@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -32,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -56,6 +59,7 @@ fun SearchScreen(
     val query by viewModel.query.collectAsState()
     val results by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
+    val searchHistory by viewModel.searchHistory.collectAsState()
 
     Scaffold(
         topBar = {
@@ -99,7 +103,17 @@ fun SearchScreen(
             ) { }
 
             when {
-                query.isBlank() -> EmptySearchState()
+                query.isBlank() -> {
+                    if (searchHistory.isNotEmpty()) {
+                        SearchHistorySection(
+                            history = searchHistory,
+                            onHistoryClick = { query -> viewModel.onQueryChange(query) },
+                            onClearHistory = viewModel::clearHistory
+                        )
+                    } else {
+                        EmptySearchState()
+                    }
+                }
                 results.isEmpty() && isSearching -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
@@ -115,6 +129,88 @@ fun SearchScreen(
                         items(items = results, key = { it.id }) { entry ->
                             WordEntryCard(entry = entry, onClick = { onWordClick(entry.id) })
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchHistorySection(
+    history: List<com.yomitanmobile.data.local.entity.SearchHistory>,
+    onHistoryClick: (String) -> Unit,
+    onClearHistory: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.History,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Historia wyszukiwań",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = onClearHistory) {
+                Icon(
+                    Icons.Default.DeleteSweep,
+                    contentDescription = "Wyczyść historię",
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("Wyczyść", fontSize = 12.sp)
+            }
+        }
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(items = history, key = { it.id }) { item ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onHistoryClick(item.query) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = item.query,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }

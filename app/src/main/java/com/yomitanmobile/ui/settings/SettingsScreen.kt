@@ -20,10 +20,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
@@ -32,6 +36,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -74,6 +79,7 @@ import java.util.Locale
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToDownload: () -> Unit = {},
+    onNavigateToStatistics: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -83,14 +89,14 @@ fun SettingsScreen(
     var showDeleteDialog by remember { mutableStateOf<String?>(null) }
     var showDeckEditDialog by remember { mutableStateOf(false) }
     var currentDeckName by remember { mutableStateOf("") }
+    var currentThemeMode by remember { mutableStateOf("system") }
     val coroutineScope = rememberCoroutineScope()
 
-    // Load current deck name
+    // Load current deck name and theme mode
     LaunchedEffect(Unit) {
-        val saved = context.dataStore.data
-            .map { it[MainActivity.ANKI_DECK_NAME] ?: "" }
-            .first()
-        currentDeckName = saved
+        val prefs = context.dataStore.data.first()
+        currentDeckName = prefs[MainActivity.ANKI_DECK_NAME] ?: ""
+        currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -294,6 +300,106 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // Theme mode toggle
+            item {
+                Text(
+                    "Wygląd",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Palette,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                "Motyw",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = currentThemeMode == "system",
+                                onClick = {
+                                    currentThemeMode = "system"
+                                    coroutineScope.launch {
+                                        context.dataStore.edit { it[MainActivity.THEME_MODE] = "system" }
+                                    }
+                                },
+                                label = { Text("Systemowy") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = currentThemeMode == "light",
+                                onClick = {
+                                    currentThemeMode = "light"
+                                    coroutineScope.launch {
+                                        context.dataStore.edit { it[MainActivity.THEME_MODE] = "light" }
+                                    }
+                                },
+                                label = { Text("Jasny") },
+                                leadingIcon = if (currentThemeMode == "light") null else {
+                                    { Icon(Icons.Default.LightMode, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = currentThemeMode == "dark",
+                                onClick = {
+                                    currentThemeMode = "dark"
+                                    coroutineScope.launch {
+                                        context.dataStore.edit { it[MainActivity.THEME_MODE] = "dark" }
+                                    }
+                                },
+                                label = { Text("Ciemny") },
+                                leadingIcon = if (currentThemeMode == "dark") null else {
+                                    { Icon(Icons.Default.DarkMode, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Statistics button
+            item {
+                Text(
+                    "Inne",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = onNavigateToStatistics,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.BarChart, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Statystyki")
                 }
             }
 

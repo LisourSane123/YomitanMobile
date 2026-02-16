@@ -76,6 +76,8 @@ fun DetailScreen(
 
     var showDeckDialog by remember { mutableStateOf(false) }
     var availableDecks by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showDuplicateDialog by remember { mutableStateOf(false) }
+    var duplicateInfo by remember { mutableStateOf("" to "") }
 
     val ankiPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -99,6 +101,30 @@ fun DetailScreen(
         )
     }
 
+    // Duplicate export warning dialog
+    if (showDuplicateDialog) {
+        AlertDialog(
+            onDismissRequest = { showDuplicateDialog = false },
+            title = { Text("Fiszka już wyeksportowana") },
+            text = {
+                Text("Słowo \"${duplicateInfo.first}\" zostało już wyeksportowane do talii \"${duplicateInfo.second}\". Czy chcesz wyeksportować ponownie?")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDuplicateDialog = false
+                    viewModel.forceExport()
+                }) {
+                    Text("Eksportuj ponownie")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDuplicateDialog = false }) {
+                    Text("Anuluj")
+                }
+            }
+        )
+    }
+
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -113,6 +139,10 @@ fun DetailScreen(
                 is DetailEvent.AnkiDeckSelectionRequired -> {
                     availableDecks = event.decks
                     showDeckDialog = true
+                }
+                is DetailEvent.AlreadyExported -> {
+                    duplicateInfo = event.expression to event.deckName
+                    showDuplicateDialog = true
                 }
             }
         }

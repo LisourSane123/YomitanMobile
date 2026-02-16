@@ -2,6 +2,8 @@ package com.yomitanmobile.ui.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.yomitanmobile.data.local.dao.SearchHistoryDao
+import com.yomitanmobile.data.local.entity.SearchHistory
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,15 +20,22 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val searchDictionaryUseCase: SearchDictionaryUseCase
+    private val searchDictionaryUseCase: SearchDictionaryUseCase,
+    private val searchHistoryDao: SearchHistoryDao
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
+
+    val searchHistory: StateFlow<List<SearchHistory>> = searchHistoryDao
+        .getRecentSearches(20)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     val searchResults: StateFlow<List<WordEntry>> = _query
@@ -45,6 +54,10 @@ class SearchViewModel @Inject constructor(
                     }
                     .map { results ->
                         _isSearching.value = false
+                        // Save to search history if results found and query is meaningful
+                        if (results.isNotEmpty() && q.length >= 2) {
+                            saveSearchQuery(q)
+                        }
                         results
                     }
             }
@@ -64,5 +77,25 @@ class SearchViewModel @Inject constructor(
     fun clearQuery() {
         _query.value = ""
         _isSearching.value = false
+    }
+
+    private fun saveSearchQuery(query: String) {
+        viewModelScope.launch {
+            try {
+                searchHistoryDao.insert(SearchHistory(query = query))
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun deleteHistoryItem(id: Long) {
+        viewModelScope.launch {
+            searchHistoryDao.deleteById(id)
+        }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            searchHistoryDao.deleteAll()
+        }
     }
 }

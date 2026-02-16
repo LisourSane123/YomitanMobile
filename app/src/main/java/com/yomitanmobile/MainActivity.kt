@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
@@ -35,27 +36,42 @@ class MainActivity : ComponentActivity() {
     companion object {
         val SETUP_COMPLETED = booleanPreferencesKey("setup_completed")
         val ANKI_DECK_NAME = stringPreferencesKey("anki_deck_name")
+        val THEME_MODE = stringPreferencesKey("theme_mode") // "system", "light", "dark"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            YomitanMobileTheme {
+            var startRoute by remember { mutableStateOf<String?>(null) }
+            var themeMode by remember { mutableStateOf("system") }
+
+            LaunchedEffect(Unit) {
+                val prefs = dataStore.data.first()
+                val setupDone = prefs[SETUP_COMPLETED] ?: false
+                themeMode = prefs[THEME_MODE] ?: "system"
+                startRoute = if (setupDone) {
+                    Screen.Search.route
+                } else {
+                    Screen.Setup.route
+                }
+            }
+
+            // Listen for theme changes
+            LaunchedEffect(Unit) {
+                dataStore.data.collect { prefs ->
+                    themeMode = prefs[THEME_MODE] ?: "system"
+                }
+            }
+
+            val isDarkTheme = when (themeMode) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+
+            YomitanMobileTheme(darkTheme = isDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    var startRoute by remember { mutableStateOf<String?>(null) }
-
-                    LaunchedEffect(Unit) {
-                        val setupDone = dataStore.data
-                            .map { prefs -> prefs[SETUP_COMPLETED] ?: false }
-                            .first()
-                        startRoute = if (setupDone) {
-                            Screen.Search.route
-                        } else {
-                            Screen.Setup.route
-                        }
-                    }
-
                     startRoute?.let { route ->
                         val navController = rememberNavController()
                         AppNavHost(

@@ -26,4 +26,5 @@
     <string name="no_dictionaries">Brak słowników. Zaimportuj słownik w formacie Yomitan (ZIP).</string>
     <string name="back">Wstecz</string>
     <string name="entries_count">wpisów</string>
+    <string name="widget_description">Szybkie wyszukiwanie słów japońskich</string>
 </resources>

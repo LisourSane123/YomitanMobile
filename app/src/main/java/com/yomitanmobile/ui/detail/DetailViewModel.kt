@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.audio.AudioPlayer
+import com.yomitanmobile.data.local.dao.ExportedWordDao
+import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
@@ -31,6 +33,7 @@ sealed class DetailEvent {
     object AnkiPermissionRequired : DetailEvent()
     object AnkiNotInstalled : DetailEvent()
     data class AnkiDeckSelectionRequired(val decks: List<String>) : DetailEvent()
+    data class AlreadyExported(val expression: String, val deckName: String) : DetailEvent()
 }
 
 @HiltViewModel
@@ -39,6 +42,7 @@ class DetailViewModel @Inject constructor(
     private val getWordDetailUseCase: GetWordDetailUseCase,
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
+    private val exportedWordDao: ExportedWordDao,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -107,6 +111,25 @@ class DetailViewModel @Inject constructor(
                 return@launch
             }
 
+            // Check if already exported
+            val existing = exportedWordDao.findExported(
+                word.expression, word.reading, savedDeck
+            )
+            if (existing != null) {
+                _events.emit(DetailEvent.AlreadyExported(word.expression, savedDeck))
+                return@launch
+            }
+
+            performExport(word, savedDeck)
+        }
+    }
+
+    fun forceExport() {
+        val word = _entry.value ?: return
+        viewModelScope.launch {
+            val savedDeck = appContext.dataStore.data
+                .map { it[MainActivity.ANKI_DECK_NAME] }
+                .first() ?: "Mining Deck"
             performExport(word, savedDeck)
         }
     }
@@ -118,6 +141,16 @@ class DetailViewModel @Inject constructor(
             appContext.dataStore.edit { prefs ->
                 prefs[MainActivity.ANKI_DECK_NAME] = sanitizedDeck
             }
+
+            // Check if already exported to this deck
+            val existing = exportedWordDao.findExported(
+                word.expression, word.reading, sanitizedDeck
+            )
+            if (existing != null) {
+                _events.emit(DetailEvent.AlreadyExported(word.expression, sanitizedDeck))
+                return@launch
+            }
+
             performExport(word, sanitizedDeck)
         }
     }
@@ -131,7 +164,18 @@ class DetailViewModel @Inject constructor(
                 deckName = deckName
             )
             result.fold(
-                onSuccess = { noteId -> _events.emit(DetailEvent.AnkiExportSuccess(noteId)) },
+                onSuccess = { noteId ->
+                    // Record the export
+                    exportedWordDao.insert(
+                        ExportedWord(
+                            expression = word.expression,
+                            reading = word.reading,
+                            deckName = deckName,
+                            ankiNoteId = noteId
+                        )
+                    )
+                    _events.emit(DetailEvent.AnkiExportSuccess(noteId))
+                },
                 onFailure = { error ->
                     _events.emit(DetailEvent.AnkiExportError(error.message ?: "Unknown error"))
                 }

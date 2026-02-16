@@ -11,6 +11,7 @@ import com.yomitanmobile.ui.download.DictionaryDownloadScreen
 import com.yomitanmobile.ui.search.SearchScreen
 import com.yomitanmobile.ui.settings.SettingsScreen
 import com.yomitanmobile.ui.setup.SetupScreen
+import com.yomitanmobile.ui.statistics.StatisticsScreen
 
 @Composable
 fun AppNavHost(
@@ -58,12 +59,21 @@ fun AppNavHost(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToDownload = {
                     navController.navigate(Screen.DictionaryDownload.route)
+                },
+                onNavigateToStatistics = {
+                    navController.navigate(Screen.Statistics.route)
                 }
             )
         }
 
         composable(Screen.DictionaryDownload.route) {
             DictionaryDownloadScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Statistics.route) {
+            StatisticsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
