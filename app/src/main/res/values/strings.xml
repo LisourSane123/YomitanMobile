@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Yomitan Mobile</string>
+    <string name="search_hint">Wpisz słowo po japońsku</string>
+    <string name="settings">Ustawienia</string>
+    <string name="import_dictionary">Importuj słownik</string>
+    <string name="export_to_anki">Eksportuj do Anki</string>
+    <string name="play_audio">Odtwórz audio</string>
+    <string name="stop_audio">Zatrzymaj audio</string>
+    <string name="no_results">Brak wyników</string>
+    <string name="loading">Ładowanie…</string>
+    <string name="error_occurred">Wystąpił błąd</string>
+    <string name="reading">Odczyt</string>
+    <string name="definition">Definicja</string>
+    <string name="frequency">Częstotliwość</string>
+    <string name="pitch_accent">Akcent tonalny</string>
+    <string name="parts_of_speech">Części mowy</string>
+    <string name="example_sentence">Przykładowe zdanie</string>
+    <string name="dictionaries">Słowniki</string>
+    <string name="delete_dictionary">Usuń słownik</string>
+    <string name="import_progress">Importowanie…</string>
+    <string name="import_success">Import zakończony pomyślnie</string>
+    <string name="import_error">Błąd importu</string>
+    <string name="anki_export_success">Wyeksportowano do AnkiDroid</string>
+    <string name="anki_export_error">Błąd eksportu do AnkiDroid</string>
+    <string name="no_dictionaries">Brak słowników. Zaimportuj słownik w formacie Yomitan (ZIP).</string>
+    <string name="back">Wstecz</string>
+    <string name="entries_count">wpisów</string>
+</resources>

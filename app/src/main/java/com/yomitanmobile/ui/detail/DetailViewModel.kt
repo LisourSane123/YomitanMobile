@@ -1,0 +1,155 @@
+package com.yomitanmobile.ui.detail
+
+import android.content.Context
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.yomitanmobile.MainActivity
+import com.yomitanmobile.data.anki.AnkiCardCreator
+import com.yomitanmobile.data.audio.AudioPlayer
+import com.yomitanmobile.dataStore
+import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import androidx.datastore.preferences.core.edit
+import javax.inject.Inject
+
+sealed class DetailEvent {
+    data class AnkiExportSuccess(val noteId: Long) : DetailEvent()
+    data class AnkiExportError(val message: String) : DetailEvent()
+    object AnkiPermissionRequired : DetailEvent()
+    object AnkiNotInstalled : DetailEvent()
+    data class AnkiDeckSelectionRequired(val decks: List<String>) : DetailEvent()
+}
+
+@HiltViewModel
+class DetailViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val getWordDetailUseCase: GetWordDetailUseCase,
+    private val ankiCardCreator: AnkiCardCreator,
+    private val audioPlayer: AudioPlayer,
+    @ApplicationContext private val appContext: Context
+) : ViewModel() {
+
+    private val entryId: Long = savedStateHandle.get<Long>("entryId") ?: 0L
+
+    private val _entry = MutableStateFlow<WordEntry?>(null)
+    val entry: StateFlow<WordEntry?> = _entry.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isExporting = MutableStateFlow(false)
+    val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
+
+    private val _events = MutableSharedFlow<DetailEvent>()
+    val events: SharedFlow<DetailEvent> = _events.asSharedFlow()
+
+    val isPlaying: StateFlow<Boolean> = audioPlayer.isPlaying
+    val ttsReady: StateFlow<Boolean> = audioPlayer.ttsReady
+
+    init {
+        loadEntry()
+        audioPlayer.initTts()
+    }
+
+    private fun loadEntry() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val word = getWordDetailUseCase.invoke(entryId)
+            _entry.value = word
+            _isLoading.value = false
+
+            // Auto-pronounce the word via TTS when detail opens
+            word?.let { entry ->
+                val textToSpeak = entry.reading.ifBlank { entry.expression }
+                if (textToSpeak.isNotBlank()) {
+                    audioPlayer.autoPronounceTts(textToSpeak)
+                }
+            }
+        }
+    }
+
+    fun playAudio() {
+        val word = _entry.value ?: return
+        val textToSpeak = word.reading.ifBlank { word.expression }
+        audioPlayer.playWord(textToSpeak, word.audioFile.takeIf { it.isNotBlank() })
+    }
+
+    fun stopAudio() {
+        audioPlayer.stopPlayback()
+    }
+
+    fun exportToAnki() {
+        val word = _entry.value ?: return
+        viewModelScope.launch {
+            if (!ankiCardCreator.isAnkiInstalled()) {
+                _events.emit(DetailEvent.AnkiNotInstalled)
+                return@launch
+            }
+            if (!ankiCardCreator.hasAnkiPermission()) {
+                _events.emit(DetailEvent.AnkiPermissionRequired)
+                return@launch
+            }
+
+            // Check if deck is already selected
+            val savedDeck = appContext.dataStore.data
+                .map { it[MainActivity.ANKI_DECK_NAME] }
+                .first()
+
+            if (savedDeck.isNullOrBlank()) {
+                // Need to let user pick a deck first
+                val decks = ankiCardCreator.getAvailableDecks()
+                _events.emit(DetailEvent.AnkiDeckSelectionRequired(decks))
+                return@launch
+            }
+
+            performExport(word, savedDeck)
+        }
+    }
+
+    fun exportToAnkiWithDeck(deckName: String) {
+        val word = _entry.value ?: return
+        viewModelScope.launch {
+            // Save the deck name
+            appContext.dataStore.edit { prefs ->
+                prefs[MainActivity.ANKI_DECK_NAME] = deckName
+            }
+            performExport(word, deckName)
+        }
+    }
+
+    private suspend fun performExport(word: WordEntry, deckName: String) {
+        _isExporting.value = true
+        try {
+            val result = ankiCardCreator.exportToAnki(
+                entry = word,
+                tts = audioPlayer.getTts(),
+                deckName = deckName
+            )
+            result.fold(
+                onSuccess = { noteId -> _events.emit(DetailEvent.AnkiExportSuccess(noteId)) },
+                onFailure = { error ->
+                    _events.emit(DetailEvent.AnkiExportError(error.message ?: "Unknown error"))
+                }
+            )
+        } finally {
+            _isExporting.value = false
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        audioPlayer.stopPlayback()
+    }
+}
