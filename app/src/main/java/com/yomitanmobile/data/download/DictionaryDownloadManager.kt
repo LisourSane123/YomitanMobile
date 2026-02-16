@@ -85,9 +85,11 @@ class DictionaryDownloadManager(
                 val result = FileInputStream(tempFile).use { fis ->
                     repository.importDictionary(
                         inputStream = fis,
-                        onProgress = { _ ->
+                        onProgress = { progress ->
                             _currentDownload.value = _currentDownload.value?.copy(
-                                phase = DownloadPhase.IMPORTING
+                                phase = DownloadPhase.IMPORTING,
+                                bytesDownloaded = progress.entriesProcessed.toLong(),
+                                totalBytes = progress.totalEntries.toLong()
                             )
                         }
                     )
@@ -138,9 +140,10 @@ class DictionaryDownloadManager(
             while (redirectCount < maxRedirects) {
                 connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 30_000
-                    readTimeout = 60_000
+                    readTimeout = 120_000
                     instanceFollowRedirects = false
                     setRequestProperty("User-Agent", "YomitanMobile/1.0")
+                    setRequestProperty("Accept", "application/octet-stream")
                 }
 
                 val responseCode = connection.responseCode

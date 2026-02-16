@@ -82,20 +82,26 @@ interface DictionaryDao {
     @Query("UPDATE dictionary_entries SET frequency = :frequency WHERE expression = :expression AND frequency = 0")
     suspend fun updateFrequency(expression: String, frequency: Int)
 
+    @Query("UPDATE dictionary_entries SET frequency = :frequency WHERE expression = :expression")
+    suspend fun updateFrequencyForce(expression: String, frequency: Int)
+
     @Query("UPDATE dictionary_entries SET pitch_accent = :pitchAccent WHERE expression = :expression AND (pitch_accent = '' OR pitch_accent IS NULL)")
     suspend fun updatePitchAccent(expression: String, pitchAccent: String)
+
+    @Query("UPDATE dictionary_entries SET pitch_accent = :pitchAccent WHERE expression = :expression")
+    suspend fun updatePitchAccentForce(expression: String, pitchAccent: String)
 
     @androidx.room.Transaction
     suspend fun updateFrequencyBatch(batch: Map<String, Int>) {
         for ((expression, frequency) in batch) {
-            updateFrequency(expression, frequency)
+            updateFrequencyForce(expression, frequency)
         }
     }
 
     @androidx.room.Transaction
     suspend fun updatePitchAccentBatch(batch: Map<String, String>) {
         for ((expression, pitchAccent) in batch) {
-            updatePitchAccent(expression, pitchAccent)
+            updatePitchAccentForce(expression, pitchAccent)
         }
     }
 }

@@ -122,10 +122,12 @@ class YomitanDictionaryParser @Inject constructor() {
                             try {
                                 val content = zip.bufferedReader().readText()
                                 val metaArray = json.decodeFromString<JsonArray>(content)
+                                val totalMetaEntries = metaArray.size
 
                                 val META_CHUNK_SIZE = 2000
                                 var freqChunk = mutableMapOf<String, Int>()
                                 var pitchChunk = mutableMapOf<String, String>()
+                                var processedInFile = 0
 
                                 for (metaElement in metaArray) {
                                     try {
@@ -148,6 +150,8 @@ class YomitanDictionaryParser @Inject constructor() {
                                         // Skip malformed meta entry
                                     }
 
+                                    processedInFile++
+
                                     // Emit in chunks to avoid accumulating huge maps
                                     if (freqChunk.size + pitchChunk.size >= META_CHUNK_SIZE) {
                                         totalFreqUpdates += freqChunk.size
@@ -155,6 +159,17 @@ class YomitanDictionaryParser @Inject constructor() {
                                         onMetaBatch(freqChunk, pitchChunk)
                                         freqChunk = mutableMapOf()
                                         pitchChunk = mutableMapOf()
+
+                                        // Report progress during meta processing
+                                        onProgress(
+                                            ImportProgress(
+                                                currentFile = name,
+                                                filesProcessed = filesProcessed,
+                                                totalFiles = filesProcessed + 1,
+                                                entriesProcessed = processedInFile,
+                                                totalEntries = totalMetaEntries
+                                            )
+                                        )
                                     }
                                 }
 
@@ -175,8 +190,12 @@ class YomitanDictionaryParser @Inject constructor() {
                                         totalEntries = totalFreqUpdates + totalPitchUpdates
                                     )
                                 )
-                            } catch (_: Exception) {
-                                // Error parsing meta bank file
+                            } catch (e: OutOfMemoryError) {
+                                // Large meta files can cause OOM — report gracefully
+                                System.gc()
+                                throw Exception("Za mało pamięci do przetworzenia pliku $name (${e.message})")
+                            } catch (e: Exception) {
+                                throw Exception("Błąd przetwarzania $name: ${e.message}")
                             }
                         }
                     }

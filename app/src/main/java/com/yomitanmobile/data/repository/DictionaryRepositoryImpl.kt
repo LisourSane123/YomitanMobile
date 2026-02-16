@@ -79,16 +79,12 @@ class DictionaryRepositoryImpl @Inject constructor(
                 },
                 onMetaBatch = { freqMap, pitchMap ->
                     if (freqMap.isNotEmpty()) {
-                        try {
-                            dictionaryDao.updateFrequencyBatch(freqMap)
-                            totalFreqUpdates += freqMap.size
-                        } catch (_: Exception) { /* frequency update failed for this batch */ }
+                        dictionaryDao.updateFrequencyBatch(freqMap)
+                        totalFreqUpdates += freqMap.size
                     }
                     if (pitchMap.isNotEmpty()) {
-                        try {
-                            dictionaryDao.updatePitchAccentBatch(pitchMap)
-                            totalPitchUpdates += pitchMap.size
-                        } catch (_: Exception) { /* pitch update failed for this batch */ }
+                        dictionaryDao.updatePitchAccentBatch(pitchMap)
+                        totalPitchUpdates += pitchMap.size
                     }
                 }
             )

@@ -200,10 +200,9 @@ fun DictionaryDownloadScreen(
                 )
             ) {
                 items(filteredDicts, key = { it.id }) { dictInfo ->
-                    val isInstalled = installedDictionaries.any { installed ->
-                        installed.name.equals(dictInfo.name, ignoreCase = true) ||
-                        installed.name.lowercase().contains(dictInfo.id.replace("_", " "))
-                    }
+                    val isInstalled = isDictionaryInstalled(dictInfo, installedDictionaries)
+                    val isMetaDict = dictInfo.category == DictionaryCategory.FREQUENCY ||
+                            dictInfo.category == DictionaryCategory.PITCH_ACCENT
                     val isCurrentlyDownloading = downloadProgress?.dictionaryId == dictInfo.id
 
                     DictionaryDownloadCard(
@@ -211,7 +210,8 @@ fun DictionaryDownloadScreen(
                         isInstalled = isInstalled,
                         isDownloading = isCurrentlyDownloading,
                         onDownload = { viewModel.downloadDictionary(dictInfo) },
-                        enabled = !isDownloading
+                        enabled = !isDownloading,
+                        allowReimport = isMetaDict
                     )
                 }
 
@@ -277,11 +277,19 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                     DownloadPhase.IMPORTING -> {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(12.dp))
-                        Text(
-                            "Importowanie: ${progress.dictionaryName}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Column {
+                            Text(
+                                "Importowanie: ${progress.dictionaryName}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (progress.totalBytes > 0) {
+                                Text(
+                                    "${progress.bytesDownloaded}/${progress.totalBytes} wpisów",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
                     }
                     DownloadPhase.COMPLETED -> {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -304,22 +312,53 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                 }
             }
 
-            if (progress.phase == DownloadPhase.DOWNLOADING && progress.totalBytes > 0) {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = progress.progressPercent,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${formatBytes(progress.bytesDownloaded)} / ${formatBytes(progress.totalBytes)}",
-                    style = MaterialTheme.typography.labelSmall
-                )
-            } else if (progress.phase == DownloadPhase.DOWNLOADING) {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            when {
+                progress.phase == DownloadPhase.DOWNLOADING && progress.totalBytes > 0 -> {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = progress.progressPercent,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "${formatBytes(progress.bytesDownloaded)} / ${formatBytes(progress.totalBytes)}",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+                progress.phase == DownloadPhase.DOWNLOADING -> {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                progress.phase == DownloadPhase.IMPORTING && progress.totalBytes > 0 -> {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = progress.progressPercent,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+/**
+ * Checks if a dictionary is installed by comparing normalized names.
+ * Handles cases where index.json title differs from the expected display name
+ * (e.g. JPDB imports as "JPDBv2" but is displayed as "JPDB Frequency v2.2").
+ */
+private fun isDictionaryInstalled(
+    dictInfo: DictionaryDownloadInfo,
+    installedDictionaries: List<com.yomitanmobile.data.local.entity.DictionaryInfo>
+): Boolean {
+    return installedDictionaries.any { installed ->
+        val iName = installed.name.lowercase().replace(" ", "").replace("-", "").replace("_", "")
+        val dName = dictInfo.name.lowercase().replace(" ", "").replace("-", "").replace("_", "")
+        val dId = dictInfo.id.lowercase().replace("_", "")
+
+        iName == dName ||
+        iName.contains(dName) || dName.contains(iName) ||
+        iName.contains(dId) || dId.contains(iName)
     }
 }
 
@@ -329,7 +368,8 @@ private fun DictionaryDownloadCard(
     isInstalled: Boolean,
     isDownloading: Boolean,
     onDownload: () -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    allowReimport: Boolean = false
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -407,7 +447,7 @@ private fun DictionaryDownloadCard(
                     } else {
                         OutlinedButton(
                             onClick = onDownload,
-                            enabled = enabled && !isInstalled
+                            enabled = enabled && (!isInstalled || allowReimport)
                         ) {
                             Icon(
                                 if (isInstalled) Icons.Default.CheckCircle else Icons.Default.Download,
@@ -415,7 +455,13 @@ private fun DictionaryDownloadCard(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text(if (isInstalled) "Zainstalowany" else "Pobierz")
+                            Text(
+                                when {
+                                    isInstalled && allowReimport -> "Zaktualizuj"
+                                    isInstalled -> "Zainstalowany"
+                                    else -> "Pobierz"
+                                }
+                            )
                         }
                     }
                 }
