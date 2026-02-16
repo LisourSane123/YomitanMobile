@@ -3,7 +3,6 @@ package com.yomitanmobile.data.audio
 import android.content.Context
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
-import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,9 +14,6 @@ import javax.inject.Singleton
 class AudioPlayer(
     private val context: Context
 ) {
-    companion object {
-        const val TAG = "AudioPlayer"
-    }
 
     private var tts: TextToSpeech? = null
     private var mediaPlayer: MediaPlayer? = null
@@ -36,15 +32,12 @@ class AudioPlayer(
                 _ttsReady.value = result != TextToSpeech.LANG_MISSING_DATA
                         && result != TextToSpeech.LANG_NOT_SUPPORTED
                 if (_ttsReady.value) {
-                    Log.d(TAG, "TTS initialized successfully for Japanese")
                     onTtsReady()
                     onReady(tts)
                 } else {
-                    Log.w(TAG, "Japanese TTS not available")
                     onReady(null)
                 }
             } else {
-                Log.e(TAG, "TTS initialization failed with status: $status")
                 _ttsReady.value = false
                 onReady(null)
             }
@@ -55,7 +48,6 @@ class AudioPlayer(
 
     fun speakWithTts(text: String) {
         if (!_ttsReady.value) {
-            Log.w(TAG, "TTS not ready, cannot speak")
             return
         }
         stopPlayback()
@@ -83,7 +75,6 @@ class AudioPlayer(
      */
     fun autoPronounceTts(text: String) {
         if (!_ttsReady.value) {
-            Log.d(TAG, "TTS not ready for auto-pronounce, queuing")
             pendingAutoSpeak = text
             return
         }
@@ -107,7 +98,6 @@ class AudioPlayer(
         try {
             val file = File(filePath)
             if (!file.exists()) {
-                Log.w(TAG, "Audio file not found: $filePath")
                 return
             }
             mediaPlayer = MediaPlayer().apply {
@@ -121,8 +111,7 @@ class AudioPlayer(
                     release()
                     mediaPlayer = null
                 }
-                setOnErrorListener { mp, what, extra ->
-                    Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                setOnErrorListener { mp, _, _ ->
                     _isPlaying.value = false
                     try { mp.release() } catch (_: Exception) {}
                     mediaPlayer = null
@@ -130,8 +119,7 @@ class AudioPlayer(
                 }
                 prepareAsync()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error playing audio file", e)
+        } catch (_: Exception) {
             _isPlaying.value = false
         }
     }

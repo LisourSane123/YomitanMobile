@@ -10,6 +10,7 @@ import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
+import com.yomitanmobile.util.InputSanitizer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -69,14 +70,6 @@ class DetailViewModel @Inject constructor(
             val word = getWordDetailUseCase.invoke(entryId)
             _entry.value = word
             _isLoading.value = false
-
-            // Auto-pronounce the word via TTS when detail opens
-            word?.let { entry ->
-                val textToSpeak = entry.reading.ifBlank { entry.expression }
-                if (textToSpeak.isNotBlank()) {
-                    audioPlayer.autoPronounceTts(textToSpeak)
-                }
-            }
         }
     }
 
@@ -120,12 +113,12 @@ class DetailViewModel @Inject constructor(
 
     fun exportToAnkiWithDeck(deckName: String) {
         val word = _entry.value ?: return
+        val sanitizedDeck = InputSanitizer.sanitizeDeckName(deckName)
         viewModelScope.launch {
-            // Save the deck name
             appContext.dataStore.edit { prefs ->
-                prefs[MainActivity.ANKI_DECK_NAME] = deckName
+                prefs[MainActivity.ANKI_DECK_NAME] = sanitizedDeck
             }
-            performExport(word, deckName)
+            performExport(word, sanitizedDeck)
         }
     }
 

@@ -22,8 +22,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -129,6 +127,28 @@ fun DetailScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "Wróć")
                     }
                 },
+                actions = {
+                    if (entry != null) {
+                        IconButton(
+                            onClick = { viewModel.exportToAnki() },
+                            enabled = !isExporting
+                        ) {
+                            if (isExporting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = "Eksportuj do Anki",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -153,10 +173,8 @@ fun DetailScreen(
                     entry = entry!!,
                     isPlaying = isPlaying,
                     ttsReady = ttsReady,
-                    isExporting = isExporting,
                     onPlayAudio = viewModel::playAudio,
                     onStopAudio = viewModel::stopAudio,
-                    onExportToAnki = viewModel::exportToAnki,
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -169,10 +187,8 @@ private fun WordDetailContent(
     entry: WordEntry,
     isPlaying: Boolean,
     ttsReady: Boolean,
-    isExporting: Boolean,
     onPlayAudio: () -> Unit,
     onStopAudio: () -> Unit,
-    onExportToAnki: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -191,7 +207,7 @@ private fun WordDetailContent(
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(entry.displayText(), fontSize = 48.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(entry.displayText(), fontSize = 52.sp, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.height(8.dp))
                 if (entry.reading.isNotBlank() && entry.reading != entry.expression) {
                     Text(entry.reading, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
@@ -267,24 +283,6 @@ private fun WordDetailContent(
         if (entry.dictionaryName.isNotBlank()) {
             Text("Źródło: ${entry.dictionaryName}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 4.dp))
             Spacer(Modifier.height(16.dp))
-        }
-
-        // Export to Anki button
-        Button(
-            onClick = onExportToAnki,
-            enabled = !isExporting,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-        ) {
-            if (isExporting) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                Spacer(Modifier.width(12.dp))
-                Text("Eksportowanie...")
-            } else {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Eksportuj do Anki", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
         }
 
         Spacer(Modifier.height(32.dp))

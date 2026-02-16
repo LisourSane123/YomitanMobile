@@ -1,6 +1,5 @@
 package com.yomitanmobile.data.parser
 
-import android.util.Log
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.domain.model.ImportProgress
 import kotlinx.coroutines.Dispatchers
@@ -39,10 +38,6 @@ data class ParseResult(
  */
 @Singleton
 class YomitanDictionaryParser @Inject constructor() {
-
-    companion object {
-        private const val TAG = "YomitanParser"
-    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -97,8 +92,8 @@ class YomitanDictionaryParser @Inject constructor() {
                                         if (parsed != null) {
                                             batch.add(parsed)
                                         }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Skipping malformed term entry: ${e.message}")
+                                    } catch (_: Exception) {
+                                        // Skip malformed term entry
                                     }
                                 }
 
@@ -118,8 +113,8 @@ class YomitanDictionaryParser @Inject constructor() {
                                 if (batch.isNotEmpty()) {
                                     onBatch(batch, name)
                                 }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error parsing term bank $name: ${e.message}", e)
+                            } catch (_: Exception) {
+                                // Error parsing term bank file
                             }
                         }
                         name.contains("term_meta_bank_") && name.endsWith(".json") -> {
@@ -128,7 +123,7 @@ class YomitanDictionaryParser @Inject constructor() {
                                 val content = zip.bufferedReader().readText()
                                 val metaArray = json.decodeFromString<JsonArray>(content)
 
-                                val META_CHUNK_SIZE = 5000
+                                val META_CHUNK_SIZE = 2000
                                 var freqChunk = mutableMapOf<String, Int>()
                                 var pitchChunk = mutableMapOf<String, String>()
 
@@ -149,8 +144,8 @@ class YomitanDictionaryParser @Inject constructor() {
                                                 if (pitchStr.isNotBlank()) pitchChunk[expr] = pitchStr
                                             }
                                         }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Skipping malformed meta entry: ${e.message}")
+                                    } catch (_: Exception) {
+                                        // Skip malformed meta entry
                                     }
 
                                     // Emit in chunks to avoid accumulating huge maps
@@ -180,8 +175,8 @@ class YomitanDictionaryParser @Inject constructor() {
                                         totalEntries = totalFreqUpdates + totalPitchUpdates
                                     )
                                 )
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error parsing meta bank $name: ${e.message}", e)
+                            } catch (_: Exception) {
+                                // Error parsing meta bank file
                             }
                         }
                     }
@@ -194,8 +189,7 @@ class YomitanDictionaryParser @Inject constructor() {
         val indexData = indexJson?.let {
             try {
                 json.decodeFromString<JsonObject>(it)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error parsing index.json", e)
+            } catch (_: Exception) {
                 null
             }
         }
@@ -218,17 +212,21 @@ class YomitanDictionaryParser @Inject constructor() {
     private fun parseFrequencyValue(element: JsonElement): Int {
         return try {
             when (element) {
-                is JsonPrimitive -> element.intOrNull ?: 0
+                is JsonPrimitive -> element.intOrNull ?: element.content.filter { it.isDigit() }.toIntOrNull() ?: 0
                 is JsonObject -> {
-                    // Format: {"value": N, "displayValue": "..."} or {"frequency": {"value": N}}
+                    // Handle various Yomitan frequency formats:
+                    // {"value": N} or {"frequency": N} or {"frequency": {"value": N}}
+                    // {"reading": "...", "frequency": N} or {"reading": "...", "frequency": {"value": N}}
                     element["value"]?.jsonPrimitive?.intOrNull
                         ?: element["frequency"]?.let { freqObj ->
                             when (freqObj) {
-                                is JsonPrimitive -> freqObj.intOrNull
+                                is JsonPrimitive -> freqObj.intOrNull ?: freqObj.content.filter { it.isDigit() }.toIntOrNull()
                                 is JsonObject -> freqObj["value"]?.jsonPrimitive?.intOrNull
+                                    ?: freqObj["displayValue"]?.jsonPrimitive?.content?.filter { it.isDigit() }?.toIntOrNull()
                                 else -> null
                             }
                         }
+                        ?: element["displayValue"]?.jsonPrimitive?.content?.filter { it.isDigit() }?.toIntOrNull()
                         ?: 0
                 }
                 else -> 0
@@ -309,8 +307,7 @@ class YomitanDictionaryParser @Inject constructor() {
                             }
                             else -> null
                         }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error parsing definition element: ${e.message}")
+                    } catch (_: Exception) {
                         null
                     }
                 }.filter { it.isNotBlank() }
@@ -337,8 +334,7 @@ class YomitanDictionaryParser @Inject constructor() {
             val glossary = obj["glossary"]
             if (glossary != null) return extractTextFromContent(glossary)
             obj.toString()
-        } catch (e: Exception) {
-            Log.w(TAG, "Error parsing structured content: ${e.message}")
+        } catch (_: Exception) {
             null
         }
     }

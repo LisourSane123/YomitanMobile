@@ -136,8 +136,7 @@ private fun WordEntryCard(entry: WordEntry, onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = entry.displayText(),
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 if (entry.reading.isNotBlank() && entry.reading != entry.expression) {

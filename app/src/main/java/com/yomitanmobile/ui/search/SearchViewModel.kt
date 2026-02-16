@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import android.util.Log
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,8 +39,7 @@ class SearchViewModel @Inject constructor(
             } else {
                 _isSearching.value = true
                 searchDictionaryUseCase.invoke(q)
-                    .catch { e ->
-                        Log.e("SearchVM", "Search error", e)
+                    .catch { _ ->
                         _isSearching.value = false
                         emit(emptyList())
                     }
@@ -51,8 +49,7 @@ class SearchViewModel @Inject constructor(
                     }
             }
         }
-        .catch { e ->
-            Log.e("SearchVM", "Search flow error", e)
+        .catch { _ ->
             emit(emptyList())
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

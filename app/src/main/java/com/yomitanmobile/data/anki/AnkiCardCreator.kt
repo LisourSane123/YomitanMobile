@@ -5,12 +5,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.ichi2.anki.api.AddContentApi
 import com.yomitanmobile.domain.model.AnkiCard
 import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -24,7 +24,6 @@ class AnkiCardCreator(
     private val context: Context
 ) {
     companion object {
-        const val TAG = "AnkiCardCreator"
         const val DEFAULT_DECK_NAME = "Mining Deck"
         const val MODEL_NAME = "Yomitan-Mobile-v2"
         const val PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
@@ -104,7 +103,6 @@ class AnkiCardCreator(
 
     private fun getOrCreateDeck(deckName: String): Long? {
         val deckList = ankiApi.deckList ?: run {
-            Log.e(TAG, "Cannot access AnkiDroid deck list")
             return null
         }
         for ((id, name) in deckList) {
@@ -116,15 +114,13 @@ class AnkiCardCreator(
     fun getAvailableDecks(): List<String> {
         return try {
             ankiApi.deckList?.values?.toList()?.sorted() ?: emptyList()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting deck list", e)
+        } catch (_: Exception) {
             emptyList()
         }
     }
 
     private fun getOrCreateModel(): Long? {
         val modelList = ankiApi.modelList ?: run {
-            Log.e(TAG, "Cannot access AnkiDroid model list")
             return null
         }
         for ((id, name) in modelList) {
@@ -146,17 +142,17 @@ class AnkiCardCreator(
         )
         val freqText = entry.frequencyLabel()
         return AnkiCard(
-            front = entry.expression.ifBlank { entry.reading },
-            reading = entry.reading,
-            meaning = entry.definitions.joinToString("<br>"),
+            front = InputSanitizer.escapeHtml(entry.expression.ifBlank { entry.reading }),
+            reading = InputSanitizer.escapeHtml(entry.reading),
+            meaning = entry.definitions.joinToString("<br>") { InputSanitizer.escapeHtml(it) },
             pitchAccent = pitchHtml,
-            frequency = freqText,
+            frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
             sentence = buildString {
-                append(entry.exampleSentence)
+                append(InputSanitizer.escapeHtml(entry.exampleSentence))
                 if (entry.exampleSentenceTranslation.isNotBlank()) {
                     append("<br><small>")
-                    append(entry.exampleSentenceTranslation)
+                    append(InputSanitizer.escapeHtml(entry.exampleSentenceTranslation))
                     append("</small>")
                 }
             }
@@ -256,7 +252,6 @@ class AnkiCardCreator(
                 Result.failure(IllegalStateException("Failed to add note - duplicate?"))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error adding note to AnkiDroid", e)
             Result.failure(e)
         }
     }
@@ -296,8 +291,7 @@ class AnkiCardCreator(
                     tempFile.delete()
                     soundRef
                 } else ""
-            } catch (e: Exception) {
-                Log.e(TAG, "Error generating TTS audio", e)
+            } catch (_: Exception) {
                 ""
             }
         }
@@ -319,10 +313,8 @@ class AnkiCardCreator(
             val preferredName = fileName.substringBeforeLast(".")
             val result = ankiApi.addMediaFromUri(uri, preferredName, "audio")
             context.revokeUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            Log.d(TAG, "Media added to AnkiDroid via API: $result")
             result ?: ""
-        } catch (e: Exception) {
-            Log.e(TAG, "Error adding media to AnkiDroid via API", e)
+        } catch (_: Exception) {
             ""
         }
     }

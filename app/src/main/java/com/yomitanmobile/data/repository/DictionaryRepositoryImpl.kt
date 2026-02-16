@@ -1,6 +1,5 @@
 package com.yomitanmobile.data.repository
 
-import android.util.Log
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.entity.DictionaryEntry
@@ -11,6 +10,7 @@ import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
+import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -28,19 +28,13 @@ class DictionaryRepositoryImpl @Inject constructor(
     private val parser: YomitanDictionaryParser
 ) : DictionaryRepository {
 
-    companion object {
-        private const val TAG = "DictionaryRepo"
-    }
-
     override fun search(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
-        // Escape FTS special characters to prevent crashes
-        val escaped = query.trim().replace("\"", "\"\"")
-        val ftsQuery = "\"$escaped\"*"
+        val ftsQuery = InputSanitizer.sanitizeFtsQuery(query)
+        if (ftsQuery.isBlank()) return flowOf(emptyList())
         return dictionaryDao.searchFts(ftsQuery)
             .map { entries -> entries.map { it.toDomain() } }
-            .catch { e ->
-                Log.e(TAG, "FTS search error", e)
+            .catch { _ ->
                 emit(emptyList())
             }
     }
@@ -49,8 +43,7 @@ class DictionaryRepositoryImpl @Inject constructor(
         if (query.isBlank()) return flowOf(emptyList())
         return dictionaryDao.searchCombined(query.trim())
             .map { entries -> entries.map { it.toDomain() } }
-            .catch { e ->
-                Log.e(TAG, "Combined search error", e)
+            .catch { _ ->
                 emit(emptyList())
             }
     }
@@ -58,8 +51,7 @@ class DictionaryRepositoryImpl @Inject constructor(
     override suspend fun getEntry(id: Long): WordEntry? {
         return try {
             dictionaryDao.getById(id)?.toDomain()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting entry $id", e)
+        } catch (_: Exception) {
             null
         }
     }
@@ -86,23 +78,17 @@ class DictionaryRepositoryImpl @Inject constructor(
                     totalInserted += batch.size
                 },
                 onMetaBatch = { freqMap, pitchMap ->
-                    // Apply frequency updates in a single transaction (batch)
                     if (freqMap.isNotEmpty()) {
                         try {
                             dictionaryDao.updateFrequencyBatch(freqMap)
                             totalFreqUpdates += freqMap.size
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to batch update frequency: ${e.message}")
-                        }
+                        } catch (_: Exception) { /* frequency update failed for this batch */ }
                     }
-                    // Apply pitch accent updates in a single transaction (batch)
                     if (pitchMap.isNotEmpty()) {
                         try {
                             dictionaryDao.updatePitchAccentBatch(pitchMap)
                             totalPitchUpdates += pitchMap.size
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to batch update pitch: ${e.message}")
-                        }
+                        } catch (_: Exception) { /* pitch update failed for this batch */ }
                     }
                 }
             )
@@ -118,18 +104,15 @@ class DictionaryRepositoryImpl @Inject constructor(
                     dictionaryDao.updateDictionaryName("temp", dictionaryNameFromBatch)
                 }
 
-                // Delete any previous version of this dictionary first
-                val existingInfo = dictionaryInfoDao.getByName(dictionaryNameFromBatch)
-                if (existingInfo != null) {
-                    dictionaryInfoDao.deleteByName(dictionaryNameFromBatch)
-                }
-
-                // Rebuild FTS index
                 try {
                     dictionaryDao.rebuildFtsIndex()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error rebuilding FTS index", e)
-                }
+                } catch (_: Exception) { /* FTS rebuild error */ }
+            }
+
+            // Clean up any previous DictionaryInfo for this dictionary (both meta and regular)
+            val existingInfo = dictionaryInfoDao.getByName(dictionaryNameFromBatch)
+            if (existingInfo != null) {
+                dictionaryInfoDao.deleteByName(dictionaryNameFromBatch)
             }
 
             val entryCount = if (parseResult.isMetaDictionary) {
@@ -147,16 +130,12 @@ class DictionaryRepositoryImpl @Inject constructor(
                 )
             )
 
-            Log.i(TAG, "Import complete: $dictionaryNameFromBatch - " +
-                "$totalInserted entries, $totalFreqUpdates freq updates, $totalPitchUpdates pitch updates")
-
             ImportResult(
                 success = true,
                 dictionaryName = dictionaryNameFromBatch,
                 entriesImported = entryCount
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Import error", e)
             ImportResult(
                 success = false,
                 dictionaryName = "Unknown",
@@ -172,9 +151,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             dictionaryInfoDao.deleteByName(dictionaryName)
             try {
                 dictionaryDao.rebuildFtsIndex()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error rebuilding FTS after delete", e)
-            }
+            } catch (_: Exception) { /* FTS rebuild error */ }
         }
     }
 
@@ -185,8 +162,7 @@ class DictionaryRepositoryImpl @Inject constructor(
     override suspend fun getEntryCount(): Int {
         return try {
             dictionaryDao.getEntryCount()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting entry count", e)
+        } catch (_: Exception) {
             0
         }
     }

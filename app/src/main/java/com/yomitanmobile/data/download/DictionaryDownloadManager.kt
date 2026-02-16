@@ -1,7 +1,6 @@
 package com.yomitanmobile.data.download
 
 import android.content.Context
-import android.util.Log
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,7 +44,6 @@ class DictionaryDownloadManager(
     private val repository: DictionaryRepository
 ) {
     companion object {
-        private const val TAG = "DictDownloadManager"
         private const val BUFFER_SIZE = 8192
     }
 
@@ -87,7 +85,7 @@ class DictionaryDownloadManager(
                 val result = FileInputStream(tempFile).use { fis ->
                     repository.importDictionary(
                         inputStream = fis,
-                        onProgress = { progress ->
+                        onProgress = { _ ->
                             _currentDownload.value = _currentDownload.value?.copy(
                                 phase = DownloadPhase.IMPORTING
                             )
@@ -101,13 +99,11 @@ class DictionaryDownloadManager(
                 )
 
                 if (result.success) {
-                    Log.i(TAG, "Downloaded and imported ${info.name}: ${result.entriesImported} entries")
                     DownloadResult.Success(info.name, result.entriesImported)
                 } else {
                     DownloadResult.Error(info.name, result.errorMessage ?: "Import failed")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Download/import error for ${info.name}", e)
                 _currentDownload.value = _currentDownload.value?.copy(
                     phase = DownloadPhase.ERROR
                 )
@@ -193,7 +189,6 @@ class DictionaryDownloadManager(
                 }
             }
 
-            Log.i(TAG, "Downloaded ${outputFile.length()} bytes for ${info.name}")
         } finally {
             connection?.disconnect()
         }
