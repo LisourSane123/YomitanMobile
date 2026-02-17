@@ -10,7 +10,9 @@ import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.dataStore
+import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
 import com.yomitanmobile.util.InputSanitizer
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,6 +42,7 @@ sealed class DetailEvent {
 class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getWordDetailUseCase: GetWordDetailUseCase,
+    private val repository: DictionaryRepository,
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
     private val exportedWordDao: ExportedWordDao,
@@ -48,8 +51,8 @@ class DetailViewModel @Inject constructor(
 
     private val entryId: Long = savedStateHandle.get<Long>("entryId") ?: 0L
 
-    private val _entry = MutableStateFlow<WordEntry?>(null)
-    val entry: StateFlow<WordEntry?> = _entry.asStateFlow()
+    private val _entry = MutableStateFlow<MergedWordEntry?>(null)
+    val entry: StateFlow<MergedWordEntry?> = _entry.asStateFlow()
 
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -72,15 +75,30 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             val word = getWordDetailUseCase.invoke(entryId)
-            _entry.value = word
+            if (word != null) {
+                // Load all entries with the same reading and merge them
+                val reading = word.reading.ifBlank { word.expression }
+                val allEntries = repository.getEntriesByReading(reading)
+                if (allEntries.isNotEmpty()) {
+                    val merged = MergedWordEntry.mergeEntries(allEntries)
+                    // Find the merged entry that contains our primary entry
+                    _entry.value = merged.firstOrNull { it.entryIds.contains(entryId) }
+                        ?: merged.firstOrNull()
+                } else {
+                    // Fallback: create a merged entry from single entry
+                    _entry.value = MergedWordEntry.mergeEntries(listOf(word)).firstOrNull()
+                }
+            } else {
+                _entry.value = null
+            }
             _isLoading.value = false
         }
     }
 
     fun playAudio() {
-        val word = _entry.value ?: return
-        val textToSpeak = word.reading.ifBlank { word.expression }
-        audioPlayer.playWord(textToSpeak, word.audioFile.takeIf { it.isNotBlank() })
+        val merged = _entry.value ?: return
+        val textToSpeak = merged.reading.ifBlank { merged.primaryExpression }
+        audioPlayer.playWord(textToSpeak, merged.audioFile.takeIf { it.isNotBlank() })
     }
 
     fun stopAudio() {
@@ -88,7 +106,8 @@ class DetailViewModel @Inject constructor(
     }
 
     fun exportToAnki() {
-        val word = _entry.value ?: return
+        val merged = _entry.value ?: return
+        val word = merged.toWordEntry()
         viewModelScope.launch {
             if (!ankiCardCreator.isAnkiInstalled()) {
                 _events.emit(DetailEvent.AnkiNotInstalled)
@@ -125,7 +144,8 @@ class DetailViewModel @Inject constructor(
     }
 
     fun forceExport() {
-        val word = _entry.value ?: return
+        val merged = _entry.value ?: return
+        val word = merged.toWordEntry()
         viewModelScope.launch {
             val savedDeck = appContext.dataStore.data
                 .map { it[MainActivity.ANKI_DECK_NAME] }
@@ -135,7 +155,8 @@ class DetailViewModel @Inject constructor(
     }
 
     fun exportToAnkiWithDeck(deckName: String) {
-        val word = _entry.value ?: return
+        val merged = _entry.value ?: return
+        val word = merged.toWordEntry()
         val sanitizedDeck = InputSanitizer.sanitizeDeckName(deckName)
         viewModelScope.launch {
             appContext.dataStore.edit { prefs ->

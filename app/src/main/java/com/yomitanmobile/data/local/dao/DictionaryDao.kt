@@ -27,6 +27,9 @@ interface DictionaryDao {
     @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
     fun findByReading(reading: String): Flow<List<DictionaryEntry>>
 
+    @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
+    suspend fun getByReading(reading: String): List<DictionaryEntry>
+
     @Query("""
         SELECT * FROM dictionary_entries 
         WHERE expression LIKE :prefix || '%' OR reading LIKE :prefix || '%'

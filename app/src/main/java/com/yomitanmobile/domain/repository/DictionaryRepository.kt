@@ -11,6 +11,7 @@ interface DictionaryRepository {
     fun search(query: String): Flow<List<WordEntry>>
     fun searchCombined(query: String): Flow<List<WordEntry>>
     suspend fun getEntry(id: Long): WordEntry?
+    suspend fun getEntriesByReading(reading: String): List<WordEntry>
     suspend fun importDictionary(
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit = {}

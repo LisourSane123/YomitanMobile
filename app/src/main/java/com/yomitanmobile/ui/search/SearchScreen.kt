@@ -47,7 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.domain.model.MergedWordEntry
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,8 +126,8 @@ fun SearchScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(items = results, key = { it.id }) { entry ->
-                            WordEntryCard(entry = entry, onClick = { onWordClick(entry.id) })
+                        items(items = results, key = { it.primaryId }) { entry ->
+                            MergedWordEntryCard(entry = entry, onClick = { onWordClick(entry.primaryId) })
                         }
                     }
                 }
@@ -219,7 +219,7 @@ private fun SearchHistorySection(
 }
 
 @Composable
-private fun WordEntryCard(entry: WordEntry, onClick: () -> Unit) {
+private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -227,7 +227,7 @@ private fun WordEntryCard(entry: WordEntry, onClick: () -> Unit) {
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -235,20 +235,38 @@ private fun WordEntryCard(entry: WordEntry, onClick: () -> Unit) {
                     fontSize = 28.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                if (entry.reading.isNotBlank() && entry.reading != entry.expression) {
+                if (entry.reading.isNotBlank() && entry.reading != entry.primaryExpression) {
                     Text(text = entry.reading, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = entry.definitionText(),
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (entry.partsOfSpeech.isNotBlank()) {
+                if (entry.alternativeExpressions.isNotEmpty()) {
                     Text(
-                        text = entry.partsOfSpeech,
+                        text = "Formy: ${entry.alternativeExpressions.joinToString(", ")}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                // Show numbered definitions
+                entry.definitions.take(3).forEachIndexed { index, definition ->
+                    Text(
+                        text = "${index + 1}. $definition",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (entry.definitions.size > 3) {
+                    Text(
+                        text = "…i ${entry.definitions.size - 3} więcej",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                if (entry.partsOfSpeech.isNotEmpty()) {
+                    Text(
+                        text = entry.partsOfSpeech.joinToString(", "),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.padding(top = 4.dp)

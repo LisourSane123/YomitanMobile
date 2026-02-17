@@ -56,6 +56,14 @@ class DictionaryRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getEntriesByReading(reading: String): List<WordEntry> {
+        return try {
+            dictionaryDao.getByReading(reading).map { it.toDomain() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     override suspend fun importDictionary(
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit

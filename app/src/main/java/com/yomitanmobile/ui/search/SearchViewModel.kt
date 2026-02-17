@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.SearchHistory
-import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,7 +38,7 @@ class SearchViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    val searchResults: StateFlow<List<WordEntry>> = _query
+    val searchResults: StateFlow<List<MergedWordEntry>> = _query
         .debounce(300L)
         .distinctUntilChanged()
         .flatMapLatest { q ->
@@ -58,7 +58,8 @@ class SearchViewModel @Inject constructor(
                         if (results.isNotEmpty() && q.length >= 2) {
                             saveSearchQuery(q)
                         }
-                        results
+                        // Merge/consolidate results by reading
+                        MergedWordEntry.mergeEntries(results)
                     }
             }
         }

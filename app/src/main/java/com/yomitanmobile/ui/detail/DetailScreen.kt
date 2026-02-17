@@ -57,7 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.domain.model.MergedWordEntry
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -214,7 +214,7 @@ fun DetailScreen(
 
 @Composable
 private fun WordDetailContent(
-    entry: WordEntry,
+    entry: MergedWordEntry,
     isPlaying: Boolean,
     ttsReady: Boolean,
     onPlayAudio: () -> Unit,
@@ -239,8 +239,18 @@ private fun WordDetailContent(
             ) {
                 Text(entry.displayText(), fontSize = 52.sp, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.height(8.dp))
-                if (entry.reading.isNotBlank() && entry.reading != entry.expression) {
+                if (entry.reading.isNotBlank() && entry.reading != entry.primaryExpression) {
                     Text(entry.reading, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
+                }
+                // Alternative expressions/forms
+                if (entry.alternativeExpressions.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Alternatywne formy: ${entry.alternativeExpressions.joinToString(", ")}",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        fontStyle = FontStyle.Italic
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 val freqLabel = entry.frequencyLabel()
@@ -269,7 +279,7 @@ private fun WordDetailContent(
         if (entry.pitchAccent.isNotBlank()) {
             SectionCard(title = "Pitch Accent") {
                 PitchAccentDiagram(
-                    reading = entry.reading.ifBlank { entry.expression },
+                    reading = entry.reading.ifBlank { entry.primaryExpression },
                     pitchPositions = entry.pitchAccent
                 )
             }
@@ -290,9 +300,9 @@ private fun WordDetailContent(
         Spacer(Modifier.height(12.dp))
 
         // Parts of speech
-        if (entry.partsOfSpeech.isNotBlank()) {
+        if (entry.partsOfSpeech.isNotEmpty()) {
             SectionCard(title = "Część mowy") {
-                Text(entry.partsOfSpeech, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(entry.partsOfSpeech.joinToString(", "), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(12.dp))
         }
