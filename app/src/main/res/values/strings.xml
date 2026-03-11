@@ -27,4 +27,5 @@
     <string name="back">Wstecz</string>
     <string name="entries_count">wpisów</string>
     <string name="widget_description">Szybkie wyszukiwanie słów japońskich</string>
+    <string name="widget_quick_description">Szybkie uruchomienie wyszukiwania</string>
 </resources>

@@ -1,6 +1,7 @@
 package com.yomitanmobile
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +26,7 @@ import androidx.navigation.compose.rememberNavController
 import com.yomitanmobile.ui.navigation.AppNavHost
 import com.yomitanmobile.ui.navigation.Screen
 import com.yomitanmobile.ui.theme.YomitanMobileTheme
+import com.yomitanmobile.widget.QuickSearchWidgetProvider
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -61,9 +63,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val isQuickSearch = intent?.action == QuickSearchWidgetProvider.ACTION_QUICK_SEARCH
+
         setContent {
             var startRoute by remember { mutableStateOf<String?>(null) }
             var themeMode by remember { mutableStateOf("system") }
+            var shouldFocusSearch by remember { mutableStateOf(isQuickSearch) }
 
             LaunchedEffect(Unit) {
                 val prefs = dataStore.data.first()
@@ -95,7 +101,8 @@ class MainActivity : ComponentActivity() {
                         val navController = rememberNavController()
                         AppNavHost(
                             navController = navController,
-                            startDestination = route
+                            startDestination = route,
+                            focusSearch = shouldFocusSearch
                         )
 
                         // Mark setup as completed when navigating away from setup

@@ -10,6 +10,7 @@ import com.yomitanmobile.data.local.entity.SearchHistory
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
+import com.yomitanmobile.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,9 +43,10 @@ data class DailyGoalState(
     val progress: Float get() = if (goalCount > 0) (todayCount.toFloat() / goalCount).coerceIn(0f, 1f) else 0f
 }
 
-enum class SearchMode {
-    JAPANESE,
-    ENGLISH
+enum class SearchMode(val label: String) {
+    JAPANESE("JP"),
+    ENGLISH("EN"),
+    ROMAJI("RM")
 }
 
 @HiltViewModel
@@ -103,6 +105,11 @@ class SearchViewModel @Inject constructor(
                 val searchFlow = when (mode) {
                     SearchMode.JAPANESE -> searchDictionaryUseCase.invoke(q)
                     SearchMode.ENGLISH -> searchDictionaryUseCase.invokeEnglish(q)
+                    SearchMode.ROMAJI -> {
+                        val hiragana = RomajiConverter.toHiragana(q)
+                        if (hiragana.isNotBlank()) searchDictionaryUseCase.invoke(hiragana)
+                        else flowOf(emptyList())
+                    }
                 }
                 searchFlow
                     .catch { _ ->
@@ -135,7 +142,8 @@ class SearchViewModel @Inject constructor(
     fun toggleSearchMode() {
         _searchMode.value = when (_searchMode.value) {
             SearchMode.JAPANESE -> SearchMode.ENGLISH
-            SearchMode.ENGLISH -> SearchMode.JAPANESE
+            SearchMode.ENGLISH -> SearchMode.ROMAJI
+            SearchMode.ROMAJI -> SearchMode.JAPANESE
         }
     }
 

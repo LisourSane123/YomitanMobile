@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,11 +40,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -56,13 +61,15 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.util.JlptLevelUtil
+import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun SearchScreen(
     onWordClick: (Long) -> Unit,
     onSettingsClick: () -> Unit,
     onFavoritesClick: () -> Unit = {},
+    focusSearch: Boolean = false,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val query by viewModel.query.collectAsState()
@@ -71,6 +78,19 @@ fun SearchScreen(
     val searchHistory by viewModel.searchHistory.collectAsState()
     val dailyGoal by viewModel.dailyGoal.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Auto-focus search bar when launched from quick search widget
+    if (focusSearch) {
+        LaunchedEffect(Unit) {
+            delay(300)
+            try {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) { }
+        }
+    }
 
     // Refresh daily goal every time screen is shown (e.g. returning from detail after export)
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -109,24 +129,41 @@ fun SearchScreen(
                 onActiveChange = { },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .focusRequester(focusRequester),
                 placeholder = {
                     Text(
                         when (searchMode) {
                             SearchMode.JAPANESE -> "Wpisz słowo po japońsku..."
                             SearchMode.ENGLISH -> "Type an English word..."
+                            SearchMode.ROMAJI -> "taberu, nomu, miru..."
                         }
                     )
                 },
                 leadingIcon = {
-                    IconButton(onClick = viewModel::toggleSearchMode) {
-                        Icon(
-                            Icons.Default.Translate,
-                            contentDescription = "Przełącz tryb wyszukiwania",
-                            tint = when (searchMode) {
-                                SearchMode.ENGLISH -> MaterialTheme.colorScheme.primary
-                                SearchMode.JAPANESE -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                when (searchMode) {
+                                    SearchMode.JAPANESE -> MaterialTheme.colorScheme.primary
+                                    SearchMode.ENGLISH -> MaterialTheme.colorScheme.tertiary
+                                    SearchMode.ROMAJI -> MaterialTheme.colorScheme.secondary
+                                }
+                            )
+                            .clickable { viewModel.toggleSearchMode() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = searchMode.label,
+                            color = when (searchMode) {
+                                SearchMode.JAPANESE -> MaterialTheme.colorScheme.onPrimary
+                                SearchMode.ENGLISH -> MaterialTheme.colorScheme.onTertiary
+                                SearchMode.ROMAJI -> MaterialTheme.colorScheme.onSecondary
+                            },
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 },
@@ -422,6 +459,7 @@ private fun EmptySearchState(searchMode: SearchMode) {
                 when (searchMode) {
                     SearchMode.JAPANESE -> "Wpisz słowo po japońsku"
                     SearchMode.ENGLISH -> "Type an English word"
+                    SearchMode.ROMAJI -> "Wpisz słowo w romaji"
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
@@ -431,6 +469,7 @@ private fun EmptySearchState(searchMode: SearchMode) {
                 when (searchMode) {
                     SearchMode.JAPANESE -> "漢字、ひらがな、カタカナ"
                     SearchMode.ENGLISH -> "e.g. eat → 食べる, drink → 飲む"
+                    SearchMode.ROMAJI -> "np. taberu → 食べる, nomu → 飲む"
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -451,6 +490,7 @@ private fun NoResultsState(query: String, searchMode: SearchMode) {
                 when (searchMode) {
                     SearchMode.JAPANESE -> "Sprawdź pisownię lub zaimportuj słownik"
                     SearchMode.ENGLISH -> "Spróbuj innego słowa angielskiego"
+                    SearchMode.ROMAJI -> "Sprawdź pisownię romaji"
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)

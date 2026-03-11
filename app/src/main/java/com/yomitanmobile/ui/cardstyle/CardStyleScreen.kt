@@ -24,6 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +36,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -142,17 +147,19 @@ fun CardStyleScreen(
         }
     }
 
-    // Auto-save when any preference changes
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Preview HTML updates live (without saving)
     val previewHtml = remember(
         expressionBold, expressionFontSize, readingFontSize, meaningFontSize,
         selectedFont, backgroundColor, expressionColor, readingColor,
         meaningColor, accentColor, showPitchAccent, showFrequency, showSentence
     ) {
-        savePreferences()
         AnkiCardCreator.buildPreviewHtml(currentPreferences())
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Wygląd fiszki") },
@@ -407,6 +414,33 @@ fun CardStyleScreen(
                         checked = showSentence,
                         onCheckedChange = { showSentence = it }
                     )
+                }
+            }
+
+            // Save button
+            item {
+                Button(
+                    onClick = {
+                        savePreferences()
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Ustawienia fiszki zapisane ✓")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Zapisz", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
