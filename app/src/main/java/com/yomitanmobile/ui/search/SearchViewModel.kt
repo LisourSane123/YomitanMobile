@@ -42,6 +42,11 @@ data class DailyGoalState(
     val progress: Float get() = if (goalCount > 0) (todayCount.toFloat() / goalCount).coerceIn(0f, 1f) else 0f
 }
 
+enum class SearchMode {
+    JAPANESE,
+    ENGLISH
+}
+
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val searchDictionaryUseCase: SearchDictionaryUseCase,
@@ -52,6 +57,9 @@ class SearchViewModel @Inject constructor(
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
+
+    private val _searchMode = MutableStateFlow(SearchMode.JAPANESE)
+    val searchMode: StateFlow<SearchMode> = _searchMode.asStateFlow()
 
     val searchHistory: StateFlow<List<SearchHistory>> = searchHistoryDao
         .getRecentSearches(20)
@@ -83,23 +91,26 @@ class SearchViewModel @Inject constructor(
     }
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-    val searchResults: StateFlow<List<MergedWordEntry>> = _query
+    val searchResults: StateFlow<List<MergedWordEntry>> = kotlinx.coroutines.flow.combine(_query, _searchMode) { q, mode -> q to mode }
         .debounce(300L)
         .distinctUntilChanged()
-        .flatMapLatest { q ->
+        .flatMapLatest { (q, mode) ->
             if (q.isBlank()) {
                 _isSearching.value = false
                 flowOf(emptyList())
             } else {
                 _isSearching.value = true
-                searchDictionaryUseCase.invoke(q)
+                val searchFlow = when (mode) {
+                    SearchMode.JAPANESE -> searchDictionaryUseCase.invoke(q)
+                    SearchMode.ENGLISH -> searchDictionaryUseCase.invokeEnglish(q)
+                }
+                searchFlow
                     .catch { _ ->
                         _isSearching.value = false
                         emit(emptyList())
                     }
                     .map { results ->
                         _isSearching.value = false
-                        // Merge/consolidate results by reading
                         MergedWordEntry.mergeEntries(results)
                     }
             }
@@ -119,6 +130,13 @@ class SearchViewModel @Inject constructor(
     fun clearQuery() {
         _query.value = ""
         _isSearching.value = false
+    }
+
+    fun toggleSearchMode() {
+        _searchMode.value = when (_searchMode.value) {
+            SearchMode.JAPANESE -> SearchMode.ENGLISH
+            SearchMode.ENGLISH -> SearchMode.JAPANESE
+        }
     }
 
     /**

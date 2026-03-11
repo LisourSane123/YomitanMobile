@@ -19,6 +19,11 @@ class SearchDictionaryUseCase @Inject constructor(
         return repository.searchCombined(query)
     }
 
+    fun invokeEnglish(query: String): Flow<List<WordEntry>> {
+        if (query.isBlank()) return flowOf(emptyList())
+        return repository.searchByDefinition(query)
+    }
+
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     fun invokeReactive(queryFlow: Flow<String>): Flow<List<WordEntry>> {
         return queryFlow

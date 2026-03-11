@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
+import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.database.AppDatabase
 import dagger.Module
@@ -46,6 +47,12 @@ object DatabaseModule {
     @Singleton
     fun provideExportedWordDao(database: AppDatabase): ExportedWordDao {
         return database.exportedWordDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideFavoriteWordDao(database: AppDatabase): FavoriteWordDao {
+        return database.favoriteWordDao()
     }
 
     @Provides

@@ -79,6 +79,21 @@ interface DictionaryDao {
     @Query("INSERT INTO dictionary_entries_fts(dictionary_entries_fts) VALUES('rebuild')")
     suspend fun rebuildFtsIndex()
 
+    /**
+     * Search by English definition text using FTS.
+     * Matches words whose definition column contains the query string.
+     */
+    @Query("""
+        SELECT dictionary_entries.* FROM dictionary_entries
+        JOIN dictionary_entries_fts ON dictionary_entries.rowid = dictionary_entries_fts.rowid
+        WHERE dictionary_entries_fts MATCH :query
+        ORDER BY CASE WHEN dictionary_entries.frequency > 0 THEN 0 ELSE 1 END,
+                 dictionary_entries.frequency ASC,
+                 LENGTH(dictionary_entries.expression) ASC
+        LIMIT :limit
+    """)
+    fun searchByDefinition(query: String, limit: Int = 50): Flow<List<DictionaryEntry>>
+
     @Query("UPDATE dictionary_entries SET dictionary_name = :newName WHERE dictionary_name = :oldName")
     suspend fun updateDictionaryName(oldName: String, newName: String)
 

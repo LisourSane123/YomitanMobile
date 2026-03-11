@@ -7,11 +7,13 @@ import com.yomitanmobile.data.local.converter.Converters
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
+import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.DictionaryEntryFts
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.data.local.entity.ExportedWord
+import com.yomitanmobile.data.local.entity.FavoriteWord
 import com.yomitanmobile.data.local.entity.SearchHistory
 
 @Database(
@@ -20,9 +22,10 @@ import com.yomitanmobile.data.local.entity.SearchHistory
         DictionaryEntryFts::class,
         DictionaryInfo::class,
         ExportedWord::class,
+        FavoriteWord::class,
         SearchHistory::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -30,6 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun dictionaryDao(): DictionaryDao
     abstract fun dictionaryInfoDao(): DictionaryInfoDao
     abstract fun exportedWordDao(): ExportedWordDao
+    abstract fun favoriteWordDao(): FavoriteWordDao
     abstract fun searchHistoryDao(): SearchHistoryDao
 
     companion object {

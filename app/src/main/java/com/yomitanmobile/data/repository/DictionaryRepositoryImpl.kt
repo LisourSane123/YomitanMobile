@@ -48,6 +48,17 @@ class DictionaryRepositoryImpl @Inject constructor(
             }
     }
 
+    override fun searchByDefinition(query: String): Flow<List<WordEntry>> {
+        if (query.isBlank()) return flowOf(emptyList())
+        val ftsQuery = InputSanitizer.sanitizeFtsQuery(query)
+        if (ftsQuery.isBlank()) return flowOf(emptyList())
+        return dictionaryDao.searchByDefinition(ftsQuery)
+            .map { entries -> entries.map { it.toDomain() } }
+            .catch { _ ->
+                emit(emptyList())
+            }
+    }
+
     override suspend fun getEntry(id: Long): WordEntry? {
         return try {
             dictionaryDao.getById(id)?.toDomain()

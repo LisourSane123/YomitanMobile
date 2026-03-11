@@ -43,4 +43,53 @@
 
     </LinearLayout>
 
+    <!-- Word of the Day section -->
+    <LinearLayout
+        android:id="@+id/widget_word_section"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="8dp"
+        android:padding="10dp"
+        android:background="@drawable/widget_search_bg"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_word_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✨ Słowo dnia"
+            android:textSize="11sp"
+            android:textColor="#80CBC4"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/widget_word_expression"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="28sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_word_reading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="#B0BEC5"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/widget_word_definition"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#90A4AE"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:layout_marginTop="2dp" />
+
+    </LinearLayout>
+
 </LinearLayout>

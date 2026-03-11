@@ -21,9 +21,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,12 +55,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.util.JlptLevelUtil
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     onWordClick: (Long) -> Unit,
     onSettingsClick: () -> Unit,
+    onFavoritesClick: () -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val query by viewModel.query.collectAsState()
@@ -65,6 +70,7 @@ fun SearchScreen(
     val isSearching by viewModel.isSearching.collectAsState()
     val searchHistory by viewModel.searchHistory.collectAsState()
     val dailyGoal by viewModel.dailyGoal.collectAsState()
+    val searchMode by viewModel.searchMode.collectAsState()
 
     // Refresh daily goal every time screen is shown (e.g. returning from detail after export)
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -80,6 +86,9 @@ fun SearchScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
+                    IconButton(onClick = onFavoritesClick) {
+                        Icon(Icons.Default.Favorite, contentDescription = "Ulubione")
+                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Ustawienia")
                     }
@@ -101,8 +110,26 @@ fun SearchScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Wpisz słowo po japońsku...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Szukaj") },
+                placeholder = {
+                    Text(
+                        when (searchMode) {
+                            SearchMode.JAPANESE -> "Wpisz słowo po japońsku..."
+                            SearchMode.ENGLISH -> "Type an English word..."
+                        }
+                    )
+                },
+                leadingIcon = {
+                    IconButton(onClick = viewModel::toggleSearchMode) {
+                        Icon(
+                            Icons.Default.Translate,
+                            contentDescription = "Przełącz tryb wyszukiwania",
+                            tint = when (searchMode) {
+                                SearchMode.ENGLISH -> MaterialTheme.colorScheme.primary
+                                SearchMode.JAPANESE -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                },
                 trailingIcon = {
                     AnimatedVisibility(visible = query.isNotBlank(), enter = fadeIn(), exit = fadeOut()) {
                         IconButton(onClick = viewModel::clearQuery) {
@@ -126,7 +153,7 @@ fun SearchScreen(
                             onClearHistory = viewModel::clearHistory
                         )
                     } else {
-                        EmptySearchState()
+                        EmptySearchState(searchMode)
                     }
                 }
                 results.isEmpty() && isSearching -> {
@@ -134,7 +161,7 @@ fun SearchScreen(
                         CircularProgressIndicator()
                     }
                 }
-                results.isEmpty() -> NoResultsState(query)
+                results.isEmpty() -> NoResultsState(query, searchMode)
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -361,12 +388,28 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = freqLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
             }
+            val jlptLevel = JlptLevelUtil.getLevel(entry.primaryExpression, entry.frequency)
+            if (jlptLevel != null) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = jlptLevel.label,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = androidx.compose.ui.graphics.Color.White,
+                    modifier = Modifier
+                        .background(
+                            color = androidx.compose.ui.graphics.Color(jlptLevel.color),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun EmptySearchState() {
+private fun EmptySearchState(searchMode: SearchMode) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
@@ -375,22 +418,43 @@ private fun EmptySearchState() {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
             Spacer(Modifier.height(16.dp))
-            Text("Wpisz słowo po japońsku", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+            Text(
+                when (searchMode) {
+                    SearchMode.JAPANESE -> "Wpisz słowo po japońsku"
+                    SearchMode.ENGLISH -> "Type an English word"
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
             Spacer(Modifier.height(8.dp))
-            Text("漢字、ひらがな、カタカナ", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            Text(
+                when (searchMode) {
+                    SearchMode.JAPANESE -> "漢字、ひらがな、カタカナ"
+                    SearchMode.ENGLISH -> "e.g. eat → 食べる, drink → 飲む"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
         }
     }
 }
 
 @Composable
-private fun NoResultsState(query: String) {
+private fun NoResultsState(query: String, searchMode: SearchMode) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("Brak wyników dla:", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text("「$query」", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(16.dp))
-            Text("Sprawdź pisownię lub zaimportuj słownik", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+            Text(
+                when (searchMode) {
+                    SearchMode.JAPANESE -> "Sprawdź pisownię lub zaimportuj słownik"
+                    SearchMode.ENGLISH -> "Spróbuj innego słowa angielskiego"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
         }
     }
 }

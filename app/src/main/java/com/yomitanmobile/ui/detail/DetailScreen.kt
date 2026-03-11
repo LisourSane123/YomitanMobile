@@ -15,10 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -58,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.util.JlptLevelUtil
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +75,7 @@ fun DetailScreen(
     val isExporting by viewModel.isExporting.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val ttsReady by viewModel.ttsReady.collectAsState()
+    val isFavorite by viewModel.isFavorite.collectAsState()
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -159,6 +165,13 @@ fun DetailScreen(
                 },
                 actions = {
                     if (entry != null) {
+                        IconButton(onClick = { viewModel.toggleFavorite() }) {
+                            Icon(
+                                if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (isFavorite) "Usuń z ulubionych" else "Dodaj do ulubionych",
+                                tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                         IconButton(
                             onClick = { viewModel.exportToAnki() },
                             enabled = !isExporting
@@ -256,6 +269,22 @@ private fun WordDetailContent(
                 val freqLabel = entry.frequencyLabel()
                 if (freqLabel.isNotBlank()) {
                     Text(freqLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Medium)
+                }
+                val jlptLevel = JlptLevelUtil.getLevel(entry.primaryExpression, entry.frequency)
+                if (jlptLevel != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "JLPT ${jlptLevel.label}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier
+                            .background(
+                                color = androidx.compose.ui.graphics.Color(jlptLevel.color),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 3.dp)
+                    )
                 }
                 Spacer(Modifier.height(16.dp))
                 OutlinedButton(

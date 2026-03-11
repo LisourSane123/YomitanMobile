@@ -8,7 +8,9 @@ import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
+import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.entity.ExportedWord
+import com.yomitanmobile.data.local.entity.FavoriteWord
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.MergedWordEntry
@@ -47,6 +49,7 @@ class DetailViewModel @Inject constructor(
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
     private val exportedWordDao: ExportedWordDao,
+    private val favoriteWordDao: FavoriteWordDao,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -66,6 +69,9 @@ class DetailViewModel @Inject constructor(
 
     val isPlaying: StateFlow<Boolean> = audioPlayer.isPlaying
     val ttsReady: StateFlow<Boolean> = audioPlayer.ttsReady
+
+    private val _isFavorite = MutableStateFlow(false)
+    val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
 
     init {
         loadEntry()
@@ -93,6 +99,41 @@ class DetailViewModel @Inject constructor(
                 _entry.value = null
             }
             _isLoading.value = false
+            checkFavoriteStatus()
+        }
+    }
+
+    private fun checkFavoriteStatus() {
+        val merged = _entry.value ?: return
+        viewModelScope.launch {
+            try {
+                val reading = merged.reading.ifBlank { merged.primaryExpression }
+                favoriteWordDao.isFavorite(merged.primaryExpression, reading).collect { fav ->
+                    _isFavorite.value = fav
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun toggleFavorite() {
+        val merged = _entry.value ?: return
+        viewModelScope.launch {
+            try {
+                val expression = merged.primaryExpression
+                val reading = merged.reading.ifBlank { expression }
+                if (_isFavorite.value) {
+                    favoriteWordDao.delete(expression, reading)
+                } else {
+                    favoriteWordDao.insert(
+                        FavoriteWord(
+                            expression = expression,
+                            reading = reading,
+                            definitionPreview = merged.definitionTextShort(),
+                            entryId = merged.primaryId
+                        )
+                    )
+                }
+            } catch (_: Exception) { }
         }
     }
 

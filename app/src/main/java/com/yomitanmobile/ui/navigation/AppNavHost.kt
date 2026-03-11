@@ -9,6 +9,7 @@ import androidx.navigation.navArgument
 import com.yomitanmobile.ui.cardstyle.CardStyleScreen
 import com.yomitanmobile.ui.detail.DetailScreen
 import com.yomitanmobile.ui.download.DictionaryDownloadScreen
+import com.yomitanmobile.ui.favorites.FavoritesScreen
 import com.yomitanmobile.ui.search.SearchScreen
 import com.yomitanmobile.ui.settings.SettingsScreen
 import com.yomitanmobile.ui.setup.SetupScreen
@@ -40,6 +41,9 @@ fun AppNavHost(
                 },
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onFavoritesClick = {
+                    navController.navigate(Screen.Favorites.route)
                 }
             )
         }
@@ -85,6 +89,15 @@ fun AppNavHost(
         composable(Screen.Statistics.route) {
             StatisticsScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Favorites.route) {
+            FavoritesScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onWordClick = { entryId ->
+                    navController.navigate(Screen.Detail.createRoute(entryId))
+                }
             )
         }
     }
