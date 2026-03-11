@@ -59,6 +59,25 @@ class SetupViewModel @Inject constructor(
         }
     }
 
+    fun startRecommendedDownload() {
+        _setupState.value = SetupState.DOWNLOADING
+        viewModelScope.launch {
+            var anyError: String? = null
+            for (dict in AvailableDictionaries.recommended) {
+                val result = downloadManager.downloadAndImport(dict)
+                if (result is DownloadResult.Error) {
+                    anyError = "${dict.name}: ${result.message}"
+                }
+            }
+            if (anyError != null) {
+                _errorMessage.value = anyError
+                _setupState.value = SetupState.ERROR
+            } else {
+                _setupState.value = SetupState.COMPLETED
+            }
+        }
+    }
+
     fun skip() {
         _setupState.value = SetupState.SKIPPED
     }

@@ -88,4 +88,22 @@ class DictionaryDownloadViewModel @Inject constructor(
     fun downloadJmdict() {
         downloadDictionary(AvailableDictionaries.jmdict)
     }
+
+    fun downloadAllRecommended() {
+        viewModelScope.launch {
+            for (dict in AvailableDictionaries.recommended) {
+                if (!isDictionaryInstalled(dict)) {
+                    val result = downloadManager.downloadAndImport(dict)
+                    when (result) {
+                        is DownloadResult.Success -> {
+                            _events.emit(DownloadEvent.Success(result.dictionaryName, result.entriesImported))
+                        }
+                        is DownloadResult.Error -> {
+                            _events.emit(DownloadEvent.Error(result.dictionaryName, result.message))
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

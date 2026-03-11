@@ -27,4 +27,16 @@ interface ExportedWordDao {
 
     @Query("SELECT COUNT(*) FROM exported_words WHERE export_date >= :startOfDay")
     suspend fun getExportedCountSince(startOfDay: Long): Int
+
+    /**
+     * Get earliest export date (for chart range).
+     */
+    @Query("SELECT MIN(export_date) FROM exported_words")
+    suspend fun getEarliestExportDate(): Long?
+
+    /**
+     * Get all export dates for chart computation.
+     */
+    @Query("SELECT export_date FROM exported_words ORDER BY export_date ASC")
+    suspend fun getAllExportDates(): List<Long>
 }

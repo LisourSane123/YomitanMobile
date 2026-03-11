@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -180,6 +181,21 @@ fun DictionaryDownloadScreen(
                         )
                     }
                 }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Download all recommended button
+            Button(
+                onClick = { viewModel.downloadAllRecommended() },
+                enabled = !isDownloading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Pobierz wszystkie rekomendowane")
             }
 
             Spacer(Modifier.height(8.dp))

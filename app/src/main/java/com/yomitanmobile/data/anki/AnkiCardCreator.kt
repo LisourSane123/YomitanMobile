@@ -136,12 +136,17 @@ class AnkiCardCreator(
          */
         fun buildPreviewHtml(prefs: CardStylePreferences): String {
             val css = buildCssFromPreferences(prefs)
+            val fontImportUrl = CardStylePreferences.googleFontsImportUrl(prefs.fontFamily)
+            val fontImport = if (fontImportUrl != null) {
+                """<link rel="stylesheet" href="$fontImportUrl">"""
+            } else ""
             return """
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
+                $fontImport
                 <style>$css</style>
             </head>
             <body class="card">

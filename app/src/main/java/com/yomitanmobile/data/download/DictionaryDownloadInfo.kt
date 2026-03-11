@@ -88,4 +88,14 @@ object AvailableDictionaries {
     fun getByCategory(category: DictionaryCategory): List<DictionaryDownloadInfo> {
         return all.filter { it.category == category }
     }
+
+    /**
+     * Recommended dictionaries for first-time setup.
+     * JMdict (main dictionary), JPDB Frequency, Kanjium Pitch Accent.
+     */
+    val recommended: List<DictionaryDownloadInfo> = listOf(
+        jmdict,
+        all.first { it.id == "jpdb_freq" },
+        all.first { it.id == "kanjium_pitch" }
+    )
 }

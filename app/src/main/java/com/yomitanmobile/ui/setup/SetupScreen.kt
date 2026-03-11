@@ -55,7 +55,8 @@ fun SetupScreen(
         ) { state ->
             when (state) {
                 SetupState.WELCOME -> WelcomeContent(
-                    onDownload = { viewModel.startJmDictDownload() },
+                    onDownloadRecommended = { viewModel.startRecommendedDownload() },
+                    onDownloadJmdict = { viewModel.startJmDictDownload() },
                     onSkip = {
                         viewModel.skip()
                         onSetupComplete()
@@ -85,7 +86,8 @@ fun SetupScreen(
 
 @Composable
 private fun WelcomeContent(
-    onDownload: () -> Unit,
+    onDownloadRecommended: () -> Unit,
+    onDownloadJmdict: () -> Unit,
     onSkip: () -> Unit
 ) {
     Column(
@@ -119,22 +121,23 @@ private fun WelcomeContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(32.dp))
 
         Text(
-            "Aby rozpocząć, pobierz słownik JMdict (English).\n" +
-                "To główny słownik z ~200 000 wpisów.\n" +
-                "Po pobraniu nie potrzebujesz internetu.",
+            "Pobierz rekomendowane słowniki, aby w pełni korzystać z aplikacji:\n" +
+                "• JMdict — główny słownik (~200K wpisów)\n" +
+                "• JPDB Frequency — ranking częstotliwości\n" +
+                "• Kanjium — akcent tonalny (pitch accent)",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
             lineHeight = 24.sp
         )
 
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(36.dp))
 
         Button(
-            onClick = onDownload,
+            onClick = onDownloadRecommended,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
@@ -145,7 +148,18 @@ private fun WelcomeContent(
                 modifier = Modifier.size(24.dp)
             )
             Spacer(Modifier.size(12.dp))
-            Text("Pobierz JMdict (~15 MB)", fontSize = 16.sp)
+            Text("Pobierz rekomendowane (~19 MB)", fontSize = 16.sp)
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = onDownloadJmdict,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Text("Pobierz tylko JMdict (~15 MB)", fontSize = 14.sp)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -175,8 +189,8 @@ private fun DownloadingContent(
         Spacer(Modifier.height(32.dp))
 
         val phaseText = when (progress?.phase) {
-            DownloadPhase.DOWNLOADING -> "Pobieranie JMdict…"
-            DownloadPhase.IMPORTING -> "Importowanie do bazy danych…"
+            DownloadPhase.DOWNLOADING -> "Pobieranie ${progress.dictionaryName}…"
+            DownloadPhase.IMPORTING -> "Importowanie ${progress.dictionaryName}…"
             DownloadPhase.COMPLETED -> "Gotowe!"
             DownloadPhase.ERROR -> "Błąd!"
             null -> "Przygotowywanie…"

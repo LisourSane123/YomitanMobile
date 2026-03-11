@@ -21,15 +21,32 @@ data class CardStylePreferences(
 ) {
     companion object {
         val FONT_FAMILIES = listOf(
-            "Hiragino Sans",
-            "Yu Gothic",
-            "Meiryo",
             "Noto Sans JP",
             "Noto Serif JP",
-            "MS Gothic",
-            "MS Mincho",
+            "M PLUS Rounded 1c",
+            "M PLUS 1p",
+            "Kosugi Maru",
+            "Sawarabi Gothic",
+            "Sawarabi Mincho",
             "sans-serif",
             "serif"
         )
+
+        /**
+         * Returns a Google Fonts CSS import URL for a given font, or null if it's a system font.
+         */
+        fun googleFontsImportUrl(fontFamily: String): String? {
+            val googleFonts = mapOf(
+                "Noto Sans JP" to "Noto+Sans+JP:wght@400;700",
+                "Noto Serif JP" to "Noto+Serif+JP:wght@400;700",
+                "M PLUS Rounded 1c" to "M+PLUS+Rounded+1c:wght@400;700",
+                "M PLUS 1p" to "M+PLUS+1p:wght@400;700",
+                "Kosugi Maru" to "Kosugi+Maru",
+                "Sawarabi Gothic" to "Sawarabi+Gothic",
+                "Sawarabi Mincho" to "Sawarabi+Mincho"
+            )
+            val param = googleFonts[fontFamily] ?: return null
+            return "https://fonts.googleapis.com/css2?family=$param&display=swap"
+        }
     }
 }

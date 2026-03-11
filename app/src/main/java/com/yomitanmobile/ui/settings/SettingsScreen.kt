@@ -61,6 +61,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -208,20 +209,14 @@ fun SettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // ═══════════════════════════════════════
+            // SECTION: Słowniki (Dictionaries)
+            // ═══════════════════════════════════════
             item {
-                Text("Słowniki", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
-            }
-
-            item {
-                Button(
-                    onClick = { filePickerLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
-                    enabled = !isImporting,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Importuj słownik Yomitan (.zip)")
-                }
+                SectionHeader(
+                    icon = Icons.Default.MenuBook,
+                    title = "Słowniki"
+                )
             }
 
             item {
@@ -236,109 +231,89 @@ fun SettingsScreen(
             }
 
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                OutlinedButton(
+                    onClick = { filePickerLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
+                    enabled = !isImporting,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Importuj słownik Yomitan (.zip)")
+                }
+            }
+
+            if (isImporting) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                     ) {
-                        Icon(
-                            Icons.Default.RecordVoiceOver,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "Wymowa TTS",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            Text(
-                                "Wymowa japońska przez Google TTS jest automatycznie dostępna. " +
-                                    "Po otwarciu słowa wymowa odtwarza się automatycznie.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-                            )
+                        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(12.dp))
+                                Text("Importowanie słownika...")
+                            }
+                            importProgress?.let { progress ->
+                                Spacer(Modifier.height(12.dp))
+                                LinearProgressIndicator(progress = progress.progressPercent, modifier = Modifier.fillMaxWidth())
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Plik ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} wpisów",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Anki deck setting
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Style,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Talia Anki",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                if (currentDeckName.isNotBlank()) currentDeckName
-                                else "Nie wybrano (zostaniesz zapytany przy eksporcie)",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
-                        IconButton(onClick = { showDeckEditDialog = true }) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "Zmień talię",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+            // Installed dictionaries
+            if (dictionaries.isNotEmpty()) {
+                item {
+                    Text(
+                        "Zainstalowane słowniki (${dictionaries.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                items(dictionaries, key = { it.id }) { dict ->
+                    DictionaryCard(dictionary = dict, onDelete = { showDeleteDialog = dict.name })
+                }
+            } else if (!isImporting) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                            Spacer(Modifier.height(8.dp))
+                            Text("Brak zainstalowanych słowników", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                         }
                     }
                 }
             }
 
-            // Theme mode toggle
+            // ═══════════════════════════════════════
+            // SECTION: Wygląd (Appearance)
+            // ═══════════════════════════════════════
             item {
-                Text(
-                    "Wygląd",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+                SectionHeader(
+                    icon = Icons.Default.Palette,
+                    title = "Wygląd"
                 )
             }
 
+            // Theme mode toggle
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Palette,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                "Motyw",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text("Motyw", fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -390,13 +365,29 @@ fun SettingsScreen(
 
             // Card style button
             item {
+                SettingsClickableItem(
+                    icon = Icons.Default.Style,
+                    title = "Wygląd fiszki Anki",
+                    subtitle = "Czcionka, rozmiar, kolory, podgląd",
+                    onClick = onNavigateToCardStyle
+                )
+            }
+
+            // ═══════════════════════════════════════
+            // SECTION: Anki
+            // ═══════════════════════════════════════
+            item {
+                SectionHeader(
+                    icon = Icons.Default.Style,
+                    title = "Anki"
+                )
+            }
+
+            // Anki deck setting
+            item {
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onNavigateToCardStyle),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -411,12 +402,54 @@ fun SettingsScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Wygląd fiszki Anki",
+                                "Talia Anki",
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "Czcionka, rozmiar, kolory, podgląd",
+                                if (currentDeckName.isNotBlank()) currentDeckName
+                                else "Nie wybrano (zostaniesz zapytany przy eksporcie)",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            )
+                        }
+                        IconButton(onClick = { showDeckEditDialog = true }) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Zmień talię",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            // TTS info
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.RecordVoiceOver,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Wymowa TTS",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Wymowa japońska przez Google TTS. " +
+                                    "Po otwarciu słowa wymowa odtwarza się automatycznie.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
@@ -425,13 +458,13 @@ fun SettingsScreen(
                 }
             }
 
-            // Statistics button
+            // ═══════════════════════════════════════
+            // SECTION: Inne (Other)
+            // ═══════════════════════════════════════
             item {
-                Text(
-                    "Inne",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+                SectionHeader(
+                    icon = Icons.Default.EmojiEvents,
+                    title = "Inne"
                 )
             }
 
@@ -501,87 +534,84 @@ fun SettingsScreen(
                 }
             }
 
+            // Statistics button
             item {
-                OutlinedButton(
-                    onClick = onNavigateToStatistics,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.BarChart, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Statystyki")
-                }
-            }
-
-            if (isImporting) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                Spacer(Modifier.width(12.dp))
-                                Text("Importowanie słownika...")
-                            }
-                            importProgress?.let { progress ->
-                                Spacer(Modifier.height(12.dp))
-                                LinearProgressIndicator(progress = progress.progressPercent, modifier = Modifier.fillMaxWidth())
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    "Plik ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} wpisów",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (dictionaries.isEmpty() && !isImporting) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                            Spacer(Modifier.height(12.dp))
-                            Text("Brak zainstalowanych słowników", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                            Spacer(Modifier.height(4.dp))
-                            Text("Zaimportuj słownik w formacie Yomitan (.zip)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                        }
-                    }
-                }
-            }
-
-            items(dictionaries, key = { it.id }) { dict ->
-                DictionaryCard(dictionary = dict, onDelete = { showDeleteDialog = dict.name })
-            }
-
-            item {
-                Spacer(Modifier.height(16.dp))
-                Text("Instrukcja", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("1. Pobierz słownik Yomitan (.zip) ze strony yomitan.wiki", fontSize = 14.sp)
-                        Spacer(Modifier.height(4.dp))
-                        Text("2. Kliknij \"Importuj słownik\" powyżej", fontSize = 14.sp)
-                        Spacer(Modifier.height(4.dp))
-                        Text("3. Wybierz plik .zip ze słownikiem", fontSize = 14.sp)
-                        Spacer(Modifier.height(4.dp))
-                        Text("4. Poczekaj na zakończenie importu", fontSize = 14.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Polecane: JMdict, KANJIDIC, Jitendex", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
+                SettingsClickableItem(
+                    icon = Icons.Default.BarChart,
+                    title = "Statystyki",
+                    subtitle = "Przegląd aktywności, streak, wykres fiszek",
+                    onClick = onNavigateToStatistics
+                )
             }
 
             item { Spacer(Modifier.height(32.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    icon: ImageVector,
+    title: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun SettingsClickableItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(32.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    subtitle,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
         }
     }
 }
