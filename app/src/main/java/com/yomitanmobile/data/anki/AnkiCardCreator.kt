@@ -1,8 +1,10 @@
 package com.yomitanmobile.data.anki
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
@@ -197,7 +199,11 @@ class AnkiCardCreator(
             return null
         }
         for ((id, name) in modelList) {
-            if (name == MODEL_NAME) return id
+            if (name == MODEL_NAME) {
+                // Model exists — update its CSS to reflect current style preferences
+                updateModelCss(id, css)
+                return id
+            }
         }
         return ankiApi.addNewCustomModel(
             MODEL_NAME, FIELD_NAMES,
@@ -206,6 +212,22 @@ class AnkiCardCreator(
             arrayOf(CARD_BACK_TEMPLATE),
             css, null, null
         )
+    }
+
+    /**
+     * Update the CSS of an existing AnkiDroid model via the content resolver.
+     * This ensures card style preferences are applied even when the model already exists.
+     */
+    private fun updateModelCss(modelId: Long, css: String) {
+        try {
+            val modelUri = Uri.parse("content://com.ichi2.anki.flashcards/models/$modelId")
+            val values = ContentValues().apply {
+                put("css", css)
+            }
+            context.contentResolver.update(modelUri, values, null, null)
+        } catch (_: Exception) {
+            // Graceful degradation: if update fails, model still works with old CSS
+        }
     }
 
     fun createAnkiCard(entry: WordEntry, audioFileName: String = ""): AnkiCard {

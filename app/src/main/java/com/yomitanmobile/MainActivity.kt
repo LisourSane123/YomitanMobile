@@ -53,6 +53,9 @@ class MainActivity : ComponentActivity() {
         val CARD_SHOW_PITCH = booleanPreferencesKey("card_show_pitch")
         val CARD_SHOW_FREQUENCY = booleanPreferencesKey("card_show_frequency")
         val CARD_SHOW_SENTENCE = booleanPreferencesKey("card_show_sentence")
+
+        // Daily goal
+        val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

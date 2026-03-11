@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
@@ -45,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -92,13 +94,15 @@ fun SettingsScreen(
     var showDeckEditDialog by remember { mutableStateOf(false) }
     var currentDeckName by remember { mutableStateOf("") }
     var currentThemeMode by remember { mutableStateOf("system") }
+    var dailyGoalCount by remember { mutableStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
 
-    // Load current deck name and theme mode
+    // Load current deck name, theme mode and daily goal
     LaunchedEffect(Unit) {
         val prefs = context.dataStore.data.first()
         currentDeckName = prefs[MainActivity.ANKI_DECK_NAME] ?: ""
         currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
+        dailyGoalCount = (prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0).toFloat()
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -429,6 +433,72 @@ fun SettingsScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
                 )
+            }
+
+            // Daily goal setting
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.EmojiEvents,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Cel dzienny fiszek",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    if (dailyGoalCount.toInt() == 0) "Wyłączony"
+                                    else "${dailyGoalCount.toInt()} fiszek dziennie",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                if (dailyGoalCount.toInt() == 0) "Wyłączony" else "${dailyGoalCount.toInt()}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text("50", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        }
+                        Slider(
+                            value = dailyGoalCount,
+                            onValueChange = { dailyGoalCount = it },
+                            onValueChangeFinished = {
+                                coroutineScope.launch {
+                                    context.dataStore.edit { prefs ->
+                                        prefs[MainActivity.DAILY_GOAL_COUNT] = dailyGoalCount.toInt()
+                                    }
+                                }
+                            },
+                            valueRange = 0f..50f,
+                            steps = 49
+                        )
+                        Text(
+                            "Ustaw na 0 aby wyłączyć cel dzienny",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                }
             }
 
             item {

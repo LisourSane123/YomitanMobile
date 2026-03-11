@@ -30,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
@@ -42,6 +43,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,6 +64,12 @@ fun SearchScreen(
     val results by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val searchHistory by viewModel.searchHistory.collectAsState()
+    val dailyGoal by viewModel.dailyGoal.collectAsState()
+
+    // Refresh daily goal every time screen is shown (e.g. returning from detail after export)
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.refreshDailyGoal()
+    }
 
     Scaffold(
         topBar = {
@@ -102,6 +112,11 @@ fun SearchScreen(
                 }
             ) { }
 
+            // Daily goal progress bar
+            if (dailyGoal.isEnabled) {
+                DailyGoalBanner(dailyGoal)
+            }
+
             when {
                 query.isBlank() -> {
                     if (searchHistory.isNotEmpty()) {
@@ -134,6 +149,71 @@ fun SearchScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DailyGoalBanner(dailyGoal: DailyGoalState) {
+    val containerColor = if (dailyGoal.isCompleted) {
+        MaterialTheme.colorScheme.tertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+    }
+    val contentColor = if (dailyGoal.isCompleted) {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.EmojiEvents,
+                contentDescription = null,
+                tint = if (dailyGoal.isCompleted) MaterialTheme.colorScheme.tertiary else contentColor.copy(alpha = 0.7f),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = if (dailyGoal.isCompleted) "Cel dzienny osiągnięty!" else "Cel dzienny",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = contentColor
+                    )
+                    Text(
+                        text = "${dailyGoal.todayCount}/${dailyGoal.goalCount}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = contentColor
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = dailyGoal.progress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    trackColor = contentColor.copy(alpha = 0.15f)
+                )
             }
         }
     }

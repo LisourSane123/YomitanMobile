@@ -1,12 +1,17 @@
 package com.yomitanmobile.ui.search
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.yomitanmobile.MainActivity
+import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.SearchHistory
+import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,13 +25,29 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
+
+/**
+ * Daily goal progress state.
+ */
+data class DailyGoalState(
+    val goalCount: Int = 0,        // 0 = disabled
+    val todayCount: Int = 0
+) {
+    val isEnabled: Boolean get() = goalCount > 0
+    val isCompleted: Boolean get() = isEnabled && todayCount >= goalCount
+    val progress: Float get() = if (goalCount > 0) (todayCount.toFloat() / goalCount).coerceIn(0f, 1f) else 0f
+}
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val searchDictionaryUseCase: SearchDictionaryUseCase,
-    private val searchHistoryDao: SearchHistoryDao
+    private val searchHistoryDao: SearchHistoryDao,
+    private val exportedWordDao: ExportedWordDao,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
@@ -36,6 +57,30 @@ class SearchViewModel @Inject constructor(
         .getRecentSearches(20)
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _dailyGoal = MutableStateFlow(DailyGoalState())
+    val dailyGoal: StateFlow<DailyGoalState> = _dailyGoal.asStateFlow()
+
+    init {
+        refreshDailyGoal()
+    }
+
+    fun refreshDailyGoal() {
+        viewModelScope.launch {
+            try {
+                val prefs = appContext.dataStore.data.first()
+                val goalCount = prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0
+                val startOfDay = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val todayCount = exportedWordDao.getExportedCountSince(startOfDay)
+                _dailyGoal.value = DailyGoalState(goalCount = goalCount, todayCount = todayCount)
+            } catch (_: Exception) { }
+        }
+    }
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     val searchResults: StateFlow<List<MergedWordEntry>> = _query

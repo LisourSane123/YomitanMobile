@@ -24,4 +24,7 @@ interface ExportedWordDao {
 
     @Query("DELETE FROM exported_words")
     suspend fun deleteAll()
+
+    @Query("SELECT COUNT(*) FROM exported_words WHERE export_date >= :startOfDay")
+    suspend fun getExportedCountSince(startOfDay: Long): Int
 }
