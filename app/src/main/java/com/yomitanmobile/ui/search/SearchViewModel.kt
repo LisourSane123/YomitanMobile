@@ -118,7 +118,21 @@ class SearchViewModel @Inject constructor(
                     }
                     .map { results ->
                         _isSearching.value = false
-                        MergedWordEntry.mergeEntries(results)
+                        val merged = MergedWordEntry.mergeEntries(results)
+                        if (mode == SearchMode.ENGLISH && q.isNotBlank()) {
+                            // Sort by how early the query appears in the definitions list
+                            val queryLower = q.lowercase()
+                            merged.sortedWith(
+                                compareBy<MergedWordEntry> { entry ->
+                                    val idx = entry.definitions.indexOfFirst {
+                                        it.lowercase().contains(queryLower)
+                                    }
+                                    if (idx < 0) Int.MAX_VALUE else idx
+                                }.thenBy { if (it.frequency > 0) it.frequency else Int.MAX_VALUE }
+                            )
+                        } else {
+                            merged
+                        }
                     }
             }
         }
