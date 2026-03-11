@@ -54,10 +54,6 @@ class SearchViewModel @Inject constructor(
                     }
                     .map { results ->
                         _isSearching.value = false
-                        // Save to search history if results found and query is meaningful
-                        if (results.isNotEmpty() && q.length >= 2) {
-                            saveSearchQuery(q)
-                        }
                         // Merge/consolidate results by reading
                         MergedWordEntry.mergeEntries(results)
                     }
@@ -80,11 +76,18 @@ class SearchViewModel @Inject constructor(
         _isSearching.value = false
     }
 
-    private fun saveSearchQuery(query: String) {
-        viewModelScope.launch {
-            try {
-                searchHistoryDao.insert(SearchHistory(query = query))
-            } catch (_: Exception) { }
+    /**
+     * Called when the user clicks on a word in search results.
+     * Only saves the clicked word's expression to history.
+     */
+    fun onWordClicked(entry: MergedWordEntry) {
+        val expression = entry.displayText()
+        if (expression.isNotBlank()) {
+            viewModelScope.launch {
+                try {
+                    searchHistoryDao.insert(SearchHistory(query = expression))
+                } catch (_: Exception) { }
+            }
         }
     }
 

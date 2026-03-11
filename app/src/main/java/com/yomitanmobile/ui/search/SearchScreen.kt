@@ -127,7 +127,10 @@ fun SearchScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(items = results, key = { it.primaryId }) { entry ->
-                            MergedWordEntryCard(entry = entry, onClick = { onWordClick(entry.primaryId) })
+                            MergedWordEntryCard(entry = entry, onClick = {
+                                viewModel.onWordClicked(entry)
+                                onWordClick(entry.primaryId)
+                            })
                         }
                     }
                 }

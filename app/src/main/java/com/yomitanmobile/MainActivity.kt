@@ -18,6 +18,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.navigation.compose.rememberNavController
@@ -37,6 +38,21 @@ class MainActivity : ComponentActivity() {
         val SETUP_COMPLETED = booleanPreferencesKey("setup_completed")
         val ANKI_DECK_NAME = stringPreferencesKey("anki_deck_name")
         val THEME_MODE = stringPreferencesKey("theme_mode") // "system", "light", "dark"
+
+        // Card style preferences
+        val CARD_EXPRESSION_BOLD = booleanPreferencesKey("card_expression_bold")
+        val CARD_EXPRESSION_FONT_SIZE = intPreferencesKey("card_expression_font_size")
+        val CARD_READING_FONT_SIZE = intPreferencesKey("card_reading_font_size")
+        val CARD_MEANING_FONT_SIZE = intPreferencesKey("card_meaning_font_size")
+        val CARD_FONT_FAMILY = stringPreferencesKey("card_font_family")
+        val CARD_BACKGROUND_COLOR = stringPreferencesKey("card_background_color")
+        val CARD_EXPRESSION_COLOR = stringPreferencesKey("card_expression_color")
+        val CARD_READING_COLOR = stringPreferencesKey("card_reading_color")
+        val CARD_MEANING_COLOR = stringPreferencesKey("card_meaning_color")
+        val CARD_ACCENT_COLOR = stringPreferencesKey("card_accent_color")
+        val CARD_SHOW_PITCH = booleanPreferencesKey("card_show_pitch")
+        val CARD_SHOW_FREQUENCY = booleanPreferencesKey("card_show_frequency")
+        val CARD_SHOW_SENTENCE = booleanPreferencesKey("card_show_sentence")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

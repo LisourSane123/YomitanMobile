@@ -10,6 +10,7 @@ import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.dataStore
+import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
@@ -176,13 +177,34 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    private suspend fun loadCardStylePreferences(): CardStylePreferences {
+        val prefs = appContext.dataStore.data.first()
+        return CardStylePreferences(
+            expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: true,
+            expressionFontSize = prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: 48,
+            readingFontSize = prefs[MainActivity.CARD_READING_FONT_SIZE] ?: 28,
+            meaningFontSize = prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: 20,
+            fontFamily = prefs[MainActivity.CARD_FONT_FAMILY] ?: "Hiragino Sans",
+            cardBackgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: "#1a1a1a",
+            expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: "#ffffff",
+            readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: "#80cbc4",
+            meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: "#e0e0e0",
+            accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: "#80cbc4",
+            showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: true,
+            showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true,
+            showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true
+        )
+    }
+
     private suspend fun performExport(word: WordEntry, deckName: String) {
         _isExporting.value = true
         try {
+            val stylePrefs = loadCardStylePreferences()
             val result = ankiCardCreator.exportToAnki(
                 entry = word,
                 tts = audioPlayer.getTts(),
-                deckName = deckName
+                deckName = deckName,
+                stylePrefs = stylePrefs
             )
             result.fold(
                 onSuccess = { noteId ->

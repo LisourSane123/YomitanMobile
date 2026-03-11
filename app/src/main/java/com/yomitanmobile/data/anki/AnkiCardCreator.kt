@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.ichi2.anki.api.AddContentApi
 import com.yomitanmobile.domain.model.AnkiCard
+import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +84,78 @@ class AnkiCardCreator(
             }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
         """
+
+        /**
+         * Generate CSS dynamically from [CardStylePreferences].
+         */
+        fun buildCssFromPreferences(prefs: CardStylePreferences): String {
+            val fontWeight = if (prefs.expressionBold) "bold" else "normal"
+            return """
+            .card {
+                font-family: "${prefs.fontFamily}", "Yu Gothic", "Meiryo", sans-serif;
+                font-size: ${prefs.meaningFontSize}px;
+                text-align: center;
+                color: ${prefs.meaningColor};
+                background-color: ${prefs.cardBackgroundColor};
+                padding: 20px;
+            }
+            .expression { font-size: ${prefs.expressionFontSize}px; font-weight: $fontWeight; color: ${prefs.expressionColor}; }
+            .reading { font-size: ${prefs.readingFontSize}px; color: ${prefs.readingColor}; margin: 10px 0; }
+            .meaning {
+                font-size: ${prefs.meaningFontSize}px; color: ${prefs.meaningColor}; margin: 12px 0;
+                text-align: left; padding: 12px; background: #2a2a2a; border-radius: 8px;
+                border-left: 3px solid ${prefs.accentColor};
+            }
+            .pitch {
+                font-size: 16px; color: #ff8a65; margin: 8px 0;
+                padding: 6px 12px; background: #2a2a2a; border-radius: 6px;
+                display: inline-block;
+                ${if (!prefs.showPitchAccent) "display: none;" else ""}
+            }
+            .freq {
+                font-size: 13px; color: #aaa; margin: 4px 0;
+                padding: 2px 10px; background: #333; border-radius: 12px;
+                display: inline-block;
+                ${if (!prefs.showFrequency) "display: none;" else ""}
+            }
+            .audio { margin: 8px 0; }
+            .sentence {
+                font-size: 18px; color: #bbb; margin-top: 15px; font-style: italic;
+                text-align: left; padding: 12px; background: #252525; border-radius: 8px;
+                border-left: 3px solid #4dd0e1;
+                ${if (!prefs.showSentence) "display: none;" else ""}
+            }
+            hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
+            """.trimIndent()
+        }
+
+        /**
+         * Build a full HTML page for preview purposes.
+         */
+        fun buildPreviewHtml(prefs: CardStylePreferences): String {
+            val css = buildCssFromPreferences(prefs)
+            return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>$css</style>
+            </head>
+            <body class="card">
+                <div class="back">
+                    <div class="expression">食べる</div>
+                    <div class="freq">★★★ Top 1K</div>
+                    <hr>
+                    <div class="reading">たべる</div>
+                    <div class="pitch"><span style="font-size:12px;color:#999;">[2] 中高</span> <span style="padding-top:4px; display:inline-block;">た</span><span style="border-top:2px solid #ff8a65;padding-top:2px;border-right:2px solid #ff8a65; display:inline-block;">べ</span><span style="padding-top:4px; display:inline-block;">る</span></div>
+                    <div class="meaning">1. to eat<br>2. to live on (e.g. a salary); to live off; to subsist on</div>
+                    <div class="sentence">毎日野菜を食べます。<br><small>I eat vegetables every day.</small></div>
+                </div>
+            </body>
+            </html>
+            """.trimIndent()
+        }
     }
 
     private val ankiApi: AddContentApi by lazy { AddContentApi(context) }
@@ -119,7 +192,7 @@ class AnkiCardCreator(
         }
     }
 
-    private fun getOrCreateModel(): Long? {
+    private fun getOrCreateModel(css: String = CARD_CSS): Long? {
         val modelList = ankiApi.modelList ?: run {
             return null
         }
@@ -131,7 +204,7 @@ class AnkiCardCreator(
             arrayOf("Card 1"),
             arrayOf(CARD_FRONT_TEMPLATE),
             arrayOf(CARD_BACK_TEMPLATE),
-            CARD_CSS, null, null
+            css, null, null
         )
     }
 
@@ -232,7 +305,7 @@ class AnkiCardCreator(
         }
     }
 
-    suspend fun addNote(card: AnkiCard, deckName: String = DEFAULT_DECK_NAME): Result<Long> = withContext(Dispatchers.IO) {
+    suspend fun addNote(card: AnkiCard, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null): Result<Long> = withContext(Dispatchers.IO) {
         try {
             if (!hasAnkiPermission()) {
                 return@withContext Result.failure(SecurityException("AnkiDroid permission not granted"))
@@ -242,7 +315,8 @@ class AnkiCardCreator(
             }
             val deckId = getOrCreateDeck(deckName)
                 ?: return@withContext Result.failure(IllegalStateException("Failed to create/find deck"))
-            val modelId = getOrCreateModel()
+            val css = if (stylePrefs != null) buildCssFromPreferences(stylePrefs) else CARD_CSS
+            val modelId = getOrCreateModel(css)
                 ?: return@withContext Result.failure(IllegalStateException("Failed to create/find note type"))
 
             val noteId = ankiApi.addNote(modelId, deckId, card.toFieldArray(), null)
@@ -319,12 +393,12 @@ class AnkiCardCreator(
         }
     }
 
-    suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME): Result<Long> {
+    suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null): Result<Long> {
         val audioFileName = if (tts != null) {
             val textForTts = entry.reading.ifBlank { entry.expression }
             generateTtsAudio(textForTts, tts)
         } else ""
         val card = createAnkiCard(entry, audioFileName)
-        return addNote(card, deckName)
+        return addNote(card, deckName, stylePrefs)
     }
 }

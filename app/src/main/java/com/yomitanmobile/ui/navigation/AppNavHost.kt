@@ -6,6 +6,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.yomitanmobile.ui.cardstyle.CardStyleScreen
 import com.yomitanmobile.ui.detail.DetailScreen
 import com.yomitanmobile.ui.download.DictionaryDownloadScreen
 import com.yomitanmobile.ui.search.SearchScreen
@@ -62,7 +63,16 @@ fun AppNavHost(
                 },
                 onNavigateToStatistics = {
                     navController.navigate(Screen.Statistics.route)
+                },
+                onNavigateToCardStyle = {
+                    navController.navigate(Screen.CardStyle.route)
                 }
+            )
+        }
+
+        composable(Screen.CardStyle.route) {
+            CardStyleScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
