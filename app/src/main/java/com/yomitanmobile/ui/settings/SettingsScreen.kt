@@ -1,5 +1,6 @@
 package com.yomitanmobile.ui.settings
 
+import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
@@ -95,6 +97,7 @@ fun SettingsScreen(
     var showDeckEditDialog by remember { mutableStateOf(false) }
     var currentDeckName by remember { mutableStateOf("") }
     var currentThemeMode by remember { mutableStateOf("system") }
+    var currentLanguage by remember { mutableStateOf("system") }
     var dailyGoalCount by remember { mutableStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -104,6 +107,9 @@ fun SettingsScreen(
         currentDeckName = prefs[MainActivity.ANKI_DECK_NAME] ?: ""
         currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
         dailyGoalCount = (prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0).toFloat()
+        // Language is stored in SharedPreferences (needed for synchronous read at startup)
+        val langPrefs = context.getSharedPreferences(MainActivity.LANG_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        currentLanguage = langPrefs.getString(MainActivity.LANG_PREFS_KEY, "system") ?: "system"
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -530,6 +536,70 @@ fun SettingsScreen(
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
+                    }
+                }
+            }
+
+            // Language selector
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Language,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Język aplikacji",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    when (currentLanguage) {
+                                        "pl" -> "Polski"
+                                        "en" -> "English"
+                                        else -> "Systemowy"
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                "system" to "Systemowy",
+                                "pl" to "Polski",
+                                "en" to "English"
+                            ).forEach { (code, label) ->
+                                FilterChip(
+                                    selected = currentLanguage == code,
+                                    onClick = {
+                                        if (currentLanguage != code) {
+                                            currentLanguage = code
+                                            val langPrefs = context.getSharedPreferences(
+                                                MainActivity.LANG_PREFS_NAME,
+                                                android.content.Context.MODE_PRIVATE
+                                            )
+                                            langPrefs.edit()
+                                                .putString(MainActivity.LANG_PREFS_KEY, code)
+                                                .apply()
+                                            (context as? Activity)?.recreate()
+                                        }
+                                    },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
                     }
                 }
             }

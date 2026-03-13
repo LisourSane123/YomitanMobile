@@ -58,6 +58,24 @@ class MainActivity : ComponentActivity() {
 
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
+
+        // Language (stored in SharedPreferences for sync read in attachBaseContext)
+        const val LANG_PREFS_NAME = "lang_prefs"
+        const val LANG_PREFS_KEY = "app_language" // "system" | "pl" | "en"
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        val langPrefs = newBase.getSharedPreferences(LANG_PREFS_NAME, Context.MODE_PRIVATE)
+        val language = langPrefs.getString(LANG_PREFS_KEY, "system") ?: "system"
+        val locale = when (language) {
+            "pl" -> java.util.Locale("pl")
+            "en" -> java.util.Locale("en")
+            else -> java.util.Locale.getDefault()
+        }
+        val config = android.content.res.Configuration(newBase.resources.configuration)
+        config.setLocale(locale)
+        val localizedContext = newBase.createConfigurationContext(config)
+        super.attachBaseContext(localizedContext)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

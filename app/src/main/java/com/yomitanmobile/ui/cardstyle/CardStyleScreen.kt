@@ -22,9 +22,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -147,6 +151,7 @@ fun CardStyleScreen(
         }
     }
 
+    var previewExpanded by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Preview HTML updates live (without saving)
@@ -206,18 +211,33 @@ fun CardStyleScreen(
         ) {
             // Live Preview
             item {
-                Text(
-                    "Podgląd fiszki",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Podgląd fiszki",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(onClick = { previewExpanded = !previewExpanded }) {
+                        Text(if (previewExpanded) "Zwiń" else "Rozwiń")
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            if (previewExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
 
             item {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp),
+                        .height(if (previewExpanded) 640.dp else 320.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -227,6 +247,7 @@ fun CardStyleScreen(
                                 settings.javaScriptEnabled = false
                                 settings.loadWithOverviewMode = true
                                 settings.useWideViewPort = true
+                                isVerticalScrollBarEnabled = true
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 loadDataWithBaseURL(null, previewHtml, "text/html", "utf-8", null)
                             }
@@ -524,6 +545,102 @@ private fun ColorPickerRow(
     presetColors: List<String>,
     onColorSelected: (String) -> Unit
 ) {
+    var showCustomPicker by remember { mutableStateOf(false) }
+    var customR by remember { mutableFloatStateOf(128f) }
+    var customG by remember { mutableFloatStateOf(128f) }
+    var customB by remember { mutableFloatStateOf(128f) }
+
+    // Re-init sliders from current color whenever dialog opens
+    LaunchedEffect(showCustomPicker) {
+        if (showCustomPicker) {
+            val c = try {
+                android.graphics.Color.parseColor(currentColor)
+            } catch (_: Exception) {
+                android.graphics.Color.parseColor("#808080")
+            }
+            customR = android.graphics.Color.red(c).toFloat()
+            customG = android.graphics.Color.green(c).toFloat()
+            customB = android.graphics.Color.blue(c).toFloat()
+        }
+    }
+
+    val customHex = "#%02x%02x%02x".format(customR.toInt(), customG.toInt(), customB.toInt())
+    val customPreviewColor = Color(customR / 255f, customG / 255f, customB / 255f)
+    val isCustomSelected = currentColor !in presetColors
+
+    if (showCustomPicker) {
+        AlertDialog(
+            onDismissRequest = { showCustomPicker = false },
+            title = { Text("Własny kolor – $label") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Color preview swatch
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(customPreviewColor)
+                    )
+                    Text(
+                        customHex.uppercase(),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    // R slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("R", fontWeight = FontWeight.Bold, color = Color.Red)
+                        Text("${customR.toInt()}", fontWeight = FontWeight.Bold, color = Color.Red)
+                    }
+                    Slider(
+                        value = customR,
+                        onValueChange = { customR = it },
+                        valueRange = 0f..255f
+                    )
+                    // G slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("G", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                        Text("${customG.toInt()}", fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                    }
+                    Slider(
+                        value = customG,
+                        onValueChange = { customG = it },
+                        valueRange = 0f..255f
+                    )
+                    // B slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("B", fontWeight = FontWeight.Bold, color = Color(0xFF2196F3))
+                        Text("${customB.toInt()}", fontWeight = FontWeight.Bold, color = Color(0xFF2196F3))
+                    }
+                    Slider(
+                        value = customB,
+                        onValueChange = { customB = it },
+                        valueRange = 0f..255f
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    onColorSelected(customHex)
+                    showCustomPicker = false
+                }) { Text("Wybierz") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomPicker = false }) { Text("Anuluj") }
+            }
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -533,7 +650,9 @@ private fun ColorPickerRow(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(label, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 8.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 presetColors.forEach { colorHex ->
@@ -557,6 +676,33 @@ private fun ColorPickerRow(
                             )
                             .clickable { onColorSelected(colorHex) }
                     )
+                }
+                // Custom color button — shows current custom color if selected, or a + circle
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isCustomSelected) parseHexColor(currentColor)
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        .border(
+                            if (isCustomSelected) 3.dp else 2.dp,
+                            if (isCustomSelected) MaterialTheme.colorScheme.primary
+                            else Color.Gray.copy(alpha = 0.6f),
+                            CircleShape
+                        )
+                        .clickable { showCustomPicker = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!isCustomSelected) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Własny kolor",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
