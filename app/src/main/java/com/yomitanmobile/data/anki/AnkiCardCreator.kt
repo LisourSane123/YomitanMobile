@@ -274,19 +274,12 @@ class AnkiCardCreator(
     }
 
     private fun formatMeaningForCard(definitions: List<String>): String {
-        val selectedDefinitions = definitions.asSequence()
+        val meaningLines = definitions.asSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
             .take(MAX_MEANINGS_ON_CARD)
             .toList()
-
-        val meaningLines = selectedDefinitions.flatMap { definition ->
-            definition
-                .split(Regex("\\s*;\\s*"))
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
-        }
 
         return meaningLines.joinToString("<br>") { InputSanitizer.escapeHtml(it) }
     }

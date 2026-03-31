@@ -105,18 +105,20 @@ fun CardStyleScreen(
     var randomVoicesEnabled by remember { mutableStateOf(false) }
     var randomVoices by remember { mutableStateOf<Set<String>>(emptySet()) }
     var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
+    var activeTts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
 
     DisposableEffect(context) {
-        var tts: android.speech.tts.TextToSpeech? = null
-        tts = android.speech.tts.TextToSpeech(context) { status ->
+        var ttsInstance: android.speech.tts.TextToSpeech? = null
+        ttsInstance = android.speech.tts.TextToSpeech(context) { status ->
             if (status == android.speech.tts.TextToSpeech.SUCCESS) {
                 try {
-                    val voices = tts?.voices?.filter { it.locale.language == "ja" }?.map { it.name } ?: emptyList()
+                    val voices = ttsInstance?.voices?.filter { it.locale.language == "ja" }?.map { it.name } ?: emptyList()
                     availableVoices = voices.sorted()
                 } catch (e: Exception) {}
             }
         }
-        onDispose { tts?.shutdown() }
+        activeTts = ttsInstance
+        onDispose { ttsInstance?.shutdown() }
     }
 
     // Load current preferences
@@ -177,6 +179,10 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_SHOW_PITCH] = showPitchAccent
                 prefs[MainActivity.CARD_SHOW_FREQUENCY] = showFrequency
                 prefs[MainActivity.CARD_SHOW_SENTENCE] = showSentence
+                prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] = randomFontsEnabled
+                prefs[MainActivity.CARD_RANDOM_FONTS] = randomFonts
+                prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] = randomVoicesEnabled
+                prefs[MainActivity.TTS_RANDOM_VOICES] = randomVoices
             }
         }
     }
@@ -568,6 +574,12 @@ fun CardStyleScreen(
                                             randomVoices = if (isSelected) {
                                                 randomVoices.minus(voice)
                                             } else {
+                                                activeTts?.let { tmpTts ->
+                                                    tmpTts.voices?.find { it.name == voice }?.let { selectedVoice ->
+                                                        tmpTts.voice = selectedVoice
+                                                        tmpTts.speak("たべる", android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                                                    }
+                                                }
                                                 randomVoices.plus(voice)
                                             }
                                         },
