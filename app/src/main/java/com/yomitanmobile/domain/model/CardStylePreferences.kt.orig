@@ -17,11 +17,7 @@ data class CardStylePreferences(
     val accentColor: String = "#80cbc4",
     val showPitchAccent: Boolean = true,
     val showFrequency: Boolean = true,
-    val showSentence: Boolean = true,
-    val randomFontsEnabled: Boolean = false,
-    val randomFonts: Set<String> = emptySet(),
-    val randomVoicesEnabled: Boolean = false,
-    val randomVoices: Set<String> = emptySet()
+    val showSentence: Boolean = true
 ) {
     companion object {
         val FONT_FAMILIES = listOf(

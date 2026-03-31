@@ -94,8 +94,16 @@ class AnkiCardCreator(
          */
         fun buildCssFromPreferences(prefs: CardStylePreferences): String {
             val fontWeight = if (prefs.expressionBold) "bold" else "normal"
+            val baseFontImportUrl = CardStylePreferences.googleFontsImportUrl(prefs.fontFamily)
+            val baseFontImport = if (baseFontImportUrl != null) "@import url('$baseFontImportUrl');\n" else ""
+            
+            val randomFontsImports = if (prefs.randomFontsEnabled && prefs.randomFonts.isNotEmpty()) {
+                prefs.randomFonts.mapNotNull { CardStylePreferences.googleFontsImportUrl(it) }
+                    .joinToString("\n") { "@import url('$it');" } + "\n"
+            } else ""
+            
             return """
-            .card {
+            $baseFontImport$randomFontsImports.card {
                 font-family: "${prefs.fontFamily}", "Yu Gothic", "Meiryo", sans-serif;
                 font-size: ${prefs.meaningFontSize}px;
                 text-align: center;
@@ -237,14 +245,18 @@ class AnkiCardCreator(
         }
     }
 
-    fun createAnkiCard(entry: WordEntry, audioFileName: String = ""): AnkiCard {
+    fun createAnkiCard(entry: WordEntry, audioFileName: String = "", randomFont: String? = null): AnkiCard {
         val pitchHtml = buildPitchAccentHtml(
             entry.reading.ifBlank { entry.expression },
             entry.pitchAccent
         )
         val freqText = entry.frequencyLabel()
+        
+        val frontExpression = InputSanitizer.escapeHtml(entry.expression.ifBlank { entry.reading })
+        val frontContent = if (randomFont != null) "<span style=\"font-family: '$randomFont', sans-serif;\">$frontExpression</span>" else frontExpression
+        
         return AnkiCard(
-            front = InputSanitizer.escapeHtml(entry.expression.ifBlank { entry.reading }),
+            front = frontContent,
             reading = InputSanitizer.escapeHtml(entry.reading),
             meaning = formatMeaningForCard(entry.definitions),
             pitchAccent = pitchHtml,
@@ -443,9 +455,21 @@ class AnkiCardCreator(
     suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null): Result<Long> {
         val audioFileName = if (tts != null) {
             val textForTts = entry.reading.ifBlank { entry.expression }
+            if (stylePrefs != null && stylePrefs.randomVoicesEnabled && stylePrefs.randomVoices.isNotEmpty()) {
+                try {
+                    val randomVoiceName = stylePrefs.randomVoices.random()
+                    tts.voices?.find { it.name == randomVoiceName }?.let { tts.setVoice(it) }
+                } catch (e: Exception) { }
+            }
             generateTtsAudio(textForTts, tts)
         } else ""
-        val card = createAnkiCard(entry, audioFileName)
+        
+        var randomFont: String? = null
+        if (stylePrefs != null && stylePrefs.randomFontsEnabled && stylePrefs.randomFonts.isNotEmpty()) {
+            randomFont = stylePrefs.randomFonts.random()
+        }
+        
+        val card = createAnkiCard(entry, audioFileName, randomFont)
         return addNote(card, deckName, stylePrefs)
     }
 }

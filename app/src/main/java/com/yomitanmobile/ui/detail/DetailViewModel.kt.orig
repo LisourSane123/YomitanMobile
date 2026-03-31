@@ -233,11 +233,7 @@ class DetailViewModel @Inject constructor(
             accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: "#80cbc4",
             showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: true,
             showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true,
-            showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true,
-            randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: false,
-            randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet(),
-            randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false,
-            randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
+            showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true
         )
     }
 

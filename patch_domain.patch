@@ -1,0 +1,15 @@
+--- app/src/main/java/com/yomitanmobile/domain/model/CardStylePreferences.kt
++++ app/src/main/java/com/yomitanmobile/domain/model/CardStylePreferences.kt
+@@ -14,7 +14,11 @@
+     val accentColor: String = "#80cbc4",
+     val showPitchAccent: Boolean = true,
+     val showFrequency: Boolean = true,
+-    val showSentence: Boolean = true
++    val showSentence: Boolean = true,
++    val randomFontsEnabled: Boolean = false,
++    val randomFonts: Set<String> = emptySet(),
++    val randomVoicesEnabled: Boolean = false,
++    val randomVoices: Set<String> = emptySet()
+ ) {
+     companion object {
+         val FONT_FAMILIES = listOf(

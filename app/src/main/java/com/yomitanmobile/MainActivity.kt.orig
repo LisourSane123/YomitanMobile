@@ -20,7 +20,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.navigation.compose.rememberNavController
@@ -56,10 +55,6 @@ class MainActivity : ComponentActivity() {
         val CARD_SHOW_PITCH = booleanPreferencesKey("card_show_pitch")
         val CARD_SHOW_FREQUENCY = booleanPreferencesKey("card_show_frequency")
         val CARD_SHOW_SENTENCE = booleanPreferencesKey("card_show_sentence")
-        val CARD_RANDOM_FONTS_ENABLED = booleanPreferencesKey("card_random_fonts_enabled")
-        val CARD_RANDOM_FONTS = stringSetPreferencesKey("card_random_fonts")
-        val TTS_RANDOM_VOICES_ENABLED = booleanPreferencesKey("tts_random_voices_enabled")
-        val TTS_RANDOM_VOICES = stringSetPreferencesKey("tts_random_voices")
 
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled

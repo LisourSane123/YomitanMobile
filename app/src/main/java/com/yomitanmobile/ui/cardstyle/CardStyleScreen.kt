@@ -48,6 +48,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -74,7 +77,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CardStyleScreen(
     onNavigateBack: () -> Unit
@@ -97,6 +100,25 @@ fun CardStyleScreen(
     var showFrequency by remember { mutableStateOf(true) }
     var showSentence by remember { mutableStateOf(true) }
 
+    var randomFontsEnabled by remember { mutableStateOf(false) }
+    var randomFonts by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var randomVoicesEnabled by remember { mutableStateOf(false) }
+    var randomVoices by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    DisposableEffect(context) {
+        var tts: android.speech.tts.TextToSpeech? = null
+        tts = android.speech.tts.TextToSpeech(context) { status ->
+            if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                try {
+                    val voices = tts?.voices?.filter { it.locale.language == "ja" }?.map { it.name } ?: emptyList()
+                    availableVoices = voices.sorted()
+                } catch (e: Exception) {}
+            }
+        }
+        onDispose { tts?.shutdown() }
+    }
+
     // Load current preferences
     LaunchedEffect(Unit) {
         val prefs = context.dataStore.data.first()
@@ -113,6 +135,10 @@ fun CardStyleScreen(
         showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: true
         showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true
         showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true
+        randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: false
+        randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet()
+        randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false
+        randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
     }
 
     fun currentPreferences() = CardStylePreferences(
@@ -128,7 +154,11 @@ fun CardStyleScreen(
         accentColor = accentColor,
         showPitchAccent = showPitchAccent,
         showFrequency = showFrequency,
-        showSentence = showSentence
+        showSentence = showSentence,
+        randomFontsEnabled = randomFontsEnabled,
+        randomFonts = randomFonts,
+        randomVoicesEnabled = randomVoicesEnabled,
+        randomVoices = randomVoices
     )
 
     fun savePreferences() {
@@ -435,6 +465,118 @@ fun CardStyleScreen(
                         checked = showSentence,
                         onCheckedChange = { showSentence = it }
                     )
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Losowa czcionka słowa",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Przy eksporcie fiszki, słowo na froncie otrzyma losową czcionkę z wybranych",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                            Switch(
+                                checked = randomFontsEnabled,
+                                onCheckedChange = { randomFontsEnabled = it }
+                            )
+                        }
+
+                        if (randomFontsEnabled) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                CardStylePreferences.FONT_FAMILIES.forEach { font ->
+                                    val isSelected = randomFonts.contains(font)
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            randomFonts = if (isSelected) {
+                                                randomFonts.minus(font)
+                                            } else {
+                                                randomFonts.plus(font)
+                                            }
+                                        },
+                                        label = { Text(text = font) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Losowy głos TTS (Japoński)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Przy eksporcie fiszki z audio TTS, użyty zostanie losowy głos z wybranych",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                            Switch(
+                                checked = randomVoicesEnabled,
+                                onCheckedChange = { randomVoicesEnabled = it }
+                            )
+                        }
+
+                        if (randomVoicesEnabled) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                availableVoices.forEach { voice ->
+                                    val isSelected = randomVoices.contains(voice)
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            randomVoices = if (isSelected) {
+                                                randomVoices.minus(voice)
+                                            } else {
+                                                randomVoices.plus(voice)
+                                            }
+                                        },
+                                        label = { Text(text = voice) }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
