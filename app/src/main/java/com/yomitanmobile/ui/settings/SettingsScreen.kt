@@ -28,6 +28,9 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MenuBook
@@ -95,6 +98,8 @@ fun SettingsScreen(
     val importProgress by viewModel.importProgress.collectAsState()
     var showDeleteDialog by remember { mutableStateOf<String?>(null) }
     var showDeckEditDialog by remember { mutableStateOf(false) }
+    var showLicensesDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
     var currentDeckName by remember { mutableStateOf("") }
     var currentThemeMode by remember { mutableStateOf("system") }
     var currentLanguage by remember { mutableStateOf("system") }
@@ -190,6 +195,56 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeckEditDialog = false }) { Text("Anuluj") }
+            }
+        )
+    }
+
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text("Polityka Prywatności") },
+            text = {
+                LazyColumn {
+                    item {
+                        Text(
+                            text = "Aplikacja działa w pełni offline (lokalnie). Nie zbieramy, " +
+                                    "nie przechowujemy, ani nie wysyłamy żadnych danych osobistych " +
+                                    "na zewnętrzne serwery. Wymaga połączenia z internetem " +
+                                    "jedynie w celu pobrania słowników od dostawców zewnętrznych.",
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) { Text("OK") }
+            }
+        )
+    }
+
+    if (showLicensesDialog) {
+        AlertDialog(
+            onDismissRequest = { showLicensesDialog = false },
+            title = { Text("O aplikacji i licencje") },
+            text = {
+                LazyColumn {
+                    item {
+                        Text("Wersja aplikacji: 1.0.0", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Aplikacja korzysta z otwartych słowników do działania. " +
+                                "Dostępne słowniki m.in. JMdict oraz KANJIDIC są udostępniane " +
+                                "na licencjach Creative Commons Attribution-ShareAlike 4.0 International " +
+                                "lub podobnych.\n\n" +
+                                "Własność i prawa autorskie:", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text("JMdict/Kanjidic (EDRDG - Electronic Dictionary Research and Development Group)")
+                        Spacer(Modifier.height(8.dp))
+                        Text("Tatoeba Project (CC-BY 2.0 FR) dla przykładowych zdań (jeśli zaimportowane).")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLicensesDialog = false }) { Text("Zamknij") }
             }
         )
     }
@@ -611,6 +666,33 @@ fun SettingsScreen(
                     title = "Statystyki",
                     subtitle = "Przegląd aktywności, streak, wykres fiszek",
                     onClick = onNavigateToStatistics
+                )
+            }
+
+            // ═══════════════════════════════════════
+            // SECTION: Informacje (About)
+            // ═══════════════════════════════════════
+            item {
+                SectionHeader(
+                    icon = Icons.Default.Info,
+                    title = "Informacje"
+                )
+            }
+            item {
+                SettingsClickableItem(
+                    icon = Icons.Default.Policy,
+                    title = "Polityka Prywatności",
+                    subtitle = "Zasady prywatności i lokalne przetwarzanie danych",
+                    onClick = { showPrivacyDialog = true }
+                )
+            }
+            item { Spacer(Modifier.height(8.dp)) }
+            item {
+                SettingsClickableItem(
+                    icon = Icons.Default.MenuBook,
+                    title = "Licencje słowników",
+                    subtitle = "Informacje o otwartych danych i prawach autorskich",
+                    onClick = { showLicensesDialog = true }
                 )
             }
 
