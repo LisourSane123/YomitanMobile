@@ -7,9 +7,10 @@ data class AnkiCard(
     val pitchAccent: String,
     val frequency: String,
     val audioFileName: String,
-    val sentence: String
+    val sentence: String,
+    val kanjiBreakdown: String = ""
 ) {
     fun toFieldArray(): Array<String> = arrayOf(
-        front, reading, meaning, pitchAccent, frequency, audioFileName, sentence
+        front, reading, meaning, pitchAccent, frequency, audioFileName, sentence, kanjiBreakdown
     )
 }

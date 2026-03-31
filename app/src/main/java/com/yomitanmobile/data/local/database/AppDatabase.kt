@@ -8,12 +8,14 @@ import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
+import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.DictionaryEntryFts
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
+import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.SearchHistory
 
 @Database(
@@ -23,9 +25,10 @@ import com.yomitanmobile.data.local.entity.SearchHistory
         DictionaryInfo::class,
         ExportedWord::class,
         FavoriteWord::class,
-        SearchHistory::class
+        SearchHistory::class,
+        KanjiEntry::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -35,6 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun exportedWordDao(): ExportedWordDao
     abstract fun favoriteWordDao(): FavoriteWordDao
     abstract fun searchHistoryDao(): SearchHistoryDao
+    abstract fun kanjiDao(): KanjiDao
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"

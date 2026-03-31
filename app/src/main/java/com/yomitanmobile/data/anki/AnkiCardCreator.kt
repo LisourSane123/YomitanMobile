@@ -30,10 +30,10 @@ class AnkiCardCreator(
         private const val MAX_MEANINGS_ON_CARD = 3
 
         const val DEFAULT_DECK_NAME = "Mining Deck"
-        const val MODEL_NAME = "Yomitan-Mobile-v2"
+        const val MODEL_NAME = "Yomitan-Mobile-v3"
         const val PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
 
-        val FIELD_NAMES = arrayOf("Front", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence")
+        val FIELD_NAMES = arrayOf("Front", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence", "KanjiBreakdown")
 
         const val CARD_FRONT_TEMPLATE = """
             <div class="front">
@@ -51,6 +51,7 @@ class AnkiCardCreator(
                 <div class="meaning">{{Meaning}}</div>
                 <div class="audio">{{Audio}}</div>
                 {{#Sentence}}<div class="sentence">{{Sentence}}</div>{{/Sentence}}
+                {{#KanjiBreakdown}}<div class="kanji-breakdown">{{KanjiBreakdown}}</div>{{/KanjiBreakdown}}
             </div>
         """
 
@@ -87,6 +88,7 @@ class AnkiCardCreator(
                 border-left: 3px solid #4dd0e1;
             }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
+            .kanji-breakdown { font-size: 16px; color: #ccc; margin-top: 15px; padding: 12px; background: #252525; border-radius: 8px; text-align: left; } .kanji-item { margin-bottom: 8px; } .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
         """
 
         /**
@@ -138,6 +140,7 @@ class AnkiCardCreator(
                 ${if (!prefs.showSentence) "display: none;" else ""}
             }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
+            .kanji-breakdown { font-size: 16px; color: #ccc; margin-top: 15px; padding: 12px; background: #252525; border-radius: 8px; text-align: left; } .kanji-item { margin-bottom: 8px; } .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
             """.trimIndent()
         }
 
@@ -445,7 +448,7 @@ class AnkiCardCreator(
         }
     }
 
-    suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null): Result<Long> {
+    suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null, kanjiData: List<com.yomitanmobile.data.local.entity.KanjiEntry> = emptyList()): Result<Long> {
         val audioFileName = if (tts != null) {
             val textForTts = entry.reading.ifBlank { entry.expression }
             if (stylePrefs != null && stylePrefs.randomVoicesEnabled && stylePrefs.randomVoices.isNotEmpty()) {
@@ -462,7 +465,17 @@ class AnkiCardCreator(
             randomFont = stylePrefs.randomFonts.random()
         }
         
-        val card = createAnkiCard(entry, audioFileName, randomFont)
+        val kanjiHtml = if (kanjiData.isNotEmpty()) {
+            kanjiData.joinToString("") { kanji ->
+                "<div class='kanji-item'><span class='kanji-char'>${kanji.kanji}</span>" +
+                (if (kanji.onyomi.isNotEmpty()) " On: ${kanji.onyomi}" else "") +
+                (if (kanji.kunyomi.isNotEmpty()) " Kun: ${kanji.kunyomi}" else "") +
+                (if (kanji.meanings.isNotEmpty()) "<br>Znaczenie: " + kanji.meanings else "") +
+                "</div>"
+            }
+        } else ""
+
+        val card = createAnkiCard(entry, audioFileName, randomFont).copy(kanjiBreakdown = kanjiHtml)
         return addNote(card, deckName, stylePrefs)
     }
 }

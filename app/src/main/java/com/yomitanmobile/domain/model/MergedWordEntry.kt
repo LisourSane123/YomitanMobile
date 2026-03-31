@@ -60,7 +60,7 @@ data class MergedWordEntry(
         /**
          * Checks if a character is a CJK kanji.
          */
-        private fun isKanji(c: Char): Boolean {
+        fun isKanji(c: Char): Boolean {
             val type = Character.UnicodeBlock.of(c)
             return type == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS ||
                     type == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A ||
@@ -71,7 +71,7 @@ data class MergedWordEntry(
         /**
          * Returns true if the string contains at least one kanji character.
          */
-        private fun containsKanji(s: String): Boolean = s.any { isKanji(it) }
+        fun containsKanji(s: String): Boolean = s.any { isKanji(it) }
 
         /**
          * Merge a list of [WordEntry] items into consolidated [MergedWordEntry] items.

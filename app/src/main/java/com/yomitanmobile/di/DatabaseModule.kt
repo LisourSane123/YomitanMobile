@@ -7,6 +7,7 @@ import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
+import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.database.AppDatabase
 import dagger.Module
 import dagger.Provides
@@ -59,5 +60,11 @@ object DatabaseModule {
     @Singleton
     fun provideSearchHistoryDao(database: AppDatabase): SearchHistoryDao {
         return database.searchHistoryDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideKanjiDao(database: AppDatabase): KanjiDao {
+        return database.kanjiDao()
     }
 }

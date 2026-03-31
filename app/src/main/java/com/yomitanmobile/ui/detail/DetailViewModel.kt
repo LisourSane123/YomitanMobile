@@ -245,8 +245,14 @@ class DetailViewModel @Inject constructor(
         _isExporting.value = true
         try {
             val stylePrefs = loadCardStylePreferences()
+            
+            // Fetch kanji information
+            val kanjiChars = word.expression.filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }.map { it.toString() }.distinct()
+            val kanjiData = if (kanjiChars.isNotEmpty()) repository.getKanjis(kanjiChars) else emptyList()
+
             val result = ankiCardCreator.exportToAnki(
                 entry = word,
+                kanjiData = kanjiData,
                 tts = audioPlayer.getTts(),
                 deckName = deckName,
                 stylePrefs = stylePrefs

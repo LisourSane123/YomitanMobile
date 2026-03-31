@@ -1,6 +1,8 @@
 package com.yomitanmobile.data.parser
 
 import com.yomitanmobile.data.local.entity.DictionaryEntry
+import com.yomitanmobile.data.local.entity.KanjiEntry
+
 import com.yomitanmobile.domain.model.ImportProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -55,7 +57,8 @@ class YomitanDictionaryParser @Inject constructor() {
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit = {},
         onBatch: suspend (List<DictionaryEntry>, String) -> Unit,
-        onMetaBatch: suspend (Map<String, Int>, Map<String, String>) -> Unit = { _, _ -> }
+        onMetaBatch: suspend (Map<String, Int>, Map<String, String>) -> Unit = { _, _ -> },
+        onKanjiBatch: suspend (List<KanjiEntry>, String) -> Unit = { _, _ -> }
     ): ParseResult = withContext(Dispatchers.IO) {
 
         var indexJson: String? = null
@@ -116,6 +119,51 @@ class YomitanDictionaryParser @Inject constructor() {
                             } catch (_: Exception) {
                                 // Error parsing term bank file
                             }
+                        }
+                        name.contains("kanji_bank_") && name.endsWith(".json") -> {
+                            try {
+                                val content = zip.bufferedReader().readText()
+                                val jsonArray = json.decodeFromString<JsonArray>(content)
+                                val KANJI_CHUNK_SIZE = 2000
+                                val batch = mutableListOf<KanjiEntry>()
+
+                                for (item in jsonArray) {
+                                    try {
+                                        val kanjiArr = item.jsonArray
+                                        if (kanjiArr.size < 5) continue
+                                        
+                                        val character = safeString(kanjiArr[0])
+                                        val onyomi = safeString(kanjiArr[1])
+                                        val kunyomi = safeString(kanjiArr[2])
+                                        val meaningsArr = parseDefinitions(kanjiArr[4])
+                                        
+                                        val encodedMeanings = json.encodeToString(
+                                            ListSerializer(String.serializer()),
+                                            meaningsArr
+                                        )
+
+                                        if (character.isNotBlank()) {
+                                            batch.add(
+                                                KanjiEntry(
+                                                    kanji = character,
+                                                    onyomi = onyomi,
+                                                    kunyomi = kunyomi,
+                                                    meanings = encodedMeanings,
+                                                    dictionaryName = name // Use zip name temporarily or fix below
+                                                )
+                                            )
+                                        }
+
+                                        if (batch.size >= KANJI_CHUNK_SIZE) {
+                                            onKanjiBatch(batch.toList(), name)
+                                            batch.clear()
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                                if (batch.isNotEmpty()) {
+                                    onKanjiBatch(batch, name)
+                                }
+                            } catch (_: Exception) {}
                         }
                         name.contains("term_meta_bank_") && name.endsWith(".json") -> {
                             hasMetaBanks = true

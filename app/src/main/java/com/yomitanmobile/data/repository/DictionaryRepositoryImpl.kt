@@ -2,8 +2,10 @@ package com.yomitanmobile.data.repository
 
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
+import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.DictionaryInfo
+import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.mapper.toDomain
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.domain.model.ImportProgress
@@ -25,8 +27,13 @@ import javax.inject.Singleton
 class DictionaryRepositoryImpl @Inject constructor(
     private val dictionaryDao: DictionaryDao,
     private val dictionaryInfoDao: DictionaryInfoDao,
+    private val kanjiDao: KanjiDao,
     private val parser: YomitanDictionaryParser
 ) : DictionaryRepository {
+
+    override suspend fun getKanjis(kanjiList: List<String>): List<KanjiEntry> {
+        return kanjiDao.getKanjis(kanjiList)
+    }
 
     override fun search(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
@@ -81,6 +88,7 @@ class DictionaryRepositoryImpl @Inject constructor(
     ): ImportResult = withContext(Dispatchers.IO) {
         try {
             var totalInserted = 0
+            var totalKanjiInserted = 0
             var dictionaryNameFromBatch: String
             var totalFreqUpdates = 0
             var totalPitchUpdates = 0
@@ -104,7 +112,13 @@ class DictionaryRepositoryImpl @Inject constructor(
                     if (pitchMap.isNotEmpty()) {
                         dictionaryDao.updatePitchAccentBatch(pitchMap)
                         totalPitchUpdates += pitchMap.size
+                    }                },
+                onKanjiBatch = { batch, _ ->
+                    val batchSize = 500
+                    batch.chunked(batchSize).forEach { chunk ->
+                        kanjiDao.insertAll(chunk)
                     }
+                    totalKanjiInserted += batch.size
                 }
             )
 
@@ -133,7 +147,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             val entryCount = if (parseResult.isMetaDictionary) {
                 totalFreqUpdates + totalPitchUpdates
             } else {
-                totalInserted
+                totalInserted + totalKanjiInserted
             }
 
             dictionaryInfoDao.insert(
@@ -163,6 +177,7 @@ class DictionaryRepositoryImpl @Inject constructor(
     override suspend fun deleteDictionary(dictionaryName: String) {
         withContext(Dispatchers.IO) {
             dictionaryDao.deleteByDictionary(dictionaryName)
+            kanjiDao.deleteByDictionary(dictionaryName)
             dictionaryInfoDao.deleteByName(dictionaryName)
             try {
                 dictionaryDao.rebuildFtsIndex()

@@ -1,6 +1,7 @@
 package com.yomitanmobile.domain.repository
 
 import com.yomitanmobile.data.local.entity.DictionaryInfo
+import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
 import com.yomitanmobile.domain.model.WordEntry
@@ -13,6 +14,7 @@ interface DictionaryRepository {
     fun searchByDefinition(query: String): Flow<List<WordEntry>>
     suspend fun getEntry(id: Long): WordEntry?
     suspend fun getEntriesByReading(reading: String): List<WordEntry>
+    suspend fun getKanjis(kanjiList: List<String>): List<KanjiEntry>
     suspend fun importDictionary(
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit = {}
