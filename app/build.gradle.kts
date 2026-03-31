@@ -9,6 +9,7 @@ plugins {
 android {
     namespace = "com.yomitanmobile"
     compileSdk = 34
+    buildToolsVersion = "34.0.0"
 
     defaultConfig {
         applicationId = "com.yomitanmobile"

@@ -27,6 +27,8 @@ class AnkiCardCreator(
     private val context: Context
 ) {
     companion object {
+        private const val MAX_MEANINGS_ON_CARD = 3
+
         const val DEFAULT_DECK_NAME = "Mining Deck"
         const val MODEL_NAME = "Yomitan-Mobile-v2"
         const val PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
@@ -244,7 +246,7 @@ class AnkiCardCreator(
         return AnkiCard(
             front = InputSanitizer.escapeHtml(entry.expression.ifBlank { entry.reading }),
             reading = InputSanitizer.escapeHtml(entry.reading),
-            meaning = entry.definitions.joinToString("<br>") { InputSanitizer.escapeHtml(it) },
+            meaning = formatMeaningForCard(entry.definitions),
             pitchAccent = pitchHtml,
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
@@ -257,6 +259,24 @@ class AnkiCardCreator(
                 }
             }
         )
+    }
+
+    private fun formatMeaningForCard(definitions: List<String>): String {
+        val selectedDefinitions = definitions.asSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(MAX_MEANINGS_ON_CARD)
+            .toList()
+
+        val meaningLines = selectedDefinitions.flatMap { definition ->
+            definition
+                .split(Regex("\\s*;\\s*"))
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+        }
+
+        return meaningLines.joinToString("<br>") { InputSanitizer.escapeHtml(it) }
     }
 
     /**
