@@ -390,7 +390,9 @@ class AnkiCardCreator(
             try {
                 val fileName =
                     "yomitan_${text.hashCode()}_${UUID.randomUUID().toString().take(8)}.wav"
-                val tempFile = File(context.cacheDir, fileName)
+                val audioDir = File(context.cacheDir, "anki_audio")
+                if (!audioDir.exists()) audioDir.mkdirs()
+                val tempFile = File(audioDir, fileName)
 
                 val success = suspendCancellableCoroutine { continuation ->
                     tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
