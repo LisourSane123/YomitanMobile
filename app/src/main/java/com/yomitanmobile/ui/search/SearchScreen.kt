@@ -70,11 +70,13 @@ fun SearchScreen(
     onSettingsClick: () -> Unit,
     onFavoritesClick: () -> Unit = {},
     focusSearch: Boolean = false,
+    initialQuery: String? = null,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val query by viewModel.query.collectAsState()
     val results by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
+    val deconjugationCandidates by viewModel.deconjugationCandidates.collectAsState()
     val searchHistory by viewModel.searchHistory.collectAsState()
     val dailyGoal by viewModel.dailyGoal.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
@@ -95,6 +97,12 @@ fun SearchScreen(
     // Refresh daily goal every time screen is shown (e.g. returning from detail after export)
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.refreshDailyGoal()
+    }
+
+    LaunchedEffect(initialQuery) {
+        if (!initialQuery.isNullOrBlank()) {
+            viewModel.applyExternalQuery(initialQuery)
+        }
     }
 
     Scaffold(
@@ -181,6 +189,13 @@ fun SearchScreen(
                 DailyGoalBanner(dailyGoal)
             }
 
+            if (searchMode == SearchMode.JAPANESE && query.isNotBlank() && deconjugationCandidates.isNotEmpty()) {
+                DeconjugationHintsCard(
+                    candidates = deconjugationCandidates,
+                    onCandidateClick = viewModel::onQueryChange
+                )
+            }
+
             when {
                 query.isBlank() -> {
                     if (searchHistory.isNotEmpty()) {
@@ -212,6 +227,63 @@ fun SearchScreen(
                             })
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeconjugationHintsCard(
+    candidates: List<com.yomitanmobile.util.DeconjugationCandidate>,
+    onCandidateClick: (String) -> Unit
+) {
+    val shown = candidates.take(4)
+    if (shown.isEmpty()) return
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "Rozpoznane formy podstawowe",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Spacer(Modifier.height(6.dp))
+            shown.forEachIndexed { idx, candidate ->
+                if (idx > 0) {
+                    Spacer(Modifier.height(6.dp))
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onCandidateClick(candidate.baseForm) }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = candidate.baseForm,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = candidate.reason,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

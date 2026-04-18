@@ -10,6 +10,8 @@ import com.yomitanmobile.data.local.entity.SearchHistory
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
+import com.yomitanmobile.util.DeconjugationCandidate
+import com.yomitanmobile.util.JapaneseDeconjugator
 import com.yomitanmobile.util.RomajiConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -63,6 +65,11 @@ class SearchViewModel @Inject constructor(
     private val _searchMode = MutableStateFlow(SearchMode.JAPANESE)
     val searchMode: StateFlow<SearchMode> = _searchMode.asStateFlow()
 
+    private val _deconjugationCandidates = MutableStateFlow<List<DeconjugationCandidate>>(emptyList())
+    val deconjugationCandidates: StateFlow<List<DeconjugationCandidate>> = _deconjugationCandidates.asStateFlow()
+
+    private var lastInjectedExternalQuery: String? = null
+
     val searchHistory: StateFlow<List<SearchHistory>> = searchHistoryDao
         .getRecentSearches(20)
         .catch { emit(emptyList()) }
@@ -99,14 +106,23 @@ class SearchViewModel @Inject constructor(
         .flatMapLatest { (q, mode) ->
             if (q.isBlank()) {
                 _isSearching.value = false
+                _deconjugationCandidates.value = emptyList()
                 flowOf(emptyList())
             } else {
                 _isSearching.value = true
                 val searchFlow = when (mode) {
-                    SearchMode.JAPANESE -> searchDictionaryUseCase.invoke(q)
+                    SearchMode.JAPANESE -> {
+                        val candidates = JapaneseDeconjugator.analyze(q)
+                        _deconjugationCandidates.value = candidates
+                        searchDictionaryUseCase.invokeWithAlternatives(
+                            query = q,
+                            alternatives = candidates.map { it.baseForm }
+                        )
+                    }
                     SearchMode.ENGLISH -> searchDictionaryUseCase.invokeEnglish(q)
                     SearchMode.ROMAJI -> {
                         val hiragana = RomajiConverter.toHiragana(q)
+                        _deconjugationCandidates.value = emptyList()
                         if (hiragana.isNotBlank()) searchDictionaryUseCase.invoke(hiragana)
                         else flowOf(emptyList())
                     }
@@ -146,6 +162,19 @@ class SearchViewModel @Inject constructor(
 
     fun onQueryChange(newQuery: String) {
         _query.value = newQuery
+    }
+
+    fun applyExternalQuery(sharedQuery: String) {
+        val normalized = sharedQuery.trim()
+            .lineSequence()
+            .firstOrNull()
+            ?.trim()
+            .orEmpty()
+        if (normalized.isBlank()) return
+        if (normalized == lastInjectedExternalQuery && normalized == _query.value) return
+
+        lastInjectedExternalQuery = normalized
+        _query.value = normalized
     }
 
     fun clearQuery() {

@@ -37,6 +37,8 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "yo
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    private var sharedSearchQuery: String? by mutableStateOf(null)
+
     companion object {
         val SETUP_COMPLETED = booleanPreferencesKey("setup_completed")
         val ANKI_DECK_NAME = stringPreferencesKey("anki_deck_name")
@@ -90,11 +92,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val isQuickSearch = intent?.action == QuickSearchWidgetProvider.ACTION_QUICK_SEARCH
+        sharedSearchQuery = extractSearchQueryFromIntent(intent)
 
         setContent {
             var startRoute by remember { mutableStateOf<String?>(null) }
             var themeMode by remember { mutableStateOf("system") }
-            var shouldFocusSearch by remember { mutableStateOf(isQuickSearch) }
+            var shouldFocusSearch by remember {
+                mutableStateOf(isQuickSearch || !sharedSearchQuery.isNullOrBlank())
+            }
 
             LaunchedEffect(Unit) {
                 val prefs = dataStore.data.first()
@@ -127,8 +132,18 @@ class MainActivity : ComponentActivity() {
                         AppNavHost(
                             navController = navController,
                             startDestination = route,
-                            focusSearch = shouldFocusSearch
+                            focusSearch = shouldFocusSearch,
+                            sharedSearchQuery = sharedSearchQuery
                         )
+
+                        LaunchedEffect(sharedSearchQuery) {
+                            if (!sharedSearchQuery.isNullOrBlank()) {
+                                shouldFocusSearch = false
+                                navController.navigate(Screen.Search.route) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
 
                         // Mark setup as completed when navigating away from setup
                         LaunchedEffect(navController) {
@@ -144,5 +159,30 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        sharedSearchQuery = extractSearchQueryFromIntent(intent)
+    }
+
+    private fun extractSearchQueryFromIntent(intent: Intent?): String? {
+        if (intent == null) return null
+
+        val action = intent.action ?: return null
+        val type = intent.type.orEmpty()
+        if (action != Intent.ACTION_SEND) return null
+        if (!type.startsWith("text/")) return null
+
+        val raw = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().trim()
+        if (raw.isBlank()) return null
+
+        val firstLine = raw.lineSequence()
+            .firstOrNull { it.isNotBlank() }
+            ?.trim()
+            .orEmpty()
+
+        return firstLine.take(80).ifBlank { null }
     }
 }

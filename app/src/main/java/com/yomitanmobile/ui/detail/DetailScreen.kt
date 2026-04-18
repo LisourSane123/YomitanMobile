@@ -76,6 +76,7 @@ fun DetailScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val ttsReady by viewModel.ttsReady.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
+    val cardQuality by viewModel.cardQualityScore.collectAsState()
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -84,6 +85,7 @@ fun DetailScreen(
     var availableDecks by remember { mutableStateOf<List<String>>(emptyList()) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
     var duplicateInfo by remember { mutableStateOf("" to "") }
+    var showExportScoreDialog by remember { mutableStateOf(false) }
 
     val ankiPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -125,6 +127,56 @@ fun DetailScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDuplicateDialog = false }) {
+                    Text("Anuluj")
+                }
+            }
+        )
+    }
+
+    if (showExportScoreDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportScoreDialog = false },
+            title = { Text("Eksport do Anki") },
+            text = {
+                Column {
+                    if (cardQuality != null) {
+                        val scoreText = when (cardQuality!!.tier) {
+                            CardQualityTier.EXCELLENT -> "Świetna"
+                            CardQualityTier.GOOD -> "Dobra"
+                            CardQualityTier.FAIR -> "Średnia"
+                            CardQualityTier.WEAK -> "Słaba"
+                        }
+                        Text(
+                            text = "Jakość karty: $scoreText (${cardQuality!!.score}/100)",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        cardQuality!!.reasons.take(3).forEach { reason ->
+                            Text("• $reason", fontSize = 13.sp)
+                        }
+                        if (cardQuality!!.tier == CardQualityTier.WEAK) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Ta karta może być mniej efektywna. Mimo to chcesz eksportować?",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Text("Przygotować eksport tej karty do Anki?")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExportScoreDialog = false
+                    viewModel.exportToAnki()
+                }) {
+                    Text("Eksportuj")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportScoreDialog = false }) {
                     Text("Anuluj")
                 }
             }
@@ -173,7 +225,7 @@ fun DetailScreen(
                             )
                         }
                         IconButton(
-                            onClick = { viewModel.exportToAnki() },
+                            onClick = { showExportScoreDialog = true },
                             enabled = !isExporting
                         ) {
                             if (isExporting) {
@@ -214,6 +266,7 @@ fun DetailScreen(
             else -> {
                 WordDetailContent(
                     entry = entry!!,
+                    cardQuality = cardQuality,
                     isPlaying = isPlaying,
                     ttsReady = ttsReady,
                     onPlayAudio = viewModel::playAudio,
@@ -228,6 +281,7 @@ fun DetailScreen(
 @Composable
 private fun WordDetailContent(
     entry: MergedWordEntry,
+    cardQuality: CardQualityScore?,
     isPlaying: Boolean,
     ttsReady: Boolean,
     onPlayAudio: () -> Unit,
@@ -304,6 +358,11 @@ private fun WordDetailContent(
 
         Spacer(Modifier.height(16.dp))
 
+        cardQuality?.let {
+            CardQualitySection(it)
+            Spacer(Modifier.height(12.dp))
+        }
+
         // Pitch Accent
         if (entry.pitchAccent.isNotBlank()) {
             SectionCard(title = "Pitch Accent") {
@@ -355,6 +414,38 @@ private fun WordDetailContent(
         }
 
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun CardQualitySection(score: CardQualityScore) {
+    val (title, accentColor) = when (score.tier) {
+        CardQualityTier.EXCELLENT -> "Świetna" to Color(0xFF2E7D32)
+        CardQualityTier.GOOD -> "Dobra" to Color(0xFF558B2F)
+        CardQualityTier.FAIR -> "Średnia" to Color(0xFFF9A825)
+        CardQualityTier.WEAK -> "Słaba" to Color(0xFFC62828)
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Jakość karty: $title (${score.score}/100)",
+                fontWeight = FontWeight.Bold,
+                color = accentColor
+            )
+            Spacer(Modifier.height(8.dp))
+            score.reasons.take(4).forEach { reason ->
+                Text(
+                    text = "• $reason",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

@@ -28,6 +28,9 @@ interface ExportedWordDao {
     @Query("SELECT COUNT(*) FROM exported_words WHERE export_date >= :startOfDay")
     suspend fun getExportedCountSince(startOfDay: Long): Int
 
+    @Query("SELECT COUNT(*) FROM exported_words WHERE expression = :expression AND reading = :reading")
+    suspend fun countExportsForWord(expression: String, reading: String): Int
+
     /**
      * Get earliest export date (for chart range).
      */

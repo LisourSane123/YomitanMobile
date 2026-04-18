@@ -19,7 +19,8 @@ import com.yomitanmobile.ui.statistics.StatisticsScreen
 fun AppNavHost(
     navController: NavHostController,
     startDestination: String = Screen.Search.route,
-    focusSearch: Boolean = false
+    focusSearch: Boolean = false,
+    sharedSearchQuery: String? = null
 ) {
     NavHost(
         navController = navController,
@@ -46,7 +47,8 @@ fun AppNavHost(
                 onFavoritesClick = {
                     navController.navigate(Screen.Favorites.route)
                 },
-                focusSearch = focusSearch
+                focusSearch = focusSearch,
+                initialQuery = sharedSearchQuery
             )
         }
 
