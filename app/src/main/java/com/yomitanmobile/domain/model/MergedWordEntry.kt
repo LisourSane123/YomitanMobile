@@ -2,7 +2,7 @@ package com.yomitanmobile.domain.model
 
 /**
  * Represents a merged/consolidated search result.
- * Multiple [WordEntry] items with the same reading are grouped into one.
+ * Multiple [WordEntry] items representing the same written form are grouped into one.
  */
 data class MergedWordEntry(
     val primaryId: Long,
@@ -75,7 +75,7 @@ data class MergedWordEntry(
 
         /**
          * Merge a list of [WordEntry] items into consolidated [MergedWordEntry] items.
-         * Groups entries by reading (hiragana). Within each group:
+         * Groups entries by expression + reading. Within each group:
          * - Picks the best expression (prefers kanji forms, then frequency)
          * - Collects all unique alternative expressions
          * - Merges all unique definitions
@@ -85,88 +85,93 @@ data class MergedWordEntry(
             if (entries.isEmpty()) return emptyList()
 
             // Use LinkedHashMap to preserve order of first appearance (from SQL query)
-            val groups = LinkedHashMap<String, MutableList<WordEntry>>()
+            val groups = LinkedHashMap<Pair<String, String>, MutableList<WordEntry>>()
             for (entry in entries) {
-                val key = entry.reading.ifBlank { entry.expression }
+                val key = buildMergeKey(entry)
                 groups.getOrPut(key) { mutableListOf() }.add(entry)
             }
 
-            return groups.map { (reading, group) ->
+            return groups.values.map { group ->
                 // Sort: prefer entries with kanji and frequency
                 val sorted = group.sortedWith(
                     compareByDescending<WordEntry> { containsKanji(it.expression) }
                         .thenBy { if (it.frequency > 0) it.frequency else Int.MAX_VALUE }
                 )
 
-                    val primary = sorted.first()
+                val primary = sorted.first()
+                val primaryExpression = primary.expression
+                val reading = primary.reading.ifBlank { primaryExpression }
 
-                    // Collect all unique expressions
-                    val allExpressions = group.map { it.expression }
-                        .filter { it.isNotBlank() }
-                        .distinct()
+                // Collect all unique expressions
+                val allExpressions = group.map { it.expression }
+                    .filter { it.isNotBlank() }
+                    .distinct()
 
-                    // Primary expression is the best one (kanji preferred)
-                    val primaryExpression = primary.expression
+                // Alternative expressions (excluding the primary)
+                val alternatives = allExpressions
+                    .filter { it != primaryExpression }
 
-                    // Alternative expressions (excluding the primary)
-                    val alternatives = allExpressions
-                        .filter { it != primaryExpression }
+                // Merge all definitions, deduplicate
+                val allDefinitions = group
+                    .flatMap { it.definitions }
+                    .filter { it.isNotBlank() }
+                    .distinct()
 
-                    // Merge all definitions, deduplicate
-                    val allDefinitions = group
-                        .flatMap { it.definitions }
-                        .filter { it.isNotBlank() }
-                        .distinct()
+                // Merge parts of speech, deduplicate
+                val allPartsOfSpeech = group
+                    .map { it.partsOfSpeech }
+                    .filter { it.isNotBlank() }
+                    .distinct()
 
-                    // Merge parts of speech, deduplicate
-                    val allPartsOfSpeech = group
-                        .map { it.partsOfSpeech }
-                        .filter { it.isNotBlank() }
-                        .distinct()
+                // Best frequency (lowest positive number)
+                val bestFrequency = group
+                    .map { it.frequency }
+                    .filter { it > 0 }
+                    .minOrNull() ?: 0
 
-                    // Best frequency (lowest positive number)
-                    val bestFrequency = group
-                        .map { it.frequency }
-                        .filter { it > 0 }
-                        .minOrNull() ?: 0
+                // First non-empty pitch accent
+                val pitchAccent = group
+                    .map { it.pitchAccent }
+                    .firstOrNull { it.isNotBlank() } ?: ""
 
-                    // First non-empty pitch accent
-                    val pitchAccent = group
-                        .map { it.pitchAccent }
-                        .firstOrNull { it.isNotBlank() } ?: ""
-
-                    // First non-empty example sentence
-                    val example = group.firstOrNull {
-                        it.exampleSentence.isNotBlank()
-                    }
-
-                    // First non-empty audio
-                    val audioFile = group
-                        .map { it.audioFile }
-                        .firstOrNull { it.isNotBlank() } ?: ""
-
-                    // First non-empty dictionary name
-                    val dictionaryName = group
-                        .map { it.dictionaryName }
-                        .firstOrNull { it.isNotBlank() } ?: ""
-
-                    MergedWordEntry(
-                        primaryId = primary.id,
-                        primaryExpression = primaryExpression,
-                        reading = reading,
-                        definitions = allDefinitions,
-                        alternativeExpressions = alternatives,
-                        frequency = bestFrequency,
-                        pitchAccent = pitchAccent,
-                        partsOfSpeech = allPartsOfSpeech,
-                        dictionaryName = dictionaryName,
-                        entryIds = group.map { it.id },
-                        exampleSentence = example?.exampleSentence ?: "",
-                        exampleSentenceTranslation = example?.exampleSentenceTranslation ?: "",
-                        audioFile = audioFile
-                    )
+                // First non-empty example sentence
+                val example = group.firstOrNull {
+                    it.exampleSentence.isNotBlank()
                 }
+
+                // First non-empty audio
+                val audioFile = group
+                    .map { it.audioFile }
+                    .firstOrNull { it.isNotBlank() } ?: ""
+
+                // First non-empty dictionary name
+                val dictionaryName = group
+                    .map { it.dictionaryName }
+                    .firstOrNull { it.isNotBlank() } ?: ""
+
+                MergedWordEntry(
+                    primaryId = primary.id,
+                    primaryExpression = primaryExpression,
+                    reading = reading,
+                    definitions = allDefinitions,
+                    alternativeExpressions = alternatives,
+                    frequency = bestFrequency,
+                    pitchAccent = pitchAccent,
+                    partsOfSpeech = allPartsOfSpeech,
+                    dictionaryName = dictionaryName,
+                    entryIds = group.map { it.id },
+                    exampleSentence = example?.exampleSentence ?: "",
+                    exampleSentenceTranslation = example?.exampleSentenceTranslation ?: "",
+                    audioFile = audioFile
+                )
+            }
                 // Preserve order from SQL query (already sorted by relevance + frequency)
+        }
+
+        private fun buildMergeKey(entry: WordEntry): Pair<String, String> {
+            val expressionKey = entry.expression.ifBlank { entry.reading }
+            val readingKey = entry.reading.ifBlank { entry.expression }
+            return expressionKey to readingKey
         }
     }
 }

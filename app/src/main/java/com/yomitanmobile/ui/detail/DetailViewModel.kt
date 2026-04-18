@@ -82,22 +82,8 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             val word = getWordDetailUseCase.invoke(entryId)
-            if (word != null) {
-                // Load all entries with the same reading and merge them
-                val reading = word.reading.ifBlank { word.expression }
-                val allEntries = repository.getEntriesByReading(reading)
-                if (allEntries.isNotEmpty()) {
-                    val merged = MergedWordEntry.mergeEntries(allEntries)
-                    // Find the merged entry that contains our primary entry
-                    _entry.value = merged.firstOrNull { it.entryIds.contains(entryId) }
-                        ?: merged.firstOrNull()
-                } else {
-                    // Fallback: create a merged entry from single entry
-                    _entry.value = MergedWordEntry.mergeEntries(listOf(word)).firstOrNull()
-                }
-            } else {
-                _entry.value = null
-            }
+            _entry.value = word
+                ?.let { MergedWordEntry.mergeEntries(listOf(it)).firstOrNull() }
             _isLoading.value = false
             checkFavoriteStatus()
         }

@@ -9,7 +9,6 @@ plugins {
 android {
     namespace = "com.yomitanmobile"
     compileSdk = 34
-    buildToolsVersion = "34.0.0"
 
     defaultConfig {
         applicationId = "com.yomitanmobile"
@@ -95,4 +94,7 @@ dependencies {
 
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // Unit tests
+    testImplementation("junit:junit:4.13.2")
 }
