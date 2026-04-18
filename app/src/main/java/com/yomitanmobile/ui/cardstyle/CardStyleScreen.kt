@@ -104,6 +104,9 @@ fun CardStyleScreen(
     var randomFonts by remember { mutableStateOf<Set<String>>(emptySet()) }
     var randomVoicesEnabled by remember { mutableStateOf(false) }
     var randomVoices by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var useOnlineSentenceApi by remember { mutableStateOf(false) }
+    var sentenceApiConsentGranted by remember { mutableStateOf(false) }
+    var showSentenceApiConsentDialog by remember { mutableStateOf(false) }
     var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var activeTts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
 
@@ -141,6 +144,8 @@ fun CardStyleScreen(
         randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet()
         randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false
         randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
+        useOnlineSentenceApi = prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] ?: false
+        sentenceApiConsentGranted = prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] ?: false
     }
 
     fun currentPreferences() = CardStylePreferences(
@@ -160,7 +165,9 @@ fun CardStyleScreen(
         randomFontsEnabled = randomFontsEnabled,
         randomFonts = randomFonts,
         randomVoicesEnabled = randomVoicesEnabled,
-        randomVoices = randomVoices
+        randomVoices = randomVoices,
+        useOnlineSentenceApi = useOnlineSentenceApi,
+        onlineSentenceApiConsentGranted = sentenceApiConsentGranted
     )
 
     fun savePreferences() {
@@ -183,12 +190,49 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_RANDOM_FONTS] = randomFonts
                 prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] = randomVoicesEnabled
                 prefs[MainActivity.TTS_RANDOM_VOICES] = randomVoices
+                prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] = useOnlineSentenceApi
+                prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] = sentenceApiConsentGranted
             }
         }
     }
 
     var previewExpanded by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    if (showSentenceApiConsentDialog) {
+        AlertDialog(
+            onDismissRequest = { showSentenceApiConsentDialog = false },
+            title = { Text("Zgoda na API zdań") },
+            text = {
+                Text(
+                    "Po włączeniu aplikacja będzie wysyłać wyszukiwane słowo do zewnętrznego API " +
+                        "w celu pobrania przykładowego zdania. Możesz cofnąć zgodę w Ustawieniach."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    sentenceApiConsentGranted = true
+                    useOnlineSentenceApi = true
+                    coroutineScope.launch {
+                        context.dataStore.edit { prefs ->
+                            prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] = true
+                        }
+                    }
+                    showSentenceApiConsentDialog = false
+                }) {
+                    Text("Wyrażam zgodę")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    useOnlineSentenceApi = false
+                    showSentenceApiConsentDialog = false
+                }) {
+                    Text("Anuluj")
+                }
+            }
+        )
+    }
 
     // Preview HTML updates live (without saving)
     val previewHtml = remember(
@@ -470,6 +514,26 @@ fun CardStyleScreen(
                     Switch(
                         checked = showSentence,
                         onCheckedChange = { showSentence = it }
+                    )
+                }
+            }
+
+            item {
+                SettingRow(
+                    title = "Zdanie z internetu (API)",
+                    subtitle = "Pobieraj online zdanie do fiszki, gdy dostępne"
+                ) {
+                    Switch(
+                        checked = useOnlineSentenceApi,
+                        onCheckedChange = { enabled ->
+                            if (!enabled) {
+                                useOnlineSentenceApi = false
+                            } else if (sentenceApiConsentGranted) {
+                                useOnlineSentenceApi = true
+                            } else {
+                                showSentenceApiConsentDialog = true
+                            }
+                        }
                     )
                 }
             }

@@ -21,7 +21,9 @@ data class CardStylePreferences(
     val randomFontsEnabled: Boolean = false,
     val randomFonts: Set<String> = emptySet(),
     val randomVoicesEnabled: Boolean = false,
-    val randomVoices: Set<String> = emptySet()
+    val randomVoices: Set<String> = emptySet(),
+    val useOnlineSentenceApi: Boolean = false,
+    val onlineSentenceApiConsentGranted: Boolean = false
 ) {
     companion object {
         val FONT_FAMILIES = listOf(

@@ -52,6 +52,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -105,6 +106,8 @@ fun SettingsScreen(
     var currentThemeMode by remember { mutableStateOf("system") }
     var currentLanguage by remember { mutableStateOf("system") }
     var dailyGoalCount by remember { mutableStateOf(0f) }
+    var sentenceApiConsentGranted by remember { mutableStateOf(false) }
+    var showSentenceApiConsentDialog by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     // Load current deck name, theme mode and daily goal
@@ -113,9 +116,44 @@ fun SettingsScreen(
         currentDeckName = prefs[MainActivity.ANKI_DECK_NAME] ?: ""
         currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
         dailyGoalCount = (prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0).toFloat()
+        sentenceApiConsentGranted = prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] ?: false
         // Language is stored in SharedPreferences (needed for synchronous read at startup)
         val langPrefs = context.getSharedPreferences(MainActivity.LANG_PREFS_NAME, android.content.Context.MODE_PRIVATE)
         currentLanguage = langPrefs.getString(MainActivity.LANG_PREFS_KEY, "system") ?: "system"
+    }
+
+    if (showSentenceApiConsentDialog) {
+        AlertDialog(
+            onDismissRequest = { showSentenceApiConsentDialog = false },
+            title = { Text("Zgoda na API zdań") },
+            text = {
+                Text(
+                    "Aplikacja będzie wysyłać wyszukiwane słowo do zewnętrznego API " +
+                        "tylko w celu pobrania przykładowego zdania. " +
+                        "Zgodę możesz odwołać w dowolnym momencie."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    sentenceApiConsentGranted = true
+                    coroutineScope.launch {
+                        context.dataStore.edit { prefs ->
+                            prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] = true
+                        }
+                    }
+                    showSentenceApiConsentDialog = false
+                }) {
+                    Text("Wyrażam zgodę")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showSentenceApiConsentDialog = false
+                }) {
+                    Text("Anuluj")
+                }
+            }
+        )
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -668,6 +706,58 @@ fun SettingsScreen(
                     subtitle = "Przegląd aktywności, streak, wykres fiszek",
                     onClick = onNavigateToStatistics
                 )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Shield,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Zgoda na API zdań",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Wymagane do pobierania przykładowych zdań z internetu. Użycie API włączasz osobno w stylu fiszki.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        Switch(
+                            checked = sentenceApiConsentGranted,
+                            onCheckedChange = { enabled ->
+                                if (!enabled) {
+                                    sentenceApiConsentGranted = false
+                                    coroutineScope.launch {
+                                        context.dataStore.edit { prefs ->
+                                            prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] = false
+                                            prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] = false
+                                        }
+                                    }
+                                } else if (!sentenceApiConsentGranted) {
+                                    showSentenceApiConsentDialog = true
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
             // ═══════════════════════════════════════

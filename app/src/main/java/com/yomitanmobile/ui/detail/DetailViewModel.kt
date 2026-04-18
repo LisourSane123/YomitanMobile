@@ -11,6 +11,7 @@ import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
+import com.yomitanmobile.data.sentence.OnlineSentenceService
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.MergedWordEntry
@@ -48,6 +49,7 @@ class DetailViewModel @Inject constructor(
     private val repository: DictionaryRepository,
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
+    private val onlineSentenceService: OnlineSentenceService,
     private val exportedWordDao: ExportedWordDao,
     private val favoriteWordDao: FavoriteWordDao,
     @ApplicationContext private val appContext: Context
@@ -226,7 +228,9 @@ class DetailViewModel @Inject constructor(
             randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: false,
             randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet(),
             randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false,
-            randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
+            randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet(),
+            useOnlineSentenceApi = prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] ?: false,
+            onlineSentenceApiConsentGranted = prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] ?: false
         )
     }
 
@@ -234,13 +238,28 @@ class DetailViewModel @Inject constructor(
         _isExporting.value = true
         try {
             val stylePrefs = loadCardStylePreferences()
+
+            val wordForExport = if (stylePrefs.useOnlineSentenceApi && stylePrefs.onlineSentenceApiConsentGranted) {
+                val lookup = word.expression.ifBlank { word.reading }
+                val onlineSentence = onlineSentenceService.fetchSentenceForWord(lookup)
+                if (onlineSentence != null && onlineSentence.japanese.isNotBlank()) {
+                    word.copy(
+                        exampleSentence = onlineSentence.japanese,
+                        exampleSentenceTranslation = onlineSentence.translation.ifBlank { word.exampleSentenceTranslation }
+                    )
+                } else {
+                    word
+                }
+            } else {
+                word
+            }
             
             // Fetch kanji information
-            val kanjiChars = word.expression.filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }.map { it.toString() }.distinct()
+            val kanjiChars = wordForExport.expression.filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }.map { it.toString() }.distinct()
             val kanjiData = if (kanjiChars.isNotEmpty()) repository.getKanjis(kanjiChars) else emptyList()
 
             val result = ankiCardCreator.exportToAnki(
-                entry = word,
+                entry = wordForExport,
                 kanjiData = kanjiData,
                 tts = audioPlayer.getTts(),
                 deckName = deckName,
@@ -251,8 +270,8 @@ class DetailViewModel @Inject constructor(
                     // Record the export
                     exportedWordDao.insert(
                         ExportedWord(
-                            expression = word.expression,
-                            reading = word.reading,
+                            expression = wordForExport.expression,
+                            reading = wordForExport.reading,
                             deckName = deckName,
                             ankiNoteId = noteId
                         )
