@@ -68,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -95,6 +96,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val dictionaries by viewModel.dictionaries.collectAsState()
     val isImporting by viewModel.isImporting.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
@@ -125,12 +128,13 @@ fun SettingsScreen(
     if (showSentenceApiConsentDialog) {
         AlertDialog(
             onDismissRequest = { showSentenceApiConsentDialog = false },
-            title = { Text("Zgoda na API zdań") },
+            title = { Text(tr("Zgoda na API zdań", "Sentence API consent")) },
             text = {
                 Text(
-                    "Aplikacja będzie wysyłać wyszukiwane słowo do zewnętrznego API " +
-                        "tylko w celu pobrania przykładowego zdania. " +
-                        "Zgodę możesz odwołać w dowolnym momencie."
+                    tr(
+                        "Aplikacja będzie wysyłać wyszukiwane słowo do zewnętrznego API tylko w celu pobrania przykładowego zdania. Zgodę możesz odwołać w dowolnym momencie.",
+                        "The app will send the searched word to an external API only to fetch an example sentence. You can revoke consent at any time."
+                    )
                 )
             },
             confirmButton = {
@@ -143,14 +147,14 @@ fun SettingsScreen(
                     }
                     showSentenceApiConsentDialog = false
                 }) {
-                    Text("Wyrażam zgodę")
+                    Text(tr("Wyrażam zgodę", "I agree"))
                 }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showSentenceApiConsentDialog = false
                 }) {
-                    Text("Anuluj")
+                    Text(tr("Anuluj", "Cancel"))
                 }
             }
         )
@@ -163,9 +167,9 @@ fun SettingsScreen(
             try {
                 val inputStream = context.contentResolver.openInputStream(it)
                 if (inputStream != null) viewModel.importDictionary(inputStream)
-                else Toast.makeText(context, "Nie można otworzyć pliku", Toast.LENGTH_SHORT).show()
+                else Toast.makeText(context, tr("Nie można otworzyć pliku", "Cannot open file"), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(context, "Błąd: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Błąd: ${e.message}", "Error: ${e.message}"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -174,9 +178,16 @@ fun SettingsScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is SettingsEvent.ImportSuccess ->
-                    Toast.makeText(context, "Zaimportowano ${event.result.dictionaryName}: ${event.result.entriesImported} wpisów", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        context,
+                        tr(
+                            "Zaimportowano ${event.result.dictionaryName}: ${event.result.entriesImported} wpisów",
+                            "Imported ${event.result.dictionaryName}: ${event.result.entriesImported} entries"
+                        ),
+                        Toast.LENGTH_LONG
+                    ).show()
                 is SettingsEvent.ImportError ->
-                    Toast.makeText(context, "Błąd importu: ${event.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Błąd importu: ${event.message}", "Import error: ${event.message}"), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -184,15 +195,22 @@ fun SettingsScreen(
     showDeleteDialog?.let { dictionaryName ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
-            title = { Text("Usuń słownik") },
-            text = { Text("Czy na pewno chcesz usunąć słownik \"$dictionaryName\" i wszystkie jego wpisy?") },
+            title = { Text(tr("Usuń słownik", "Delete dictionary")) },
+            text = {
+                Text(
+                    tr(
+                        "Czy na pewno chcesz usunąć słownik \"$dictionaryName\" i wszystkie jego wpisy?",
+                        "Are you sure you want to delete dictionary \"$dictionaryName\" and all its entries?"
+                    )
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { viewModel.deleteDictionary(dictionaryName); showDeleteDialog = null }) {
-                    Text("Usuń", color = MaterialTheme.colorScheme.error)
+                    Text(tr("Usuń", "Delete"), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) { Text("Anuluj") }
+                TextButton(onClick = { showDeleteDialog = null }) { Text(tr("Anuluj", "Cancel")) }
             }
         )
     }
@@ -201,18 +219,18 @@ fun SettingsScreen(
         var editedDeckName by remember { mutableStateOf(currentDeckName.ifBlank { "Mining Deck" }) }
         AlertDialog(
             onDismissRequest = { showDeckEditDialog = false },
-            title = { Text("Zmień talię Anki") },
+            title = { Text(tr("Zmień talię Anki", "Change Anki deck")) },
             text = {
                 Column {
                     Text(
-                        "Nowe fiszki będą dodawane do wybranej talii.",
+                        tr("Nowe fiszki będą dodawane do wybranej talii.", "New cards will be added to the selected deck."),
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
                     OutlinedTextField(
                         value = editedDeckName,
                         onValueChange = { editedDeckName = it },
-                        label = { Text("Nazwa talii") },
+                        label = { Text(tr("Nazwa talii", "Deck name")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -229,11 +247,11 @@ fun SettingsScreen(
                     }
                     showDeckEditDialog = false
                 }) {
-                    Text("Zapisz")
+                    Text(tr("Zapisz", "Save"))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeckEditDialog = false }) { Text("Anuluj") }
+                TextButton(onClick = { showDeckEditDialog = false }) { Text(tr("Anuluj", "Cancel")) }
             }
         )
     }
@@ -241,15 +259,15 @@ fun SettingsScreen(
     if (showPrivacyDialog) {
         AlertDialog(
             onDismissRequest = { showPrivacyDialog = false },
-            title = { Text("Polityka Prywatności") },
+            title = { Text(tr("Polityka Prywatności", "Privacy Policy")) },
             text = {
                 LazyColumn {
                     item {
                         Text(
-                            text = "Aplikacja działa w pełni offline (lokalnie). Nie zbieramy, " +
-                                    "nie przechowujemy, ani nie wysyłamy żadnych danych osobistych " +
-                                    "na zewnętrzne serwery. Wymaga połączenia z internetem " +
-                                    "jedynie w celu pobrania słowników od dostawców zewnętrznych.",
+                            text = tr(
+                                "Aplikacja działa w pełni offline (lokalnie). Nie zbieramy, nie przechowujemy, ani nie wysyłamy żadnych danych osobistych na zewnętrzne serwery. Wymaga połączenia z internetem jedynie w celu pobrania słowników od dostawców zewnętrznych.",
+                                "The app works fully offline (locally). We do not collect, store, or send any personal data to external servers. Internet access is required only to download dictionaries from third-party providers."
+                            ),
                             fontSize = 14.sp
                         )
                     }
@@ -264,26 +282,33 @@ fun SettingsScreen(
     if (showLicensesDialog) {
         AlertDialog(
             onDismissRequest = { showLicensesDialog = false },
-            title = { Text("O aplikacji i licencje") },
+            title = { Text(tr("O aplikacji i licencje", "About app and licenses")) },
             text = {
                 LazyColumn {
                     item {
-                        Text("Wersja aplikacji: 1.0.0", fontWeight = FontWeight.Bold)
+                        Text(tr("Wersja aplikacji: 1.0.0", "App version: 1.0.0"), fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
-                        Text("Aplikacja korzysta z otwartych słowników do działania. " +
-                                "Dostępne słowniki m.in. JMdict oraz KANJIDIC są udostępniane " +
-                                "na licencjach Creative Commons Attribution-ShareAlike 4.0 International " +
-                                "lub podobnych.\n\n" +
-                                "Własność i prawa autorskie:", fontWeight = FontWeight.Bold)
+                        Text(
+                            tr(
+                                "Aplikacja korzysta z otwartych słowników do działania. Dostępne słowniki m.in. JMdict oraz KANJIDIC są udostępniane na licencjach Creative Commons Attribution-ShareAlike 4.0 International lub podobnych.\n\nWłasność i prawa autorskie:",
+                                "The app uses open dictionaries. Available dictionaries including JMdict and KANJIDIC are shared under Creative Commons Attribution-ShareAlike 4.0 International licenses or similar.\n\nOwnership and copyrights:"
+                            ),
+                            fontWeight = FontWeight.Bold
+                        )
                         Spacer(Modifier.height(4.dp))
                         Text("JMdict/Kanjidic (EDRDG - Electronic Dictionary Research and Development Group)")
                         Spacer(Modifier.height(8.dp))
-                        Text("Tatoeba Project (CC-BY 2.0 FR) dla przykładowych zdań (jeśli zaimportowane).")
+                        Text(
+                            tr(
+                                "Tatoeba Project (CC-BY 2.0 FR) dla przykładowych zdań (jeśli zaimportowane).",
+                                "Tatoeba Project (CC-BY 2.0 FR) for example sentences (if imported)."
+                            )
+                        )
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showLicensesDialog = false }) { Text("Zamknij") }
+                TextButton(onClick = { showLicensesDialog = false }) { Text(tr("Zamknij", "Close")) }
             }
         )
     }
@@ -291,10 +316,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ustawienia") },
+                title = { Text(tr("Ustawienia", "Settings")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Wróć")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -315,7 +340,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.MenuBook,
-                    title = "Słowniki"
+                    title = tr("Słowniki", "Dictionaries")
                 )
             }
 
@@ -326,7 +351,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Pobierz słowniki z internetu")
+                    Text(tr("Pobierz słowniki z internetu", "Download dictionaries from the internet"))
                 }
             }
 
@@ -338,7 +363,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Importuj słownik Yomitan (.zip)")
+                    Text(tr("Importuj słownik Yomitan (.zip)", "Import Yomitan dictionary (.zip)"))
                 }
             }
 
@@ -352,14 +377,17 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                                 Spacer(Modifier.width(12.dp))
-                                Text("Importowanie słownika...")
+                                Text(tr("Importowanie słownika...", "Importing dictionary..."))
                             }
                             importProgress?.let { progress ->
                                 Spacer(Modifier.height(12.dp))
                                 LinearProgressIndicator(progress = progress.progressPercent, modifier = Modifier.fillMaxWidth())
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    "Plik ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} wpisów",
+                                    tr(
+                                        "Plik ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} wpisów",
+                                        "File ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} entries"
+                                    ),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                                 )
@@ -373,7 +401,7 @@ fun SettingsScreen(
             if (dictionaries.isNotEmpty()) {
                 item {
                     Text(
-                        "Zainstalowane słowniki (${dictionaries.size})",
+                        tr("Zainstalowane słowniki (${dictionaries.size})", "Installed dictionaries (${dictionaries.size})"),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -390,7 +418,7 @@ fun SettingsScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                             Spacer(Modifier.height(8.dp))
-                            Text("Brak zainstalowanych słowników", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            Text(tr("Brak zainstalowanych słowników", "No installed dictionaries"), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                         }
                     }
                 }
@@ -402,7 +430,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Palette,
-                    title = "Wygląd"
+                    title = tr("Wygląd", "Appearance")
                 )
             }
 
@@ -413,7 +441,7 @@ fun SettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Motyw", fontWeight = FontWeight.Bold)
+                        Text(tr("Motyw", "Theme"), fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -427,7 +455,7 @@ fun SettingsScreen(
                                         context.dataStore.edit { it[MainActivity.THEME_MODE] = "system" }
                                     }
                                 },
-                                label = { Text("Systemowy") },
+                                label = { Text(tr("Systemowy", "System")) },
                                 modifier = Modifier.weight(1f)
                             )
                             FilterChip(
@@ -438,7 +466,7 @@ fun SettingsScreen(
                                         context.dataStore.edit { it[MainActivity.THEME_MODE] = "light" }
                                     }
                                 },
-                                label = { Text("Jasny") },
+                                label = { Text(tr("Jasny", "Light")) },
                                 leadingIcon = if (currentThemeMode == "light") null else {
                                     { Icon(Icons.Default.LightMode, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 },
@@ -452,7 +480,7 @@ fun SettingsScreen(
                                         context.dataStore.edit { it[MainActivity.THEME_MODE] = "dark" }
                                     }
                                 },
-                                label = { Text("Ciemny") },
+                                label = { Text(tr("Ciemny", "Dark")) },
                                 leadingIcon = if (currentThemeMode == "dark") null else {
                                     { Icon(Icons.Default.DarkMode, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 },
@@ -467,8 +495,8 @@ fun SettingsScreen(
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.Style,
-                    title = "Wygląd fiszki Anki",
-                    subtitle = "Czcionka, rozmiar, kolory, podgląd",
+                    title = tr("Wygląd fiszki Anki", "Anki card style"),
+                    subtitle = tr("Czcionka, rozmiar, kolory, podgląd", "Font, size, colors, preview"),
                     onClick = onNavigateToCardStyle
                 )
             }
@@ -502,13 +530,13 @@ fun SettingsScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Talia Anki",
+                                tr("Talia Anki", "Anki deck"),
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 if (currentDeckName.isNotBlank()) currentDeckName
-                                else "Nie wybrano (zostaniesz zapytany przy eksporcie)",
+                                else tr("Nie wybrano (zostaniesz zapytany przy eksporcie)", "Not selected (you will be asked during export)"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                             )
@@ -516,7 +544,7 @@ fun SettingsScreen(
                         IconButton(onClick = { showDeckEditDialog = true }) {
                             Icon(
                                 Icons.Default.Edit,
-                                contentDescription = "Zmień talię",
+                                contentDescription = tr("Zmień talię", "Change deck"),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -543,13 +571,15 @@ fun SettingsScreen(
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Wymowa TTS",
+                                tr("Wymowa TTS", "TTS pronunciation"),
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "Wymowa japońska przez Google TTS. " +
-                                    "Po otwarciu słowa wymowa odtwarza się automatycznie.",
+                                tr(
+                                    "Wymowa japońska przez Google TTS. Po otwarciu słowa wymowa odtwarza się automatycznie.",
+                                    "Japanese pronunciation via Google TTS. After opening a word, pronunciation plays automatically."
+                                ),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
@@ -564,7 +594,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.EmojiEvents,
-                    title = "Inne"
+                    title = tr("Inne", "Other")
                 )
             }
 
@@ -587,13 +617,13 @@ fun SettingsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    "Cel dzienny fiszek",
+                                    tr("Cel dzienny fiszek", "Daily card goal"),
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    if (dailyGoalCount.toInt() == 0) "Wyłączony"
-                                    else "${dailyGoalCount.toInt()} fiszek dziennie",
+                                    if (dailyGoalCount.toInt() == 0) tr("Wyłączony", "Disabled")
+                                    else tr("${dailyGoalCount.toInt()} fiszek dziennie", "${dailyGoalCount.toInt()} cards/day"),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
@@ -605,7 +635,7 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                if (dailyGoalCount.toInt() == 0) "Wyłączony" else "${dailyGoalCount.toInt()}",
+                                if (dailyGoalCount.toInt() == 0) tr("Wyłączony", "Disabled") else "${dailyGoalCount.toInt()}",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -626,7 +656,7 @@ fun SettingsScreen(
                             steps = 49
                         )
                         Text(
-                            "Ustaw na 0 aby wyłączyć cel dzienny",
+                            tr("Ustaw na 0 aby wyłączyć cel dzienny", "Set to 0 to disable daily goal"),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
@@ -653,15 +683,15 @@ fun SettingsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    "Język aplikacji",
+                                    tr("Język aplikacji", "App language"),
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     when (currentLanguage) {
-                                        "pl" -> "Polski"
+                                        "pl" -> tr("Polski", "Polish")
                                         "en" -> "English"
-                                        else -> "Systemowy"
+                                        else -> tr("Systemowy", "System")
                                     },
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
@@ -671,8 +701,8 @@ fun SettingsScreen(
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(
-                                "system" to "Systemowy",
-                                "pl" to "Polski",
+                                "system" to tr("Systemowy", "System"),
+                                "pl" to tr("Polski", "Polish"),
                                 "en" to "English"
                             ).forEach { (code, label) ->
                                 FilterChip(
@@ -702,8 +732,8 @@ fun SettingsScreen(
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.BarChart,
-                    title = "Statystyki",
-                    subtitle = "Przegląd aktywności, streak, wykres fiszek",
+                    title = tr("Statystyki", "Statistics"),
+                    subtitle = tr("Przegląd aktywności, streak, wykres fiszek", "Activity overview, streak, card chart"),
                     onClick = onNavigateToStatistics
                 )
             }
@@ -730,12 +760,15 @@ fun SettingsScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Zgoda na API zdań",
+                                tr("Zgoda na API zdań", "Sentence API consent"),
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "Wymagane do pobierania przykładowych zdań z internetu. Użycie API włączasz osobno w stylu fiszki.",
+                                tr(
+                                    "Wymagane do pobierania przykładowych zdań z internetu. Użycie API włączasz osobno w stylu fiszki.",
+                                    "Required to fetch example sentences from the internet. API usage is enabled separately in card style."
+                                ),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
@@ -766,14 +799,14 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Info,
-                    title = "Informacje"
+                    title = tr("Informacje", "Information")
                 )
             }
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.Policy,
-                    title = "Polityka Prywatności",
-                    subtitle = "Zasady prywatności i lokalne przetwarzanie danych",
+                    title = tr("Polityka Prywatności", "Privacy Policy"),
+                    subtitle = tr("Zasady prywatności i lokalne przetwarzanie danych", "Privacy rules and local data processing"),
                     onClick = { showPrivacyDialog = true }
                 )
             }
@@ -781,8 +814,8 @@ fun SettingsScreen(
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.MenuBook,
-                    title = "Licencje słowników",
-                    subtitle = "Informacje o otwartych danych i prawach autorskich",
+                    title = tr("Licencje słowników", "Dictionary licenses"),
+                    subtitle = tr("Informacje o otwartych danych i prawach autorskich", "Open data and copyright information"),
                     onClick = { showLicensesDialog = true }
                 )
             }
@@ -861,6 +894,8 @@ private fun SettingsClickableItem(
 
 @Composable
 private fun DictionaryCard(dictionary: DictionaryInfo, onDelete: () -> Unit) {
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Row(
@@ -871,14 +906,14 @@ private fun DictionaryCard(dictionary: DictionaryInfo, onDelete: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(dictionary.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text("${dictionary.entryCount} wpisów", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${dictionary.entryCount} ${tr("wpisów", "entries")}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (dictionary.revision.isNotBlank()) {
-                    Text("Wersja: ${dictionary.revision}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                    Text("${tr("Wersja", "Version")}: ${dictionary.revision}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                 }
-                Text("Dodano: ${dateFormat.format(Date(dictionary.importDate))}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                Text("${tr("Dodano", "Added")}: ${dateFormat.format(Date(dictionary.importDate))}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Usuń słownik", tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Default.Delete, contentDescription = tr("Usuń słownik", "Delete dictionary"), tint = MaterialTheme.colorScheme.error)
             }
         }
     }

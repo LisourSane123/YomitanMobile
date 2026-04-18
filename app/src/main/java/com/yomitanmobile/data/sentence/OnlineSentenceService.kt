@@ -15,6 +15,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,6 +34,12 @@ class OnlineSentenceService @Inject constructor() {
         const val MAX_RESPONSE_BYTES = 1 * 1024 * 1024
         const val MAX_RESULTS = 5
         const val BUFFER_SIZE = 8192
+        const val MAX_REDIRECTS = 3
+
+        private val ALLOWED_HOSTS = setOf(
+            "tatoeba.org",
+            "www.tatoeba.org"
+        )
     }
 
     private val json = Json {
@@ -47,22 +54,39 @@ class OnlineSentenceService @Inject constructor() {
         var connection: HttpURLConnection? = null
         try {
             val encoded = URLEncoder.encode(query, StandardCharsets.UTF_8.name())
-            val url = URL("$ENDPOINT?from=jpn&to=eng&query=$encoded&per_page=$MAX_RESULTS&page=1")
+            var currentUrl = "$ENDPOINT?from=jpn&to=eng&query=$encoded&per_page=$MAX_RESULTS&page=1"
+            if (!isAllowedUrl(currentUrl)) return@withContext null
 
-            connection = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "YomitanMobile/1.0")
-                setRequestProperty("Accept", "application/json")
+            var redirects = 0
+            while (true) {
+                connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = CONNECT_TIMEOUT_MS
+                    readTimeout = READ_TIMEOUT_MS
+                    instanceFollowRedirects = false
+                    setRequestProperty("User-Agent", "YomitanMobile/1.0")
+                    setRequestProperty("Accept", "application/json")
+                }
+
+                val responseCode = connection.responseCode
+                if (responseCode in 300..399) {
+                    if (redirects >= MAX_REDIRECTS) return@withContext null
+                    val location = connection.getHeaderField("Location") ?: return@withContext null
+                    connection.disconnect()
+                    currentUrl = resolveRedirectUrl(currentUrl, location)
+                    if (!isAllowedUrl(currentUrl)) return@withContext null
+                    redirects++
+                    continue
+                }
+
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    return@withContext null
+                }
+                break
             }
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                return@withContext null
-            }
-
-            val payload = connection.inputStream.use { input ->
+            val activeConnection = connection ?: return@withContext null
+            val payload = activeConnection.inputStream.use { input ->
                 val out = ByteArrayOutputStream()
                 val buffer = ByteArray(BUFFER_SIZE)
                 var total = 0
@@ -83,6 +107,24 @@ class OnlineSentenceService @Inject constructor() {
             null
         } finally {
             connection?.disconnect()
+        }
+    }
+
+    private fun isAllowedUrl(url: String): Boolean {
+        return try {
+            val parsed = URL(url)
+            val host = parsed.host.lowercase(Locale.ROOT)
+            parsed.protocol.equals("https", ignoreCase = true) && host in ALLOWED_HOSTS
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun resolveRedirectUrl(baseUrl: String, location: String): String {
+        return if (location.startsWith("http", ignoreCase = true)) {
+            location
+        } else {
+            URL(URL(baseUrl), location).toString()
         }
     }
 

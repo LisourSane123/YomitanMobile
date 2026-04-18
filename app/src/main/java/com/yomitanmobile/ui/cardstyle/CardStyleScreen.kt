@@ -63,6 +63,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -84,6 +85,8 @@ fun CardStyleScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     // Style state
     var expressionBold by remember { mutableStateOf(true) }
@@ -202,11 +205,13 @@ fun CardStyleScreen(
     if (showSentenceApiConsentDialog) {
         AlertDialog(
             onDismissRequest = { showSentenceApiConsentDialog = false },
-            title = { Text("Zgoda na API zdań") },
+            title = { Text(tr("Zgoda na API zdań", "Sentence API consent")) },
             text = {
                 Text(
-                    "Po włączeniu aplikacja będzie wysyłać wyszukiwane słowo do zewnętrznego API " +
-                        "w celu pobrania przykładowego zdania. Możesz cofnąć zgodę w Ustawieniach."
+                    tr(
+                        "Po włączeniu aplikacja będzie wysyłać wyszukiwane słowo do zewnętrznego API w celu pobrania przykładowego zdania. Możesz cofnąć zgodę w Ustawieniach.",
+                        "When enabled, the app will send the searched word to an external API to fetch an example sentence. You can revoke consent in Settings."
+                    )
                 )
             },
             confirmButton = {
@@ -220,7 +225,7 @@ fun CardStyleScreen(
                     }
                     showSentenceApiConsentDialog = false
                 }) {
-                    Text("Wyrażam zgodę")
+                    Text(tr("Wyrażam zgodę", "I agree"))
                 }
             },
             dismissButton = {
@@ -228,7 +233,7 @@ fun CardStyleScreen(
                     useOnlineSentenceApi = false
                     showSentenceApiConsentDialog = false
                 }) {
-                    Text("Anuluj")
+                    Text(tr("Anuluj", "Cancel"))
                 }
             }
         )
@@ -247,10 +252,10 @@ fun CardStyleScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Wygląd fiszki") },
+                title = { Text(tr("Wygląd fiszki", "Card style")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Wróć")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 },
                 actions = {
@@ -272,7 +277,7 @@ fun CardStyleScreen(
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Reset")
+                        Text(tr("Reset", "Reset"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -297,12 +302,12 @@ fun CardStyleScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Podgląd fiszki",
+                        tr("Podgląd fiszki", "Card preview"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     TextButton(onClick = { previewExpanded = !previewExpanded }) {
-                        Text(if (previewExpanded) "Zwiń" else "Rozwiń")
+                        Text(if (previewExpanded) tr("Zwiń", "Collapse") else tr("Rozwiń", "Expand"))
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             if (previewExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -343,7 +348,7 @@ fun CardStyleScreen(
             // Font section
             item {
                 Text(
-                    "Czcionka",
+                    tr("Czcionka", "Font"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -370,8 +375,8 @@ fun CardStyleScreen(
             // Bold toggle
             item {
                 SettingRow(
-                    title = "Pogrubione słowo",
-                    subtitle = "Główne wyrażenie na fiszce będzie pogrubione"
+                    title = tr("Pogrubione słowo", "Bold expression"),
+                    subtitle = tr("Główne wyrażenie na fiszce będzie pogrubione", "The main expression on the card will be bold")
                 ) {
                     Switch(
                         checked = expressionBold,
@@ -383,7 +388,7 @@ fun CardStyleScreen(
             // Font sizes
             item {
                 Text(
-                    "Rozmiary czcionek",
+                    tr("Rozmiary czcionek", "Font sizes"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -392,7 +397,7 @@ fun CardStyleScreen(
 
             item {
                 FontSizeSlider(
-                    label = "Wyrażenie",
+                    label = tr("Wyrażenie", "Expression"),
                     value = expressionFontSize,
                     onValueChange = { expressionFontSize = it },
                     valueRange = 24f..72f
@@ -401,7 +406,7 @@ fun CardStyleScreen(
 
             item {
                 FontSizeSlider(
-                    label = "Czytanie",
+                    label = tr("Czytanie", "Reading"),
                     value = readingFontSize,
                     onValueChange = { readingFontSize = it },
                     valueRange = 16f..48f
@@ -410,7 +415,7 @@ fun CardStyleScreen(
 
             item {
                 FontSizeSlider(
-                    label = "Znaczenie",
+                    label = tr("Znaczenie", "Meaning"),
                     value = meaningFontSize,
                     onValueChange = { meaningFontSize = it },
                     valueRange = 12f..36f
@@ -420,7 +425,7 @@ fun CardStyleScreen(
             // Colors
             item {
                 Text(
-                    "Kolory",
+                    tr("Kolory", "Colors"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -429,7 +434,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = "Tło karty",
+                    label = tr("Tło karty", "Card background"),
                     currentColor = backgroundColor,
                     presetColors = listOf("#1a1a1a", "#000000", "#1e1e2e", "#2d2d2d", "#0d1117", "#1a1b26"),
                     onColorSelected = { backgroundColor = it }
@@ -438,7 +443,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = "Kolor wyrażenia",
+                    label = tr("Kolor wyrażenia", "Expression color"),
                     currentColor = expressionColor,
                     presetColors = listOf("#ffffff", "#e0e0e0", "#bb86fc", "#03dac6", "#ff7043", "#ffb74d"),
                     onColorSelected = { expressionColor = it }
@@ -447,7 +452,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = "Kolor czytania",
+                    label = tr("Kolor czytania", "Reading color"),
                     currentColor = readingColor,
                     presetColors = listOf("#80cbc4", "#03dac6", "#64b5f6", "#81c784", "#ffb74d", "#ce93d8"),
                     onColorSelected = { readingColor = it }
@@ -456,7 +461,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = "Kolor znaczenia",
+                    label = tr("Kolor znaczenia", "Meaning color"),
                     currentColor = meaningColor,
                     presetColors = listOf("#e0e0e0", "#ffffff", "#b0bec5", "#cfd8dc", "#a5d6a7", "#ffcc80"),
                     onColorSelected = { meaningColor = it }
@@ -465,7 +470,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = "Kolor akcentu",
+                    label = tr("Kolor akcentu", "Accent color"),
                     currentColor = accentColor,
                     presetColors = listOf("#80cbc4", "#03dac6", "#bb86fc", "#ff7043", "#64b5f6", "#ffb74d"),
                     onColorSelected = { accentColor = it }
@@ -475,7 +480,7 @@ fun CardStyleScreen(
             // Visibility toggles
             item {
                 Text(
-                    "Widoczność elementów",
+                    tr("Widoczność elementów", "Element visibility"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -485,7 +490,7 @@ fun CardStyleScreen(
             item {
                 SettingRow(
                     title = "Pitch accent",
-                    subtitle = "Pokaż wzorzec akcentu tonalnego"
+                    subtitle = tr("Pokaż wzorzec akcentu tonalnego", "Show pitch accent pattern")
                 ) {
                     Switch(
                         checked = showPitchAccent,
@@ -496,8 +501,8 @@ fun CardStyleScreen(
 
             item {
                 SettingRow(
-                    title = "Częstotliwość",
-                    subtitle = "Pokaż ranking częstotliwości słowa"
+                    title = tr("Częstotliwość", "Frequency"),
+                    subtitle = tr("Pokaż ranking częstotliwości słowa", "Show frequency ranking of the word")
                 ) {
                     Switch(
                         checked = showFrequency,
@@ -508,8 +513,8 @@ fun CardStyleScreen(
 
             item {
                 SettingRow(
-                    title = "Przykładowe zdanie",
-                    subtitle = "Pokaż przykładowe zdanie na fiszce"
+                    title = tr("Przykładowe zdanie", "Example sentence"),
+                    subtitle = tr("Pokaż przykładowe zdanie na fiszce", "Show an example sentence on the card")
                 ) {
                     Switch(
                         checked = showSentence,
@@ -520,8 +525,8 @@ fun CardStyleScreen(
 
             item {
                 SettingRow(
-                    title = "Zdanie z internetu (API)",
-                    subtitle = "Pobieraj online zdanie do fiszki, gdy dostępne"
+                    title = tr("Zdanie z internetu (API)", "Sentence from the internet (API)"),
+                    subtitle = tr("Pobieraj online zdanie do fiszki, gdy dostępne", "Fetch an online sentence for the card when available")
                 ) {
                     Switch(
                         checked = useOnlineSentenceApi,
@@ -551,12 +556,15 @@ fun CardStyleScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Losowa czcionka słowa",
+                                    text = tr("Losowa czcionka słowa", "Random expression font"),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "Przy eksporcie fiszki, słowo na froncie otrzyma losową czcionkę z wybranych",
+                                    text = tr(
+                                        "Przy eksporcie fiszki, słowo na froncie otrzyma losową czcionkę z wybranych",
+                                        "When exporting a card, the front expression will use a random font from selected ones"
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
@@ -607,12 +615,15 @@ fun CardStyleScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Losowy głos TTS (Japoński)",
+                                    text = tr("Losowy głos TTS (Japoński)", "Random TTS voice (Japanese)"),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "Przy eksporcie fiszki z audio TTS, użyty zostanie losowy głos z wybranych",
+                                    text = tr(
+                                        "Przy eksporcie fiszki z audio TTS, użyty zostanie losowy głos z wybranych",
+                                        "When exporting a card with TTS audio, a random voice from selected ones will be used"
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
@@ -662,7 +673,7 @@ fun CardStyleScreen(
                     onClick = {
                         savePreferences()
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Ustawienia fiszki zapisane ✓")
+                            snackbarHostState.showSnackbar(tr("Ustawienia fiszki zapisane ✓", "Card style settings saved ✓"))
                         }
                     },
                     modifier = Modifier
@@ -679,7 +690,7 @@ fun CardStyleScreen(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Zapisz", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Zapisz", "Save"), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -763,6 +774,8 @@ private fun ColorPickerRow(
     presetColors: List<String>,
     onColorSelected: (String) -> Unit
 ) {
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     var showCustomPicker by remember { mutableStateOf(false) }
     var customR by remember { mutableFloatStateOf(128f) }
     var customG by remember { mutableFloatStateOf(128f) }
@@ -789,7 +802,7 @@ private fun ColorPickerRow(
     if (showCustomPicker) {
         AlertDialog(
             onDismissRequest = { showCustomPicker = false },
-            title = { Text("Własny kolor – $label") },
+            title = { Text(tr("Własny kolor - $label", "Custom color - $label")) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     // Color preview swatch
@@ -851,10 +864,10 @@ private fun ColorPickerRow(
                 Button(onClick = {
                     onColorSelected(customHex)
                     showCustomPicker = false
-                }) { Text("Wybierz") }
+                }) { Text(tr("Wybierz", "Select")) }
             },
             dismissButton = {
-                TextButton(onClick = { showCustomPicker = false }) { Text("Anuluj") }
+                TextButton(onClick = { showCustomPicker = false }) { Text(tr("Anuluj", "Cancel")) }
             }
         )
     }
@@ -916,7 +929,7 @@ private fun ColorPickerRow(
                     if (!isCustomSelected) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = "Własny kolor",
+                            contentDescription = tr("Własny kolor", "Custom color"),
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
