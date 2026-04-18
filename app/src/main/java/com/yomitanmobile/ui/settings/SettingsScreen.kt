@@ -75,6 +75,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.dataStore
+import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -181,7 +182,7 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val name = editedDeckName.ifBlank { "Mining Deck" }
+                    val name = InputSanitizer.sanitizeDeckName(editedDeckName)
                     currentDeckName = name
                     coroutineScope.launch {
                         context.dataStore.edit { prefs ->
@@ -293,7 +294,7 @@ fun SettingsScreen(
 
             item {
                 OutlinedButton(
-                    onClick = { filePickerLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) },
+                    onClick = { filePickerLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed")) },
                     enabled = !isImporting,
                     modifier = Modifier.fillMaxWidth()
                 ) {

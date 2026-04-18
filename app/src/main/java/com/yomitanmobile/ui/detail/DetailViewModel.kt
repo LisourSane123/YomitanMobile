@@ -158,16 +158,18 @@ class DetailViewModel @Inject constructor(
                 return@launch
             }
 
+            val sanitizedDeck = InputSanitizer.sanitizeDeckName(savedDeck)
+
             // Check if already exported
             val existing = exportedWordDao.findExported(
-                word.expression, word.reading, savedDeck
+                word.expression, word.reading, sanitizedDeck
             )
             if (existing != null) {
-                _events.emit(DetailEvent.AlreadyExported(word.expression, savedDeck))
+                _events.emit(DetailEvent.AlreadyExported(word.expression, sanitizedDeck))
                 return@launch
             }
 
-            performExport(word, savedDeck)
+            performExport(word, sanitizedDeck)
         }
     }
 
@@ -175,9 +177,10 @@ class DetailViewModel @Inject constructor(
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
         viewModelScope.launch {
-            val savedDeck = appContext.dataStore.data
+            val savedDeckRaw = appContext.dataStore.data
                 .map { it[MainActivity.ANKI_DECK_NAME] }
                 .first() ?: "Mining Deck"
+            val savedDeck = InputSanitizer.sanitizeDeckName(savedDeckRaw)
             performExport(word, savedDeck)
         }
     }

@@ -17,6 +17,9 @@ interface KanjiDao {
     @Query("DELETE FROM kanji_entries WHERE dictionary_name = :dictionaryName")
     suspend fun deleteByDictionary(dictionaryName: String)
 
+    @Query("UPDATE kanji_entries SET dictionary_name = :newName WHERE dictionary_name = :oldName")
+    suspend fun updateDictionaryName(oldName: String, newName: String)
+
     @Query("SELECT COUNT(*) FROM kanji_entries WHERE dictionary_name = :dictionaryName")
     suspend fun countByDictionary(dictionaryName: String): Int
 }

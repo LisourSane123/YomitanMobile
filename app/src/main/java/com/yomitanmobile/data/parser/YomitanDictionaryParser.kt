@@ -18,6 +18,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.InputStream
+import java.io.ByteArrayOutputStream
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,6 +41,16 @@ data class ParseResult(
  */
 @Singleton
 class YomitanDictionaryParser @Inject constructor() {
+
+    private companion object {
+        const val TEMP_DICTIONARY_NAME = "temp"
+        const val BUFFER_SIZE = 8192
+        const val MAX_INDEX_JSON_BYTES = 1 * 1024 * 1024
+        const val MAX_TERM_BANK_BYTES = 25 * 1024 * 1024
+        const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
+        const val MAX_META_BANK_BYTES = 25 * 1024 * 1024
+        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 200L * 1024L * 1024L
+    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -68,8 +79,31 @@ class YomitanDictionaryParser @Inject constructor() {
         var filesProcessed = 0
         var hasTermBanks = false
         var hasMetaBanks = false
+        var hasKanjiBanks = false
+        var totalUncompressedBytes = 0L
 
         ZipInputStream(inputStream).use { zip ->
+            fun readEntryTextLimited(entryName: String, maxBytes: Int): String {
+                val out = ByteArrayOutputStream(minOf(maxBytes, BUFFER_SIZE))
+                val buffer = ByteArray(BUFFER_SIZE)
+                var bytesReadTotal = 0
+                while (true) {
+                    val read = zip.read(buffer)
+                    if (read == -1) break
+                    bytesReadTotal += read
+                    totalUncompressedBytes += read
+
+                    if (bytesReadTotal > maxBytes) {
+                        throw Exception("Plik $entryName przekracza limit ${maxBytes / (1024 * 1024)} MB")
+                    }
+                    if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                        throw Exception("Archiwum przekracza limit ${MAX_TOTAL_UNCOMPRESSED_BYTES / (1024 * 1024)} MB")
+                    }
+                    out.write(buffer, 0, read)
+                }
+                return out.toString(Charsets.UTF_8.name())
+            }
+
             var entry = zip.nextEntry
             while (entry != null) {
                 val name = entry.name
@@ -77,16 +111,16 @@ class YomitanDictionaryParser @Inject constructor() {
                 if (!entry.isDirectory) {
                     when {
                         name.endsWith("index.json") -> {
-                            indexJson = zip.bufferedReader().readText()
+                            indexJson = readEntryTextLimited(name, MAX_INDEX_JSON_BYTES)
                         }
                         name.contains("term_bank_") && name.endsWith(".json") -> {
                             hasTermBanks = true
                             // Parse this term bank file immediately and emit batch
                             try {
-                                val content = zip.bufferedReader().readText()
+                                val content = readEntryTextLimited(name, MAX_TERM_BANK_BYTES)
                                 val termArray = json.decodeFromString<JsonArray>(content)
 
-                                val dictionaryName = "temp" // will be updated later
+                                val dictionaryName = TEMP_DICTIONARY_NAME
                                 val batch = mutableListOf<DictionaryEntry>()
                                 for (termElement in termArray) {
                                     try {
@@ -116,13 +150,14 @@ class YomitanDictionaryParser @Inject constructor() {
                                 if (batch.isNotEmpty()) {
                                     onBatch(batch, name)
                                 }
-                            } catch (_: Exception) {
-                                // Error parsing term bank file
+                            } catch (e: Exception) {
+                                throw Exception("Błąd przetwarzania $name: ${e.message}", e)
                             }
                         }
                         name.contains("kanji_bank_") && name.endsWith(".json") -> {
+                            hasKanjiBanks = true
                             try {
-                                val content = zip.bufferedReader().readText()
+                                val content = readEntryTextLimited(name, MAX_KANJI_BANK_BYTES)
                                 val jsonArray = json.decodeFromString<JsonArray>(content)
                                 val KANJI_CHUNK_SIZE = 2000
                                 val batch = mutableListOf<KanjiEntry>()
@@ -149,7 +184,7 @@ class YomitanDictionaryParser @Inject constructor() {
                                                     onyomi = onyomi,
                                                     kunyomi = kunyomi,
                                                     meanings = encodedMeanings,
-                                                    dictionaryName = name // Use zip name temporarily or fix below
+                                                    dictionaryName = TEMP_DICTIONARY_NAME
                                                 )
                                             )
                                         }
@@ -163,12 +198,15 @@ class YomitanDictionaryParser @Inject constructor() {
                                 if (batch.isNotEmpty()) {
                                     onKanjiBatch(batch, name)
                                 }
-                            } catch (_: Exception) {}
+                                filesProcessed++
+                            } catch (e: Exception) {
+                                throw Exception("Błąd przetwarzania $name: ${e.message}", e)
+                            }
                         }
                         name.contains("term_meta_bank_") && name.endsWith(".json") -> {
                             hasMetaBanks = true
                             try {
-                                val content = zip.bufferedReader().readText()
+                                val content = readEntryTextLimited(name, MAX_META_BANK_BYTES)
                                 val metaArray = json.decodeFromString<JsonArray>(content)
                                 val totalMetaEntries = metaArray.size
 
@@ -251,6 +289,10 @@ class YomitanDictionaryParser @Inject constructor() {
                 zip.closeEntry()
                 entry = zip.nextEntry
             }
+        }
+
+        if (!hasTermBanks && !hasMetaBanks && !hasKanjiBanks) {
+            throw Exception("Archiwum nie zawiera obsługiwanych plików słownika")
         }
 
         val indexData = indexJson?.let {

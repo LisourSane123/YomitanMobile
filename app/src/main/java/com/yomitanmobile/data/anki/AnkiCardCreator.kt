@@ -17,6 +17,7 @@ import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
 import javax.inject.Singleton
@@ -177,6 +178,8 @@ class AnkiCardCreator(
             """.trimIndent()
         }
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     private val ankiApi: AddContentApi by lazy { AddContentApi(context) }
 
@@ -470,17 +473,16 @@ class AnkiCardCreator(
         val kanjiHtml = if (kanjiData.isNotEmpty()) {
             kanjiData.sortedBy { entry.expression.indexOf(it.kanji).takeIf { idx -> idx >= 0 } ?: Int.MAX_VALUE }
                 .joinToString("") { kanji ->
-                    val cleanMeanings = kanji.meanings
-                        .removePrefix("[")
-                        .removeSuffix("]")
-                        .split(",")
-                        .map { it.trim().removePrefix("\"").removeSuffix("\"") }
-                        .filter { it.isNotBlank() }
+                    val cleanMeanings = parseKanjiMeanings(kanji.meanings)
+                        .map { InputSanitizer.escapeHtml(it) }
                         .joinToString(", ")
-                        
-                    "<div class='kanji-item'><span class='kanji-char'>${kanji.kanji}</span>" +
-                    (if (kanji.onyomi.isNotEmpty()) " On: ${kanji.onyomi}" else "") +
-                    (if (kanji.kunyomi.isNotEmpty()) " Kun: ${kanji.kunyomi}" else "") +
+                    val safeKanji = InputSanitizer.escapeHtml(kanji.kanji)
+                    val safeOnyomi = InputSanitizer.escapeHtml(kanji.onyomi)
+                    val safeKunyomi = InputSanitizer.escapeHtml(kanji.kunyomi)
+
+                    "<div class='kanji-item'><span class='kanji-char'>$safeKanji</span>" +
+                    (if (safeOnyomi.isNotEmpty()) " On: $safeOnyomi" else "") +
+                    (if (safeKunyomi.isNotEmpty()) " Kun: $safeKunyomi" else "") +
                     (if (cleanMeanings.isNotEmpty()) "<br>Znaczenie: $cleanMeanings" else "") +
                     "</div>"
                 }
@@ -488,5 +490,20 @@ class AnkiCardCreator(
 
         val card = createAnkiCard(entry, audioFileName, randomFont).copy(kanjiBreakdown = kanjiHtml)
         return addNote(card, deckName, stylePrefs)
+    }
+
+    private fun parseKanjiMeanings(raw: String): List<String> {
+        if (raw.isBlank()) return emptyList()
+        return try {
+            json.decodeFromString<List<String>>(raw)
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+        } catch (_: Exception) {
+            raw.removePrefix("[")
+                .removeSuffix("]")
+                .split(",")
+                .map { it.trim().removePrefix("\"").removeSuffix("\"") }
+                .filter { it.isNotBlank() }
+        }
     }
 }

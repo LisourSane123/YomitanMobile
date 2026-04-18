@@ -53,7 +53,7 @@ class SearchWidgetProvider : AppWidgetProvider() {
                         context.applicationContext,
                         AppDatabase::class.java,
                         AppDatabase.DATABASE_NAME
-                    ).fallbackToDestructiveMigration().build()
+                    ).build()
 
                     val favorite = db.favoriteWordDao().getRandomFavorite()
                     if (favorite != null) {

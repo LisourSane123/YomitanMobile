@@ -10,6 +10,7 @@ data class DictionaryDownloadInfo(
     val category: DictionaryCategory,
     val url: String,
     val fileSize: String,
+    val sha256: String? = null,
     val language: String = "EN"
 )
 

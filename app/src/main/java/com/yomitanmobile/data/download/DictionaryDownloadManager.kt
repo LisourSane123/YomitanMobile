@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
 import java.io.File
@@ -13,6 +14,8 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
+import java.util.Locale
 import javax.inject.Singleton
 
 data class DownloadProgress(
@@ -45,6 +48,27 @@ class DictionaryDownloadManager(
 ) {
     companion object {
         private const val BUFFER_SIZE = 8192
+        private const val MAX_REDIRECTS = 5
+        private const val MAX_DOWNLOAD_BYTES = 250L * 1024L * 1024L
+
+        private val ALLOWED_DOWNLOAD_HOSTS = setOf(
+            "github.com",
+            "raw.githubusercontent.com",
+            "objects.githubusercontent.com",
+            "github-releases.githubusercontent.com",
+            "release-assets.githubusercontent.com"
+        )
+
+        internal fun isAllowedDownloadUrl(url: String): Boolean {
+            return try {
+                val parsed = URL(url)
+                val host = parsed.host.lowercase(Locale.ROOT)
+                parsed.protocol.equals("https", ignoreCase = true) &&
+                    host in ALLOWED_DOWNLOAD_HOSTS
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 
     private val _currentDownload = MutableStateFlow<DownloadProgress?>(null)
@@ -53,77 +77,82 @@ class DictionaryDownloadManager(
     private val _isDownloading = MutableStateFlow(false)
     val isDownloading: StateFlow<Boolean> = _isDownloading.asStateFlow()
 
-    suspend fun downloadAndImport(info: DictionaryDownloadInfo): DownloadResult =
-        withContext(Dispatchers.IO) {
-            if (_isDownloading.value) {
-                return@withContext DownloadResult.Error(
-                    info.name,
-                    "Inne pobieranie jest w toku"
-                )
-            }
+    private val downloadMutex = Mutex()
 
-            _isDownloading.value = true
-            val tempFile = File(context.cacheDir, "dict_download_${info.id}.zip")
+    suspend fun downloadAndImport(info: DictionaryDownloadInfo): DownloadResult {
+        if (!downloadMutex.tryLock()) {
+            return DownloadResult.Error(info.name, "Inne pobieranie jest w toku")
+        }
+        try {
+            return withContext(Dispatchers.IO) {
+                _isDownloading.value = true
+                val tempFile = File(context.cacheDir, "dict_download_${info.id}.zip")
 
-            try {
-                // Phase 1: Download
-                _currentDownload.value = DownloadProgress(
-                    dictionaryId = info.id,
-                    dictionaryName = info.name,
-                    bytesDownloaded = 0,
-                    totalBytes = -1,
-                    phase = DownloadPhase.DOWNLOADING
-                )
-
-                downloadFile(info.url, tempFile, info)
-
-                // Phase 2: Import
-                _currentDownload.value = _currentDownload.value?.copy(
-                    phase = DownloadPhase.IMPORTING
-                )
-
-                val result = FileInputStream(tempFile).use { fis ->
-                    repository.importDictionary(
-                        inputStream = fis,
-                        onProgress = { progress ->
-                            _currentDownload.value = _currentDownload.value?.copy(
-                                phase = DownloadPhase.IMPORTING,
-                                bytesDownloaded = progress.entriesProcessed.toLong(),
-                                totalBytes = progress.totalEntries.toLong()
-                            )
-                        }
-                    )
-                }
-
-                // Phase 3: Complete
-                _currentDownload.value = _currentDownload.value?.copy(
-                    phase = DownloadPhase.COMPLETED
-                )
-
-                if (result.success) {
-                    DownloadResult.Success(info.name, result.entriesImported)
-                } else {
-                    DownloadResult.Error(info.name, result.errorMessage ?: "Import failed")
-                }
-            } catch (e: Exception) {
-                _currentDownload.value = _currentDownload.value?.copy(
-                    phase = DownloadPhase.ERROR
-                )
-                DownloadResult.Error(info.name, e.message ?: "Unknown error")
-            } finally {
-                tempFile.delete()
-                _isDownloading.value = false
-                // Clear progress after a delay so UI can show final state
                 try {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                        kotlinx.coroutines.delay(2000)
+                    // Phase 1: Download
+                    _currentDownload.value = DownloadProgress(
+                        dictionaryId = info.id,
+                        dictionaryName = info.name,
+                        bytesDownloaded = 0,
+                        totalBytes = -1,
+                        phase = DownloadPhase.DOWNLOADING
+                    )
+
+                    downloadFile(info.url, tempFile, info)
+                    verifyZipSignature(tempFile)
+                    verifySha256(tempFile, info.sha256)
+
+                    // Phase 2: Import
+                    _currentDownload.value = _currentDownload.value?.copy(
+                        phase = DownloadPhase.IMPORTING
+                    )
+
+                    val result = FileInputStream(tempFile).use { fis ->
+                        repository.importDictionary(
+                            inputStream = fis,
+                            onProgress = { progress ->
+                                _currentDownload.value = _currentDownload.value?.copy(
+                                    phase = DownloadPhase.IMPORTING,
+                                    bytesDownloaded = progress.entriesProcessed.toLong(),
+                                    totalBytes = progress.totalEntries.toLong()
+                                )
+                            }
+                        )
+                    }
+
+                    // Phase 3: Complete
+                    _currentDownload.value = _currentDownload.value?.copy(
+                        phase = DownloadPhase.COMPLETED
+                    )
+
+                    if (result.success) {
+                        DownloadResult.Success(info.name, result.entriesImported)
+                    } else {
+                        DownloadResult.Error(info.name, result.errorMessage ?: "Import failed")
+                    }
+                } catch (e: Exception) {
+                    _currentDownload.value = _currentDownload.value?.copy(
+                        phase = DownloadPhase.ERROR
+                    )
+                    DownloadResult.Error(info.name, e.message ?: "Unknown error")
+                } finally {
+                    tempFile.delete()
+                    _isDownloading.value = false
+                    // Clear progress after a delay so UI can show final state
+                    try {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                            kotlinx.coroutines.delay(2000)
+                            _currentDownload.value = null
+                        }
+                    } catch (_: Exception) {
                         _currentDownload.value = null
                     }
-                } catch (_: Exception) {
-                    _currentDownload.value = null
                 }
             }
+        } finally {
+            downloadMutex.unlock()
         }
+    }
 
     private suspend fun downloadFile(
         urlString: String,
@@ -132,12 +161,15 @@ class DictionaryDownloadManager(
     ) = withContext(Dispatchers.IO) {
         var connection: HttpURLConnection? = null
         try {
+            if (!isAllowedDownloadUrl(urlString)) {
+                throw Exception("Niedozwolony adres pobierania")
+            }
+
             var currentUrl = urlString
             var redirectCount = 0
-            val maxRedirects = 5
 
             // Follow redirects manually (GitHub releases use redirects)
-            while (redirectCount < maxRedirects) {
+            while (redirectCount < MAX_REDIRECTS) {
                 connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 30_000
                     readTimeout = 120_000
@@ -151,9 +183,9 @@ class DictionaryDownloadManager(
                     val newUrl = connection.getHeaderField("Location")
                     connection.disconnect()
                     if (newUrl.isNullOrBlank()) throw Exception("Redirect without Location header")
-                    currentUrl = if (newUrl.startsWith("http")) newUrl else {
-                        val base = URL(currentUrl)
-                        URL(base, newUrl).toString()
+                    currentUrl = resolveRedirectUrl(currentUrl, newUrl)
+                    if (!isAllowedDownloadUrl(currentUrl)) {
+                        throw Exception("Redirect do niedozwolonego hosta")
                     }
                     redirectCount++
                     continue
@@ -165,11 +197,14 @@ class DictionaryDownloadManager(
                 break
             }
 
-            if (redirectCount >= maxRedirects) {
-                throw Exception("Too many redirects ($maxRedirects) for URL: $urlString")
+            if (redirectCount >= MAX_REDIRECTS) {
+                throw Exception("Too many redirects ($MAX_REDIRECTS) for URL: $urlString")
             }
 
             val totalBytes = connection?.contentLengthLong ?: -1L
+            if (totalBytes > MAX_DOWNLOAD_BYTES) {
+                throw Exception("Plik jest zbyt duży (${totalBytes / (1024 * 1024)} MB)")
+            }
             var bytesDownloaded = 0L
 
             BufferedInputStream(connection!!.inputStream, BUFFER_SIZE).use { input ->
@@ -180,6 +215,10 @@ class DictionaryDownloadManager(
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         output.write(buffer, 0, bytesRead)
                         bytesDownloaded += bytesRead
+
+                        if (bytesDownloaded > MAX_DOWNLOAD_BYTES) {
+                            throw Exception("Pobrany plik przekracza limit ${MAX_DOWNLOAD_BYTES / (1024 * 1024)} MB")
+                        }
 
                         _currentDownload.value = DownloadProgress(
                             dictionaryId = info.id,
@@ -195,5 +234,45 @@ class DictionaryDownloadManager(
         } finally {
             connection?.disconnect()
         }
+    }
+
+    private fun resolveRedirectUrl(baseUrl: String, locationHeader: String): String {
+        return if (locationHeader.startsWith("http", ignoreCase = true)) {
+            locationHeader
+        } else {
+            URL(URL(baseUrl), locationHeader).toString()
+        }
+    }
+
+    private fun verifyZipSignature(file: File) {
+        FileInputStream(file).use { input ->
+            val signature = ByteArray(4)
+            val read = input.read(signature)
+            if (read < 4 || signature[0] != 0x50.toByte() || signature[1] != 0x4B.toByte()) {
+                throw Exception("Pobrany plik nie jest poprawnym archiwum ZIP")
+            }
+        }
+    }
+
+    private fun verifySha256(file: File, expectedSha256: String?) {
+        val expected = expectedSha256?.trim()?.lowercase(Locale.ROOT) ?: return
+        if (expected.isBlank()) return
+
+        val actual = sha256(file)
+        if (actual != expected) {
+            throw Exception("Niepoprawna suma kontrolna pobranego pliku")
+        }
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(BUFFER_SIZE)
+            var read: Int
+            while (input.read(buffer).also { read = it } != -1) {
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }

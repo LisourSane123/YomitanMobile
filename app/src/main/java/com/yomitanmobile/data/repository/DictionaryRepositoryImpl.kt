@@ -131,6 +131,7 @@ class DictionaryRepositoryImpl @Inject constructor(
                 // to the actual dictionary name from index.json
                 if (dictionaryNameFromBatch != "temp") {
                     dictionaryDao.updateDictionaryName("temp", dictionaryNameFromBatch)
+                    kanjiDao.updateDictionaryName("temp", dictionaryNameFromBatch)
                 }
 
                 try {
