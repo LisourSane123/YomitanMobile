@@ -70,6 +70,9 @@ fun StatisticsScreen(
     val weeklyWordsForCopy = remember(state.weeklyLearnedWords) {
         StatisticsViewModel.buildWeeklyLearnedWordsCopyText(state.weeklyLearnedWords)
     }
+    val bunproKanjiForCopy = remember(state.bunproKanjiLearned) {
+        state.bunproKanjiLearned.joinToString("")
+    }
 
     Scaffold(
         topBar = {
@@ -226,7 +229,120 @@ fun StatisticsScreen(
                     )
                 }
 
+                item {
+                    BunproProgressCard(
+                        integrationEnabled = state.bunproIntegrationEnabled,
+                        vocabularyCount = state.bunproVocabularyCount,
+                        learnedKanji = state.bunproKanjiLearned,
+                        errorMessage = state.bunproError,
+                        onCopyKanji = {
+                            if (bunproKanjiForCopy.isBlank()) {
+                                Toast.makeText(context, "Brak znaków Bunpro do skopiowania", Toast.LENGTH_SHORT)
+                                    .show()
+                            } else {
+                                clipboardManager.setText(AnnotatedString(bunproKanjiForCopy))
+                                Toast.makeText(context, "Skopiowano znaki Bunpro", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+
                 item { Spacer(Modifier.height(32.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BunproProgressCard(
+    integrationEnabled: Boolean,
+    vocabularyCount: Int,
+    learnedKanji: List<String>,
+    errorMessage: String?,
+    onCopyKanji: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Bunpro",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            if (!integrationEnabled) {
+                Text(
+                    "Integracja Bunpro jest wyłączona w ustawieniach.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                return@Column
+            }
+
+            Text(
+                "Nauczone słownictwo: $vocabularyCount",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            if (!errorMessage.isNullOrBlank()) {
+                Text(
+                    "Błąd: $errorMessage",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                return@Column
+            }
+
+            Text(
+                "Nauczone znaki: ${learnedKanji.size}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+
+            if (learnedKanji.isEmpty()) {
+                Text(
+                    "Brak dostępnych znaków z Bunpro.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                return@Column
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Lista znaków",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onCopyKanji) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Kopiuj znaki Bunpro")
+                }
+            }
+
+            val previewLimit = 120
+            Text(
+                text = learnedKanji.take(previewLimit).joinToString(" "),
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            if (learnedKanji.size > previewLimit) {
+                Text(
+                    text = "...oraz ${learnedKanji.size - previewLimit} kolejnych",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

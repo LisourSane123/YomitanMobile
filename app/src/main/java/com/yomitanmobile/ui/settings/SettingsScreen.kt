@@ -78,7 +78,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.yomitanmobile.BuildConfig
 import com.yomitanmobile.MainActivity
+import com.yomitanmobile.data.bunpro.BunproProgressService
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.util.InputSanitizer
@@ -116,6 +118,9 @@ fun SettingsScreen(
     var dailyGoalCount by remember { mutableStateOf(0f) }
     var sentenceApiConsentGranted by remember { mutableStateOf(false) }
     var showSentenceApiConsentDialog by remember { mutableStateOf(false) }
+    var bunproApiEnabled by remember { mutableStateOf(false) }
+    var bunproApiToken by remember { mutableStateOf("") }
+    var bunproApiEndpoint by remember { mutableStateOf(BunproProgressService.DEFAULT_ENDPOINT_TEMPLATE) }
     val coroutineScope = rememberCoroutineScope()
 
     // Load current deck name, theme mode and daily goal
@@ -125,6 +130,21 @@ fun SettingsScreen(
         currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
         dailyGoalCount = (prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0).toFloat()
         sentenceApiConsentGranted = prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] ?: false
+        val bunproEnabledFallback =
+            BuildConfig.BUNPRO_API_ENABLED_FALLBACK || BuildConfig.BUNPRO_API_TOKEN_FALLBACK.isNotBlank()
+        bunproApiEnabled = prefs[MainActivity.BUNPRO_API_ENABLED] ?: bunproEnabledFallback
+        bunproApiToken = prefs[MainActivity.BUNPRO_API_TOKEN]
+            ?.trim()
+            .orEmpty()
+            .ifBlank { BuildConfig.BUNPRO_API_TOKEN_FALLBACK.trim() }
+        bunproApiEndpoint = prefs[MainActivity.BUNPRO_API_ENDPOINT]
+            ?.trim()
+            .orEmpty()
+            .ifBlank {
+                BuildConfig.BUNPRO_API_ENDPOINT_FALLBACK
+                    .trim()
+                    .ifBlank { BunproProgressService.DEFAULT_ENDPOINT_TEMPLATE }
+            }
         // Language is stored in SharedPreferences (needed for synchronous read at startup)
         val langPrefs = context.getSharedPreferences(MainActivity.LANG_PREFS_NAME, android.content.Context.MODE_PRIVATE)
         currentLanguage = langPrefs.getString(MainActivity.LANG_PREFS_KEY, "system") ?: "system"
@@ -811,6 +831,121 @@ fun SettingsScreen(
                                 }
                             }
                         )
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Shield,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    tr("Integracja Bunpro", "Bunpro integration"),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    tr(
+                                        "Opcjonalne pobieranie postępu nauki słownictwa i znaków z Bunpro.",
+                                        "Optional fetch of learned vocabulary and kanji progress from Bunpro."
+                                    ),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                            Switch(
+                                checked = bunproApiEnabled,
+                                onCheckedChange = { enabled ->
+                                    bunproApiEnabled = enabled
+                                    coroutineScope.launch {
+                                        context.dataStore.edit { prefs ->
+                                            prefs[MainActivity.BUNPRO_API_ENABLED] = enabled
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
+                        if (bunproApiEnabled) {
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = bunproApiToken,
+                                onValueChange = { bunproApiToken = it },
+                                label = { Text(tr("Token API Bunpro", "Bunpro API token")) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = bunproApiEndpoint,
+                                onValueChange = { bunproApiEndpoint = it },
+                                label = { Text(tr("Szablon endpointu", "Endpoint template")) },
+                                supportingText = {
+                                    Text(
+                                        tr(
+                                            "Użyj {token} jako placeholder lub pozostaw domyślny URL.",
+                                            "Use {token} placeholder or keep the default URL."
+                                        )
+                                    )
+                                },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        bunproApiEndpoint = BunproProgressService.DEFAULT_ENDPOINT_TEMPLATE
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(tr("Domyślny URL", "Default URL"))
+                                }
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            context.dataStore.edit { prefs ->
+                                                prefs[MainActivity.BUNPRO_API_TOKEN] = bunproApiToken.trim()
+                                                prefs[MainActivity.BUNPRO_API_ENDPOINT] = bunproApiEndpoint
+                                                    .trim()
+                                                    .ifBlank { BunproProgressService.DEFAULT_ENDPOINT_TEMPLATE }
+                                            }
+                                        }
+                                        Toast.makeText(
+                                            context,
+                                            tr("Zapisano ustawienia Bunpro", "Saved Bunpro settings"),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(tr("Zapisz", "Save"))
+                                }
+                            }
+                        }
                     }
                 }
             }
