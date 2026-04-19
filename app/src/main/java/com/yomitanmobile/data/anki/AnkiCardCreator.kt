@@ -14,6 +14,7 @@ import com.yomitanmobile.domain.model.AnkiCard
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.util.InputSanitizer
+import com.yomitanmobile.util.SentenceContextHighlighter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -31,14 +32,15 @@ class AnkiCardCreator(
         private const val MAX_MEANINGS_ON_CARD = 3
 
         const val DEFAULT_DECK_NAME = "Mining Deck"
-        const val MODEL_NAME = "Yomitan-Mobile-v3"
+        const val MODEL_NAME = "Yomitan-Mobile-v4"
         const val PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
 
-        val FIELD_NAMES = arrayOf("Front", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence", "KanjiBreakdown")
+        val FIELD_NAMES = arrayOf("Front", "FrontContext", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence", "KanjiBreakdown")
 
         const val CARD_FRONT_TEMPLATE = """
             <div class="front">
                 <span class="expression">{{Front}}</span>
+                {{#FrontContext}}<div class="front-context">{{FrontContext}}</div>{{/FrontContext}}
             </div>
         """
 
@@ -81,6 +83,18 @@ class AnkiCardCreator(
                 font-size: 13px; color: #aaa; margin: 4px 0;
                 padding: 2px 10px; background: #333; border-radius: 12px;
                 display: inline-block;
+            }
+            .front-context {
+                font-size: 18px; color: #d7d7d7; margin-top: 14px;
+                text-align: left; padding: 10px 12px; background: #242424; border-radius: 8px;
+                border-left: 3px solid #80cbc4;
+            }
+            .context-highlight {
+                font-weight: 700;
+                color: #ffffff;
+                background: rgba(128, 203, 196, 0.28);
+                border-radius: 4px;
+                padding: 0 2px;
             }
             .audio { margin: 8px 0; }
             .sentence {
@@ -133,6 +147,19 @@ class AnkiCardCreator(
                 display: inline-block;
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
+            .front-context {
+                font-size: 18px; color: #d7d7d7; margin-top: 14px;
+                text-align: left; padding: 10px 12px; background: #242424; border-radius: 8px;
+                border-left: 3px solid ${prefs.accentColor};
+                ${if (!prefs.showFrontContextSentence) "display: none;" else ""}
+            }
+            .context-highlight {
+                font-weight: 700;
+                color: ${prefs.expressionColor};
+                background: ${prefs.accentColor}44;
+                border-radius: 4px;
+                padding: 0 2px;
+            }
             .audio { margin: 8px 0; }
             .sentence {
                 font-size: 18px; color: #bbb; margin-top: 15px; font-style: italic;
@@ -154,6 +181,11 @@ class AnkiCardCreator(
             val fontImport = if (fontImportUrl != null) {
                 """<link rel="stylesheet" href="$fontImportUrl">"""
             } else ""
+            val frontContext = if (prefs.showFrontContextSentence) {
+                """<div class="front-context">毎日野菜を<strong class="context-highlight">食べる</strong>。<br><small style="opacity:0.7;">(kontekst na froncie)</small></div>"""
+            } else {
+                ""
+            }
             return """
             <!DOCTYPE html>
             <html>
@@ -164,6 +196,11 @@ class AnkiCardCreator(
                 <style>$css</style>
             </head>
             <body class="card">
+                <div class="front" style="margin-bottom: 20px;">
+                    <div class="expression">食べる</div>
+                    $frontContext
+                </div>
+                <hr>
                 <div class="back">
                     <div class="expression">食べる</div>
                     <div class="freq">★★★ Top 1K</div>
@@ -251,7 +288,12 @@ class AnkiCardCreator(
         }
     }
 
-    fun createAnkiCard(entry: WordEntry, audioFileName: String = "", randomFont: String? = null): AnkiCard {
+    fun createAnkiCard(
+        entry: WordEntry,
+        audioFileName: String = "",
+        randomFont: String? = null,
+        stylePrefs: CardStylePreferences? = null
+    ): AnkiCard {
         val pitchHtml = buildPitchAccentHtml(
             entry.reading.ifBlank { entry.expression },
             entry.pitchAccent
@@ -260,9 +302,18 @@ class AnkiCardCreator(
         
         val frontExpression = InputSanitizer.escapeHtml(entry.expression.ifBlank { entry.reading })
         val frontContent = if (randomFont != null) "<span style=\"font-family: '$randomFont', sans-serif;\">$frontExpression</span>" else frontExpression
+        val frontContext = if (stylePrefs?.showFrontContextSentence == true) {
+            SentenceContextHighlighter.buildHighlightedSentenceHtml(
+                sentence = entry.exampleSentence,
+                preferredTokens = listOf(entry.expression, entry.reading)
+            )
+        } else {
+            ""
+        }
         
         return AnkiCard(
             front = frontContent,
+            frontContext = frontContext,
             reading = InputSanitizer.escapeHtml(entry.reading),
             meaning = formatMeaningForCard(entry.definitions),
             pitchAccent = pitchHtml,
@@ -488,7 +539,7 @@ class AnkiCardCreator(
                 }
         } else ""
 
-        val card = createAnkiCard(entry, audioFileName, randomFont).copy(kanjiBreakdown = kanjiHtml)
+        val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs).copy(kanjiBreakdown = kanjiHtml)
         return addNote(card, deckName, stylePrefs)
     }
 

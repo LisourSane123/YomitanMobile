@@ -102,6 +102,7 @@ fun CardStyleScreen(
     var showPitchAccent by remember { mutableStateOf(true) }
     var showFrequency by remember { mutableStateOf(true) }
     var showSentence by remember { mutableStateOf(true) }
+    var showFrontContextSentence by remember { mutableStateOf(false) }
 
     var randomFontsEnabled by remember { mutableStateOf(false) }
     var randomFonts by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -118,13 +119,18 @@ fun CardStyleScreen(
         ttsInstance = android.speech.tts.TextToSpeech(context) { status ->
             if (status == android.speech.tts.TextToSpeech.SUCCESS) {
                 try {
-                    val voices = ttsInstance?.voices?.filter { it.locale.language == "ja" }?.map { it.name } ?: emptyList()
+                    val currentTts = ttsInstance
+                    val voices = if (currentTts != null) {
+                        currentTts.voices.filter { it.locale.language == "ja" }.map { it.name }
+                    } else {
+                        emptyList()
+                    }
                     availableVoices = voices.sorted()
                 } catch (e: Exception) {}
             }
         }
         activeTts = ttsInstance
-        onDispose { ttsInstance?.shutdown() }
+        onDispose { ttsInstance.shutdown() }
     }
 
     // Load current preferences
@@ -143,6 +149,7 @@ fun CardStyleScreen(
         showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: true
         showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true
         showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true
+        showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: false
         randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: false
         randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet()
         randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false
@@ -165,6 +172,7 @@ fun CardStyleScreen(
         showPitchAccent = showPitchAccent,
         showFrequency = showFrequency,
         showSentence = showSentence,
+        showFrontContextSentence = showFrontContextSentence,
         randomFontsEnabled = randomFontsEnabled,
         randomFonts = randomFonts,
         randomVoicesEnabled = randomVoicesEnabled,
@@ -189,6 +197,7 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_SHOW_PITCH] = showPitchAccent
                 prefs[MainActivity.CARD_SHOW_FREQUENCY] = showFrequency
                 prefs[MainActivity.CARD_SHOW_SENTENCE] = showSentence
+                prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] = showFrontContextSentence
                 prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] = randomFontsEnabled
                 prefs[MainActivity.CARD_RANDOM_FONTS] = randomFonts
                 prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] = randomVoicesEnabled
@@ -243,7 +252,8 @@ fun CardStyleScreen(
     val previewHtml = remember(
         expressionBold, expressionFontSize, readingFontSize, meaningFontSize,
         selectedFont, backgroundColor, expressionColor, readingColor,
-        meaningColor, accentColor, showPitchAccent, showFrequency, showSentence
+        meaningColor, accentColor, showPitchAccent, showFrequency, showSentence,
+        showFrontContextSentence
     ) {
         AnkiCardCreator.buildPreviewHtml(currentPreferences())
     }
@@ -274,6 +284,7 @@ fun CardStyleScreen(
                         showPitchAccent = true
                         showFrequency = true
                         showSentence = true
+                        showFrontContextSentence = false
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
@@ -519,6 +530,21 @@ fun CardStyleScreen(
                     Switch(
                         checked = showSentence,
                         onCheckedChange = { showSentence = it }
+                    )
+                }
+            }
+
+            item {
+                SettingRow(
+                    title = tr("Zdanie kontekstowe na froncie", "Front context sentence"),
+                    subtitle = tr(
+                        "Pokaż pod słowem japońskie zdanie i pogrub wyszukiwane słowo",
+                        "Show a Japanese sentence under the word and highlight the target word"
+                    )
+                ) {
+                    Switch(
+                        checked = showFrontContextSentence,
+                        onCheckedChange = { showFrontContextSentence = it }
                     )
                 }
             }

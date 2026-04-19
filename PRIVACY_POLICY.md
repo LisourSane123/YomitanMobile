@@ -1,19 +1,39 @@
 # Polityka Prywatności aplikacji Yomitan Mobile
 
-## Gromadzenie Danych
-Aplikacja "Yomitan Mobile" działa w pełni offline. Nasza aplikacja szanuje Twoją prywatność. Nie prosimy o udostępnianie, nie zbieramy, nie przetwarzamy, nie przechowujemy i nie wysyłamy na zewnętrzne serwery żadnych danych osobowych, historii wyszukiwań ani logów. 
+## 1. Zakres danych
 
-## Internet
-Aplikacja wykorzystuje połączenie sieciowe z Internetem wyłącznie w celach dobrowolnego pobierania paczek słownikowych przez Użytkownika. Pobieranie słowników odbywa się bezpośrednio z ogólnodostępnych, powszechnie uznanych repozytoriów na platformie GitHub (np. JMdict, Kanjidic).
+Yomitan Mobile nie wymaga konta i nie zbiera danych osobowych w centralnym backendzie.
 
-## Pliki Lokalne (Storage)
-Dane zapisywane przez aplikację (historia wyszukiwań, fiszki Anki, pobrane słowniki, ustawienia) przetwarzane i przechowywane są w 100% lokalnie na Twoim urządzeniu. W każdej chwili możesz je usunąć resetując pamięć aplikacji w ustawieniach systemu operacyjnego.
+Domyslnie dane uzytkownika (np. historia wyszukiwan, ustawienia, lista eksportow) sa przechowywane lokalnie na urzadzeniu.
 
-## Uprawnienia Bazy Danych
-Aplikacja może się integrować z aplikacją "AnkiDroid" za pomocą oficjalnego standardu intencji AnkiDroid. Ta opcja eksportuje pliki lokalnie i nie współdzieli informacji w Internecie.
+## 2. Kiedy aplikacja laczy sie z internetem
 
-## Kontakt
-W przypadku pytań lub wątpliwości dotyczących prywatności, proszę otworzyć zgłoszenie (Issue) w oficjalnym repozytorium GitHub projektu.
+Aplikacja moze uzywac sieci w dwoch scenariuszach:
+
+1. Pobieranie slownikow na zyczenie uzytkownika.
+2. Opcjonalne pobieranie zdan przykladowych z zewnetrznego API (tylko po wyrazeniu zgody).
+
+## 3. Opcjonalne API zdan
+
+Funkcja zdan online jest dobrowolna i domyslnie wylaczona.
+
+Po wlaczeniu aplikacja wysyla zapytanie zawierajace szukane slowo do zewnetrznego API zdan wyłącznie w celu pobrania przykladowego zdania.
+
+Zgode mozna w kazdej chwili cofnac w ustawieniach aplikacji.
+
+## 4. Przechowywanie lokalne
+
+Dane tworzone przez aplikacje (m.in. historia wyszukiwan, preferencje, metadane eksportu do Anki) sa przechowywane lokalnie.
+
+Uzytkownik moze usunac je przez wyczyszczenie danych aplikacji w ustawieniach systemu Android.
+
+## 5. Integracja z AnkiDroid
+
+Eksport do AnkiDroid wykorzystuje oficjalne API AnkiDroid i lokalny mechanizm Content Provider.
+
+## 6. Kontakt
+
+W razie pytan lub watpliwosci dotyczacych prywatnosci prosimy o otwarcie zgłoszenia (Issue) w repozytorium projektu.
 
 ---
-Stan na dzień: 31 Marca 2026.
+Stan na dzien: 18 kwietnia 2026.

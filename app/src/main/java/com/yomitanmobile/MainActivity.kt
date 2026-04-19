@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
         val CARD_SHOW_PITCH = booleanPreferencesKey("card_show_pitch")
         val CARD_SHOW_FREQUENCY = booleanPreferencesKey("card_show_frequency")
         val CARD_SHOW_SENTENCE = booleanPreferencesKey("card_show_sentence")
+        val CARD_SHOW_FRONT_CONTEXT_SENTENCE = booleanPreferencesKey("card_show_front_context_sentence")
         val CARD_RANDOM_FONTS_ENABLED = booleanPreferencesKey("card_random_fonts_enabled")
         val CARD_RANDOM_FONTS = stringSetPreferencesKey("card_random_fonts")
         val TTS_RANDOM_VOICES_ENABLED = booleanPreferencesKey("tts_random_voices_enabled")

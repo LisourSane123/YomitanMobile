@@ -2,6 +2,7 @@ package com.yomitanmobile.domain.model
 
 data class AnkiCard(
     val front: String,
+    val frontContext: String,
     val reading: String,
     val meaning: String,
     val pitchAccent: String,
@@ -11,6 +12,6 @@ data class AnkiCard(
     val kanjiBreakdown: String = ""
 ) {
     fun toFieldArray(): Array<String> = arrayOf(
-        front, reading, meaning, pitchAccent, frequency, audioFileName, sentence, kanjiBreakdown
+        front, frontContext, reading, meaning, pitchAccent, frequency, audioFileName, sentence, kanjiBreakdown
     )
 }
