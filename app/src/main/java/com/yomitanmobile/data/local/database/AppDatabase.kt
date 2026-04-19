@@ -30,7 +30,7 @@ import com.yomitanmobile.data.local.entity.SearchHistory
         SearchHistory::class,
         KanjiEntry::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -58,6 +58,17 @@ abstract class AppDatabase : RoomDatabase() {
                     UPDATE exported_words
                     SET export_hour = CAST(strftime('%H', export_date / 1000, 'unixepoch', 'localtime') AS INTEGER)
                     WHERE export_hour = -1
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE exported_words
+                    ADD COLUMN export_category TEXT NOT NULL DEFAULT 'OTHER'
                     """.trimIndent()
                 )
             }

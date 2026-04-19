@@ -20,6 +20,7 @@ import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
 import com.yomitanmobile.util.InputSanitizer
 import com.yomitanmobile.util.JlptLevelUtil
+import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -292,6 +293,7 @@ class DetailViewModel @Inject constructor(
                     val localHour = Calendar.getInstance().apply {
                         timeInMillis = exportedAt
                     }.get(Calendar.HOUR_OF_DAY)
+                    val exportCategory = WordCategoryClassifier.classify(wordForExport)
                     exportedWordDao.insert(
                         ExportedWord(
                             expression = wordForExport.expression,
@@ -299,7 +301,8 @@ class DetailViewModel @Inject constructor(
                             deckName = deckName,
                             ankiNoteId = noteId,
                             exportDate = exportedAt,
-                            exportHour = localHour
+                            exportHour = localHour,
+                            exportCategory = exportCategory
                         )
                     )
                     refreshCardQualityScore()

@@ -176,6 +176,14 @@ fun StatisticsScreen(
                     )
                 }
 
+                item {
+                    CategoryImmersionCard(
+                        mostActiveCategory = state.mostActiveCategory,
+                        mostActiveCategoryCount = state.mostActiveCategoryCount,
+                        categoryActivity = state.categoryActivity
+                    )
+                }
+
                 // Chart section
                 if (state.dailyCounts.any { it.count > 0 }) {
                     item {
@@ -219,6 +227,67 @@ fun StatisticsScreen(
                 }
 
                 item { Spacer(Modifier.height(32.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryImmersionCard(
+    mostActiveCategory: String?,
+    mostActiveCategoryCount: Int,
+    categoryActivity: List<CategoryActivity>
+) {
+    val topCategories = categoryActivity
+        .filter { it.count > 0 }
+        .sortedByDescending { it.count }
+        .take(6)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Kategorie kopanych słów (7 dni)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            if (mostActiveCategory != null && mostActiveCategoryCount > 0) {
+                Text(
+                    "Najczęstsza kategoria: $mostActiveCategory",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "Liczba słów: $mostActiveCategoryCount",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Brak danych kategorii z ostatniego tygodnia.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (topCategories.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                topCategories.forEachIndexed { index, item ->
+                    Text(
+                        text = "${index + 1}. ${item.categoryLabel} -> ${item.count}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -395,8 +464,9 @@ private fun WeeklyLearnedWordsCard(
                         word.reading == word.expression -> ""
                         else -> " (${word.reading})"
                     }
+                    val category = StatisticsViewModel.categoryLabel(word.exportCategory)
                     Text(
-                        text = "${index + 1}. ${word.expression}$readingPart",
+                        text = "${index + 1}. ${word.expression}$readingPart - $category",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }

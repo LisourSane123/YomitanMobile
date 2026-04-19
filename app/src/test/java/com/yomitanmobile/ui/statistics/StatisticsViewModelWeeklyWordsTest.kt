@@ -1,7 +1,9 @@
 package com.yomitanmobile.ui.statistics
 
+import com.yomitanmobile.data.local.dao.CategoryActivityCount
 import com.yomitanmobile.data.local.dao.HourlyActivityCount
 import com.yomitanmobile.data.local.entity.ExportedWord
+import com.yomitanmobile.util.WordCategoryClassifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -31,7 +33,8 @@ class StatisticsViewModelWeeklyWordsTest {
                 expression = "飲む",
                 reading = "のむ",
                 deckName = "DeckA",
-                exportDate = 150L
+                exportDate = 150L,
+                exportCategory = WordCategoryClassifier.CATEGORY_FOOD
             )
         )
 
@@ -40,6 +43,7 @@ class StatisticsViewModelWeeklyWordsTest {
         assertEquals(2, weekly.size)
         assertEquals("食べる", weekly[0].expression)
         assertEquals("飲む", weekly[1].expression)
+        assertEquals(WordCategoryClassifier.CATEGORY_FOOD, weekly[1].exportCategory)
     }
 
     @Test
@@ -52,8 +56,8 @@ class StatisticsViewModelWeeklyWordsTest {
         val text = StatisticsViewModel.buildWeeklyLearnedWordsCopyText(words)
 
         assertTrue(text.startsWith("Słowa z ostatnich 7 dni (2)"))
-        assertTrue(text.contains("1. 食べる (たべる)"))
-        assertTrue(text.contains("2. 犬 (いぬ)"))
+        assertTrue(text.contains("1. 食べる (たべる) - Inne"))
+        assertTrue(text.contains("2. 犬 (いぬ) - Inne"))
     }
 
     @Test
@@ -106,5 +110,40 @@ class StatisticsViewModelWeeklyWordsTest {
     fun hourRangeLabel_formatsLeadingZeros() {
         assertEquals("03:00-03:59", StatisticsViewModel.hourRangeLabel(3))
         assertEquals("23:00-23:59", StatisticsViewModel.hourRangeLabel(23))
+    }
+
+    @Test
+    fun toCategoryActivity_sortsByCountDescending() {
+        val activity = StatisticsViewModel.toCategoryActivity(
+            listOf(
+                CategoryActivityCount(category = WordCategoryClassifier.CATEGORY_TRAVEL, count = 3),
+                CategoryActivityCount(category = WordCategoryClassifier.CATEGORY_FOOD, count = 8),
+                CategoryActivityCount(category = WordCategoryClassifier.CATEGORY_ECONOMY, count = 3)
+            )
+        )
+
+        assertEquals(WordCategoryClassifier.CATEGORY_FOOD, activity[0].categoryCode)
+        assertEquals(8, activity[0].count)
+    }
+
+    @Test
+    fun findMostActiveCategory_returnsAlphabeticalLabelOnTie() {
+        val mostActive = StatisticsViewModel.findMostActiveCategory(
+            listOf(
+                CategoryActivity(
+                    categoryCode = WordCategoryClassifier.CATEGORY_ECONOMY,
+                    categoryLabel = "Ekonomia",
+                    count = 5
+                ),
+                CategoryActivity(
+                    categoryCode = WordCategoryClassifier.CATEGORY_FOOD,
+                    categoryLabel = "Jedzenie",
+                    count = 5
+                )
+            )
+        )
+
+        assertEquals("Ekonomia", mostActive?.categoryLabel)
+        assertEquals(5, mostActive?.count)
     }
 }

@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.yomitanmobile.util.WordCategoryClassifier
 import java.util.Calendar
 
 @Entity(
@@ -32,7 +33,10 @@ data class ExportedWord(
     val exportDate: Long = System.currentTimeMillis(),
 
     @ColumnInfo(name = "export_hour")
-    val exportHour: Int = localHourFromTimestamp(exportDate)
+    val exportHour: Int = localHourFromTimestamp(exportDate),
+
+    @ColumnInfo(name = "export_category")
+    val exportCategory: String = WordCategoryClassifier.CATEGORY_OTHER
 )
 
 private fun localHourFromTimestamp(timestamp: Long): Int {

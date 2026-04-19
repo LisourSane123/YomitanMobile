@@ -15,6 +15,13 @@ data class HourlyActivityCount(
     val count: Int
 )
 
+data class CategoryActivityCount(
+    @ColumnInfo(name = "category")
+    val category: String,
+    @ColumnInfo(name = "count")
+    val count: Int
+)
+
 @Dao
 interface ExportedWordDao {
 
@@ -52,6 +59,17 @@ interface ExportedWordDao {
         """
     )
     suspend fun getHourlyActivitySince(fromTimestamp: Long): List<HourlyActivityCount>
+
+    @Query(
+        """
+        SELECT export_category AS category, COUNT(*) AS count
+        FROM exported_words
+        WHERE export_date >= :fromTimestamp
+        GROUP BY export_category
+        ORDER BY count DESC, category ASC
+        """
+    )
+    suspend fun getCategoryActivitySince(fromTimestamp: Long): List<CategoryActivityCount>
 
     /**
      * Get earliest export date (for chart range).

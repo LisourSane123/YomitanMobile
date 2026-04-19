@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.MainActivity
+import com.yomitanmobile.data.local.dao.CategoryActivityCount
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
@@ -11,6 +12,7 @@ import com.yomitanmobile.data.local.dao.HourlyActivityCount
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.dataStore
+import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,11 +32,18 @@ data class DailyCount(
 data class WeeklyLearnedWord(
     val expression: String,
     val reading: String,
-    val exportDate: Long
+    val exportDate: Long,
+    val exportCategory: String = WordCategoryClassifier.CATEGORY_OTHER
 )
 
 data class HourlyActivity(
     val hour: Int,
+    val count: Int
+)
+
+data class CategoryActivity(
+    val categoryCode: String,
+    val categoryLabel: String,
     val count: Int
 )
 
@@ -50,6 +59,9 @@ data class StatisticsState(
     val hourlyActivity: List<HourlyActivity> = emptyList(),
     val mostActiveHour: Int? = null,
     val mostActiveHourCount: Int = 0,
+    val categoryActivity: List<CategoryActivity> = emptyList(),
+    val mostActiveCategory: String? = null,
+    val mostActiveCategoryCount: Int = 0,
     val isLoading: Boolean = true
 )
 
@@ -70,10 +82,14 @@ class StatisticsViewModel @Inject constructor(
                 .sortedByDescending { it.exportDate }
                 .distinctBy { "${it.expression.trim()}|${it.reading.trim()}" }
                 .map {
+                    val categoryCode = it.exportCategory.trim().ifBlank {
+                        WordCategoryClassifier.CATEGORY_OTHER
+                    }
                     WeeklyLearnedWord(
                         expression = it.expression.trim(),
                         reading = it.reading.trim(),
-                        exportDate = it.exportDate
+                        exportDate = it.exportDate,
+                        exportCategory = categoryCode
                     )
                 }
         }
@@ -88,10 +104,15 @@ class StatisticsViewModel @Inject constructor(
                     word.reading == word.expression -> ""
                     else -> " (${word.reading})"
                 }
-                "${index + 1}. ${word.expression}$readingPart"
+                val category = categoryLabel(word.exportCategory)
+                "${index + 1}. ${word.expression}$readingPart - $category"
             }
 
             return (listOf(header) + body).joinToString("\n")
+        }
+
+        internal fun categoryLabel(categoryCode: String): String {
+            return WordCategoryClassifier.displayName(categoryCode)
         }
 
         internal fun toHourlyActivity(items: List<HourlyActivityCount>): List<HourlyActivity> {
@@ -113,6 +134,28 @@ class StatisticsViewModel @Inject constructor(
         internal fun hourRangeLabel(hour: Int): String {
             val normalized = hour.coerceIn(0, 23)
             return String.format("%02d:00-%02d:59", normalized, normalized)
+        }
+
+        internal fun toCategoryActivity(items: List<CategoryActivityCount>): List<CategoryActivity> {
+            return items
+                .map {
+                    val code = it.category.trim().ifBlank { WordCategoryClassifier.CATEGORY_OTHER }
+                    CategoryActivity(
+                        categoryCode = code,
+                        categoryLabel = categoryLabel(code),
+                        count = it.count
+                    )
+                }
+                .sortedWith(compareByDescending<CategoryActivity> { it.count }.thenBy { it.categoryLabel })
+        }
+
+        internal fun findMostActiveCategory(activity: List<CategoryActivity>): CategoryActivity? {
+            val positive = activity.filter { it.count > 0 }
+            if (positive.isEmpty()) return null
+            val maxCount = positive.maxOf { it.count }
+            return positive
+                .filter { it.count == maxCount }
+                .minByOrNull { it.categoryLabel }
         }
     }
 
@@ -146,6 +189,10 @@ class StatisticsViewModel @Inject constructor(
                 exportedWordDao.getHourlyActivitySince(oneWeekAgo)
             )
             val mostActiveHour = findMostActiveHour(hourlyActivity)
+            val categoryActivity = toCategoryActivity(
+                exportedWordDao.getCategoryActivitySince(oneWeekAgo)
+            )
+            val mostActiveCategory = findMostActiveCategory(categoryActivity)
 
             // Compute streak
             val streak = if (dailyGoal > 0) computeStreak(dailyCounts, dailyGoal) else 0
@@ -162,6 +209,9 @@ class StatisticsViewModel @Inject constructor(
                 hourlyActivity = hourlyActivity,
                 mostActiveHour = mostActiveHour?.hour,
                 mostActiveHourCount = mostActiveHour?.count ?: 0,
+                categoryActivity = categoryActivity,
+                mostActiveCategory = mostActiveCategory?.categoryLabel,
+                mostActiveCategoryCount = mostActiveCategory?.count ?: 0,
                 isLoading = false
             )
         }
