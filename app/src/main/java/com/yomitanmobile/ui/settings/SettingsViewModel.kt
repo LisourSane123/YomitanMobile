@@ -2,12 +2,14 @@ package com.yomitanmobile.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
 import com.yomitanmobile.domain.usecase.DeleteDictionaryUseCase
 import com.yomitanmobile.domain.usecase.GetDictionariesUseCase
 import com.yomitanmobile.domain.usecase.ImportDictionaryUseCase
+import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.InputStream
@@ -25,14 +28,36 @@ sealed class SettingsEvent {
     data class ImportError(val message: String) : SettingsEvent()
 }
 
+data class MinedCategoryStat(
+    val code: String,
+    val label: String,
+    val count: Int
+)
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val importDictionaryUseCase: ImportDictionaryUseCase,
     private val deleteDictionaryUseCase: DeleteDictionaryUseCase,
-    getDictionariesUseCase: GetDictionariesUseCase
+    getDictionariesUseCase: GetDictionariesUseCase,
+    exportedWordDao: ExportedWordDao
 ) : ViewModel() {
 
     val dictionaries: StateFlow<List<DictionaryInfo>> = getDictionariesUseCase.invoke()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val minedCategoryStats: StateFlow<List<MinedCategoryStat>> = exportedWordDao.getCategoryActivityAll()
+        .map { rows ->
+            val countsByCode = rows
+                .associate { row -> row.category.trim().ifBlank { WordCategoryClassifier.CATEGORY_OTHER } to row.count }
+
+            WordCategoryClassifier.mostImportantCategories().map { (code, label) ->
+                MinedCategoryStat(
+                    code = code,
+                    label = label,
+                    count = countsByCode[code] ?: 0
+                )
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _isImporting = MutableStateFlow(false)

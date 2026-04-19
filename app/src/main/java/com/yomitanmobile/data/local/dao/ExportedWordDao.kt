@@ -71,6 +71,16 @@ interface ExportedWordDao {
     )
     suspend fun getCategoryActivitySince(fromTimestamp: Long): List<CategoryActivityCount>
 
+    @Query(
+        """
+        SELECT export_category AS category, COUNT(*) AS count
+        FROM exported_words
+        GROUP BY export_category
+        ORDER BY count DESC, category ASC
+        """
+    )
+    fun getCategoryActivityAll(): Flow<List<CategoryActivityCount>>
+
     /**
      * Get earliest export date (for chart range).
      */
