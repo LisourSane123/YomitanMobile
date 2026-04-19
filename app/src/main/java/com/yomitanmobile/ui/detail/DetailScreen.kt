@@ -85,7 +85,6 @@ fun DetailScreen(
     var availableDecks by remember { mutableStateOf<List<String>>(emptyList()) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
     var duplicateInfo by remember { mutableStateOf("" to "") }
-    var showExportScoreDialog by remember { mutableStateOf(false) }
 
     val ankiPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -127,56 +126,6 @@ fun DetailScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDuplicateDialog = false }) {
-                    Text("Anuluj")
-                }
-            }
-        )
-    }
-
-    if (showExportScoreDialog) {
-        AlertDialog(
-            onDismissRequest = { showExportScoreDialog = false },
-            title = { Text("Eksport do Anki") },
-            text = {
-                Column {
-                    if (cardQuality != null) {
-                        val scoreText = when (cardQuality!!.tier) {
-                            CardQualityTier.EXCELLENT -> "Świetna"
-                            CardQualityTier.GOOD -> "Dobra"
-                            CardQualityTier.FAIR -> "Średnia"
-                            CardQualityTier.WEAK -> "Słaba"
-                        }
-                        Text(
-                            text = "Jakość karty: $scoreText (${cardQuality!!.score}/100)",
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        cardQuality!!.reasons.take(3).forEach { reason ->
-                            Text("• $reason", fontSize = 13.sp)
-                        }
-                        if (cardQuality!!.tier == CardQualityTier.WEAK) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Ta karta może być mniej efektywna. Mimo to chcesz eksportować?",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        Text("Przygotować eksport tej karty do Anki?")
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showExportScoreDialog = false
-                    viewModel.exportToAnki()
-                }) {
-                    Text("Eksportuj")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExportScoreDialog = false }) {
                     Text("Anuluj")
                 }
             }
@@ -225,7 +174,7 @@ fun DetailScreen(
                             )
                         }
                         IconButton(
-                            onClick = { showExportScoreDialog = true },
+                            onClick = { viewModel.exportToAnki() },
                             enabled = !isExporting
                         ) {
                             if (isExporting) {

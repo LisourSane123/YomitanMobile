@@ -4,9 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.yomitanmobile.BuildConfig
 import com.yomitanmobile.MainActivity
-import com.yomitanmobile.data.bunpro.BunproProgressService
 import com.yomitanmobile.data.local.dao.CategoryActivityCount
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
@@ -78,7 +76,6 @@ class StatisticsViewModel @Inject constructor(
     private val dictionaryInfoDao: DictionaryInfoDao,
     private val exportedWordDao: ExportedWordDao,
     private val searchHistoryDao: SearchHistoryDao,
-    private val bunproProgressService: BunproProgressService,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -188,43 +185,6 @@ class StatisticsViewModel @Inject constructor(
                 val prefs = context.dataStore.data.first()
                 val dailyGoal = prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0
 
-                val bunproEnabledFallback =
-                    BuildConfig.BUNPRO_API_ENABLED_FALLBACK || BuildConfig.BUNPRO_API_TOKEN_FALLBACK.isNotBlank()
-                val bunproIntegrationEnabled = prefs[MainActivity.BUNPRO_API_ENABLED] ?: bunproEnabledFallback
-                val bunproToken = prefs[MainActivity.BUNPRO_API_TOKEN]
-                    ?.trim()
-                    .orEmpty()
-                    .ifBlank { BuildConfig.BUNPRO_API_TOKEN_FALLBACK.trim() }
-                val bunproEndpoint = prefs[MainActivity.BUNPRO_API_ENDPOINT]
-                    ?.trim()
-                    .orEmpty()
-                    .ifBlank {
-                        BuildConfig.BUNPRO_API_ENDPOINT_FALLBACK
-                            .trim()
-                            .ifBlank { BunproProgressService.DEFAULT_ENDPOINT_TEMPLATE }
-                    }
-
-                var bunproVocabularyCount = 0
-                var bunproKanjiLearned: List<String> = emptyList()
-                var bunproError: String? = null
-
-                if (bunproIntegrationEnabled) {
-                    if (bunproToken.isBlank()) {
-                        bunproError = "Brak tokenu Bunpro API"
-                    } else {
-                        val bunproProgress = bunproProgressService.fetchProgress(
-                            endpointTemplate = bunproEndpoint,
-                            apiToken = bunproToken
-                        )
-                        if (bunproProgress != null) {
-                            bunproVocabularyCount = bunproProgress.learnedVocabulary.size
-                            bunproKanjiLearned = bunproProgress.learnedKanji
-                        } else {
-                            bunproError = "Nie udało się pobrać danych Bunpro"
-                        }
-                    }
-                }
-
                 // Compute daily counts for chart (last 30 days)
                 val allDates = exportedWordDao.getAllExportDates()
                 val dailyCounts = computeDailyCounts(allDates, 30)
@@ -269,10 +229,6 @@ class StatisticsViewModel @Inject constructor(
                     categoryActivity = categoryActivity,
                     mostActiveCategory = mostActiveCategory?.categoryLabel,
                     mostActiveCategoryCount = mostActiveCategory?.count ?: 0,
-                    bunproIntegrationEnabled = bunproIntegrationEnabled,
-                    bunproVocabularyCount = bunproVocabularyCount,
-                    bunproKanjiLearned = bunproKanjiLearned,
-                    bunproError = bunproError,
                     isLoading = false
                 )
             } catch (exception: Exception) {
