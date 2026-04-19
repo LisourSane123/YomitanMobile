@@ -1,6 +1,7 @@
 package com.yomitanmobile.ui.statistics
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.BuildConfig
@@ -80,6 +81,8 @@ class StatisticsViewModel @Inject constructor(
     private val bunproProgressService: BunproProgressService,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    private val logTag = "StatisticsViewModel"
 
     companion object {
         private const val WEEK_IN_MILLIS = 7L * 24L * 60L * 60L * 1000L
@@ -175,93 +178,110 @@ class StatisticsViewModel @Inject constructor(
 
     private fun loadStatistics() {
         viewModelScope.launch {
-            val totalEntries = dictionaryDao.getEntryCount()
-            val dictionaries = dictionaryInfoDao.getAllDictionaries().first()
-            val exportedCount = exportedWordDao.getExportedCount()
-            val searchCount = searchHistoryDao.getCount()
+            try {
+                val totalEntries = dictionaryDao.getEntryCount()
+                val dictionaries = dictionaryInfoDao.getAllDictionaries().first()
+                val exportedCount = exportedWordDao.getExportedCount()
+                val searchCount = searchHistoryDao.getCount()
 
-            // Load daily goal
-            val prefs = context.dataStore.data.first()
-            val dailyGoal = prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0
+                // Load daily goal
+                val prefs = context.dataStore.data.first()
+                val dailyGoal = prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0
 
-            val bunproEnabledFallback =
-                BuildConfig.BUNPRO_API_ENABLED_FALLBACK || BuildConfig.BUNPRO_API_TOKEN_FALLBACK.isNotBlank()
-            val bunproIntegrationEnabled = prefs[MainActivity.BUNPRO_API_ENABLED] ?: bunproEnabledFallback
-            val bunproToken = prefs[MainActivity.BUNPRO_API_TOKEN]
-                ?.trim()
-                .orEmpty()
-                .ifBlank { BuildConfig.BUNPRO_API_TOKEN_FALLBACK.trim() }
-            val bunproEndpoint = prefs[MainActivity.BUNPRO_API_ENDPOINT]
-                ?.trim()
-                .orEmpty()
-                .ifBlank {
-                    BuildConfig.BUNPRO_API_ENDPOINT_FALLBACK
-                        .trim()
-                        .ifBlank { BunproProgressService.DEFAULT_ENDPOINT_TEMPLATE }
-                }
+                val bunproEnabledFallback =
+                    BuildConfig.BUNPRO_API_ENABLED_FALLBACK || BuildConfig.BUNPRO_API_TOKEN_FALLBACK.isNotBlank()
+                val bunproIntegrationEnabled = prefs[MainActivity.BUNPRO_API_ENABLED] ?: bunproEnabledFallback
+                val bunproToken = prefs[MainActivity.BUNPRO_API_TOKEN]
+                    ?.trim()
+                    .orEmpty()
+                    .ifBlank { BuildConfig.BUNPRO_API_TOKEN_FALLBACK.trim() }
+                val bunproEndpoint = prefs[MainActivity.BUNPRO_API_ENDPOINT]
+                    ?.trim()
+                    .orEmpty()
+                    .ifBlank {
+                        BuildConfig.BUNPRO_API_ENDPOINT_FALLBACK
+                            .trim()
+                            .ifBlank { BunproProgressService.DEFAULT_ENDPOINT_TEMPLATE }
+                    }
 
-            var bunproVocabularyCount = 0
-            var bunproKanjiLearned: List<String> = emptyList()
-            var bunproError: String? = null
+                var bunproVocabularyCount = 0
+                var bunproKanjiLearned: List<String> = emptyList()
+                var bunproError: String? = null
 
-            if (bunproIntegrationEnabled) {
-                if (bunproToken.isBlank()) {
-                    bunproError = "Brak tokenu Bunpro API"
-                } else {
-                    val bunproProgress = bunproProgressService.fetchProgress(
-                        endpointTemplate = bunproEndpoint,
-                        apiToken = bunproToken
-                    )
-                    if (bunproProgress != null) {
-                        bunproVocabularyCount = bunproProgress.learnedVocabulary.size
-                        bunproKanjiLearned = bunproProgress.learnedKanji
+                if (bunproIntegrationEnabled) {
+                    if (bunproToken.isBlank()) {
+                        bunproError = "Brak tokenu Bunpro API"
                     } else {
-                        bunproError = "Nie udało się pobrać danych Bunpro"
+                        val bunproProgress = bunproProgressService.fetchProgress(
+                            endpointTemplate = bunproEndpoint,
+                            apiToken = bunproToken
+                        )
+                        if (bunproProgress != null) {
+                            bunproVocabularyCount = bunproProgress.learnedVocabulary.size
+                            bunproKanjiLearned = bunproProgress.learnedKanji
+                        } else {
+                            bunproError = "Nie udało się pobrać danych Bunpro"
+                        }
                     }
                 }
+
+                // Compute daily counts for chart (last 30 days)
+                val allDates = exportedWordDao.getAllExportDates()
+                val dailyCounts = computeDailyCounts(allDates, 30)
+
+                val oneWeekAgo = System.currentTimeMillis() - WEEK_IN_MILLIS
+                val weeklyLearnedWords = runCatching {
+                    toWeeklyLearnedWords(exportedWordDao.getExportsSince(oneWeekAgo))
+                }.getOrElse {
+                    Log.e(logTag, "Failed to load weekly learned words", it)
+                    emptyList()
+                }
+                val hourlyActivity = runCatching {
+                    toHourlyActivity(exportedWordDao.getHourlyActivitySince(oneWeekAgo))
+                }.getOrElse {
+                    Log.e(logTag, "Failed to load hourly activity", it)
+                    emptyList()
+                }
+                val mostActiveHour = findMostActiveHour(hourlyActivity)
+                val categoryActivity = runCatching {
+                    toCategoryActivity(exportedWordDao.getCategoryActivitySince(oneWeekAgo))
+                }.getOrElse {
+                    Log.e(logTag, "Failed to load category activity", it)
+                    emptyList()
+                }
+                val mostActiveCategory = findMostActiveCategory(categoryActivity)
+
+                // Compute streak
+                val streak = if (dailyGoal > 0) computeStreak(dailyCounts, dailyGoal) else 0
+
+                _state.value = StatisticsState(
+                    totalEntries = totalEntries,
+                    dictionaryCount = dictionaries.size,
+                    exportedCount = exportedCount,
+                    searchHistoryCount = searchCount,
+                    streak = streak,
+                    dailyGoal = dailyGoal,
+                    dailyCounts = dailyCounts,
+                    weeklyLearnedWords = weeklyLearnedWords,
+                    hourlyActivity = hourlyActivity,
+                    mostActiveHour = mostActiveHour?.hour,
+                    mostActiveHourCount = mostActiveHour?.count ?: 0,
+                    categoryActivity = categoryActivity,
+                    mostActiveCategory = mostActiveCategory?.categoryLabel,
+                    mostActiveCategoryCount = mostActiveCategory?.count ?: 0,
+                    bunproIntegrationEnabled = bunproIntegrationEnabled,
+                    bunproVocabularyCount = bunproVocabularyCount,
+                    bunproKanjiLearned = bunproKanjiLearned,
+                    bunproError = bunproError,
+                    isLoading = false
+                )
+            } catch (exception: Exception) {
+                Log.e(logTag, "Failed to load statistics", exception)
+                _state.value = _state.value.copy(
+                    isLoading = false,
+                    bunproError = "Blad ladowania statystyk"
+                )
             }
-
-            // Compute daily counts for chart (last 30 days)
-            val allDates = exportedWordDao.getAllExportDates()
-            val dailyCounts = computeDailyCounts(allDates, 30)
-
-            val oneWeekAgo = System.currentTimeMillis() - WEEK_IN_MILLIS
-            val weeklyLearnedWords = toWeeklyLearnedWords(
-                exportedWordDao.getExportsSince(oneWeekAgo)
-            )
-            val hourlyActivity = toHourlyActivity(
-                exportedWordDao.getHourlyActivitySince(oneWeekAgo)
-            )
-            val mostActiveHour = findMostActiveHour(hourlyActivity)
-            val categoryActivity = toCategoryActivity(
-                exportedWordDao.getCategoryActivitySince(oneWeekAgo)
-            )
-            val mostActiveCategory = findMostActiveCategory(categoryActivity)
-
-            // Compute streak
-            val streak = if (dailyGoal > 0) computeStreak(dailyCounts, dailyGoal) else 0
-
-            _state.value = StatisticsState(
-                totalEntries = totalEntries,
-                dictionaryCount = dictionaries.size,
-                exportedCount = exportedCount,
-                searchHistoryCount = searchCount,
-                streak = streak,
-                dailyGoal = dailyGoal,
-                dailyCounts = dailyCounts,
-                weeklyLearnedWords = weeklyLearnedWords,
-                hourlyActivity = hourlyActivity,
-                mostActiveHour = mostActiveHour?.hour,
-                mostActiveHourCount = mostActiveHour?.count ?: 0,
-                categoryActivity = categoryActivity,
-                mostActiveCategory = mostActiveCategory?.categoryLabel,
-                mostActiveCategoryCount = mostActiveCategory?.count ?: 0,
-                bunproIntegrationEnabled = bunproIntegrationEnabled,
-                bunproVocabularyCount = bunproVocabularyCount,
-                bunproKanjiLearned = bunproKanjiLearned,
-                bunproError = bunproError,
-                isLoading = false
-            )
         }
     }
 

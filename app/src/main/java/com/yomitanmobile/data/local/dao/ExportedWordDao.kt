@@ -62,10 +62,10 @@ interface ExportedWordDao {
 
     @Query(
         """
-        SELECT export_category AS category, COUNT(*) AS count
+        SELECT COALESCE(NULLIF(TRIM(export_category), ''), 'OTHER') AS category, COUNT(*) AS count
         FROM exported_words
         WHERE export_date >= :fromTimestamp
-        GROUP BY export_category
+        GROUP BY COALESCE(NULLIF(TRIM(export_category), ''), 'OTHER')
         ORDER BY count DESC, category ASC
         """
     )
@@ -73,9 +73,9 @@ interface ExportedWordDao {
 
     @Query(
         """
-        SELECT export_category AS category, COUNT(*) AS count
+        SELECT COALESCE(NULLIF(TRIM(export_category), ''), 'OTHER') AS category, COUNT(*) AS count
         FROM exported_words
-        GROUP BY export_category
+        GROUP BY COALESCE(NULLIF(TRIM(export_category), ''), 'OTHER')
         ORDER BY count DESC, category ASC
         """
     )
