@@ -1,11 +1,19 @@
 package com.yomitanmobile.data.local.dao
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.yomitanmobile.data.local.entity.ExportedWord
 import kotlinx.coroutines.flow.Flow
+
+data class HourlyActivityCount(
+    @ColumnInfo(name = "hour")
+    val hour: Int,
+    @ColumnInfo(name = "count")
+    val count: Int
+)
 
 @Dao
 interface ExportedWordDao {
@@ -33,6 +41,17 @@ interface ExportedWordDao {
 
     @Query("SELECT * FROM exported_words WHERE export_date >= :fromTimestamp ORDER BY export_date DESC")
     suspend fun getExportsSince(fromTimestamp: Long): List<ExportedWord>
+
+    @Query(
+        """
+        SELECT export_hour AS hour, COUNT(*) AS count
+        FROM exported_words
+        WHERE export_date >= :fromTimestamp AND export_hour BETWEEN 0 AND 23
+        GROUP BY export_hour
+        ORDER BY count DESC, hour ASC
+        """
+    )
+    suspend fun getHourlyActivitySince(fromTimestamp: Long): List<HourlyActivityCount>
 
     /**
      * Get earliest export date (for chart range).

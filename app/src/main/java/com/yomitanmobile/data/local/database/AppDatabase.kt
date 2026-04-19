@@ -3,6 +3,8 @@ package com.yomitanmobile.data.local.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.yomitanmobile.data.local.converter.Converters
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
@@ -28,7 +30,7 @@ import com.yomitanmobile.data.local.entity.SearchHistory
         SearchHistory::class,
         KanjiEntry::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -42,5 +44,23 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE exported_words
+                    ADD COLUMN export_hour INTEGER NOT NULL DEFAULT -1
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    UPDATE exported_words
+                    SET export_hour = CAST(strftime('%H', export_date / 1000, 'unixepoch', 'localtime') AS INTEGER)
+                    WHERE export_hour = -1
+                    """.trimIndent()
+                )
+            }
+        }
     }
 }

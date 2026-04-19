@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.datastore.preferences.core.edit
+import java.util.Calendar
 import javax.inject.Inject
 
 sealed class DetailEvent {
@@ -287,12 +288,18 @@ class DetailViewModel @Inject constructor(
             result.fold(
                 onSuccess = { noteId ->
                     // Record the export
+                    val exportedAt = System.currentTimeMillis()
+                    val localHour = Calendar.getInstance().apply {
+                        timeInMillis = exportedAt
+                    }.get(Calendar.HOUR_OF_DAY)
                     exportedWordDao.insert(
                         ExportedWord(
                             expression = wordForExport.expression,
                             reading = wordForExport.reading,
                             deckName = deckName,
-                            ankiNoteId = noteId
+                            ankiNoteId = noteId,
+                            exportDate = exportedAt,
+                            exportHour = localHour
                         )
                     )
                     refreshCardQualityScore()

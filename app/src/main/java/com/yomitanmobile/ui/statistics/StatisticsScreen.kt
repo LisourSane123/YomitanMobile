@@ -168,6 +168,14 @@ fun StatisticsScreen(
                     )
                 }
 
+                item {
+                    HourlyImmersionCard(
+                        mostActiveHour = state.mostActiveHour,
+                        mostActiveHourCount = state.mostActiveHourCount,
+                        hourlyActivity = state.hourlyActivity
+                    )
+                }
+
                 // Chart section
                 if (state.dailyCounts.any { it.count > 0 }) {
                     item {
@@ -211,6 +219,67 @@ fun StatisticsScreen(
                 }
 
                 item { Spacer(Modifier.height(32.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HourlyImmersionCard(
+    mostActiveHour: Int?,
+    mostActiveHourCount: Int,
+    hourlyActivity: List<HourlyActivity>
+) {
+    val topHours = hourlyActivity
+        .filter { it.count > 0 }
+        .sortedByDescending { it.count }
+        .take(5)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Aktywność godzinowa (7 dni)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            if (mostActiveHour != null && mostActiveHourCount > 0) {
+                Text(
+                    "Najbardziej aktywna pora: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "Skopanych słów: $mostActiveHourCount",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Brak danych aktywności godzinowej z ostatniego tygodnia.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (topHours.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                topHours.forEachIndexed { index, item ->
+                    Text(
+                        text = "${index + 1}. ${StatisticsViewModel.hourRangeLabel(item.hour)} -> ${item.count}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

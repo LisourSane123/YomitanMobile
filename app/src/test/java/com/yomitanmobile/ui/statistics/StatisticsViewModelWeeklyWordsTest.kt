@@ -1,7 +1,9 @@
 package com.yomitanmobile.ui.statistics
 
+import com.yomitanmobile.data.local.dao.HourlyActivityCount
 import com.yomitanmobile.data.local.entity.ExportedWord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -59,5 +61,50 @@ class StatisticsViewModelWeeklyWordsTest {
         val text = StatisticsViewModel.buildWeeklyLearnedWordsCopyText(emptyList())
 
         assertEquals("", text)
+    }
+
+    @Test
+    fun toHourlyActivity_sortsAscendingByHour() {
+        val activity = StatisticsViewModel.toHourlyActivity(
+            listOf(
+                HourlyActivityCount(hour = 22, count = 3),
+                HourlyActivityCount(hour = 8, count = 5),
+                HourlyActivityCount(hour = 15, count = 2)
+            )
+        )
+
+        assertEquals(listOf(8, 15, 22), activity.map { it.hour })
+    }
+
+    @Test
+    fun findMostActiveHour_returnsEarliestHourOnTie() {
+        val mostActive = StatisticsViewModel.findMostActiveHour(
+            listOf(
+                HourlyActivity(hour = 21, count = 4),
+                HourlyActivity(hour = 10, count = 4),
+                HourlyActivity(hour = 8, count = 1)
+            )
+        )
+
+        assertEquals(10, mostActive?.hour)
+        assertEquals(4, mostActive?.count)
+    }
+
+    @Test
+    fun findMostActiveHour_returnsNullWhenNoPositiveCounts() {
+        val mostActive = StatisticsViewModel.findMostActiveHour(
+            listOf(
+                HourlyActivity(hour = 9, count = 0),
+                HourlyActivity(hour = 11, count = 0)
+            )
+        )
+
+        assertNull(mostActive)
+    }
+
+    @Test
+    fun hourRangeLabel_formatsLeadingZeros() {
+        assertEquals("03:00-03:59", StatisticsViewModel.hourRangeLabel(3))
+        assertEquals("23:00-23:59", StatisticsViewModel.hourRangeLabel(23))
     }
 }

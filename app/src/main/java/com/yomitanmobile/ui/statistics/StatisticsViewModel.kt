@@ -7,6 +7,7 @@ import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
+import com.yomitanmobile.data.local.dao.HourlyActivityCount
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.dataStore
@@ -32,6 +33,11 @@ data class WeeklyLearnedWord(
     val exportDate: Long
 )
 
+data class HourlyActivity(
+    val hour: Int,
+    val count: Int
+)
+
 data class StatisticsState(
     val totalEntries: Int = 0,
     val dictionaryCount: Int = 0,
@@ -41,6 +47,9 @@ data class StatisticsState(
     val dailyGoal: Int = 0,
     val dailyCounts: List<DailyCount> = emptyList(),
     val weeklyLearnedWords: List<WeeklyLearnedWord> = emptyList(),
+    val hourlyActivity: List<HourlyActivity> = emptyList(),
+    val mostActiveHour: Int? = null,
+    val mostActiveHourCount: Int = 0,
     val isLoading: Boolean = true
 )
 
@@ -84,6 +93,27 @@ class StatisticsViewModel @Inject constructor(
 
             return (listOf(header) + body).joinToString("\n")
         }
+
+        internal fun toHourlyActivity(items: List<HourlyActivityCount>): List<HourlyActivity> {
+            return items
+                .filter { it.hour in 0..23 }
+                .map { HourlyActivity(hour = it.hour, count = it.count) }
+                .sortedBy { it.hour }
+        }
+
+        internal fun findMostActiveHour(activity: List<HourlyActivity>): HourlyActivity? {
+            val positive = activity.filter { it.count > 0 }
+            if (positive.isEmpty()) return null
+            val maxCount = positive.maxOf { it.count }
+            return positive
+                .filter { it.count == maxCount }
+                .minByOrNull { it.hour }
+        }
+
+        internal fun hourRangeLabel(hour: Int): String {
+            val normalized = hour.coerceIn(0, 23)
+            return String.format("%02d:00-%02d:59", normalized, normalized)
+        }
     }
 
     private val _state = MutableStateFlow(StatisticsState())
@@ -112,6 +142,10 @@ class StatisticsViewModel @Inject constructor(
             val weeklyLearnedWords = toWeeklyLearnedWords(
                 exportedWordDao.getExportsSince(oneWeekAgo)
             )
+            val hourlyActivity = toHourlyActivity(
+                exportedWordDao.getHourlyActivitySince(oneWeekAgo)
+            )
+            val mostActiveHour = findMostActiveHour(hourlyActivity)
 
             // Compute streak
             val streak = if (dailyGoal > 0) computeStreak(dailyCounts, dailyGoal) else 0
@@ -125,6 +159,9 @@ class StatisticsViewModel @Inject constructor(
                 dailyGoal = dailyGoal,
                 dailyCounts = dailyCounts,
                 weeklyLearnedWords = weeklyLearnedWords,
+                hourlyActivity = hourlyActivity,
+                mostActiveHour = mostActiveHour?.hour,
+                mostActiveHourCount = mostActiveHour?.count ?: 0,
                 isLoading = false
             )
         }

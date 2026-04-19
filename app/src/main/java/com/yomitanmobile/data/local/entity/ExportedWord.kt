@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.util.Calendar
 
 @Entity(
     tableName = "exported_words",
@@ -28,5 +29,14 @@ data class ExportedWord(
     val ankiNoteId: Long = 0,
 
     @ColumnInfo(name = "export_date")
-    val exportDate: Long = System.currentTimeMillis()
+    val exportDate: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "export_hour")
+    val exportHour: Int = localHourFromTimestamp(exportDate)
 )
+
+private fun localHourFromTimestamp(timestamp: Long): Int {
+    val calendar = Calendar.getInstance()
+    calendar.timeInMillis = timestamp
+    return calendar.get(Calendar.HOUR_OF_DAY)
+}
