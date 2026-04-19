@@ -32,7 +32,8 @@ class AnkiCardCreator(
         private const val MAX_MEANINGS_ON_CARD = 3
 
         const val DEFAULT_DECK_NAME = "Mining Deck"
-        const val MODEL_NAME = "Yomitan-Mobile-v4"
+        const val MODEL_NAME = "Yomitan-Mobile"
+        private const val LEGACY_MODEL_NAME_V4 = "Yomitan-Mobile-v4"
         const val PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
 
         val FIELD_NAMES = arrayOf("Front", "FrontContext", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence", "KanjiBreakdown")
@@ -256,9 +257,10 @@ class AnkiCardCreator(
         val modelList = ankiApi.modelList ?: run {
             return null
         }
+        val compatibleNames = setOf(MODEL_NAME, LEGACY_MODEL_NAME_V4)
         for ((id, name) in modelList) {
-            if (name == MODEL_NAME) {
-                // Model exists — update its CSS to reflect current style preferences
+            if (name in compatibleNames) {
+                // Compatible model exists — update CSS to reflect current style preferences
                 updateModelCss(id, css)
                 return id
             }
