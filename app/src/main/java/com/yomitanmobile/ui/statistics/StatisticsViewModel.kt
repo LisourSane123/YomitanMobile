@@ -8,6 +8,7 @@ import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
+import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.dataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,6 +26,12 @@ data class DailyCount(
     val dayTimestamp: Long      // start of that day
 )
 
+data class WeeklyLearnedWord(
+    val expression: String,
+    val reading: String,
+    val exportDate: Long
+)
+
 data class StatisticsState(
     val totalEntries: Int = 0,
     val dictionaryCount: Int = 0,
@@ -33,6 +40,7 @@ data class StatisticsState(
     val streak: Int = 0,
     val dailyGoal: Int = 0,
     val dailyCounts: List<DailyCount> = emptyList(),
+    val weeklyLearnedWords: List<WeeklyLearnedWord> = emptyList(),
     val isLoading: Boolean = true
 )
 
@@ -44,6 +52,39 @@ class StatisticsViewModel @Inject constructor(
     private val searchHistoryDao: SearchHistoryDao,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    companion object {
+        private const val WEEK_IN_MILLIS = 7L * 24L * 60L * 60L * 1000L
+
+        internal fun toWeeklyLearnedWords(exports: List<ExportedWord>): List<WeeklyLearnedWord> {
+            return exports
+                .sortedByDescending { it.exportDate }
+                .distinctBy { "${it.expression.trim()}|${it.reading.trim()}" }
+                .map {
+                    WeeklyLearnedWord(
+                        expression = it.expression.trim(),
+                        reading = it.reading.trim(),
+                        exportDate = it.exportDate
+                    )
+                }
+        }
+
+        internal fun buildWeeklyLearnedWordsCopyText(words: List<WeeklyLearnedWord>): String {
+            if (words.isEmpty()) return ""
+
+            val header = "Słowa z ostatnich 7 dni (${words.size})"
+            val body = words.mapIndexed { index, word ->
+                val readingPart = when {
+                    word.reading.isBlank() -> ""
+                    word.reading == word.expression -> ""
+                    else -> " (${word.reading})"
+                }
+                "${index + 1}. ${word.expression}$readingPart"
+            }
+
+            return (listOf(header) + body).joinToString("\n")
+        }
+    }
 
     private val _state = MutableStateFlow(StatisticsState())
     val state: StateFlow<StatisticsState> = _state.asStateFlow()
@@ -67,6 +108,11 @@ class StatisticsViewModel @Inject constructor(
             val allDates = exportedWordDao.getAllExportDates()
             val dailyCounts = computeDailyCounts(allDates, 30)
 
+            val oneWeekAgo = System.currentTimeMillis() - WEEK_IN_MILLIS
+            val weeklyLearnedWords = toWeeklyLearnedWords(
+                exportedWordDao.getExportsSince(oneWeekAgo)
+            )
+
             // Compute streak
             val streak = if (dailyGoal > 0) computeStreak(dailyCounts, dailyGoal) else 0
 
@@ -78,6 +124,7 @@ class StatisticsViewModel @Inject constructor(
                 streak = streak,
                 dailyGoal = dailyGoal,
                 dailyCounts = dailyCounts,
+                weeklyLearnedWords = weeklyLearnedWords,
                 isLoading = false
             )
         }

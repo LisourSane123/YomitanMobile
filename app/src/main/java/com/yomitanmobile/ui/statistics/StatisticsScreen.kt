@@ -1,5 +1,6 @@
 package com.yomitanmobile.ui.statistics
 
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -39,6 +41,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -47,6 +50,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +65,11 @@ fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val weeklyWordsForCopy = remember(state.weeklyLearnedWords) {
+        StatisticsViewModel.buildWeeklyLearnedWordsCopyText(state.weeklyLearnedWords)
+    }
 
     Scaffold(
         topBar = {
@@ -176,6 +187,29 @@ fun StatisticsScreen(
                     }
                 }
 
+                item {
+                    Text(
+                        "Słówka z ostatnich 7 dni",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+                }
+
+                item {
+                    WeeklyLearnedWordsCard(
+                        words = state.weeklyLearnedWords,
+                        onCopyClick = {
+                            if (weeklyWordsForCopy.isBlank()) {
+                                Toast.makeText(context, "Brak słówek do skopiowania", Toast.LENGTH_SHORT).show()
+                            } else {
+                                clipboardManager.setText(AnnotatedString(weeklyWordsForCopy))
+                                Toast.makeText(context, "Skopiowano listę słówek", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+
                 item { Spacer(Modifier.height(32.dp)) }
             }
         }
@@ -237,6 +271,74 @@ private fun StreakCard(
                 fontWeight = FontWeight.Bold,
                 color = if (streak > 0) Color(0xFFFF6D00) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
             )
+        }
+    }
+}
+
+@Composable
+private fun WeeklyLearnedWordsCard(
+    words: List<WeeklyLearnedWord>,
+    onCopyClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Nauczone słowa: ${words.size}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Lista do szybkiego wysłania np. korepetytorowi",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onCopyClick, enabled = words.isNotEmpty()) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Kopiuj listę słów")
+                }
+            }
+
+            if (words.isEmpty()) {
+                Text(
+                    "Brak wyeksportowanych słów w ostatnim tygodniu.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                val previewLimit = 40
+                words.take(previewLimit).forEachIndexed { index, word ->
+                    val readingPart = when {
+                        word.reading.isBlank() -> ""
+                        word.reading == word.expression -> ""
+                        else -> " (${word.reading})"
+                    }
+                    Text(
+                        text = "${index + 1}. ${word.expression}$readingPart",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                if (words.size > previewLimit) {
+                    Text(
+                        text = "...oraz ${words.size - previewLimit} kolejnych",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
