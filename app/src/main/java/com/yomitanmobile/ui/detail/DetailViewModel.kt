@@ -1,6 +1,7 @@
 package com.yomitanmobile.ui.detail
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -70,6 +71,8 @@ class DetailViewModel @Inject constructor(
     private val favoriteWordDao: FavoriteWordDao,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    private val logTag = "DetailViewModel"
 
     private val entryId: Long = savedStateHandle.get<Long>("entryId") ?: 0L
 
@@ -159,39 +162,48 @@ class DetailViewModel @Inject constructor(
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
         viewModelScope.launch {
-            if (!ankiCardCreator.isAnkiInstalled()) {
-                _events.emit(DetailEvent.AnkiNotInstalled)
-                return@launch
+            try {
+                if (!ankiCardCreator.isAnkiInstalled()) {
+                    _events.emit(DetailEvent.AnkiNotInstalled)
+                    return@launch
+                }
+                if (!ankiCardCreator.hasAnkiPermission()) {
+                    _events.emit(DetailEvent.AnkiPermissionRequired)
+                    return@launch
+                }
+
+                // Check if deck is already selected
+                val savedDeck = appContext.dataStore.data
+                    .map { it[MainActivity.ANKI_DECK_NAME] }
+                    .first()
+
+                if (savedDeck.isNullOrBlank()) {
+                    // Need to let user pick a deck first
+                    val decks = ankiCardCreator.getAvailableDecks()
+                    _events.emit(DetailEvent.AnkiDeckSelectionRequired(decks))
+                    return@launch
+                }
+
+                val sanitizedDeck = InputSanitizer.sanitizeDeckName(savedDeck)
+                val safeExpression = normalizeExpression(word.expression, word.reading)
+                val safeReading = normalizeReading(safeExpression, word.reading)
+
+                // Check if already exported
+                val existing = findExistingExport(
+                    expression = safeExpression,
+                    reading = safeReading,
+                    deckName = sanitizedDeck
+                )
+                if (existing != null) {
+                    _events.emit(DetailEvent.AlreadyExported(safeExpression, sanitizedDeck))
+                    return@launch
+                }
+
+                performExport(word, sanitizedDeck)
+            } catch (exception: Exception) {
+                Log.e(logTag, "Export pre-check failed", exception)
+                _events.emit(DetailEvent.AnkiExportError(exception.message ?: "Unknown error"))
             }
-            if (!ankiCardCreator.hasAnkiPermission()) {
-                _events.emit(DetailEvent.AnkiPermissionRequired)
-                return@launch
-            }
-
-            // Check if deck is already selected
-            val savedDeck = appContext.dataStore.data
-                .map { it[MainActivity.ANKI_DECK_NAME] }
-                .first()
-
-            if (savedDeck.isNullOrBlank()) {
-                // Need to let user pick a deck first
-                val decks = ankiCardCreator.getAvailableDecks()
-                _events.emit(DetailEvent.AnkiDeckSelectionRequired(decks))
-                return@launch
-            }
-
-            val sanitizedDeck = InputSanitizer.sanitizeDeckName(savedDeck)
-
-            // Check if already exported
-            val existing = exportedWordDao.findExported(
-                word.expression, word.reading, sanitizedDeck
-            )
-            if (existing != null) {
-                _events.emit(DetailEvent.AlreadyExported(word.expression, sanitizedDeck))
-                return@launch
-            }
-
-            performExport(word, sanitizedDeck)
         }
     }
 
@@ -199,11 +211,16 @@ class DetailViewModel @Inject constructor(
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
         viewModelScope.launch {
-            val savedDeckRaw = appContext.dataStore.data
-                .map { it[MainActivity.ANKI_DECK_NAME] }
-                .first() ?: "Mining Deck"
-            val savedDeck = InputSanitizer.sanitizeDeckName(savedDeckRaw)
-            performExport(word, savedDeck)
+            try {
+                val savedDeckRaw = appContext.dataStore.data
+                    .map { it[MainActivity.ANKI_DECK_NAME] }
+                    .first() ?: "Mining Deck"
+                val savedDeck = InputSanitizer.sanitizeDeckName(savedDeckRaw)
+                performExport(word, savedDeck)
+            } catch (exception: Exception) {
+                Log.e(logTag, "Force export failed", exception)
+                _events.emit(DetailEvent.AnkiExportError(exception.message ?: "Unknown error"))
+            }
         }
     }
 
@@ -212,21 +229,61 @@ class DetailViewModel @Inject constructor(
         val word = merged.toWordEntry()
         val sanitizedDeck = InputSanitizer.sanitizeDeckName(deckName)
         viewModelScope.launch {
-            appContext.dataStore.edit { prefs ->
-                prefs[MainActivity.ANKI_DECK_NAME] = sanitizedDeck
-            }
+            try {
+                appContext.dataStore.edit { prefs ->
+                    prefs[MainActivity.ANKI_DECK_NAME] = sanitizedDeck
+                }
 
-            // Check if already exported to this deck
-            val existing = exportedWordDao.findExported(
-                word.expression, word.reading, sanitizedDeck
-            )
-            if (existing != null) {
-                _events.emit(DetailEvent.AlreadyExported(word.expression, sanitizedDeck))
-                return@launch
-            }
+                val safeExpression = normalizeExpression(word.expression, word.reading)
+                val safeReading = normalizeReading(safeExpression, word.reading)
 
-            performExport(word, sanitizedDeck)
+                // Check if already exported to this deck
+                val existing = findExistingExport(
+                    expression = safeExpression,
+                    reading = safeReading,
+                    deckName = sanitizedDeck
+                )
+                if (existing != null) {
+                    _events.emit(DetailEvent.AlreadyExported(safeExpression, sanitizedDeck))
+                    return@launch
+                }
+
+                performExport(word, sanitizedDeck)
+            } catch (exception: Exception) {
+                Log.e(logTag, "Export with deck failed", exception)
+                _events.emit(DetailEvent.AnkiExportError(exception.message ?: "Unknown error"))
+            }
         }
+    }
+
+    private fun normalizeExpression(expression: String, reading: String): String {
+        val normalizedReading = reading.trim()
+        return expression.trim().ifBlank { normalizedReading }
+    }
+
+    private fun normalizeReading(expression: String, reading: String): String {
+        return reading.trim().ifBlank { expression.trim() }
+    }
+
+    private suspend fun findExistingExport(
+        expression: String,
+        reading: String,
+        deckName: String
+    ): ExportedWord? {
+        val direct = exportedWordDao.findExported(expression, reading, deckName)
+        if (direct != null) return direct
+
+        // Backward compatibility: previous app versions could store empty reading.
+        val emptyReadingMatch = exportedWordDao.findExported(expression, "", deckName)
+        if (emptyReadingMatch != null) return emptyReadingMatch
+
+        // Backward compatibility: previous app versions could mirror expression in reading.
+        if (reading != expression) {
+            val expressionReadingMatch = exportedWordDao.findExported(expression, expression, deckName)
+            if (expressionReadingMatch != null) return expressionReadingMatch
+        }
+
+        return null
     }
 
     private suspend fun loadCardStylePreferences(): CardStylePreferences {
@@ -288,30 +345,61 @@ class DetailViewModel @Inject constructor(
             )
             result.fold(
                 onSuccess = { noteId ->
-                    // Record the export
-                    val exportedAt = System.currentTimeMillis()
-                    val localHour = Calendar.getInstance().apply {
-                        timeInMillis = exportedAt
-                    }.get(Calendar.HOUR_OF_DAY)
-                    val exportCategory = WordCategoryClassifier.classify(wordForExport)
-                    exportedWordDao.insert(
-                        ExportedWord(
-                            expression = wordForExport.expression,
-                            reading = wordForExport.reading,
-                            deckName = deckName,
-                            ankiNoteId = noteId,
-                            exportDate = exportedAt,
-                            exportHour = localHour,
-                            exportCategory = exportCategory
+                    val safeExpression = normalizeExpression(wordForExport.expression, wordForExport.reading)
+                    val safeReading = normalizeReading(safeExpression, wordForExport.reading)
+
+                    // Record export metadata in local DB if available, but keep Anki export successful
+                    // even when local schema is stale.
+                    runCatching {
+                        val exportedAt = System.currentTimeMillis()
+                        val localHour = Calendar.getInstance().apply {
+                            timeInMillis = exportedAt
+                        }.get(Calendar.HOUR_OF_DAY)
+                        val exportCategory = runCatching {
+                            WordCategoryClassifier.classify(
+                                wordForExport.copy(
+                                    expression = safeExpression,
+                                    reading = safeReading
+                                )
+                            )
+                        }.getOrDefault(WordCategoryClassifier.CATEGORY_OTHER)
+
+                        exportedWordDao.insert(
+                            ExportedWord(
+                                expression = safeExpression,
+                                reading = safeReading,
+                                deckName = deckName,
+                                ankiNoteId = noteId,
+                                exportDate = exportedAt,
+                                exportHour = localHour,
+                                exportCategory = exportCategory
+                            )
                         )
-                    )
-                    refreshCardQualityScore()
+                    }.onFailure { exception ->
+                        Log.e(logTag, "Failed to persist export metadata", exception)
+                    }
+
+                    runCatching {
+                        refreshCardQualityScore()
+                    }.onFailure { exception ->
+                        Log.e(logTag, "Failed to refresh quality score after export", exception)
+                    }
+
                     _events.emit(DetailEvent.AnkiExportSuccess(noteId))
                 },
                 onFailure = { error ->
-                    _events.emit(DetailEvent.AnkiExportError(error.message ?: "Unknown error"))
+                    val message = error.message?.trim().orEmpty()
+                    if (message.contains("duplicate", ignoreCase = true)) {
+                        val safeExpression = normalizeExpression(wordForExport.expression, wordForExport.reading)
+                        _events.emit(DetailEvent.AlreadyExported(safeExpression, deckName))
+                    } else {
+                        _events.emit(DetailEvent.AnkiExportError(message.ifBlank { "Unknown error" }))
+                    }
                 }
             )
+        } catch (exception: Exception) {
+            Log.e(logTag, "Export flow failed", exception)
+            _events.emit(DetailEvent.AnkiExportError(exception.message ?: "Unknown error"))
         } finally {
             _isExporting.value = false
         }

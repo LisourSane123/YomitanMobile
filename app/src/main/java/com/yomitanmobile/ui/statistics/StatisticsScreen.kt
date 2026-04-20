@@ -49,6 +49,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -576,7 +577,7 @@ private fun DailyFlashcardChart(
                                 x + barWidth / 2,
                                 size.height - 2f,
                                 android.graphics.Paint().apply {
-                                    this.color = textColor.hashCode()
+                                    this.color = textColor.toArgb()
                                     textSize = 22f
                                     textAlign = android.graphics.Paint.Align.CENTER
                                     isAntiAlias = true
@@ -591,7 +592,7 @@ private fun DailyFlashcardChart(
                                 x + barWidth / 2,
                                 y - 6f,
                                 android.graphics.Paint().apply {
-                                    this.color = textColor.hashCode()
+                                    this.color = textColor.toArgb()
                                     textSize = 20f
                                     textAlign = android.graphics.Paint.Align.CENTER
                                     isAntiAlias = true
