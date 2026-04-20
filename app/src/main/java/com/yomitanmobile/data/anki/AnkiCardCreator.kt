@@ -30,9 +30,12 @@ class AnkiCardCreator(
 ) {
     companion object {
         private const val MAX_MEANINGS_ON_CARD = 3
+        private const val MODEL_NAME_PREFIX = "Yomitan-Mobile"
+        private const val MAX_MODEL_CREATE_RETRIES = 8
 
         const val DEFAULT_DECK_NAME = "Mining Deck"
-        const val MODEL_NAME = "Yomitan-Mobile"
+        const val MODEL_NAME = "Yomitan-Mobile-v7"
+        private const val LEGACY_MODEL_NAME = "Yomitan-Mobile"
         private const val LEGACY_MODEL_NAME_V4 = "Yomitan-Mobile-v4"
         const val PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
 
@@ -257,21 +260,126 @@ class AnkiCardCreator(
         val modelList = ankiApi.modelList ?: run {
             return null
         }
-        val compatibleNames = setOf(MODEL_NAME, LEGACY_MODEL_NAME_V4)
-        for ((id, name) in modelList) {
-            if (name in compatibleNames) {
-                // Compatible model exists — update CSS to reflect current style preferences
-                updateModelCss(id, css)
-                return id
+
+        val compatibleModelId = modelList
+            .entries
+            .asSequence()
+            .filter { (_, name) -> name.startsWith(MODEL_NAME_PREFIX) }
+            .sortedBy { (_, name) -> modelNamePriority(name) }
+            .map { it.key }
+            .firstOrNull { modelId -> isModelCompatible(modelId) }
+
+        if (compatibleModelId != null) {
+            updateModelCss(compatibleModelId, css)
+            return compatibleModelId
+        }
+
+        return createCompatibleModel(css)
+    }
+
+    private fun modelNamePriority(name: String): Int {
+        return when (name) {
+            MODEL_NAME -> 0
+            LEGACY_MODEL_NAME -> 1
+            LEGACY_MODEL_NAME_V4 -> 2
+            else -> 3
+        }
+    }
+
+    private fun isModelCompatible(modelId: Long): Boolean {
+        return try {
+            val existingFields = ankiApi.getFieldList(modelId)
+                .map { it.trim() }
+            val expectedFields = FIELD_NAMES.map { it.trim() }
+
+            existingFields == expectedFields
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun createCompatibleModel(css: String): Long? {
+        val candidateNames = buildList {
+            add(MODEL_NAME)
+            for (index in 1..MAX_MODEL_CREATE_RETRIES) {
+                add("$MODEL_NAME-$index")
             }
         }
-        return ankiApi.addNewCustomModel(
-            MODEL_NAME, FIELD_NAMES,
-            arrayOf("Card 1"),
-            arrayOf(CARD_FRONT_TEMPLATE),
-            arrayOf(CARD_BACK_TEMPLATE),
-            css, null, null
-        )
+
+        for (candidateName in candidateNames) {
+            val createdModelId = runCatching {
+                ankiApi.addNewCustomModel(
+                    candidateName,
+                    FIELD_NAMES,
+                    arrayOf("Card 1"),
+                    arrayOf(CARD_FRONT_TEMPLATE),
+                    arrayOf(CARD_BACK_TEMPLATE),
+                    css,
+                    null,
+                    null
+                )
+            }.getOrNull()
+
+            if (createdModelId != null) {
+                return createdModelId
+            }
+
+            val existingCandidateId = ankiApi.modelList
+                ?.entries
+                ?.firstOrNull { (_, name) -> name == candidateName }
+                ?.key
+
+            if (existingCandidateId != null && isModelCompatible(existingCandidateId)) {
+                updateModelCss(existingCandidateId, css)
+                return existingCandidateId
+            }
+        }
+
+        return null
+    }
+
+    private fun addNoteWithRecovery(
+        modelId: Long,
+        deckId: Long,
+        fields: Array<String>,
+        css: String
+    ): Result<Long> {
+        val firstAttempt = runCatching {
+            ankiApi.addNote(modelId, deckId, fields, null)
+        }
+
+        val firstNoteId = firstAttempt.getOrNull()
+        if (firstNoteId != null) {
+            return Result.success(firstNoteId)
+        }
+
+        val firstError = firstAttempt.exceptionOrNull()
+        val shouldRetryWithFreshModel =
+            firstError?.message?.contains("Incorrect flds argument", true) ?: false
+
+        if (shouldRetryWithFreshModel) {
+            val fallbackModelId = createCompatibleModel(css)
+            if (fallbackModelId != null && fallbackModelId != modelId) {
+                val retryAttempt = runCatching {
+                    ankiApi.addNote(fallbackModelId, deckId, fields, null)
+                }
+                val retryNoteId = retryAttempt.getOrNull()
+                if (retryNoteId != null) {
+                    return Result.success(retryNoteId)
+                }
+
+                val retryError = retryAttempt.exceptionOrNull()
+                if (retryError != null) {
+                    return Result.failure(retryError)
+                }
+            }
+        }
+
+        if (firstError != null) {
+            return Result.failure(firstError)
+        }
+
+        return Result.failure(IllegalStateException("Failed to add note - duplicate?"))
     }
 
     /**
@@ -430,12 +538,13 @@ class AnkiCardCreator(
             val modelId = getOrCreateModel(css)
                 ?: return@withContext Result.failure(IllegalStateException("Failed to create/find note type"))
 
-            val noteId = ankiApi.addNote(modelId, deckId, card.toFieldArray(), null)
-            if (noteId != null) {
-                Result.success(noteId)
-            } else {
-                Result.failure(IllegalStateException("Failed to add note - duplicate?"))
-            }
+
+            addNoteWithRecovery(
+                modelId = modelId,
+                deckId = deckId,
+                fields = card.toFieldArray(),
+                css = css
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }
