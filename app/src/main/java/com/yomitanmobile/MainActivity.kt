@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
 
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
+        val DETAIL_SHOW_CARD_QUALITY = booleanPreferencesKey("detail_show_card_quality")
 
         // Language (stored in SharedPreferences for sync read in attachBaseContext)
         const val LANG_PREFS_NAME = "lang_prefs"

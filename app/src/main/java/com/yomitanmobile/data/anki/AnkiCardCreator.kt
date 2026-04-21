@@ -51,13 +51,13 @@ class AnkiCardCreator(
         const val CARD_BACK_TEMPLATE = """
             <div class="back">
                 <div class="expression">{{Front}}</div>
+                {{#Sentence}}<div class="sentence">{{Sentence}}</div>{{/Sentence}}
                 {{#Frequency}}<div class="freq">{{Frequency}}</div>{{/Frequency}}
                 <hr>
                 <div class="reading">{{Reading}}</div>
                 {{#PitchAccent}}<div class="pitch">{{PitchAccent}}</div>{{/PitchAccent}}
                 <div class="meaning">{{Meaning}}</div>
                 <div class="audio">{{Audio}}</div>
-                {{#Sentence}}<div class="sentence">{{Sentence}}</div>{{/Sentence}}
                 {{#KanjiBreakdown}}<div class="kanji-breakdown">{{KanjiBreakdown}}</div>{{/KanjiBreakdown}}
             </div>
         """
@@ -89,9 +89,8 @@ class AnkiCardCreator(
                 display: inline-block;
             }
             .front-context {
-                font-size: 18px; color: #d7d7d7; margin-top: 14px;
-                text-align: left; padding: 10px 12px; background: #242424; border-radius: 8px;
-                border-left: 3px solid #80cbc4;
+                font-size: 14px; color: #cfd8dc; margin-top: 8px;
+                text-align: center; line-height: 1.35;
             }
             .context-highlight {
                 font-weight: 700;
@@ -102,9 +101,8 @@ class AnkiCardCreator(
             }
             .audio { margin: 8px 0; }
             .sentence {
-                font-size: 18px; color: #bbb; margin-top: 15px; font-style: italic;
-                text-align: left; padding: 12px; background: #252525; border-radius: 8px;
-                border-left: 3px solid #4dd0e1;
+                font-size: 14px; color: #b0bec5; margin-top: 8px; font-style: italic;
+                text-align: center; line-height: 1.35;
             }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
             .kanji-breakdown { font-size: 16px; color: #ccc; margin-top: 15px; padding: 12px; background: #252525; border-radius: 8px; text-align: left; } .kanji-item { margin-bottom: 8px; } .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
@@ -152,9 +150,8 @@ class AnkiCardCreator(
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
             .front-context {
-                font-size: 18px; color: #d7d7d7; margin-top: 14px;
-                text-align: left; padding: 10px 12px; background: #242424; border-radius: 8px;
-                border-left: 3px solid ${prefs.accentColor};
+                font-size: 14px; color: #d7d7d7; margin-top: 8px;
+                text-align: center; line-height: 1.35;
                 ${if (!prefs.showFrontContextSentence) "display: none;" else ""}
             }
             .context-highlight {
@@ -166,9 +163,8 @@ class AnkiCardCreator(
             }
             .audio { margin: 8px 0; }
             .sentence {
-                font-size: 18px; color: #bbb; margin-top: 15px; font-style: italic;
-                text-align: left; padding: 12px; background: #252525; border-radius: 8px;
-                border-left: 3px solid #4dd0e1;
+                font-size: 14px; color: #bbb; margin-top: 8px; font-style: italic;
+                text-align: center; line-height: 1.35;
                 ${if (!prefs.showSentence) "display: none;" else ""}
             }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }

@@ -61,8 +61,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.yomitanmobile.MainActivity
+import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.util.JlptLevelUtil
+import kotlinx.coroutines.flow.map
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,6 +82,9 @@ fun DetailScreen(
     val cardQuality by viewModel.cardQualityScore.collectAsState()
 
     val context = LocalContext.current
+    val showCardQuality by context.dataStore.data
+        .map { it[MainActivity.DETAIL_SHOW_CARD_QUALITY] ?: true }
+        .collectAsState(initial = true)
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showDeckDialog by remember { mutableStateOf(false) }
@@ -216,6 +222,7 @@ fun DetailScreen(
                 WordDetailContent(
                     entry = entry!!,
                     cardQuality = cardQuality,
+                    showCardQuality = showCardQuality,
                     isPlaying = isPlaying,
                     ttsReady = ttsReady,
                     onPlayAudio = viewModel::playAudio,
@@ -231,6 +238,7 @@ fun DetailScreen(
 private fun WordDetailContent(
     entry: MergedWordEntry,
     cardQuality: CardQualityScore?,
+    showCardQuality: Boolean,
     isPlaying: Boolean,
     ttsReady: Boolean,
     onPlayAudio: () -> Unit,
@@ -258,6 +266,29 @@ private fun WordDetailContent(
                 if (entry.reading.isNotBlank() && entry.reading != entry.primaryExpression) {
                     Text(entry.reading, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
                 }
+
+                if (entry.exampleSentence.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = entry.exampleSentence,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    if (entry.exampleSentenceTranslation.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = entry.exampleSentenceTranslation,
+                            fontSize = 12.sp,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                }
+
                 // Alternative expressions/forms
                 if (entry.alternativeExpressions.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
@@ -307,7 +338,7 @@ private fun WordDetailContent(
 
         Spacer(Modifier.height(16.dp))
 
-        cardQuality?.let {
+        if (showCardQuality) cardQuality?.let {
             CardQualitySection(it)
             Spacer(Modifier.height(12.dp))
         }
@@ -340,18 +371,6 @@ private fun WordDetailContent(
         if (entry.partsOfSpeech.isNotEmpty()) {
             SectionCard(title = "Część mowy") {
                 Text(entry.partsOfSpeech.joinToString(", "), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-
-        // Example sentence
-        if (entry.exampleSentence.isNotBlank()) {
-            SectionCard(title = "Przykładowe zdanie") {
-                Text(entry.exampleSentence, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
-                if (entry.exampleSentenceTranslation.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(entry.exampleSentenceTranslation, fontSize = 14.sp, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
             }
             Spacer(Modifier.height(12.dp))
         }

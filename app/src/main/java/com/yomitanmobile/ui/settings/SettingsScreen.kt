@@ -118,6 +118,7 @@ fun SettingsScreen(
     var dailyGoalCount by remember { mutableStateOf(0f) }
     var sentenceApiConsentGranted by remember { mutableStateOf(false) }
     var showSentenceApiConsentDialog by remember { mutableStateOf(false) }
+    var showCardQualityInDetails by remember { mutableStateOf(true) }
     var bunproApiEnabled by remember { mutableStateOf(false) }
     var bunproApiToken by remember { mutableStateOf("") }
     var bunproApiEndpoint by remember { mutableStateOf(BunproProgressService.DEFAULT_ENDPOINT_TEMPLATE) }
@@ -130,6 +131,7 @@ fun SettingsScreen(
         currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
         dailyGoalCount = (prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0).toFloat()
         sentenceApiConsentGranted = prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] ?: false
+        showCardQualityInDetails = prefs[MainActivity.DETAIL_SHOW_CARD_QUALITY] ?: true
         val bunproEnabledFallback =
             BuildConfig.BUNPRO_API_ENABLED_FALLBACK || BuildConfig.BUNPRO_API_TOKEN_FALLBACK.isNotBlank()
         bunproApiEnabled = prefs[MainActivity.BUNPRO_API_ENABLED] ?: bunproEnabledFallback
@@ -626,6 +628,55 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
                         }
+                    }
+                }
+            }
+
+            // Card quality section toggle
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.EmojiEvents,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                tr("Pokaż jakość fiszki", "Show card quality"),
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                tr(
+                                    "Wyświetla sekcję oceny jakości na ekranie szczegółów słowa.",
+                                    "Shows quality scoring section on the word detail screen."
+                                ),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                        Switch(
+                            checked = showCardQualityInDetails,
+                            onCheckedChange = { enabled ->
+                                showCardQualityInDetails = enabled
+                                coroutineScope.launch {
+                                    context.dataStore.edit { prefs ->
+                                        prefs[MainActivity.DETAIL_SHOW_CARD_QUALITY] = enabled
+                                    }
+                                }
+                            }
+                        )
                     }
                 }
             }

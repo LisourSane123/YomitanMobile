@@ -106,8 +106,21 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             val word = getWordDetailUseCase.invoke(entryId)
-            _entry.value = word
-                ?.let { MergedWordEntry.mergeEntries(listOf(it)).firstOrNull() }
+            _entry.value = word?.let { baseWord ->
+                val normalizedReading = baseWord.reading.ifBlank { baseWord.expression }
+                val relatedEntries = runCatching {
+                    repository.getEntriesByReading(normalizedReading)
+                }.getOrDefault(emptyList())
+
+                val mergeInput = (relatedEntries + baseWord)
+                    .distinctBy { it.id }
+                    .ifEmpty { listOf(baseWord) }
+
+                val merged = MergedWordEntry.mergeEntries(mergeInput)
+                merged.firstOrNull { entryId in it.entryIds }
+                    ?: merged.firstOrNull { it.primaryId == entryId }
+                    ?: merged.firstOrNull()
+            }
             _isLoading.value = false
             checkFavoriteStatus()
             refreshCardQualityScore()
@@ -417,6 +430,8 @@ class DetailViewModel @Inject constructor(
     private suspend fun computeCardQuality(entry: MergedWordEntry): CardQualityScore {
         var score = 0
         val reasons = mutableListOf<String>()
+        val hasExampleSentence = hasUsableExampleSentence(entry)
+        val hasExampleTranslation = normalizeForQuality(entry.exampleSentenceTranslation).isNotBlank()
 
         // Frequency quality (more common words are usually better early mining targets)
         when {
@@ -439,14 +454,14 @@ class DetailViewModel @Inject constructor(
             else -> reasons += "Brak danych o częstotliwości"
         }
 
-        if (entry.exampleSentence.isNotBlank()) {
+        if (hasExampleSentence) {
             score += 20
             reasons += "Ma przykładowe zdanie"
         } else {
             reasons += "Brak przykładowego zdania"
         }
 
-        if (entry.exampleSentenceTranslation.isNotBlank()) {
+        if (hasExampleSentence && hasExampleTranslation) {
             score += 5
         }
 
@@ -511,6 +526,36 @@ class DetailViewModel @Inject constructor(
             tier = tier,
             reasons = reasons.distinct().take(6)
         )
+    }
+
+    private fun hasUsableExampleSentence(entry: MergedWordEntry): Boolean {
+        val directSentence = normalizeForQuality(entry.exampleSentence)
+        if (directSentence.isNotBlank()) {
+            return true
+        }
+
+        return entry.definitions.any { definition ->
+            val normalizedDefinition = normalizeForQuality(definition)
+            if (normalizedDefinition.isBlank()) {
+                return@any false
+            }
+
+            val hasJapaneseChars = normalizedDefinition.any { char ->
+                char in '\u3040'..'\u30ff' || MergedWordEntry.isKanji(char)
+            }
+            val looksLikeSentence = normalizedDefinition.any { char ->
+                char == '。' || char == '！' || char == '？' || char == '!' || char == '?'
+            }
+
+            hasJapaneseChars && looksLikeSentence
+        }
+    }
+
+    private fun normalizeForQuality(value: String): String {
+        return value
+            .replace(Regex("<[^>]*>"), " ")
+            .replace("&nbsp;", " ")
+            .trim()
     }
 
     override fun onCleared() {
