@@ -119,7 +119,22 @@ class SearchViewModel @Inject constructor(
                             alternatives = candidates.map { it.baseForm }
                         )
                     }
-                    SearchMode.ENGLISH -> searchDictionaryUseCase.invokeEnglish(q)
+                    SearchMode.ENGLISH -> {
+                        _deconjugationCandidates.value = emptyList()
+                        searchDictionaryUseCase.invokeEnglish(q)
+                            .map { englishResults ->
+                                if (englishResults.isNotEmpty()) {
+                                    englishResults
+                                } else {
+                                    val romajiConverted = RomajiConverter.toHiragana(q)
+                                    if (shouldUseRomajiFallback(q, romajiConverted)) {
+                                        searchDictionaryUseCase.invoke(romajiConverted).first()
+                                    } else {
+                                        emptyList()
+                                    }
+                                }
+                            }
+                    }
                     SearchMode.ROMAJI -> {
                         val hiragana = RomajiConverter.toHiragana(q)
                         _deconjugationCandidates.value = emptyList()
@@ -162,6 +177,7 @@ class SearchViewModel @Inject constructor(
 
     fun onQueryChange(newQuery: String) {
         _query.value = newQuery
+        applyAutoSearchModeIfNeeded(newQuery)
     }
 
     fun applyExternalQuery(sharedQuery: String) {
@@ -175,10 +191,12 @@ class SearchViewModel @Inject constructor(
 
         lastInjectedExternalQuery = normalized
         _query.value = normalized
+        applyAutoSearchModeIfNeeded(normalized)
     }
 
     fun clearQuery() {
         _query.value = ""
+        _searchMode.value = SearchMode.JAPANESE
         _isSearching.value = false
     }
 
@@ -187,6 +205,41 @@ class SearchViewModel @Inject constructor(
             SearchMode.JAPANESE -> SearchMode.ENGLISH
             SearchMode.ENGLISH -> SearchMode.ROMAJI
             SearchMode.ROMAJI -> SearchMode.JAPANESE
+        }
+    }
+
+    private fun applyAutoSearchModeIfNeeded(query: String) {
+        _searchMode.value = detectSearchMode(query)
+    }
+
+    companion object {
+        internal fun detectSearchMode(query: String): SearchMode {
+            val normalized = query.trim()
+            if (normalized.isBlank()) return SearchMode.JAPANESE
+
+            return if (containsJapaneseScript(normalized)) {
+                SearchMode.JAPANESE
+            } else {
+                SearchMode.ENGLISH
+            }
+        }
+
+        internal fun shouldUseRomajiFallback(query: String, romajiConverted: String): Boolean {
+            val normalizedQuery = query.trim().lowercase()
+            val normalizedConverted = romajiConverted.trim()
+            if (normalizedQuery.isBlank() || normalizedConverted.isBlank()) return false
+            return normalizedConverted != normalizedQuery
+        }
+
+        private fun containsJapaneseScript(text: String): Boolean {
+            return text.any {
+                when (Character.UnicodeScript.of(it.code)) {
+                    Character.UnicodeScript.HAN,
+                    Character.UnicodeScript.HIRAGANA,
+                    Character.UnicodeScript.KATAKANA -> true
+                    else -> false
+                }
+            }
         }
     }
 
