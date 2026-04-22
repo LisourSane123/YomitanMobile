@@ -1,5 +1,16 @@
 package com.yomitanmobile.domain.model
 
+enum class PitchAccentStyle(val storageValue: String) {
+    LEGACY("legacy"),
+    DOT_LINE("dot_line");
+
+    companion object {
+        fun fromStorage(value: String?): PitchAccentStyle {
+            return values().firstOrNull { it.storageValue == value } ?: LEGACY
+        }
+    }
+}
+
 /**
  * Preferences for Anki card visual styling.
  * These control how the generated HTML card looks.
@@ -16,6 +27,7 @@ data class CardStylePreferences(
     val meaningColor: String = "#e0e0e0",
     val accentColor: String = "#80cbc4",
     val showPitchAccent: Boolean = true,
+    val pitchAccentStyle: PitchAccentStyle = PitchAccentStyle.LEGACY,
     val showFrequency: Boolean = true,
     val showSentence: Boolean = true,
     val showFrontContextSentence: Boolean = false,

@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
         val CARD_MEANING_COLOR = stringPreferencesKey("card_meaning_color")
         val CARD_ACCENT_COLOR = stringPreferencesKey("card_accent_color")
         val CARD_SHOW_PITCH = booleanPreferencesKey("card_show_pitch")
+        val CARD_PITCH_ACCENT_STYLE = stringPreferencesKey("card_pitch_accent_style")
         val CARD_SHOW_FREQUENCY = booleanPreferencesKey("card_show_frequency")
         val CARD_SHOW_SENTENCE = booleanPreferencesKey("card_show_sentence")
         val CARD_SHOW_FRONT_CONTEXT_SENTENCE = booleanPreferencesKey("card_show_front_context_sentence")

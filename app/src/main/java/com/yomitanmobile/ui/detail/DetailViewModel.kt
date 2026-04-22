@@ -16,6 +16,7 @@ import com.yomitanmobile.data.sentence.OnlineSentenceService
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.domain.model.PitchAccentStyle
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
@@ -313,6 +314,9 @@ class DetailViewModel @Inject constructor(
             meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: "#e0e0e0",
             accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: "#80cbc4",
             showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: true,
+            pitchAccentStyle = PitchAccentStyle.fromStorage(
+                prefs[MainActivity.CARD_PITCH_ACCENT_STYLE]
+            ),
             showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true,
             showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true,
             showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: false,

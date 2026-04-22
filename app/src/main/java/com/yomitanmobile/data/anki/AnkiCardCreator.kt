@@ -12,6 +12,7 @@ import androidx.core.content.FileProvider
 import com.ichi2.anki.api.AddContentApi
 import com.yomitanmobile.domain.model.AnkiCard
 import com.yomitanmobile.domain.model.CardStylePreferences
+import com.yomitanmobile.domain.model.PitchAccentStyle
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.util.InputSanitizer
 import com.yomitanmobile.util.SentenceContextHighlighter
@@ -32,6 +33,9 @@ class AnkiCardCreator(
         private const val MAX_MEANINGS_ON_CARD = 3
         private const val MODEL_NAME_PREFIX = "Yomitan-Mobile"
         private const val MAX_MODEL_CREATE_RETRIES = 8
+        private const val DEFAULT_PITCH_ACCENT_COLOR = "#ff8a65"
+        private const val DEFAULT_PITCH_LOW_COLOR = "#777777"
+        private const val DEFAULT_PITCH_KANA_COLOR = "#80cbc4"
 
         const val DEFAULT_DECK_NAME = "Mining Deck"
         const val MODEL_NAME = "Yomitan-Mobile-v7"
@@ -186,6 +190,11 @@ class AnkiCardCreator(
             } else {
                 ""
             }
+            val previewPitch = buildPitchAccentHtml(
+                reading = "たべる",
+                pitchPositions = "2",
+                prefs = prefs
+            )
             return """
             <!DOCTYPE html>
             <html>
@@ -206,13 +215,192 @@ class AnkiCardCreator(
                     <div class="freq">★★★ Top 1K</div>
                     <hr>
                     <div class="reading">たべる</div>
-                    <div class="pitch"><span style="font-size:12px;color:#999;">[2] 中高</span> <span style="padding-top:4px; display:inline-block;">た</span><span style="border-top:2px solid #ff8a65;padding-top:2px;border-right:2px solid #ff8a65; display:inline-block;">べ</span><span style="padding-top:4px; display:inline-block;">る</span></div>
+                    <div class="pitch">$previewPitch</div>
                     <div class="meaning">1. to eat<br>2. to live on (e.g. a salary); to live off; to subsist on</div>
                     <div class="sentence">毎日野菜を食べます。<br><small>I eat vegetables every day.</small></div>
                 </div>
             </body>
             </html>
             """.trimIndent()
+        }
+
+        private fun buildPitchAccentHtml(
+            reading: String,
+            pitchPositions: String,
+            prefs: CardStylePreferences?
+        ): String {
+            if (pitchPositions.isBlank()) return ""
+            val positions = pitchPositions.split(",").mapNotNull { it.trim().toIntOrNull() }
+            if (positions.isEmpty()) return ""
+
+            val morae = splitIntoMorae(reading)
+            if (morae.isEmpty()) return ""
+
+            val accentColor = normalizedCssColor(prefs?.accentColor, DEFAULT_PITCH_ACCENT_COLOR)
+            val kanaColor = normalizedCssColor(prefs?.readingColor, DEFAULT_PITCH_KANA_COLOR)
+            val style = prefs?.pitchAccentStyle ?: PitchAccentStyle.LEGACY
+
+            return buildString {
+                positions.forEachIndexed { idx, dropPos ->
+                    if (idx > 0) append("&nbsp;&nbsp;")
+                    val pattern = computePitchPattern(morae.size, dropPos)
+                    val label = pitchLabel(dropPos, morae.size)
+                    if (style == PitchAccentStyle.DOT_LINE) {
+                        append(
+                            buildDotLinePitchAccentPattern(
+                                morae = morae,
+                                pattern = pattern,
+                                dropPos = dropPos,
+                                label = label,
+                                accentColor = accentColor,
+                                kanaColor = kanaColor
+                            )
+                        )
+                    } else {
+                        append(
+                            buildLegacyPitchAccentPattern(
+                                morae = morae,
+                                pattern = pattern,
+                                dropPos = dropPos,
+                                label = label,
+                                accentColor = accentColor
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        private fun buildLegacyPitchAccentPattern(
+            morae: List<String>,
+            pattern: List<Boolean>,
+            dropPos: Int,
+            label: String,
+            accentColor: String
+        ): String {
+            return buildString {
+                append("<span style=\"font-size:12px;color:#999;\">[$dropPos] $label</span> ")
+                for (i in morae.indices) {
+                    val high = pattern[i]
+                    val style = if (high) {
+                        "border-top:2px solid $accentColor;padding-top:2px;"
+                    } else {
+                        "padding-top:4px;"
+                    }
+                    val rightBorder = if (i < morae.size - 1 && pattern[i] != pattern[i + 1]) {
+                        if (pattern[i]) "border-right:2px solid $accentColor;" else "border-right:2px solid #666;"
+                    } else {
+                        ""
+                    }
+                    append(
+                        "<span style=\"$style$rightBorder display:inline-block;\">${InputSanitizer.escapeHtml(morae[i])}</span>"
+                    )
+                }
+            }
+        }
+
+        private fun buildDotLinePitchAccentPattern(
+            morae: List<String>,
+            pattern: List<Boolean>,
+            dropPos: Int,
+            label: String,
+            accentColor: String,
+            kanaColor: String
+        ): String {
+            return buildString {
+                append("<span style=\"display:inline-flex;flex-direction:column;align-items:flex-start;\">")
+                append("<span style=\"font-size:12px;color:#999;\">[$dropPos] $label</span>")
+                append("<span style=\"white-space:nowrap;line-height:1.0;\">")
+                for (i in morae.indices) {
+                    val isHigh = pattern[i]
+                    val nodeChar = if (isHigh) "●" else "○"
+                    val nodeColor = if (isHigh) accentColor else DEFAULT_PITCH_LOW_COLOR
+                    append(
+                        "<span style=\"display:inline-block;min-width:0.95em;text-align:center;color:$nodeColor;font-weight:700;\">$nodeChar</span>"
+                    )
+                    if (i < morae.size - 1) {
+                        val nextHigh = pattern[i + 1]
+                        val connectorChar = when {
+                            isHigh && nextHigh -> "━"
+                            !isHigh && !nextHigh -> "─"
+                            isHigh && !nextHigh -> "╲"
+                            else -> "╱"
+                        }
+                        val connectorColor = when {
+                            isHigh && nextHigh -> accentColor
+                            !isHigh && !nextHigh -> "#666"
+                            isHigh && !nextHigh -> accentColor
+                            else -> "#888"
+                        }
+                        append(
+                            "<span style=\"display:inline-block;min-width:0.95em;text-align:center;color:$connectorColor;font-weight:700;\">$connectorChar</span>"
+                        )
+                    }
+                }
+                append("</span>")
+
+                append("<span style=\"white-space:nowrap;line-height:1.0;margin-top:2px;\">")
+                for (i in morae.indices) {
+                    append(
+                        "<span style=\"display:inline-block;min-width:0.95em;text-align:center;color:$kanaColor;\">${InputSanitizer.escapeHtml(morae[i])}</span>"
+                    )
+                    if (i < morae.size - 1) {
+                        append(
+                            "<span style=\"display:inline-block;min-width:0.95em;text-align:center;color:transparent;\">・</span>"
+                        )
+                    }
+                }
+                append("</span>")
+                append("</span>")
+            }
+        }
+
+        private fun splitIntoMorae(reading: String): List<String> {
+            val smallKana = setOf(
+                'ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ',
+                'ャ', 'ュ', 'ョ', 'ァ', 'ィ', 'ゥ', 'ェ', 'ォ',
+                'っ', 'ッ', 'ー'
+            )
+            val result = mutableListOf<String>()
+            var i = 0
+            while (i < reading.length) {
+                val sb = StringBuilder()
+                sb.append(reading[i])
+                i++
+                while (i < reading.length && reading[i] in smallKana) {
+                    sb.append(reading[i])
+                    i++
+                }
+                result.add(sb.toString())
+            }
+            return result
+        }
+
+        private fun computePitchPattern(moraCount: Int, dropPos: Int): List<Boolean> {
+            if (moraCount == 0) return emptyList()
+            if (moraCount == 1) return listOf(dropPos != 0)
+            return List(moraCount) { i ->
+                when {
+                    dropPos == 0 -> i > 0
+                    dropPos == 1 -> i == 0
+                    else -> i > 0 && i < dropPos
+                }
+            }
+        }
+
+        private fun pitchLabel(dropPos: Int, moraCount: Int): String {
+            return when (dropPos) {
+                0 -> "平板"
+                1 -> "頭高"
+                moraCount -> "尾高"
+                else -> "中高"
+            }
+        }
+
+        private fun normalizedCssColor(value: String?, fallback: String): String {
+            val candidate = value?.trim().orEmpty()
+            val hexColorRegex = Regex("^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+            return if (candidate.matches(hexColorRegex)) candidate else fallback
         }
     }
 
@@ -402,7 +590,8 @@ class AnkiCardCreator(
     ): AnkiCard {
         val pitchHtml = buildPitchAccentHtml(
             entry.reading.ifBlank { entry.expression },
-            entry.pitchAccent
+            entry.pitchAccent,
+            stylePrefs
         )
         val freqText = entry.frequencyLabel()
         
@@ -445,79 +634,6 @@ class AnkiCardCreator(
             .toList()
 
         return meaningLines.joinToString("<br><br>") { InputSanitizer.escapeHtml(it) }
-    }
-
-    /**
-     * Build an HTML representation of the pitch accent pattern.
-     * Shows morae with overline styling for high pitch.
-     */
-    private fun buildPitchAccentHtml(reading: String, pitchPositions: String): String {
-        if (pitchPositions.isBlank()) return ""
-        val positions = pitchPositions.split(",").mapNotNull { it.trim().toIntOrNull() }
-        if (positions.isEmpty()) return ""
-
-        val morae = splitIntoMorae(reading)
-        if (morae.isEmpty()) return ""
-
-        return buildString {
-            positions.forEachIndexed { idx, dropPos ->
-                if (idx > 0) append("&nbsp;&nbsp;")
-                val pattern = computePitchPattern(morae.size, dropPos)
-                val label = when (dropPos) {
-                    0 -> "平板"
-                    1 -> "頭高"
-                    morae.size -> "尾高"
-                    else -> "中高"
-                }
-                append("<span style=\"font-size:12px;color:#999;\">[$dropPos] $label</span> ")
-                for (i in morae.indices) {
-                    val high = pattern[i]
-                    val style = if (high) {
-                        "border-top:2px solid #ff8a65;padding-top:2px;"
-                    } else {
-                        "padding-top:4px;"
-                    }
-                    // Add drop marker
-                    val rightBorder = if (i < morae.size - 1 && pattern[i] != pattern[i + 1]) {
-                        if (pattern[i]) "border-right:2px solid #ff8a65;" else "border-right:2px solid #666;"
-                    } else ""
-                    append("<span style=\"$style$rightBorder display:inline-block;\">${morae[i]}</span>")
-                }
-            }
-        }
-    }
-
-    private fun splitIntoMorae(reading: String): List<String> {
-        val smallKana = setOf(
-            'ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ',
-            'ャ', 'ュ', 'ョ', 'ァ', 'ィ', 'ゥ', 'ェ', 'ォ',
-            'っ', 'ッ', 'ー'
-        )
-        val result = mutableListOf<String>()
-        var i = 0
-        while (i < reading.length) {
-            val sb = StringBuilder()
-            sb.append(reading[i])
-            i++
-            while (i < reading.length && reading[i] in smallKana) {
-                sb.append(reading[i])
-                i++
-            }
-            result.add(sb.toString())
-        }
-        return result
-    }
-
-    private fun computePitchPattern(moraCount: Int, dropPos: Int): List<Boolean> {
-        if (moraCount == 0) return emptyList()
-        if (moraCount == 1) return listOf(dropPos != 0)
-        return List(moraCount) { i ->
-            when {
-                dropPos == 0 -> i > 0
-                dropPos == 1 -> i == 0
-                else -> i > 0 && i < dropPos
-            }
-        }
     }
 
     suspend fun addNote(card: AnkiCard, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null): Result<Long> = withContext(Dispatchers.IO) {

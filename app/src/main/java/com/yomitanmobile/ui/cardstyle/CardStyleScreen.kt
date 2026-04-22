@@ -74,6 +74,7 @@ import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.CardStylePreferences
+import com.yomitanmobile.domain.model.PitchAccentStyle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -100,6 +101,7 @@ fun CardStyleScreen(
     var meaningColor by remember { mutableStateOf("#e0e0e0") }
     var accentColor by remember { mutableStateOf("#80cbc4") }
     var showPitchAccent by remember { mutableStateOf(true) }
+    var pitchAccentStyle by remember { mutableStateOf(PitchAccentStyle.LEGACY) }
     var showFrequency by remember { mutableStateOf(true) }
     var showSentence by remember { mutableStateOf(true) }
     var showFrontContextSentence by remember { mutableStateOf(false) }
@@ -147,6 +149,7 @@ fun CardStyleScreen(
         meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: "#e0e0e0"
         accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: "#80cbc4"
         showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: true
+        pitchAccentStyle = PitchAccentStyle.fromStorage(prefs[MainActivity.CARD_PITCH_ACCENT_STYLE])
         showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true
         showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true
         showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: false
@@ -170,6 +173,7 @@ fun CardStyleScreen(
         meaningColor = meaningColor,
         accentColor = accentColor,
         showPitchAccent = showPitchAccent,
+        pitchAccentStyle = pitchAccentStyle,
         showFrequency = showFrequency,
         showSentence = showSentence,
         showFrontContextSentence = showFrontContextSentence,
@@ -195,6 +199,7 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_MEANING_COLOR] = meaningColor
                 prefs[MainActivity.CARD_ACCENT_COLOR] = accentColor
                 prefs[MainActivity.CARD_SHOW_PITCH] = showPitchAccent
+                prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] = pitchAccentStyle.storageValue
                 prefs[MainActivity.CARD_SHOW_FREQUENCY] = showFrequency
                 prefs[MainActivity.CARD_SHOW_SENTENCE] = showSentence
                 prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] = showFrontContextSentence
@@ -253,7 +258,7 @@ fun CardStyleScreen(
         expressionBold, expressionFontSize, readingFontSize, meaningFontSize,
         selectedFont, backgroundColor, expressionColor, readingColor,
         meaningColor, accentColor, showPitchAccent, showFrequency, showSentence,
-        showFrontContextSentence
+        showFrontContextSentence, pitchAccentStyle
     ) {
         AnkiCardCreator.buildPreviewHtml(currentPreferences())
     }
@@ -282,6 +287,7 @@ fun CardStyleScreen(
                         meaningColor = "#e0e0e0"
                         accentColor = "#80cbc4"
                         showPitchAccent = true
+                        pitchAccentStyle = PitchAccentStyle.LEGACY
                         showFrequency = true
                         showSentence = true
                         showFrontContextSentence = false
@@ -507,6 +513,47 @@ fun CardStyleScreen(
                         checked = showPitchAccent,
                         onCheckedChange = { showPitchAccent = it }
                     )
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = tr("Styl pitch accent", "Pitch accent style"),
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = tr(
+                                "Wybierz klasyczny zapis albo wariant z kropkami i liniami oraz kana pod spodem",
+                                "Choose classic rendering or dots and lines with kana below"
+                            ),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = pitchAccentStyle == PitchAccentStyle.LEGACY,
+                                onClick = { pitchAccentStyle = PitchAccentStyle.LEGACY },
+                                label = { Text(tr("Klasyczny", "Classic")) }
+                            )
+                            FilterChip(
+                                selected = pitchAccentStyle == PitchAccentStyle.DOT_LINE,
+                                onClick = { pitchAccentStyle = PitchAccentStyle.DOT_LINE },
+                                label = { Text(tr("Kropki + linie", "Dots + lines")) }
+                            )
+                        }
+                    }
                 }
             }
 
