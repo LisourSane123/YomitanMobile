@@ -75,6 +75,7 @@ fun SearchScreen(
     onWordClick: (Long) -> Unit,
     onSettingsClick: () -> Unit,
     onFavoritesClick: () -> Unit = {},
+    onNavigateToCategories: () -> Unit,
     focusSearch: Boolean = false,
     initialQuery: String? = null,
     viewModel: SearchViewModel = hiltViewModel()
@@ -91,7 +92,7 @@ fun SearchScreen(
     val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
-    var showQuickStatsDialog by remember { mutableStateOf(false) }
+    // Quick stats removed; icon will navigate to Categories screen
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -117,14 +118,7 @@ fun SearchScreen(
         }
     }
 
-    if (showQuickStatsDialog) {
-        QuickStatsDialog(
-            importedWordsCount = importedWordsCount,
-            categoryStats = categoryStats,
-            isEnglish = isEnglish,
-            onDismiss = { showQuickStatsDialog = false }
-        )
-    }
+    // Quick stats dialog removed; navigation goes to Categories screen instead
 
     Scaffold(
         topBar = {
@@ -138,11 +132,8 @@ fun SearchScreen(
                     IconButton(onClick = onFavoritesClick) {
                         Icon(Icons.Default.Favorite, contentDescription = tr("Ulubione", "Favorites"))
                     }
-                    IconButton(onClick = {
-                        viewModel.refreshQuickStats()
-                        showQuickStatsDialog = true
-                    }) {
-                        Icon(Icons.Default.BarChart, contentDescription = tr("Szybkie statystyki", "Quick stats"))
+                    IconButton(onClick = onNavigateToCategories) {
+                        Icon(Icons.Default.BarChart, contentDescription = tr("Kategorie słów", "Word categories"))
                     }
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = tr("Ustawienia", "Settings"))
@@ -260,64 +251,7 @@ fun SearchScreen(
     }
 }
 
-@Composable
-private fun QuickStatsDialog(
-    importedWordsCount: Int,
-    categoryStats: List<SearchCategoryStat>,
-    isEnglish: Boolean,
-    onDismiss: () -> Unit
-) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
-
-    val topCategoryStats = categoryStats
-        .filter { it.count > 0 }
-        .sortedByDescending { it.count }
-        .take(8)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(tr("Szybkie statystyki", "Quick stats")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "${tr("Zaimportowane słowa", "Imported words")}: $importedWordsCount",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = tr("Słowa per kategoria", "Words per category"),
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                if (topCategoryStats.isEmpty()) {
-                    Text(
-                        text = tr(
-                            "Brak danych kategorii. Zacznij eksportować słowa do Anki, aby zobaczyć statystyki.",
-                            "No category data yet. Export words to Anki to see category stats."
-                        ),
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    topCategoryStats.forEachIndexed { index, stat ->
-                        val label = WordCategoryClassifier.displayName(stat.code, isEnglish)
-                        Text(
-                            text = "${index + 1}. $label -> ${stat.count}",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(tr("Zamknij", "Close"))
-            }
-        }
-    )
-}
+// QuickStatsDialog removed — stats icon now navigates to dedicated Categories screen
 
 @Composable
 private fun DeconjugationHintsCard(

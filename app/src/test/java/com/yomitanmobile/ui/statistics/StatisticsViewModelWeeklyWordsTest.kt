@@ -55,9 +55,8 @@ class StatisticsViewModelWeeklyWordsTest {
 
         val text = StatisticsViewModel.buildWeeklyLearnedWordsCopyText(words)
 
-        assertTrue(text.startsWith("Słowa z ostatnich 7 dni (2)"))
-        assertTrue(text.contains("1. 食べる (たべる) - Inne"))
-        assertTrue(text.contains("2. 犬 (いぬ) - Inne"))
+        // now only words + readings (no header, no categories)
+        assertEquals("食べる (たべる)\n犬 (いぬ)", text.trim())
     }
 
     @Test

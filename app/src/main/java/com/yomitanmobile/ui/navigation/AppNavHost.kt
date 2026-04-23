@@ -48,7 +48,8 @@ fun AppNavHost(
                     navController.navigate(Screen.Favorites.route)
                 },
                 focusSearch = focusSearch,
-                initialQuery = sharedSearchQuery
+                initialQuery = sharedSearchQuery,
+                onNavigateToCategories = { navController.navigate(Screen.Categories.route) }
             )
         }
 
@@ -92,6 +93,12 @@ fun AppNavHost(
 
         composable(Screen.Statistics.route) {
             StatisticsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Categories.route) {
+            com.yomitanmobile.ui.statistics.CategoriesScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

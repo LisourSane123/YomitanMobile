@@ -128,50 +128,26 @@ fun StatisticsScreen(
                     )
                 }
 
+                // Decorative banner / image for statistics (requested)
                 item {
-                    StatCard(
-                        icon = Icons.Default.Book,
-                        title = "Wpisy w słownikach",
-                        value = formatNumber(state.totalEntries),
-                        subtitle = "Łączna liczba wpisów we wszystkich słownikach",
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // simple placeholder graphic — keeps UI consistent without external assets
+                            Text("[Grafika statystyk]", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
 
-                item {
-                    StatCard(
-                        icon = Icons.Default.MenuBook,
-                        title = "Zainstalowane słowniki",
-                        value = state.dictionaryCount.toString(),
-                        subtitle = "Liczba zaimportowanych słowników",
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-
-                item {
-                    StatCard(
-                        icon = Icons.Default.Style,
-                        title = "Wyeksportowane fiszki",
-                        value = formatNumber(state.exportedCount),
-                        subtitle = "Słówka wysłane do AnkiDroid",
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-
-                item {
-                    StatCard(
-                        icon = Icons.Default.History,
-                        title = "Historia wyszukiwań",
-                        value = formatNumber(state.searchHistoryCount),
-                        subtitle = "Unikalne wyszukiwania",
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
+                // Removed total entries, installed dictionaries and search history per request
+                
                 item {
                     HourlyImmersionCard(
                         mostActiveHour = state.mostActiveHour,
@@ -181,6 +157,7 @@ fun StatisticsScreen(
                 }
 
                 item {
+                    // Keep category overview small here; the detailed list is in Categories screen
                     CategoryImmersionCard(
                         mostActiveCategoryCount = state.mostActiveCategoryCount,
                         categoryActivity = state.categoryActivity,
@@ -200,10 +177,10 @@ fun StatisticsScreen(
                     }
 
                     item {
-                        DailyFlashcardChart(
-                            dailyCounts = state.dailyCounts,
-                            dailyGoal = state.dailyGoal
-                        )
+                            DailyFlashcardChart(
+                                dailyCounts = state.dailyCounts,
+                                dailyGoal = state.dailyGoal
+                            )
                     }
                 }
 
@@ -519,8 +496,9 @@ private fun DailyFlashcardChart(
                 Spacer(Modifier.height(8.dp))
             }
 
-            val barWidth = 28f
-            val spacing = 6f
+            // Denser bars for better visibility when there are few data points
+            val barWidth = 12f
+            val spacing = 4f
             val chartWidth = dailyCounts.size * (barWidth + spacing)
             val maxCount = (dailyCounts.maxOfOrNull { it.count } ?: 1).coerceAtLeast(
                 if (dailyGoal > 0) dailyGoal else 1
@@ -581,8 +559,8 @@ private fun DailyFlashcardChart(
                             cornerRadius = CornerRadius(4f, 4f)
                         )
 
-                        // Day label (every 5th day or last)
-                        if (index % 5 == 0 || index == dailyCounts.size - 1) {
+                        // Day label (every 2nd day or last) to improve density
+                        if (index % 2 == 0 || index == dailyCounts.size - 1) {
                             drawContext.canvas.nativeCanvas.drawText(
                                 daily.dayLabel,
                                 x + barWidth / 2,

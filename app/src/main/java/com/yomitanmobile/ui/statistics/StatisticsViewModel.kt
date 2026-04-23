@@ -104,18 +104,17 @@ class StatisticsViewModel @Inject constructor(
         internal fun buildWeeklyLearnedWordsCopyText(words: List<WeeklyLearnedWord>): String {
             if (words.isEmpty()) return ""
 
-            val header = "Słowa z ostatnich 7 dni (${words.size})"
-            val body = words.mapIndexed { index, word ->
+            // Only copy the words (expression + optional reading) per line, no categories or numbering
+            val body = words.map { word ->
                 val readingPart = when {
                     word.reading.isBlank() -> ""
                     word.reading == word.expression -> ""
                     else -> " (${word.reading})"
                 }
-                val category = categoryLabel(word.exportCategory)
-                "${index + 1}. ${word.expression}$readingPart - $category"
+                "${word.expression}$readingPart"
             }
 
-            return (listOf(header) + body).joinToString("\n")
+            return body.joinToString("\n")
         }
 
         internal fun buildWeeklyLearnedWordsCopyText(
@@ -129,17 +128,17 @@ class StatisticsViewModel @Inject constructor(
             } else {
                 "Słowa z ostatnich 7 dni (${words.size})"
             }
-            val body = words.mapIndexed { index, word ->
-                val readingPart = when {
-                    word.reading.isBlank() -> ""
-                    word.reading == word.expression -> ""
-                    else -> " (${word.reading})"
+                val body = words.map { word ->
+                    val readingPart = when {
+                        word.reading.isBlank() -> ""
+                        word.reading == word.expression -> ""
+                        else -> " (${word.reading})"
+                    }
+                    // only expression + reading
+                    "${word.expression}$readingPart"
                 }
-                val category = categoryLabel(word.exportCategory, isEnglish)
-                "${index + 1}. ${word.expression}$readingPart - $category"
-            }
 
-            return (listOf(header) + body).joinToString("\n")
+                return body.joinToString("\n")
         }
 
         internal fun categoryLabel(categoryCode: String, isEnglish: Boolean = false): String {
