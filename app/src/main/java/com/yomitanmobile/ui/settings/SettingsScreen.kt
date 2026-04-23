@@ -84,6 +84,7 @@ import com.yomitanmobile.data.bunpro.BunproProgressService
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.util.InputSanitizer
+import com.yomitanmobile.util.WordCategoryClassifier
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -682,12 +683,12 @@ fun SettingsScreen(
             }
 
             // ═══════════════════════════════════════
-            // SECTION: Inne (Other)
+            // SECTION: Statystyki i cele (Stats & goals)
             // ═══════════════════════════════════════
             item {
                 SectionHeader(
-                    icon = Icons.Default.EmojiEvents,
-                    title = tr("Inne", "Other")
+                    icon = Icons.Default.BarChart,
+                    title = tr("Statystyki i cele", "Stats & goals")
                 )
             }
 
@@ -757,6 +758,25 @@ fun SettingsScreen(
                 }
             }
 
+            item {
+                SettingsClickableItem(
+                    icon = Icons.Default.BarChart,
+                    title = tr("Statystyki", "Statistics"),
+                    subtitle = tr("Przegląd aktywności, streak, wykres fiszek", "Activity overview, streak, card chart"),
+                    onClick = onNavigateToStatistics
+                )
+            }
+
+            // ═══════════════════════════════════════
+            // SECTION: Aplikacja (App)
+            // ═══════════════════════════════════════
+            item {
+                SectionHeader(
+                    icon = Icons.Default.Language,
+                    title = tr("Aplikacja", "App")
+                )
+            }
+
             // Language selector
             item {
                 Card(
@@ -821,13 +841,22 @@ fun SettingsScreen(
                 }
             }
 
-            // Statistics button
+            // ═══════════════════════════════════════
+            // SECTION: Prywatność i integracje (Privacy & integrations)
+            // ═══════════════════════════════════════
+            item {
+                SectionHeader(
+                    icon = Icons.Default.Shield,
+                    title = tr("Prywatność i integracje", "Privacy & integrations")
+                )
+            }
+
             item {
                 SettingsClickableItem(
-                    icon = Icons.Default.BarChart,
-                    title = tr("Statystyki", "Statistics"),
-                    subtitle = tr("Przegląd aktywności, streak, wykres fiszek", "Activity overview, streak, card chart"),
-                    onClick = onNavigateToStatistics
+                    icon = Icons.Default.Policy,
+                    title = tr("Polityka Prywatności", "Privacy Policy"),
+                    subtitle = tr("Zasady prywatności i lokalne przetwarzanie danych", "Privacy rules and local data processing"),
+                    onClick = { showPrivacyDialog = true }
                 )
             }
 
@@ -1007,15 +1036,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Info,
-                    title = tr("Informacje", "Information")
-                )
-            }
-            item {
-                SettingsClickableItem(
-                    icon = Icons.Default.Policy,
-                    title = tr("Polityka Prywatności", "Privacy Policy"),
-                    subtitle = tr("Zasady prywatności i lokalne przetwarzanie danych", "Privacy rules and local data processing"),
-                    onClick = { showPrivacyDialog = true }
+                    title = tr("Informacje i licencje", "Information & licenses")
                 )
             }
             item { Spacer(Modifier.height(8.dp)) }
@@ -1057,6 +1078,7 @@ private fun DictionaryCategoryDistributionCard(
     allCategoriesTitle: String,
     emptyText: String
 ) {
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     val colorByCode = remember(categoryStats) {
         categoryStats.mapIndexed { index, stat ->
             stat.code to CategoryChartColors[index % CategoryChartColors.size]
@@ -1134,6 +1156,7 @@ private fun DictionaryCategoryDistributionCard(
                     .sortedByDescending { it.count }
                     .take(3)
                     .forEachIndexed { index, stat ->
+                        val localizedLabel = WordCategoryClassifier.displayName(stat.code, isEnglish)
                         val percent = if (totalCount == 0) 0f else (stat.count.toFloat() * 100f / totalCount.toFloat())
                         val color = colorByCode[stat.code] ?: Color.Gray
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1144,7 +1167,7 @@ private fun DictionaryCategoryDistributionCard(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "${index + 1}. ${stat.label}: ${String.format(Locale.getDefault(), "%.1f", percent)}% (${stat.count})",
+                                text = "${index + 1}. $localizedLabel: ${String.format(Locale.getDefault(), "%.1f", percent)}% (${stat.count})",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1159,6 +1182,7 @@ private fun DictionaryCategoryDistributionCard(
                 )
 
                 categoryStats.forEach { stat ->
+                    val localizedLabel = WordCategoryClassifier.displayName(stat.code, isEnglish)
                     val color = colorByCode[stat.code] ?: Color.Gray
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -1168,7 +1192,7 @@ private fun DictionaryCategoryDistributionCard(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "${stat.label}: ${stat.count}",
+                            text = "$localizedLabel: ${stat.count}",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
                         )

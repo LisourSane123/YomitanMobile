@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.MainActivity
+import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.SearchHistory
@@ -13,6 +14,7 @@ import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import com.yomitanmobile.util.DeconjugationCandidate
 import com.yomitanmobile.util.JapaneseDeconjugator
 import com.yomitanmobile.util.RomajiConverter
+import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -45,6 +47,11 @@ data class DailyGoalState(
     val progress: Float get() = if (goalCount > 0) (todayCount.toFloat() / goalCount).coerceIn(0f, 1f) else 0f
 }
 
+data class SearchCategoryStat(
+    val code: String,
+    val count: Int
+)
+
 enum class SearchMode(val label: String) {
     JAPANESE("JP"),
     ENGLISH("EN"),
@@ -54,6 +61,7 @@ enum class SearchMode(val label: String) {
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val searchDictionaryUseCase: SearchDictionaryUseCase,
+    private val dictionaryDao: DictionaryDao,
     private val searchHistoryDao: SearchHistoryDao,
     private val exportedWordDao: ExportedWordDao,
     @ApplicationContext private val appContext: Context
@@ -78,8 +86,35 @@ class SearchViewModel @Inject constructor(
     private val _dailyGoal = MutableStateFlow(DailyGoalState())
     val dailyGoal: StateFlow<DailyGoalState> = _dailyGoal.asStateFlow()
 
+    private val _importedWordsCount = MutableStateFlow(0)
+    val importedWordsCount: StateFlow<Int> = _importedWordsCount.asStateFlow()
+
+    val categoryStats: StateFlow<List<SearchCategoryStat>> = exportedWordDao
+        .getCategoryActivityAll()
+        .map { rows ->
+            rows
+                .map { row ->
+                    SearchCategoryStat(
+                        code = row.category.trim().ifBlank { WordCategoryClassifier.CATEGORY_OTHER },
+                        count = row.count
+                    )
+                }
+                .sortedByDescending { it.count }
+        }
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
         refreshDailyGoal()
+        refreshQuickStats()
+    }
+
+    fun refreshQuickStats() {
+        viewModelScope.launch {
+            try {
+                _importedWordsCount.value = dictionaryDao.getEntryCount()
+            } catch (_: Exception) { }
+        }
     }
 
     fun refreshDailyGoal() {

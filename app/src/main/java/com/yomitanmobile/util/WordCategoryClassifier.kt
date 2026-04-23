@@ -23,6 +23,7 @@ object WordCategoryClassifier {
     private data class CategoryRule(
         val code: String,
         val labelPl: String,
+        val labelEn: String,
         val keywords: Set<String>
     )
 
@@ -30,6 +31,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_FOOD,
             "Jedzenie",
+            "Food",
             setOf(
                 "food", "eat", "meal", "drink", "restaurant", "kitchen", "cooking", "recipe",
                 "rice", "fish", "vegetable", "fruit", "meat", "coffee", "tea", "breakfast", "lunch", "dinner",
@@ -40,6 +42,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_TRAVEL,
             "Podroze",
+            "Travel",
             setOf(
                 "travel", "trip", "journey", "airport", "station", "train", "bus", "ticket", "hotel", "map", "passport",
                 "podroz", "lotnisko", "pociag", "autobus", "bilet", "hotel",
@@ -49,6 +52,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_ECONOMY,
             "Ekonomia",
+            "Economy",
             setOf(
                 "economy", "economic", "finance", "financial", "bank", "inflation", "market", "investment", "stock", "tax",
                 "budget", "loan", "interest rate", "currency",
@@ -59,6 +63,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_WORK,
             "Praca",
+            "Work",
             setOf(
                 "work", "job", "office", "company", "business", "meeting", "manager", "employee", "career", "salary",
                 "deadline", "project", "client",
@@ -69,6 +74,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_EDUCATION,
             "Edukacja",
+            "Education",
             setOf(
                 "school", "study", "learn", "education", "student", "teacher", "class", "lesson", "exam", "university",
                 "homework", "dictionary", "grammar",
@@ -79,6 +85,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_HEALTH,
             "Zdrowie",
+            "Health",
             setOf(
                 "health", "medical", "doctor", "hospital", "medicine", "symptom", "disease", "pain", "therapy", "treatment",
                 "exercise", "sleep", "diet",
@@ -89,6 +96,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_TECHNOLOGY,
             "Technologia",
+            "Technology",
             setOf(
                 "technology", "computer", "software", "hardware", "app", "application", "internet", "network", "device", "data",
                 "security", "ai", "machine learning", "database", "code", "programming",
@@ -99,6 +107,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_SHOPPING,
             "Zakupy",
+            "Shopping",
             setOf(
                 "shop", "shopping", "buy", "sell", "price", "cheap", "expensive", "store", "marketplace", "payment",
                 "discount", "receipt", "customer",
@@ -109,6 +118,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_HOME_DAILY,
             "Dom i codziennosc",
+            "Home & daily life",
             setOf(
                 "home", "house", "family", "daily", "routine", "clean", "laundry", "cook", "room", "kitchen", "bathroom",
                 "morning", "evening", "weekend",
@@ -119,6 +129,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_CULTURE,
             "Kultura i rozrywka",
+            "Culture & entertainment",
             setOf(
                 "culture", "music", "movie", "film", "book", "anime", "manga", "game", "art", "festival", "concert",
                 "museum", "theater", "hobby",
@@ -129,6 +140,7 @@ object WordCategoryClassifier {
         CategoryRule(
             CATEGORY_RELATIONSHIPS,
             "Relacje",
+            "Relationships",
             setOf(
                 "relationship", "friend", "family", "partner", "marriage", "love", "emotion", "feeling", "communication", "talk",
                 "conflict", "support", "trust",
@@ -180,12 +192,16 @@ object WordCategoryClassifier {
         return CATEGORY_OTHER
     }
 
-    fun displayName(categoryCode: String): String {
-        return rules.firstOrNull { it.code == categoryCode }?.labelPl ?: "Inne"
+    fun displayName(categoryCode: String, isEnglish: Boolean = false): String {
+        val match = rules.firstOrNull { it.code == categoryCode }
+        if (match == null) return if (isEnglish) "Other" else "Inne"
+        return if (isEnglish) match.labelEn else match.labelPl
     }
 
-    fun mostImportantCategories(): List<Pair<String, String>> {
-        val primary = rules.map { it.code to it.labelPl }
-        return primary + (CATEGORY_OTHER to "Inne")
+    fun mostImportantCategories(isEnglish: Boolean = false): List<Pair<String, String>> {
+        val primary = rules.map { rule ->
+            rule.code to if (isEnglish) rule.labelEn else rule.labelPl
+        }
+        return primary + (CATEGORY_OTHER to if (isEnglish) "Other" else "Inne")
     }
 }

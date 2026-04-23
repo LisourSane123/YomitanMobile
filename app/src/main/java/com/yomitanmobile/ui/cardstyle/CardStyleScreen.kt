@@ -94,6 +94,8 @@ fun CardStyleScreen(
     var expressionFontSize by remember { mutableFloatStateOf(48f) }
     var readingFontSize by remember { mutableFloatStateOf(28f) }
     var meaningFontSize by remember { mutableFloatStateOf(20f) }
+    var frontContextSentenceFontSize by remember { mutableFloatStateOf(14f) }
+    var backSentenceFontSize by remember { mutableFloatStateOf(14f) }
     var selectedFont by remember { mutableStateOf("Hiragino Sans") }
     var backgroundColor by remember { mutableStateOf("#1a1a1a") }
     var expressionColor by remember { mutableStateOf("#ffffff") }
@@ -142,6 +144,8 @@ fun CardStyleScreen(
         expressionFontSize = (prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: 48).toFloat()
         readingFontSize = (prefs[MainActivity.CARD_READING_FONT_SIZE] ?: 28).toFloat()
         meaningFontSize = (prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: 20).toFloat()
+        frontContextSentenceFontSize = (prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: 14).toFloat()
+        backSentenceFontSize = (prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: 14).toFloat()
         selectedFont = prefs[MainActivity.CARD_FONT_FAMILY] ?: "Hiragino Sans"
         backgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: "#1a1a1a"
         expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: "#ffffff"
@@ -166,6 +170,8 @@ fun CardStyleScreen(
         expressionFontSize = expressionFontSize.roundToInt(),
         readingFontSize = readingFontSize.roundToInt(),
         meaningFontSize = meaningFontSize.roundToInt(),
+        frontContextSentenceFontSize = frontContextSentenceFontSize.roundToInt(),
+        backSentenceFontSize = backSentenceFontSize.roundToInt(),
         fontFamily = selectedFont,
         cardBackgroundColor = backgroundColor,
         expressionColor = expressionColor,
@@ -192,6 +198,8 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] = expressionFontSize.roundToInt()
                 prefs[MainActivity.CARD_READING_FONT_SIZE] = readingFontSize.roundToInt()
                 prefs[MainActivity.CARD_MEANING_FONT_SIZE] = meaningFontSize.roundToInt()
+                prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] = frontContextSentenceFontSize.roundToInt()
+                prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] = backSentenceFontSize.roundToInt()
                 prefs[MainActivity.CARD_FONT_FAMILY] = selectedFont
                 prefs[MainActivity.CARD_BACKGROUND_COLOR] = backgroundColor
                 prefs[MainActivity.CARD_EXPRESSION_COLOR] = expressionColor
@@ -256,6 +264,7 @@ fun CardStyleScreen(
     // Preview HTML updates live (without saving)
     val previewHtml = remember(
         expressionBold, expressionFontSize, readingFontSize, meaningFontSize,
+        frontContextSentenceFontSize, backSentenceFontSize,
         selectedFont, backgroundColor, expressionColor, readingColor,
         meaningColor, accentColor, showPitchAccent, showFrequency, showSentence,
         showFrontContextSentence, pitchAccentStyle
@@ -280,6 +289,8 @@ fun CardStyleScreen(
                         expressionFontSize = 48f
                         readingFontSize = 28f
                         meaningFontSize = 20f
+                        frontContextSentenceFontSize = 14f
+                        backSentenceFontSize = 14f
                         selectedFont = "Hiragino Sans"
                         backgroundColor = "#1a1a1a"
                         expressionColor = "#ffffff"
@@ -436,6 +447,24 @@ fun CardStyleScreen(
                     value = meaningFontSize,
                     onValueChange = { meaningFontSize = it },
                     valueRange = 12f..36f
+                )
+            }
+
+            item {
+                FontSizeSlider(
+                    label = tr("Zdanie na froncie", "Front sentence"),
+                    value = frontContextSentenceFontSize,
+                    onValueChange = { frontContextSentenceFontSize = it },
+                    valueRange = 10f..28f
+                )
+            }
+
+            item {
+                FontSizeSlider(
+                    label = tr("Zdanie z tyłu", "Back sentence"),
+                    value = backSentenceFontSize,
+                    onValueChange = { backSentenceFontSize = it },
+                    valueRange = 10f..28f
                 )
             }
 

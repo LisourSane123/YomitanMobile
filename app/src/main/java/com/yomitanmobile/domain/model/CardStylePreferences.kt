@@ -20,6 +20,8 @@ data class CardStylePreferences(
     val expressionFontSize: Int = 48,
     val readingFontSize: Int = 28,
     val meaningFontSize: Int = 20,
+    val frontContextSentenceFontSize: Int = 14,
+    val backSentenceFontSize: Int = 14,
     val fontFamily: String = "Hiragino Sans",
     val cardBackgroundColor: String = "#1a1a1a",
     val expressionColor: String = "#ffffff",

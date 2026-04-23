@@ -49,6 +49,8 @@ class MainActivity : ComponentActivity() {
         val CARD_EXPRESSION_FONT_SIZE = intPreferencesKey("card_expression_font_size")
         val CARD_READING_FONT_SIZE = intPreferencesKey("card_reading_font_size")
         val CARD_MEANING_FONT_SIZE = intPreferencesKey("card_meaning_font_size")
+        val CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE = intPreferencesKey("card_front_context_sentence_font_size")
+        val CARD_BACK_SENTENCE_FONT_SIZE = intPreferencesKey("card_back_sentence_font_size")
         val CARD_FONT_FAMILY = stringPreferencesKey("card_font_family")
         val CARD_BACKGROUND_COLOR = stringPreferencesKey("card_background_color")
         val CARD_EXPRESSION_COLOR = stringPreferencesKey("card_expression_color")

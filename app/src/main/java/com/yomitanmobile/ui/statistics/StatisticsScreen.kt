@@ -52,12 +52,14 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.yomitanmobile.util.WordCategoryClassifier
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,10 +68,11 @@ fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val weeklyWordsForCopy = remember(state.weeklyLearnedWords) {
-        StatisticsViewModel.buildWeeklyLearnedWordsCopyText(state.weeklyLearnedWords)
+    val weeklyWordsForCopy = remember(state.weeklyLearnedWords, isEnglish) {
+        StatisticsViewModel.buildWeeklyLearnedWordsCopyText(state.weeklyLearnedWords, isEnglish)
     }
 
     Scaffold(
@@ -179,9 +182,9 @@ fun StatisticsScreen(
 
                 item {
                     CategoryImmersionCard(
-                        mostActiveCategory = state.mostActiveCategory,
                         mostActiveCategoryCount = state.mostActiveCategoryCount,
-                        categoryActivity = state.categoryActivity
+                        categoryActivity = state.categoryActivity,
+                        isEnglish = isEnglish
                     )
                 }
 
@@ -216,6 +219,7 @@ fun StatisticsScreen(
                 item {
                     WeeklyLearnedWordsCard(
                         words = state.weeklyLearnedWords,
+                        isEnglish = isEnglish,
                         onCopyClick = {
                             if (weeklyWordsForCopy.isBlank()) {
                                 Toast.makeText(context, "Brak słówek do skopiowania", Toast.LENGTH_SHORT).show()
@@ -235,14 +239,15 @@ fun StatisticsScreen(
 
 @Composable
 private fun CategoryImmersionCard(
-    mostActiveCategory: String?,
     mostActiveCategoryCount: Int,
-    categoryActivity: List<CategoryActivity>
+    categoryActivity: List<CategoryActivity>,
+    isEnglish: Boolean
 ) {
     val topCategories = categoryActivity
         .filter { it.count > 0 }
         .sortedByDescending { it.count }
         .take(6)
+    val mostActiveCategory = topCategories.firstOrNull()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -262,8 +267,12 @@ private fun CategoryImmersionCard(
             )
 
             if (mostActiveCategory != null && mostActiveCategoryCount > 0) {
+                val localizedMostActive = WordCategoryClassifier.displayName(
+                    mostActiveCategory.categoryCode,
+                    isEnglish
+                )
                 Text(
-                    "Najczęstsza kategoria: $mostActiveCategory",
+                    "Najczęstsza kategoria: $localizedMostActive",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -283,8 +292,9 @@ private fun CategoryImmersionCard(
             if (topCategories.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 topCategories.forEachIndexed { index, item ->
+                    val localizedLabel = WordCategoryClassifier.displayName(item.categoryCode, isEnglish)
                     Text(
-                        text = "${index + 1}. ${item.categoryLabel} -> ${item.count}",
+                        text = "${index + 1}. $localizedLabel -> ${item.count}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -417,6 +427,7 @@ private fun StreakCard(
 @Composable
 private fun WeeklyLearnedWordsCard(
     words: List<WeeklyLearnedWord>,
+    isEnglish: Boolean,
     onCopyClick: () -> Unit
 ) {
     Card(
@@ -465,7 +476,7 @@ private fun WeeklyLearnedWordsCard(
                         word.reading == word.expression -> ""
                         else -> " (${word.reading})"
                     }
-                    val category = StatisticsViewModel.categoryLabel(word.exportCategory)
+                    val category = StatisticsViewModel.categoryLabel(word.exportCategory, isEnglish)
                     Text(
                         text = "${index + 1}. ${word.expression}$readingPart - $category",
                         style = MaterialTheme.typography.bodyMedium

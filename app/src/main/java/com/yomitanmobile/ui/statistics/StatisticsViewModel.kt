@@ -118,8 +118,32 @@ class StatisticsViewModel @Inject constructor(
             return (listOf(header) + body).joinToString("\n")
         }
 
-        internal fun categoryLabel(categoryCode: String): String {
-            return WordCategoryClassifier.displayName(categoryCode)
+        internal fun buildWeeklyLearnedWordsCopyText(
+            words: List<WeeklyLearnedWord>,
+            isEnglish: Boolean
+        ): String {
+            if (words.isEmpty()) return ""
+
+            val header = if (isEnglish) {
+                "Words from last 7 days (${words.size})"
+            } else {
+                "Słowa z ostatnich 7 dni (${words.size})"
+            }
+            val body = words.mapIndexed { index, word ->
+                val readingPart = when {
+                    word.reading.isBlank() -> ""
+                    word.reading == word.expression -> ""
+                    else -> " (${word.reading})"
+                }
+                val category = categoryLabel(word.exportCategory, isEnglish)
+                "${index + 1}. ${word.expression}$readingPart - $category"
+            }
+
+            return (listOf(header) + body).joinToString("\n")
+        }
+
+        internal fun categoryLabel(categoryCode: String, isEnglish: Boolean = false): String {
+            return WordCategoryClassifier.displayName(categoryCode, isEnglish)
         }
 
         internal fun toHourlyActivity(items: List<HourlyActivityCount>): List<HourlyActivity> {
@@ -143,13 +167,16 @@ class StatisticsViewModel @Inject constructor(
             return String.format("%02d:00-%02d:59", normalized, normalized)
         }
 
-        internal fun toCategoryActivity(items: List<CategoryActivityCount>): List<CategoryActivity> {
+        internal fun toCategoryActivity(
+            items: List<CategoryActivityCount>,
+            isEnglish: Boolean = false
+        ): List<CategoryActivity> {
             return items
                 .map {
                     val code = it.category.trim().ifBlank { WordCategoryClassifier.CATEGORY_OTHER }
                     CategoryActivity(
                         categoryCode = code,
-                        categoryLabel = categoryLabel(code),
+                        categoryLabel = categoryLabel(code, isEnglish),
                         count = it.count
                     )
                 }

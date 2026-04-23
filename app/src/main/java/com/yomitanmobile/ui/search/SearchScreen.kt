@@ -19,12 +19,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,13 +45,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -60,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.util.WordCategoryClassifier
 import com.yomitanmobile.util.JlptLevelUtil
 import kotlinx.coroutines.delay
 
@@ -79,7 +85,13 @@ fun SearchScreen(
     val deconjugationCandidates by viewModel.deconjugationCandidates.collectAsState()
     val searchHistory by viewModel.searchHistory.collectAsState()
     val dailyGoal by viewModel.dailyGoal.collectAsState()
+    val importedWordsCount by viewModel.importedWordsCount.collectAsState()
+    val categoryStats by viewModel.categoryStats.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+
+    var showQuickStatsDialog by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -105,6 +117,15 @@ fun SearchScreen(
         }
     }
 
+    if (showQuickStatsDialog) {
+        QuickStatsDialog(
+            importedWordsCount = importedWordsCount,
+            categoryStats = categoryStats,
+            isEnglish = isEnglish,
+            onDismiss = { showQuickStatsDialog = false }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -115,10 +136,16 @@ fun SearchScreen(
                 ),
                 actions = {
                     IconButton(onClick = onFavoritesClick) {
-                        Icon(Icons.Default.Favorite, contentDescription = "Ulubione")
+                        Icon(Icons.Default.Favorite, contentDescription = tr("Ulubione", "Favorites"))
+                    }
+                    IconButton(onClick = {
+                        viewModel.refreshQuickStats()
+                        showQuickStatsDialog = true
+                    }) {
+                        Icon(Icons.Default.BarChart, contentDescription = tr("Szybkie statystyki", "Quick stats"))
                     }
                     IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = "Ustawienia")
+                        Icon(Icons.Default.Settings, contentDescription = tr("Ustawienia", "Settings"))
                     }
                 }
             )
@@ -231,6 +258,65 @@ fun SearchScreen(
             }
         }
     }
+}
+
+@Composable
+private fun QuickStatsDialog(
+    importedWordsCount: Int,
+    categoryStats: List<SearchCategoryStat>,
+    isEnglish: Boolean,
+    onDismiss: () -> Unit
+) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+
+    val topCategoryStats = categoryStats
+        .filter { it.count > 0 }
+        .sortedByDescending { it.count }
+        .take(8)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(tr("Szybkie statystyki", "Quick stats")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "${tr("Zaimportowane słowa", "Imported words")}: $importedWordsCount",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = tr("Słowa per kategoria", "Words per category"),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                if (topCategoryStats.isEmpty()) {
+                    Text(
+                        text = tr(
+                            "Brak danych kategorii. Zacznij eksportować słowa do Anki, aby zobaczyć statystyki.",
+                            "No category data yet. Export words to Anki to see category stats."
+                        ),
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    topCategoryStats.forEachIndexed { index, stat ->
+                        val label = WordCategoryClassifier.displayName(stat.code, isEnglish)
+                        Text(
+                            text = "${index + 1}. $label -> ${stat.count}",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(tr("Zamknij", "Close"))
+            }
+        }
+    )
 }
 
 @Composable

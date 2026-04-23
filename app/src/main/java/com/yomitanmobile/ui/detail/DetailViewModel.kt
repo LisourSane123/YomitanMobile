@@ -307,6 +307,8 @@ class DetailViewModel @Inject constructor(
             expressionFontSize = prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: 48,
             readingFontSize = prefs[MainActivity.CARD_READING_FONT_SIZE] ?: 28,
             meaningFontSize = prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: 20,
+            frontContextSentenceFontSize = prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: 14,
+            backSentenceFontSize = prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: 14,
             fontFamily = prefs[MainActivity.CARD_FONT_FAMILY] ?: "Hiragino Sans",
             cardBackgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: "#1a1a1a",
             expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: "#ffffff",

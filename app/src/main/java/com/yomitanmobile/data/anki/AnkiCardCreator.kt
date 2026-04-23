@@ -154,7 +154,7 @@ class AnkiCardCreator(
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
             .front-context {
-                font-size: 14px; color: #d7d7d7; margin-top: 8px;
+                font-size: ${prefs.frontContextSentenceFontSize}px; color: #d7d7d7; margin-top: 8px;
                 text-align: center; line-height: 1.35;
                 ${if (!prefs.showFrontContextSentence) "display: none;" else ""}
             }
@@ -167,7 +167,7 @@ class AnkiCardCreator(
             }
             .audio { margin: 8px 0; }
             .sentence {
-                font-size: 14px; color: #bbb; margin-top: 8px; font-style: italic;
+                font-size: ${prefs.backSentenceFontSize}px; color: #bbb; margin-top: 8px; font-style: italic;
                 text-align: center; line-height: 1.35;
                 ${if (!prefs.showSentence) "display: none;" else ""}
             }
