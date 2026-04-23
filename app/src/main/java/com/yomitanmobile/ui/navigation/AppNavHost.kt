@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.yomitanmobile.ui.cardstyle.CardStyleScreen
 import com.yomitanmobile.ui.detail.DetailScreen
+import com.yomitanmobile.ui.dictionaries.DictionariesScreen
 import com.yomitanmobile.ui.download.DictionaryDownloadScreen
 import com.yomitanmobile.ui.favorites.FavoritesScreen
 import com.yomitanmobile.ui.search.SearchScreen
@@ -75,6 +76,9 @@ fun AppNavHost(
                 },
                 onNavigateToCardStyle = {
                     navController.navigate(Screen.CardStyle.route)
+                },
+                onNavigateToDictionaries = {
+                    navController.navigate(Screen.Dictionaries.route)
                 }
             )
         }
@@ -93,6 +97,12 @@ fun AppNavHost(
 
         composable(Screen.Statistics.route) {
             StatisticsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Dictionaries.route) {
+            DictionariesScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

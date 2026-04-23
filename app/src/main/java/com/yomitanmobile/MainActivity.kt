@@ -69,11 +69,6 @@ class MainActivity : ComponentActivity() {
         val CARD_USE_ONLINE_SENTENCE_API = booleanPreferencesKey("card_use_online_sentence_api")
         val SENTENCE_API_CONSENT_GRANTED = booleanPreferencesKey("sentence_api_consent_granted")
 
-        // Bunpro integration
-        val BUNPRO_API_ENABLED = booleanPreferencesKey("bunpro_api_enabled")
-        val BUNPRO_API_TOKEN = stringPreferencesKey("bunpro_api_token")
-        val BUNPRO_API_ENDPOINT = stringPreferencesKey("bunpro_api_endpoint")
-
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
         val DETAIL_SHOW_CARD_QUALITY = booleanPreferencesKey("detail_show_card_quality")

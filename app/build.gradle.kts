@@ -6,21 +6,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-import java.util.Properties
-
-val localProperties = Properties().apply {
-    val file = rootProject.file("local.properties")
-    if (file.exists()) {
-        file.inputStream().use { load(it) }
-    }
-}
-
-fun String.escapeForBuildConfig(): String {
-    return this
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-}
-
 android {
     namespace = "com.yomitanmobile"
     compileSdk = 34
@@ -37,39 +22,6 @@ android {
             useSupportLibrary = true
         }
 
-        val bunproApiEnabledFallback = providers
-            .gradleProperty("BUNPRO_API_ENABLED")
-            .orNull
-            ?: localProperties.getProperty("BUNPRO_API_ENABLED")
-        val bunproApiEnabledParsed = bunproApiEnabledFallback
-            ?.toBooleanStrictOrNull()
-            ?: false
-        val bunproApiTokenFallback = providers
-            .gradleProperty("BUNPRO_API_TOKEN")
-            .orNull
-            ?: localProperties.getProperty("BUNPRO_API_TOKEN")
-            ?: ""
-        val bunproApiEndpointFallback = providers
-            .gradleProperty("BUNPRO_API_ENDPOINT")
-            .orNull
-            ?: localProperties.getProperty("BUNPRO_API_ENDPOINT")
-            ?: ""
-
-        buildConfigField(
-            "boolean",
-            "BUNPRO_API_ENABLED_FALLBACK",
-            bunproApiEnabledParsed.toString()
-        )
-        buildConfigField(
-            "String",
-            "BUNPRO_API_TOKEN_FALLBACK",
-            "\"${bunproApiTokenFallback.escapeForBuildConfig()}\""
-        )
-        buildConfigField(
-            "String",
-            "BUNPRO_API_ENDPOINT_FALLBACK",
-            "\"${bunproApiEndpointFallback.escapeForBuildConfig()}\""
-        )
     }
 
     buildTypes {

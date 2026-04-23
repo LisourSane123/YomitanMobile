@@ -63,10 +63,6 @@ data class StatisticsState(
     val categoryActivity: List<CategoryActivity> = emptyList(),
     val mostActiveCategory: String? = null,
     val mostActiveCategoryCount: Int = 0,
-    val bunproIntegrationEnabled: Boolean = false,
-    val bunproVocabularyCount: Int = 0,
-    val bunproKanjiLearned: List<String> = emptyList(),
-    val bunproError: String? = null,
     val isLoading: Boolean = true
 )
 
@@ -260,8 +256,7 @@ class StatisticsViewModel @Inject constructor(
             } catch (exception: Exception) {
                 Log.e(logTag, "Failed to load statistics", exception)
                 _state.value = _state.value.copy(
-                    isLoading = false,
-                    bunproError = "Blad ladowania statystyk"
+                    isLoading = false
                 )
             }
         }
