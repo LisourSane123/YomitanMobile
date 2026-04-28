@@ -3,7 +3,6 @@ package com.yomitanmobile.ui.statistics
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -141,22 +139,11 @@ fun StatisticsScreen(
                     )
                 }
 
-                // Decorative banner / image for statistics (requested)
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            // simple placeholder graphic — keeps UI consistent without external assets
-                            Text("[Grafika statystyk]", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                    CategoryDistributionCard(
+                        categoryStats = allTimeCategoryStats,
+                        isEnglish = isEnglish
+                    )
                 }
 
                 // Removed total entries, installed dictionaries and search history per request
@@ -174,13 +161,6 @@ fun StatisticsScreen(
                     CategoryImmersionCard(
                         mostActiveCategoryCount = state.mostActiveCategoryCount,
                         categoryActivity = state.categoryActivity,
-                        isEnglish = isEnglish
-                    )
-                }
-
-                item {
-                    CategoryDistributionCard(
-                        categoryStats = allTimeCategoryStats,
                         isEnglish = isEnglish
                     )
                 }
@@ -665,98 +645,100 @@ private fun DailyFlashcardChart(
                 Spacer(Modifier.height(8.dp))
             }
 
-            // Denser bars for better visibility when there are few data points
-            val barWidth = 12f
-            val spacing = 4f
-            val chartWidth = dailyCounts.size * (barWidth + spacing)
+            val barCount = dailyCounts.size
             val maxCount = (dailyCounts.maxOfOrNull { it.count } ?: 1).coerceAtLeast(
                 if (dailyGoal > 0) dailyGoal else 1
             )
 
-            Row(
+            Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
+                    .height(200.dp)
             ) {
-                Canvas(
-                    modifier = Modifier
-                        .width((chartWidth + 40).dp)
-                        .height(200.dp)
-                ) {
-                    val chartHeight = size.height - 40f
-                    val startX = 10f
+                val chartHeight = size.height - 40f
+                val startX = 12f
+                val endX = size.width - 12f
+                val availableWidth = (endX - startX).coerceAtLeast(1f)
+                val rawBarWidth = if (barCount > 0) (availableWidth / barCount) else 0f
+                val barWidth = (rawBarWidth * 0.7f).coerceAtLeast(4f)
+                val spacing = (rawBarWidth - barWidth).coerceAtLeast(2f)
+                val labelEvery = when {
+                    barCount <= 10 -> 1
+                    barCount <= 20 -> 2
+                    barCount <= 30 -> 3
+                    else -> 4
+                }
 
-                    // Draw goal line
-                    if (dailyGoal > 0) {
-                        val goalY = chartHeight - (dailyGoal.toFloat() / maxCount * chartHeight)
-                        drawLine(
-                            color = goalColor.copy(alpha = 0.6f),
-                            start = Offset(0f, goalY),
-                            end = Offset(size.width, goalY),
-                            strokeWidth = 2f
+                // Draw goal line
+                if (dailyGoal > 0) {
+                    val goalY = chartHeight - (dailyGoal.toFloat() / maxCount * chartHeight)
+                    drawLine(
+                        color = goalColor.copy(alpha = 0.6f),
+                        start = Offset(0f, goalY),
+                        end = Offset(size.width, goalY),
+                        strokeWidth = 2f
+                    )
+                }
+
+                // Draw grid lines
+                for (i in 0..4) {
+                    val y = chartHeight - (i.toFloat() / 4f * chartHeight)
+                    drawLine(
+                        color = gridColor.copy(alpha = 0.3f),
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1f
+                    )
+                }
+
+                // Draw bars
+                dailyCounts.forEachIndexed { index, daily ->
+                    val x = startX + index * (barWidth + spacing)
+                    val barHeight = if (maxCount > 0) daily.count.toFloat() / maxCount * chartHeight else 0f
+                    val y = chartHeight - barHeight
+
+                    val color = when {
+                        dailyGoal > 0 && daily.count >= dailyGoal -> Color(0xFF4CAF50)
+                        daily.count > 0 -> barColor
+                        else -> barColor.copy(alpha = 0.15f)
+                    }
+
+                    // Bar
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(x, y),
+                        size = Size(barWidth, barHeight.coerceAtLeast(2f)),
+                        cornerRadius = CornerRadius(4f, 4f)
+                    )
+
+                    // Day label (sparser for larger datasets)
+                    if (index % labelEvery == 0 || index == dailyCounts.size - 1) {
+                        drawContext.canvas.nativeCanvas.drawText(
+                            daily.dayLabel,
+                            x + barWidth / 2,
+                            size.height - 2f,
+                            android.graphics.Paint().apply {
+                                this.color = textColor.toArgb()
+                                textSize = 22f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isAntiAlias = true
+                            }
                         )
                     }
 
-                    // Draw grid lines
-                    for (i in 0..4) {
-                        val y = chartHeight - (i.toFloat() / 4f * chartHeight)
-                        drawLine(
-                            color = gridColor.copy(alpha = 0.3f),
-                            start = Offset(0f, y),
-                            end = Offset(size.width, y),
-                            strokeWidth = 1f
+                    // Count on top of bar (if > 0)
+                    if (daily.count > 0) {
+                        drawContext.canvas.nativeCanvas.drawText(
+                            daily.count.toString(),
+                            x + barWidth / 2,
+                            y - 6f,
+                            android.graphics.Paint().apply {
+                                this.color = textColor.toArgb()
+                                textSize = 20f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isAntiAlias = true
+                            }
                         )
-                    }
-
-                    // Draw bars
-                    dailyCounts.forEachIndexed { index, daily ->
-                        val x = startX + index * (barWidth + spacing)
-                        val barHeight = if (maxCount > 0) daily.count.toFloat() / maxCount * chartHeight else 0f
-                        val y = chartHeight - barHeight
-
-                        val color = when {
-                            dailyGoal > 0 && daily.count >= dailyGoal -> Color(0xFF4CAF50)
-                            daily.count > 0 -> barColor
-                            else -> barColor.copy(alpha = 0.15f)
-                        }
-
-                        // Bar
-                        drawRoundRect(
-                            color = color,
-                            topLeft = Offset(x, y),
-                            size = Size(barWidth, barHeight.coerceAtLeast(2f)),
-                            cornerRadius = CornerRadius(4f, 4f)
-                        )
-
-                        // Day label (every 2nd day or last) to improve density
-                        if (index % 2 == 0 || index == dailyCounts.size - 1) {
-                            drawContext.canvas.nativeCanvas.drawText(
-                                daily.dayLabel,
-                                x + barWidth / 2,
-                                size.height - 2f,
-                                android.graphics.Paint().apply {
-                                    this.color = textColor.toArgb()
-                                    textSize = 22f
-                                    textAlign = android.graphics.Paint.Align.CENTER
-                                    isAntiAlias = true
-                                }
-                            )
-                        }
-
-                        // Count on top of bar (if > 0)
-                        if (daily.count > 0) {
-                            drawContext.canvas.nativeCanvas.drawText(
-                                daily.count.toString(),
-                                x + barWidth / 2,
-                                y - 6f,
-                                android.graphics.Paint().apply {
-                                    this.color = textColor.toArgb()
-                                    textSize = 20f
-                                    textAlign = android.graphics.Paint.Align.CENTER
-                                    isAntiAlias = true
-                                }
-                            )
-                        }
                     }
                 }
             }

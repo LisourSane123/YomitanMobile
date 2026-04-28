@@ -177,8 +177,7 @@ fun SearchScreen(
                                     SearchMode.ENGLISH -> MaterialTheme.colorScheme.tertiary
                                     SearchMode.ROMAJI -> MaterialTheme.colorScheme.secondary
                                 }
-                            )
-                            .clickable { viewModel.toggleSearchMode() },
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

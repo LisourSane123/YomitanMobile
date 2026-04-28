@@ -10,6 +10,7 @@ import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.SearchHistory
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import com.yomitanmobile.util.DeconjugationCandidate
 import com.yomitanmobile.util.JapaneseDeconjugator
@@ -156,9 +157,25 @@ class SearchViewModel @Inject constructor(
                     }
                     SearchMode.ENGLISH -> {
                         _deconjugationCandidates.value = emptyList()
+                        val romajiCandidate = romajiQueryToHiragana(q)
                         searchDictionaryUseCase.invokeEnglish(q)
                             .map { englishResults ->
-                                if (englishResults.isNotEmpty()) {
+                                if (romajiCandidate != null) {
+                                    val romajiResults = if (shouldUseRomajiFallback(q, romajiCandidate)) {
+                                        searchDictionaryUseCase.invoke(romajiCandidate).first()
+                                    } else {
+                                        emptyList()
+                                    }
+
+                                    if (romajiResults.isNotEmpty()) {
+                                        val mergedById = LinkedHashMap<Long, WordEntry>()
+                                        romajiResults.forEach { mergedById.putIfAbsent(it.id, it) }
+                                        englishResults.forEach { mergedById.putIfAbsent(it.id, it) }
+                                        mergedById.values.toList()
+                                    } else {
+                                        englishResults
+                                    }
+                                } else if (englishResults.isNotEmpty()) {
                                     englishResults
                                 } else {
                                     val romajiConverted = RomajiConverter.toHiragana(q)
@@ -171,10 +188,20 @@ class SearchViewModel @Inject constructor(
                             }
                     }
                     SearchMode.ROMAJI -> {
-                        val hiragana = RomajiConverter.toHiragana(q)
+                        val hiragana = romajiQueryToHiragana(q) ?: RomajiConverter.toHiragana(q)
                         _deconjugationCandidates.value = emptyList()
-                        if (hiragana.isNotBlank()) searchDictionaryUseCase.invoke(hiragana)
-                        else flowOf(emptyList())
+                        if (hiragana.isNotBlank()) {
+                            searchDictionaryUseCase.invoke(hiragana)
+                                .flatMapLatest { kanaResults ->
+                                    if (kanaResults.isNotEmpty()) {
+                                        flowOf(kanaResults)
+                                    } else {
+                                        searchDictionaryUseCase.invokeEnglish(q)
+                                    }
+                                }
+                        } else {
+                            flowOf(emptyList())
+                        }
                     }
                 }
                 searchFlow
@@ -185,7 +212,10 @@ class SearchViewModel @Inject constructor(
                     .map { results ->
                         _isSearching.value = false
                         val merged = MergedWordEntry.mergeEntries(results)
-                        if (mode == SearchMode.ENGLISH && q.isNotBlank()) {
+                        val romajiCandidate = romajiQueryToHiragana(q)
+                        if (romajiCandidate != null) {
+                            sortRomajiExactFirst(merged, romajiCandidate)
+                        } else if (mode == SearchMode.ENGLISH && q.isNotBlank()) {
                             // Sort by how early the query appears in the definitions list
                             val queryLower = q.lowercase()
                             merged.sortedWith(
@@ -212,7 +242,6 @@ class SearchViewModel @Inject constructor(
 
     fun onQueryChange(newQuery: String) {
         _query.value = newQuery
-        applyAutoSearchModeIfNeeded(newQuery)
     }
 
     fun applyExternalQuery(sharedQuery: String) {
@@ -226,12 +255,10 @@ class SearchViewModel @Inject constructor(
 
         lastInjectedExternalQuery = normalized
         _query.value = normalized
-        applyAutoSearchModeIfNeeded(normalized)
     }
 
     fun clearQuery() {
         _query.value = ""
-        _searchMode.value = SearchMode.JAPANESE
         _isSearching.value = false
     }
 
@@ -245,6 +272,56 @@ class SearchViewModel @Inject constructor(
 
     private fun applyAutoSearchModeIfNeeded(query: String) {
         _searchMode.value = detectSearchMode(query)
+    }
+
+    private fun romajiQueryToHiragana(query: String): String? {
+        val converted = RomajiConverter.toHiragana(query).trim()
+        if (converted.isBlank()) return null
+        val hasLatin = converted.any { it.isLetter() && it.code < 128 }
+        return if (hasLatin) null else converted
+    }
+
+    private fun sortRomajiExactFirst(
+        entries: List<MergedWordEntry>,
+        hiraganaQuery: String
+    ): List<MergedWordEntry> {
+        val katakanaQuery = toKatakana(hiraganaQuery)
+        return entries.sortedWith(
+            compareBy<MergedWordEntry> { entry ->
+                if (isRomajiExactMatch(entry, hiraganaQuery, katakanaQuery)) 0 else 1
+            }.thenBy { entry ->
+                if (entry.frequency > 0) entry.frequency else Int.MAX_VALUE
+            }
+        )
+    }
+
+    private fun isRomajiExactMatch(
+        entry: MergedWordEntry,
+        hiraganaQuery: String,
+        katakanaQuery: String
+    ): Boolean {
+        val reading = entry.reading.trim()
+        val expression = entry.primaryExpression.trim()
+        if (reading == hiraganaQuery || reading == katakanaQuery) return true
+        if (expression == hiraganaQuery || expression == katakanaQuery) return true
+        return entry.alternativeExpressions.any {
+            val alt = it.trim()
+            alt == hiraganaQuery || alt == katakanaQuery
+        }
+    }
+
+    private fun toKatakana(input: String): String {
+        if (input.isBlank()) return input
+        val sb = StringBuilder(input.length)
+        for (ch in input) {
+            val code = ch.code
+            if (code in 0x3041..0x3096) {
+                sb.append((code + 0x60).toChar())
+            } else {
+                sb.append(ch)
+            }
+        }
+        return sb.toString()
     }
 
     companion object {
