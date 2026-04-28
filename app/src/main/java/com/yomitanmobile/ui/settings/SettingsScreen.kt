@@ -167,6 +167,39 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
+                TextButton(onClick = {
+                    val sanitized = InputSanitizer.sanitizeDeckName(editedDeckName)
+                    currentDeckName = sanitized
+                    coroutineScope.launch {
+                        context.dataStore.edit { prefs ->
+                            prefs[MainActivity.ANKI_DECK_NAME] = sanitized
+                        }
+                    }
+                    showDeckEditDialog = false
+                }) {
+                    Text(tr("Zapisz", "Save"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeckEditDialog = false }) {
+                    Text(tr("Anuluj", "Cancel"))
+                }
+            }
+        )
+    }
+
+    if (showLicensesDialog) {
+        AlertDialog(
+            onDismissRequest = { showLicensesDialog = false },
+            title = { Text(tr("O aplikacji i licencje", "About app and licenses")) },
+            text = {
+                LazyColumn {
+                    item {
+                        Text(tr("Wersja aplikacji: 1.0.0", "App version: 1.0.0"), fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            tr(
+                                "Aplikacja korzysta z otwartych słowników do działania. Dostępne słowniki m.in. JMdict oraz KANJIDIC są udostępniane na licencjach Creative Commons Attribution-ShareAlike 4.0 International lub podobnych.\n\nWłasność i prawa autorskie:",
                                 "The app uses open dictionaries. Available dictionaries including JMdict and KANJIDIC are shared under Creative Commons Attribution-ShareAlike 4.0 International licenses or similar.\n\nOwnership and copyrights:"
                             ),
                             fontWeight = FontWeight.Bold
@@ -185,6 +218,29 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showLicensesDialog = false }) { Text(tr("Zamknij", "Close")) }
+            }
+        )
+    }
+
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text(tr("Polityka Prywatności", "Privacy Policy")) },
+            text = {
+                LazyColumn {
+                    item {
+                        Text(
+                            tr(
+                                "1. Zakres danych\nYomitan Mobile nie wymaga konta i nie zbiera danych osobowych w centralnym backendzie.\nDomyślnie dane użytkownika (np. historia wyszukiwań, ustawienia, lista eksportów) są przechowywane lokalnie na urządzeniu.\n\n2. Kiedy aplikacja łączy się z internetem\nAplikacja może używać sieci w dwóch scenariuszach:\n1) Pobieranie słowników na życzenie użytkownika.\n2) Opcjonalne pobieranie zdań przykładowych z zewnętrznego API (tylko po wyrażeniu zgody).\n\n3. Opcjonalne API zdań\nFunkcja zdań online jest dobrowolna i domyślnie wyłączona.\nPo włączeniu aplikacja wysyła zapytanie zawierające szukane słowo do zewnętrznego API wyłącznie w celu pobrania przykładowego zdania.\nZgodę można w każdej chwili cofnąć w ustawieniach aplikacji.\n\n4. Przechowywanie lokalne\nDane tworzone przez aplikację (m.in. historia wyszukiwań, preferencje, metadane eksportu do Anki) są przechowywane lokalnie.\nUżytkownik może usunąć je przez wyczyszczenie danych aplikacji w ustawieniach systemu Android.\n\n5. Integracja z AnkiDroid\nEksport do AnkiDroid wykorzystuje oficjalne API AnkiDroid i lokalny mechanizm Content Provider.\n\n6. Kontakt\nW razie pytań lub wątpliwości dotyczących prywatności prosimy o otwarcie zgłoszenia (Issue) w repozytorium projektu.\n\nStan na dzień: 18 kwietnia 2026.",
+                                "1. Data scope\nYomitan Mobile does not require an account and does not collect personal data in a central backend.\nBy default, user data (search history, settings, export list) is stored locally on the device.\n\n2. When the app connects to the internet\nThe app may use the network in two cases:\n1) Downloading dictionaries on user request.\n2) Optional fetching of example sentences from an external API (only with consent).\n\n3. Optional sentence API\nThe online sentence feature is optional and disabled by default.\nWhen enabled, the app sends the searched word to an external sentence API solely to fetch an example sentence.\nConsent can be revoked at any time in the app settings.\n\n4. Local storage\nData created by the app (search history, preferences, Anki export metadata) is stored locally.\nYou can delete it by clearing app data in Android system settings.\n\n5. AnkiDroid integration\nExport to AnkiDroid uses the official AnkiDroid API and a local Content Provider mechanism.\n\n6. Contact\nIf you have questions or privacy concerns, please open an Issue in the project repository.\n\nStatus as of: April 18, 2026."
+                            ),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) { Text(tr("Zamknij", "Close")) }
             }
         )
     }

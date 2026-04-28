@@ -61,11 +61,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.yomitanmobile.MainActivity
-import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.util.JlptLevelUtil
-import kotlinx.coroutines.flow.map
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,12 +76,8 @@ fun DetailScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val ttsReady by viewModel.ttsReady.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
-    val cardQuality by viewModel.cardQualityScore.collectAsState()
 
     val context = LocalContext.current
-    val showCardQuality by context.dataStore.data
-        .map { it[MainActivity.DETAIL_SHOW_CARD_QUALITY] ?: true }
-        .collectAsState(initial = true)
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showDeckDialog by remember { mutableStateOf(false) }
@@ -221,8 +214,6 @@ fun DetailScreen(
             else -> {
                 WordDetailContent(
                     entry = entry!!,
-                    cardQuality = cardQuality,
-                    showCardQuality = showCardQuality,
                     isPlaying = isPlaying,
                     ttsReady = ttsReady,
                     onPlayAudio = viewModel::playAudio,
@@ -237,8 +228,6 @@ fun DetailScreen(
 @Composable
 private fun WordDetailContent(
     entry: MergedWordEntry,
-    cardQuality: CardQualityScore?,
-    showCardQuality: Boolean,
     isPlaying: Boolean,
     ttsReady: Boolean,
     onPlayAudio: () -> Unit,
@@ -338,11 +327,6 @@ private fun WordDetailContent(
 
         Spacer(Modifier.height(16.dp))
 
-        if (showCardQuality) cardQuality?.let {
-            CardQualitySection(it)
-            Spacer(Modifier.height(12.dp))
-        }
-
         // Pitch Accent
         if (entry.pitchAccent.isNotBlank()) {
             SectionCard(title = "Pitch Accent") {
@@ -382,38 +366,6 @@ private fun WordDetailContent(
         }
 
         Spacer(Modifier.height(32.dp))
-    }
-}
-
-@Composable
-private fun CardQualitySection(score: CardQualityScore) {
-    val (title, accentColor) = when (score.tier) {
-        CardQualityTier.EXCELLENT -> "Świetna" to Color(0xFF2E7D32)
-        CardQualityTier.GOOD -> "Dobra" to Color(0xFF558B2F)
-        CardQualityTier.FAIR -> "Średnia" to Color(0xFFF9A825)
-        CardQualityTier.WEAK -> "Słaba" to Color(0xFFC62828)
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Jakość karty: $title (${score.score}/100)",
-                fontWeight = FontWeight.Bold,
-                color = accentColor
-            )
-            Spacer(Modifier.height(8.dp))
-            score.reasons.take(4).forEach { reason ->
-                Text(
-                    text = "• $reason",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }
 

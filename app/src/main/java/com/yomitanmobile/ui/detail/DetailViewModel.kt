@@ -21,7 +21,6 @@ import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
 import com.yomitanmobile.util.InputSanitizer
-import com.yomitanmobile.util.JlptLevelUtil
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -46,19 +45,6 @@ sealed class DetailEvent {
     data class AnkiDeckSelectionRequired(val decks: List<String>) : DetailEvent()
     data class AlreadyExported(val expression: String, val deckName: String) : DetailEvent()
 }
-
-enum class CardQualityTier {
-    EXCELLENT,
-    GOOD,
-    FAIR,
-    WEAK
-}
-
-data class CardQualityScore(
-    val score: Int,
-    val tier: CardQualityTier,
-    val reasons: List<String>
-)
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
@@ -95,9 +81,6 @@ class DetailViewModel @Inject constructor(
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
 
-    private val _cardQualityScore = MutableStateFlow<CardQualityScore?>(null)
-    val cardQualityScore: StateFlow<CardQualityScore?> = _cardQualityScore.asStateFlow()
-
     init {
         loadEntry()
         audioPlayer.initTts()
@@ -124,7 +107,6 @@ class DetailViewModel @Inject constructor(
             }
             _isLoading.value = false
             checkFavoriteStatus()
-            refreshCardQualityScore()
         }
     }
 
@@ -398,12 +380,6 @@ class DetailViewModel @Inject constructor(
                         Log.e(logTag, "Failed to persist export metadata", exception)
                     }
 
-                    runCatching {
-                        refreshCardQualityScore()
-                    }.onFailure { exception ->
-                        Log.e(logTag, "Failed to refresh quality score after export", exception)
-                    }
-
                     _events.emit(DetailEvent.AnkiExportSuccess(noteId))
                 },
                 onFailure = { error ->
@@ -422,146 +398,6 @@ class DetailViewModel @Inject constructor(
         } finally {
             _isExporting.value = false
         }
-    }
-
-    private suspend fun refreshCardQualityScore() {
-        val merged = _entry.value
-        if (merged == null) {
-            _cardQualityScore.value = null
-            return
-        }
-        _cardQualityScore.value = computeCardQuality(merged)
-    }
-
-    private suspend fun computeCardQuality(entry: MergedWordEntry): CardQualityScore {
-        var score = 0
-        val reasons = mutableListOf<String>()
-        val hasExampleSentence = hasUsableExampleSentence(entry)
-        val hasExampleTranslation = normalizeForQuality(entry.exampleSentenceTranslation).isNotBlank()
-
-        // Frequency quality (more common words are usually better early mining targets)
-        when {
-            entry.frequency in 1..3_000 -> {
-                score += 35
-                reasons += "Bardzo częste słowo"
-            }
-            entry.frequency in 3_001..10_000 -> {
-                score += 28
-                reasons += "Częste słowo"
-            }
-            entry.frequency in 10_001..30_000 -> {
-                score += 18
-                reasons += "Średnia częstotliwość"
-            }
-            entry.frequency > 0 -> {
-                score += 10
-                reasons += "Rzadsze słowo"
-            }
-            else -> reasons += "Brak danych o częstotliwości"
-        }
-
-        if (hasExampleSentence) {
-            score += 20
-            reasons += "Ma przykładowe zdanie"
-        } else {
-            reasons += "Brak przykładowego zdania"
-        }
-
-        if (hasExampleSentence && hasExampleTranslation) {
-            score += 5
-        }
-
-        when {
-            entry.definitions.size <= 2 -> {
-                score += 12
-                reasons += "Kompaktowe znaczenie"
-            }
-            entry.definitions.size <= 5 -> {
-                score += 8
-            }
-            else -> {
-                score += 2
-                reasons += "Wiele znaczeń"
-            }
-        }
-
-        if (entry.pitchAccent.isNotBlank()) {
-            score += 8
-            reasons += "Zawiera pitch accent"
-        }
-
-        if (entry.partsOfSpeech.isNotEmpty()) {
-            score += 5
-        }
-
-        when (entry.primaryExpression.length) {
-            in 1..6 -> score += 10
-            in 7..10 -> score += 5
-            else -> score -= 3
-        }
-
-        val jlpt = JlptLevelUtil.getLevel(entry.primaryExpression, entry.frequency)
-        if (jlpt != null) {
-            score += when (jlpt) {
-                JlptLevelUtil.JlptLevel.N5 -> 12
-                JlptLevelUtil.JlptLevel.N4 -> 12
-                JlptLevelUtil.JlptLevel.N3 -> 10
-                JlptLevelUtil.JlptLevel.N2 -> 8
-                JlptLevelUtil.JlptLevel.N1 -> 6
-            }
-            reasons += "Poziom ${jlpt.label}"
-        }
-
-        val normalizedReading = entry.reading.ifBlank { entry.primaryExpression }
-        val exportsCount = exportedWordDao.countExportsForWord(entry.primaryExpression, normalizedReading)
-        if (exportsCount > 0) {
-            score -= minOf(20, exportsCount * 6)
-            reasons += "Już eksportowane ${exportsCount}×"
-        }
-
-        score = score.coerceIn(0, 100)
-        val tier = when {
-            score >= 80 -> CardQualityTier.EXCELLENT
-            score >= 60 -> CardQualityTier.GOOD
-            score >= 40 -> CardQualityTier.FAIR
-            else -> CardQualityTier.WEAK
-        }
-
-        return CardQualityScore(
-            score = score,
-            tier = tier,
-            reasons = reasons.distinct().take(6)
-        )
-    }
-
-    private fun hasUsableExampleSentence(entry: MergedWordEntry): Boolean {
-        val directSentence = normalizeForQuality(entry.exampleSentence)
-        if (directSentence.isNotBlank()) {
-            return true
-        }
-
-        return entry.definitions.any { definition ->
-            val normalizedDefinition = normalizeForQuality(definition)
-            if (normalizedDefinition.isBlank()) {
-                return@any false
-            }
-
-            val hasJapaneseChars = normalizedDefinition.any { char ->
-                char in '\u3040'..'\u30ff' || MergedWordEntry.isKanji(char)
-            }
-            val looksLikeSentence = normalizedDefinition.any { char ->
-                char == '。' || char == '！' || char == '？' || char == '!' || char == '?'
-            }
-
-            hasJapaneseChars && looksLikeSentence
-        }
-    }
-
-    private fun normalizeForQuality(value: String): String {
-        return value
-            .replace(Regex("<[^>]*>"), " ")
-            .replace("&nbsp;", " ")
-            .trim()
     }
 
     override fun onCleared() {
