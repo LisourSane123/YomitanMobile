@@ -7,6 +7,12 @@ import androidx.room.Query
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import kotlinx.coroutines.flow.Flow
 
+data class FrequencyUpdate(
+    val expression: String,
+    val reading: String?,
+    val frequency: Int
+)
+
 @Dao
 interface DictionaryDao {
 
@@ -103,6 +109,9 @@ interface DictionaryDao {
     @Query("UPDATE dictionary_entries SET frequency = :frequency WHERE expression = :expression")
     suspend fun updateFrequencyForce(expression: String, frequency: Int)
 
+    @Query("UPDATE dictionary_entries SET frequency = :frequency WHERE expression = :expression AND reading = :reading")
+    suspend fun updateFrequencyWithReading(expression: String, reading: String, frequency: Int)
+
     @Query("UPDATE dictionary_entries SET pitch_accent = :pitchAccent WHERE expression = :expression AND (pitch_accent = '' OR pitch_accent IS NULL)")
     suspend fun updatePitchAccent(expression: String, pitchAccent: String)
 
@@ -110,9 +119,14 @@ interface DictionaryDao {
     suspend fun updatePitchAccentForce(expression: String, pitchAccent: String)
 
     @androidx.room.Transaction
-    suspend fun updateFrequencyBatch(batch: Map<String, Int>) {
-        for ((expression, frequency) in batch) {
-            updateFrequencyForce(expression, frequency)
+    suspend fun updateFrequencyBatch(batch: List<FrequencyUpdate>) {
+        for (update in batch) {
+            val reading = update.reading?.trim().orEmpty()
+            if (reading.isNotBlank()) {
+                updateFrequencyWithReading(update.expression, reading, update.frequency)
+            } else {
+                updateFrequencyForce(update.expression, update.frequency)
+            }
         }
     }
 

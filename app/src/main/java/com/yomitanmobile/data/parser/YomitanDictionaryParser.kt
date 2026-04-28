@@ -1,5 +1,6 @@
 package com.yomitanmobile.data.parser
 
+import com.yomitanmobile.data.local.dao.FrequencyUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.KanjiEntry
 
@@ -32,6 +33,7 @@ data class ParseResult(
     val metaFrequencyCount: Int = 0,
     val metaPitchCount: Int = 0
 )
+
 
 /**
  * Parses Yomitan/Yomichan dictionary ZIP files in a streaming fashion.
@@ -68,7 +70,7 @@ class YomitanDictionaryParser @Inject constructor() {
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit = {},
         onBatch: suspend (List<DictionaryEntry>, String) -> Unit,
-        onMetaBatch: suspend (Map<String, Int>, Map<String, String>) -> Unit = { _, _ -> },
+        onMetaBatch: suspend (List<FrequencyUpdate>, Map<String, String>) -> Unit = { _, _ -> },
         onKanjiBatch: suspend (List<KanjiEntry>, String) -> Unit = { _, _ -> }
     ): ParseResult = withContext(Dispatchers.IO) {
 
@@ -211,7 +213,7 @@ class YomitanDictionaryParser @Inject constructor() {
                                 val totalMetaEntries = metaArray.size
 
                                 val META_CHUNK_SIZE = 2000
-                                var freqChunk = mutableMapOf<String, Int>()
+                                var freqChunk = mutableListOf<FrequencyUpdate>()
                                 var pitchChunk = mutableMapOf<String, String>()
                                 var processedInFile = 0
 
@@ -225,7 +227,10 @@ class YomitanDictionaryParser @Inject constructor() {
                                         when (type) {
                                             "freq" -> {
                                                 val freq = parseFrequencyValue(meta[2])
-                                                if (freq > 0) freqChunk[expr] = freq
+                                                if (freq > 0) {
+                                                    val reading = parseFrequencyReading(meta[2])
+                                                    freqChunk.add(FrequencyUpdate(expr, reading, freq))
+                                                }
                                             }
                                             "pitch" -> {
                                                 val pitchStr = parsePitchValue(meta[2])
@@ -243,7 +248,7 @@ class YomitanDictionaryParser @Inject constructor() {
                                         totalFreqUpdates += freqChunk.size
                                         totalPitchUpdates += pitchChunk.size
                                         onMetaBatch(freqChunk, pitchChunk)
-                                        freqChunk = mutableMapOf()
+                                        freqChunk = mutableListOf()
                                         pitchChunk = mutableMapOf()
 
                                         // Report progress during meta processing
@@ -341,6 +346,16 @@ class YomitanDictionaryParser @Inject constructor() {
                 else -> 0
             }
         } catch (e: Exception) { 0 }
+    }
+
+    private fun parseFrequencyReading(element: JsonElement): String? {
+        return try {
+            if (element !is JsonObject) return null
+            val reading = element["reading"]?.jsonPrimitive?.content?.trim()
+            reading?.ifBlank { null }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun parsePitchValue(element: JsonElement): String {

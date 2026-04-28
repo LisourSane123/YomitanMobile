@@ -104,15 +104,16 @@ class DictionaryRepositoryImpl @Inject constructor(
                     }
                     totalInserted += batch.size
                 },
-                onMetaBatch = { freqMap, pitchMap ->
-                    if (freqMap.isNotEmpty()) {
-                        dictionaryDao.updateFrequencyBatch(freqMap)
-                        totalFreqUpdates += freqMap.size
+                onMetaBatch = { freqUpdates, pitchMap ->
+                    if (freqUpdates.isNotEmpty()) {
+                        dictionaryDao.updateFrequencyBatch(freqUpdates)
+                        totalFreqUpdates += freqUpdates.size
                     }
                     if (pitchMap.isNotEmpty()) {
                         dictionaryDao.updatePitchAccentBatch(pitchMap)
                         totalPitchUpdates += pitchMap.size
-                    }                },
+                    }
+                },
                 onKanjiBatch = { batch, _ ->
                     val batchSize = 500
                     batch.chunked(batchSize).forEach { chunk ->
