@@ -160,16 +160,16 @@ fun SearchScreen(
                 placeholder = {
                     Text(
                         when (searchMode) {
-                            SearchMode.JAPANESE -> "Wpisz słowo po japońsku..."
-                            SearchMode.ENGLISH -> "Type an English word..."
-                            SearchMode.ROMAJI -> "taberu, nomu, miru..."
+                            SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku...", "Type a Japanese word...")
+                            SearchMode.ENGLISH -> tr("Type an English word...", "Type an English word...")
+                            SearchMode.ROMAJI -> tr("taberu, nomu, miru...", "taberu, nomu, miru...")
                         }
                     )
                 },
                 trailingIcon = {
                     AnimatedVisibility(visible = query.isNotBlank(), enter = fadeIn(), exit = fadeOut()) {
                         IconButton(onClick = viewModel::clearQuery) {
-                            Icon(Icons.Default.Clear, contentDescription = "Wyczyść")
+                            Icon(Icons.Default.Clear, contentDescription = tr("Wyczyść", "Clear"))
                         }
                     }
                 }
@@ -177,7 +177,7 @@ fun SearchScreen(
 
             // Daily goal progress bar
             if (dailyGoal.isEnabled) {
-                DailyGoalBanner(dailyGoal)
+                DailyGoalBanner(dailyGoal, isEnglish)
             }
 
             if (searchMode == SearchMode.JAPANESE && query.isNotBlank() && deconjugationCandidates.isNotEmpty()) {
@@ -193,10 +193,11 @@ fun SearchScreen(
                         SearchHistorySection(
                             history = searchHistory,
                             onHistoryClick = { query -> viewModel.onQueryChange(query) },
-                            onClearHistory = viewModel::clearHistory
+                            onClearHistory = viewModel::clearHistory,
+                            isEnglish = isEnglish
                         )
                     } else {
-                        EmptySearchState(searchMode)
+                        EmptySearchState(searchMode, isEnglish)
                     }
                 }
                 results.isEmpty() && isSearching -> {
@@ -204,7 +205,7 @@ fun SearchScreen(
                         CircularProgressIndicator()
                     }
                 }
-                results.isEmpty() -> NoResultsState(query, searchMode)
+                results.isEmpty() -> NoResultsState(query, searchMode, isEnglish)
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -284,7 +285,8 @@ private fun DeconjugationHintsCard(
 }
 
 @Composable
-private fun DailyGoalBanner(dailyGoal: DailyGoalState) {
+private fun DailyGoalBanner(dailyGoal: DailyGoalState, isEnglish: Boolean) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val containerColor = if (dailyGoal.isCompleted) {
         MaterialTheme.colorScheme.tertiaryContainer
     } else {
@@ -316,13 +318,13 @@ private fun DailyGoalBanner(dailyGoal: DailyGoalState) {
                 modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = if (dailyGoal.isCompleted) "Cel dzienny osiągnięty!" else "Cel dzienny",
+                        text = if (dailyGoal.isCompleted) tr("Cel dzienny osiągnięty!", "Daily goal achieved!") else tr("Cel dzienny", "Daily goal"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = contentColor
@@ -352,8 +354,10 @@ private fun DailyGoalBanner(dailyGoal: DailyGoalState) {
 private fun SearchHistorySection(
     history: List<com.yomitanmobile.data.local.entity.SearchHistory>,
     onHistoryClick: (String) -> Unit,
-    onClearHistory: () -> Unit
+    onClearHistory: () -> Unit,
+    isEnglish: Boolean
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -375,7 +379,7 @@ private fun SearchHistorySection(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Historia wyszukiwań",
+                    tr("Historia wyszukiwań", "Search history"),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -383,11 +387,11 @@ private fun SearchHistorySection(
             TextButton(onClick = onClearHistory) {
                 Icon(
                     Icons.Default.DeleteSweep,
-                    contentDescription = "Wyczyść historię",
+                    contentDescription = tr("Wyczyść historię", "Clear search history"),
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.width(4.dp))
-                Text("Wyczyść", fontSize = 12.sp)
+                Text(tr("Wyczyść", "Clear"), fontSize = 12.sp)
             }
         }
 
@@ -511,7 +515,8 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EmptySearchState(searchMode: SearchMode) {
+private fun EmptySearchState(searchMode: SearchMode, isEnglish: Boolean) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
@@ -522,9 +527,9 @@ private fun EmptySearchState(searchMode: SearchMode) {
             Spacer(Modifier.height(16.dp))
             Text(
                 when (searchMode) {
-                    SearchMode.JAPANESE -> "Wpisz słowo po japońsku"
-                    SearchMode.ENGLISH -> "Type an English word"
-                    SearchMode.ROMAJI -> "Wpisz słowo w romaji"
+                    SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku", "Type a Japanese word")
+                    SearchMode.ENGLISH -> tr("Type an English word", "Type an English word")
+                    SearchMode.ROMAJI -> tr("Wpisz słowo w romaji", "Type a word in romaji")
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
@@ -532,9 +537,9 @@ private fun EmptySearchState(searchMode: SearchMode) {
             Spacer(Modifier.height(8.dp))
             Text(
                 when (searchMode) {
-                    SearchMode.JAPANESE -> "漢字、ひらがな、カタカナ"
-                    SearchMode.ENGLISH -> "e.g. eat → 食べる, drink → 飲む"
-                    SearchMode.ROMAJI -> "np. taberu → 食べる, nomu → 飲む"
+                    SearchMode.JAPANESE -> tr("漢字、ひらがな、カタカナ", "Kanji, hiragana, katakana")
+                    SearchMode.ENGLISH -> tr("e.g. eat → 食べる, drink → 飲む", "e.g. eat → 食べる, drink → 飲む")
+                    SearchMode.ROMAJI -> tr("np. taberu → 食べる, nomu → 飲む", "e.g. taberu → 食べる, nomu → 飲む")
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -544,18 +549,19 @@ private fun EmptySearchState(searchMode: SearchMode) {
 }
 
 @Composable
-private fun NoResultsState(query: String, searchMode: SearchMode) {
+private fun NoResultsState(query: String, searchMode: SearchMode, isEnglish: Boolean) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Brak wyników dla:", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Brak wyników dla:", "No results for:"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text("「$query」", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(16.dp))
             Text(
                 when (searchMode) {
-                    SearchMode.JAPANESE -> "Sprawdź pisownię lub zaimportuj słownik"
-                    SearchMode.ENGLISH -> "Spróbuj innego słowa angielskiego"
-                    SearchMode.ROMAJI -> "Sprawdź pisownię romaji"
+                    SearchMode.JAPANESE -> tr("Sprawdź pisownię lub zaimportuj słownik", "Check the spelling or import a dictionary")
+                    SearchMode.ENGLISH -> tr("Spróbuj innego słowa angielskiego", "Try a different English word")
+                    SearchMode.ROMAJI -> tr("Sprawdź pisownię romaji", "Check the romaji spelling")
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)

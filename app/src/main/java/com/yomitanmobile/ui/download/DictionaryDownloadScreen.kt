@@ -53,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +62,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.data.download.DictionaryCategory
 import com.yomitanmobile.data.download.DictionaryDownloadInfo
 import com.yomitanmobile.data.download.DownloadPhase
+import com.yomitanmobile.data.download.localizedDescription
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -72,6 +74,8 @@ fun DictionaryDownloadScreen(
     val isDownloading by viewModel.isDownloading.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val installedDictionaries by viewModel.installedDictionaries.collectAsState()
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -79,12 +83,12 @@ fun DictionaryDownloadScreen(
             when (event) {
                 is DownloadEvent.Success -> {
                     snackbarHostState.showSnackbar(
-                        "✓ ${event.name}: ${event.entries} wpisów zaimportowano"
+                        tr("✓ ${event.name}: ${event.entries} wpisów zaimportowano", "✓ ${event.name}: ${event.entries} entries imported")
                     )
                 }
                 is DownloadEvent.Error -> {
                     snackbarHostState.showSnackbar(
-                        "✗ ${event.name}: ${event.message}"
+                        tr("✗ ${event.name}: ${event.message}", "✗ ${event.name}: ${event.message}")
                     )
                 }
             }
@@ -94,10 +98,10 @@ fun DictionaryDownloadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Pobierz słowniki") },
+                title = { Text(tr("Pobierz słowniki", "Download dictionaries")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Wstecz")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wstecz", "Back"))
                     }
                 }
             )
@@ -116,7 +120,7 @@ fun DictionaryDownloadScreen(
                 exit = shrinkVertically() + fadeOut()
             ) {
                 downloadProgress?.let { progress ->
-                    DownloadProgressBanner(progress)
+                    DownloadProgressBanner(progress, isEnglish)
                 }
             }
 
@@ -130,13 +134,13 @@ fun DictionaryDownloadScreen(
                 FilterChip(
                     selected = selectedCategory == null,
                     onClick = { viewModel.selectCategory(null) },
-                    label = { Text("Wszystkie") }
+                    label = { Text(tr("Wszystkie", "All")) }
                 )
                 DictionaryCategory.entries.forEach { category ->
                     FilterChip(
                         selected = selectedCategory == category,
                         onClick = { viewModel.selectCategory(category) },
-                        label = { Text(categoryLabel(category)) },
+                        label = { Text(categoryLabel(category, isEnglish)) },
                         leadingIcon = {
                             Icon(
                                 categoryIcon(category),
@@ -169,13 +173,15 @@ fun DictionaryDownloadScreen(
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(
-                            "Pobieranie słowników",
+                            tr("Pobieranie słowników", "Dictionary downloads"),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            "Słowniki zostaną pobrane z internetu i zaimportowane offline. " +
-                                "Po pobraniu nie potrzebujesz internetu do wyszukiwania.",
+                            tr(
+                                "Słowniki zostaną pobrane z internetu i zaimportowane offline. Po pobraniu nie potrzebujesz internetu do wyszukiwania.",
+                                "The dictionaries will be downloaded from the internet and imported offline. After that, you do not need the internet to search."
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
@@ -195,7 +201,7 @@ fun DictionaryDownloadScreen(
             ) {
                 Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Pobierz wszystkie rekomendowane")
+                Text(tr("Pobierz wszystkie rekomendowane", "Download all recommended"))
             }
 
             Spacer(Modifier.height(8.dp))
@@ -227,7 +233,8 @@ fun DictionaryDownloadScreen(
                         isDownloading = isCurrentlyDownloading,
                         onDownload = { viewModel.downloadDictionary(dictInfo) },
                         enabled = !isDownloading,
-                        allowReimport = isMetaDict
+                        allowReimport = isMetaDict,
+                        isEnglish = isEnglish
                     )
                 }
 
@@ -241,16 +248,23 @@ fun DictionaryDownloadScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                "💡 Wskazówki",
+                                tr("💡 Wskazówki", "💡 Tips"),
                                 style = MaterialTheme.typography.titleSmall
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "• JMdict (English) – podstawowy słownik, zainstaluj go jako pierwszy\n" +
-                                    "• Frequency – pozwala sortować słowa wg częstości użycia\n" +
-                                    "• Pitch Accent – pokazuje akcent tonalny słów\n" +
-                                    "• Wymowa TTS – automatycznie dostępna przez Google TTS (nie wymaga pobierania)\n" +
-                                    "• Możesz też importować własne słowniki (ZIP) w Ustawieniach",
+                                tr(
+                                    "• JMdict (English) – podstawowy słownik, zainstaluj go jako pierwszy\n" +
+                                        "• Frequency – pozwala sortować słowa wg częstości użycia\n" +
+                                        "• Pitch Accent – pokazuje akcent tonalny słów\n" +
+                                        "• Wymowa TTS – automatycznie dostępna przez Google TTS (nie wymaga pobierania)\n" +
+                                        "• Możesz też importować własne słowniki (ZIP) w Ustawieniach",
+                                    "• JMdict (English) - the main dictionary, install it first\n" +
+                                        "• Frequency - lets you sort words by usage frequency\n" +
+                                        "• Pitch Accent - shows word pitch accent patterns\n" +
+                                        "• TTS pronunciation - automatically available via Google TTS (no download needed)\n" +
+                                        "• You can also import your own dictionaries (ZIP) in Settings"
+                                ),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -262,7 +276,8 @@ fun DictionaryDownloadScreen(
 }
 
 @Composable
-private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.DownloadProgress) {
+private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.DownloadProgress, isEnglish: Boolean) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -285,7 +300,7 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            "Pobieranie: ${progress.dictionaryName}",
+                            tr("Pobieranie: ${progress.dictionaryName}", "Downloading: ${progress.dictionaryName}"),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -295,13 +310,13 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                "Importowanie: ${progress.dictionaryName}",
+                                tr("Importowanie: ${progress.dictionaryName}", "Importing: ${progress.dictionaryName}"),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
                             if (progress.totalBytes > 0) {
                                 Text(
-                                    "${progress.bytesDownloaded}/${progress.totalBytes} wpisów",
+                                    tr("${progress.bytesDownloaded}/${progress.totalBytes} wpisów", "${progress.bytesDownloaded}/${progress.totalBytes} entries"),
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -311,7 +326,7 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                         Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            "Gotowe: ${progress.dictionaryName}",
+                            tr("Gotowe: ${progress.dictionaryName}", "Done: ${progress.dictionaryName}"),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -320,7 +335,7 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                         Icon(Icons.Default.Error, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            "Błąd: ${progress.dictionaryName}",
+                            tr("Błąd: ${progress.dictionaryName}", "Error: ${progress.dictionaryName}"),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -385,8 +400,10 @@ private fun DictionaryDownloadCard(
     isDownloading: Boolean,
     onDownload: () -> Unit,
     enabled: Boolean,
-    allowReimport: Boolean = false
+    allowReimport: Boolean = false,
+    isEnglish: Boolean
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -428,7 +445,7 @@ private fun DictionaryDownloadCard(
                         Spacer(Modifier.width(8.dp))
                         Icon(
                             Icons.Default.CheckCircle,
-                            contentDescription = "Zainstalowany",
+                            contentDescription = tr("Zainstalowany", "Installed"),
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.tertiary
                         )
@@ -438,7 +455,7 @@ private fun DictionaryDownloadCard(
                 Spacer(Modifier.height(4.dp))
 
                 Text(
-                    info.description,
+                    info.localizedDescription(isEnglish),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
@@ -453,7 +470,7 @@ private fun DictionaryDownloadCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "${categoryLabel(info.category)} • ${info.fileSize}",
+                        "${categoryLabel(info.category, isEnglish)} • ${info.fileSize}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -473,9 +490,9 @@ private fun DictionaryDownloadCard(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 when {
-                                    isInstalled && allowReimport -> "Zaktualizuj"
-                                    isInstalled -> "Zainstalowany"
-                                    else -> "Pobierz"
+                                    isInstalled && allowReimport -> tr("Zaktualizuj", "Update")
+                                    isInstalled -> tr("Zainstalowany", "Installed")
+                                    else -> tr("Pobierz", "Download")
                                 }
                             )
                         }
@@ -486,11 +503,11 @@ private fun DictionaryDownloadCard(
     }
 }
 
-private fun categoryLabel(category: DictionaryCategory): String = when (category) {
-    DictionaryCategory.DICTIONARY -> "Słownik"
-    DictionaryCategory.FREQUENCY -> "Częstotliwość"
-    DictionaryCategory.PITCH_ACCENT -> "Pitch Accent"
-    DictionaryCategory.KANJI -> "Kanji"
+private fun categoryLabel(category: DictionaryCategory, isEnglish: Boolean): String = when (category) {
+    DictionaryCategory.DICTIONARY -> if (isEnglish) "Dictionary" else "Słownik"
+    DictionaryCategory.FREQUENCY -> if (isEnglish) "Frequency" else "Częstotliwość"
+    DictionaryCategory.PITCH_ACCENT -> if (isEnglish) "Pitch Accent" else "Akcent tonalny"
+    DictionaryCategory.KANJI -> if (isEnglish) "Kanji" else "Kanji"
 }
 
 private fun categoryIcon(category: DictionaryCategory): ImageVector = when (category) {

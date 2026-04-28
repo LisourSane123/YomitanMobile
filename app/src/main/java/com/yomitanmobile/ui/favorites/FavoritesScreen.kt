@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,23 +58,25 @@ fun FavoritesScreen(
     viewModel: FavoritesViewModel = hiltViewModel()
 ) {
     val favorites by viewModel.favorites.collectAsState()
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     var showClearAllDialog by remember { mutableStateOf(false) }
 
     if (showClearAllDialog) {
         AlertDialog(
             onDismissRequest = { showClearAllDialog = false },
-            title = { Text("Wyczyść ulubione") },
-            text = { Text("Czy na pewno chcesz usunąć wszystkie ulubione słowa?") },
+            title = { Text(tr("Wyczyść ulubione", "Clear favorites")) },
+            text = { Text(tr("Czy na pewno chcesz usunąć wszystkie ulubione słowa?", "Are you sure you want to remove all favorite words?")) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAll()
                     showClearAllDialog = false
                 }) {
-                    Text("Usuń wszystko", color = MaterialTheme.colorScheme.error)
+                    Text(tr("Usuń wszystko", "Delete all"), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearAllDialog = false }) { Text("Anuluj") }
+                TextButton(onClick = { showClearAllDialog = false }) { Text(tr("Anuluj", "Cancel")) }
             }
         )
     }
@@ -81,16 +84,16 @@ fun FavoritesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ulubione (${favorites.size})") },
+                title = { Text(tr("Ulubione (${favorites.size})", "Favorites (${favorites.size})")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Wróć")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 },
                 actions = {
                     if (favorites.isNotEmpty()) {
                         IconButton(onClick = { showClearAllDialog = true }) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = "Wyczyść wszystko")
+                            Icon(Icons.Default.DeleteSweep, contentDescription = tr("Wyczyść wszystko", "Clear all"))
                         }
                     }
                 },
@@ -115,13 +118,16 @@ fun FavoritesScreen(
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        "Brak ulubionych słów",
+                        tr("Brak ulubionych słów", "No favorite words"),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Dodaj słowo do ulubionych klikając ❤ na stronie szczegółów",
+                        tr(
+                            "Dodaj słowo do ulubionych klikając ❤ na stronie szczegółów",
+                            "Add a word to favorites by tapping ❤ on the detail page"
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
@@ -137,7 +143,8 @@ fun FavoritesScreen(
                     FavoriteWordCard(
                         favorite = favorite,
                         onClick = { onWordClick(favorite.entryId) },
-                        onDelete = { viewModel.deleteFavorite(favorite) }
+                        onDelete = { viewModel.deleteFavorite(favorite) },
+                        isEnglish = isEnglish
                     )
                 }
             }
@@ -149,8 +156,10 @@ fun FavoritesScreen(
 private fun FavoriteWordCard(
     favorite: FavoriteWord,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isEnglish: Boolean
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -198,7 +207,7 @@ private fun FavoriteWordCard(
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Usuń z ulubionych",
+                    contentDescription = tr("Usuń z ulubionych", "Remove from favorites"),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             }

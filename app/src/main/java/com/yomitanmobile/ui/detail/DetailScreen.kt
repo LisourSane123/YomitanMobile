@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -76,6 +77,8 @@ fun DetailScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val ttsReady by viewModel.ttsReady.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -91,7 +94,7 @@ fun DetailScreen(
         if (isGranted) {
             viewModel.exportToAnki()
         } else {
-            Toast.makeText(context, "Uprawnienia do AnkiDroid zostały odrzucone.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, tr("Uprawnienia do AnkiDroid zostały odrzucone.", "AnkiDroid permissions were denied."), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -111,21 +114,24 @@ fun DetailScreen(
     if (showDuplicateDialog) {
         AlertDialog(
             onDismissRequest = { showDuplicateDialog = false },
-            title = { Text("Fiszka już wyeksportowana") },
+            title = { Text(tr("Fiszka już wyeksportowana", "Card already exported")) },
             text = {
-                Text("Słowo \"${duplicateInfo.first}\" zostało już wyeksportowane do talii \"${duplicateInfo.second}\". Czy chcesz wyeksportować ponownie?")
+                Text(tr(
+                    "Słowo \"${duplicateInfo.first}\" zostało już wyeksportowane do talii \"${duplicateInfo.second}\". Czy chcesz wyeksportować ponownie?",
+                    "The word \"${duplicateInfo.first}\" has already been exported to the deck \"${duplicateInfo.second}\". Do you want to export it again?"
+                ))
             },
             confirmButton = {
                 TextButton(onClick = {
                     showDuplicateDialog = false
                     viewModel.forceExport()
                 }) {
-                    Text("Eksportuj ponownie")
+                    Text(tr("Eksportuj ponownie", "Export again"))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDuplicateDialog = false }) {
-                    Text("Anuluj")
+                    Text(tr("Anuluj", "Cancel"))
                 }
             }
         )
@@ -135,13 +141,13 @@ fun DetailScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is DetailEvent.AnkiExportSuccess ->
-                    snackbarHostState.showSnackbar("Fiszka dodana do Anki!")
+                    snackbarHostState.showSnackbar(tr("Fiszka dodana do Anki!", "Card added to Anki!"))
                 is DetailEvent.AnkiExportError ->
-                    snackbarHostState.showSnackbar("Błąd: ${event.message}")
+                    snackbarHostState.showSnackbar(tr("Błąd: ${event.message}", "Error: ${event.message}"))
                 is DetailEvent.AnkiPermissionRequired ->
                     ankiPermissionLauncher.launch("com.ichi2.anki.permission.READ_WRITE_DATABASE")
                 is DetailEvent.AnkiNotInstalled ->
-                    Toast.makeText(context, "AnkiDroid nie jest zainstalowany!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("AnkiDroid nie jest zainstalowany!", "AnkiDroid is not installed!"), Toast.LENGTH_LONG).show()
                 is DetailEvent.AnkiDeckSelectionRequired -> {
                     availableDecks = event.decks
                     showDeckDialog = true
@@ -157,10 +163,10 @@ fun DetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(entry?.displayText() ?: "Szczegóły") },
+                title = { Text(entry?.displayText() ?: tr("Szczegóły", "Details")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Wróć")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 },
                 actions = {
@@ -168,7 +174,7 @@ fun DetailScreen(
                         IconButton(onClick = { viewModel.toggleFavorite() }) {
                             Icon(
                                 if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = if (isFavorite) "Usuń z ulubionych" else "Dodaj do ulubionych",
+                                contentDescription = if (isFavorite) tr("Usuń z ulubionych", "Remove from favorites") else tr("Dodaj do ulubionych", "Add to favorites"),
                                 tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -185,7 +191,7 @@ fun DetailScreen(
                             } else {
                                 Icon(
                                     Icons.Default.Add,
-                                    contentDescription = "Eksportuj do Anki",
+                                    contentDescription = tr("Eksportuj do Anki", "Export to Anki"),
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
@@ -208,7 +214,7 @@ fun DetailScreen(
             }
             entry == null -> {
                 Box(Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
-                    Text("Nie znaleziono wpisu")
+                    Text(tr("Nie znaleziono wpisu", "Entry not found"))
                 }
             }
             else -> {
@@ -218,6 +224,7 @@ fun DetailScreen(
                     ttsReady = ttsReady,
                     onPlayAudio = viewModel::playAudio,
                     onStopAudio = viewModel::stopAudio,
+                    isEnglish = isEnglish,
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -232,8 +239,10 @@ private fun WordDetailContent(
     ttsReady: Boolean,
     onPlayAudio: () -> Unit,
     onStopAudio: () -> Unit,
+    isEnglish: Boolean,
     modifier: Modifier = Modifier
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -282,7 +291,10 @@ private fun WordDetailContent(
                 if (entry.alternativeExpressions.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Alternatywne formy: ${entry.alternativeExpressions.joinToString(", ")}",
+                        text = tr(
+                            "Alternatywne formy: ${entry.alternativeExpressions.joinToString(", ")}",
+                            "Alternative forms: ${entry.alternativeExpressions.joinToString(", ")}"
+                        ),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         fontStyle = FontStyle.Italic
@@ -316,11 +328,11 @@ private fun WordDetailContent(
                 ) {
                     Icon(
                         if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Zatrzymaj" else "Odtwórz wymowę",
+                        contentDescription = if (isPlaying) tr("Zatrzymaj", "Stop") else tr("Odtwórz wymowę", "Play pronunciation"),
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(if (isPlaying) "Zatrzymaj" else "Odtwórz wymowę")
+                    Text(if (isPlaying) tr("Zatrzymaj", "Stop") else tr("Odtwórz wymowę", "Play pronunciation"))
                 }
             }
         }
@@ -339,7 +351,7 @@ private fun WordDetailContent(
         }
 
         // Definitions
-        SectionCard(title = "Znaczenie") {
+        SectionCard(title = tr("Znaczenie", "Meaning")) {
             entry.definitions.forEachIndexed { index, definition ->
                 if (index > 0) Divider(modifier = Modifier.padding(vertical = 8.dp))
                 Row {
@@ -353,7 +365,7 @@ private fun WordDetailContent(
 
         // Parts of speech
         if (entry.partsOfSpeech.isNotEmpty()) {
-            SectionCard(title = "Część mowy") {
+            SectionCard(title = tr("Część mowy", "Part of speech")) {
                 Text(entry.partsOfSpeech.joinToString(", "), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(12.dp))
@@ -361,7 +373,7 @@ private fun WordDetailContent(
 
         // Dictionary source
         if (entry.dictionaryName.isNotBlank()) {
-            Text("Źródło: ${entry.dictionaryName}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 4.dp))
+            Text(tr("Źródło: ${entry.dictionaryName}", "Source: ${entry.dictionaryName}"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 4.dp))
             Spacer(Modifier.height(16.dp))
         }
 
@@ -541,15 +553,17 @@ private fun DeckSelectionDialog(
     onDismiss: () -> Unit
 ) {
     var newDeckName by remember { mutableStateOf("") }
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Wybierz talię Anki") },
+        title = { Text(tr("Wybierz talię Anki", "Choose Anki deck")) },
         text = {
             Column {
                 if (existingDecks.isNotEmpty()) {
                     Text(
-                        "Istniejące talie:",
+                        tr("Istniejące talie:", "Existing decks:"),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -569,7 +583,7 @@ private fun DeckSelectionDialog(
                     Spacer(Modifier.height(12.dp))
                 }
                 Text(
-                    "Lub utwórz nową talię:",
+                    tr("Lub utwórz nową talię:", "Or create a new deck:"),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -577,8 +591,8 @@ private fun DeckSelectionDialog(
                 OutlinedTextField(
                     value = newDeckName,
                     onValueChange = { newDeckName = it },
-                    label = { Text("Nazwa talii") },
-                    placeholder = { Text("np. Mining Deck") },
+                    label = { Text(tr("Nazwa talii", "Deck name")) },
+                    placeholder = { Text(tr("np. Mining Deck", "e.g. Mining Deck")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -589,11 +603,11 @@ private fun DeckSelectionDialog(
                 onClick = { onDeckSelected(newDeckName.ifBlank { "Mining Deck" }) },
                 enabled = true
             ) {
-                Text("Utwórz")
+                Text(tr("Utwórz", "Create"))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Anuluj") }
+            TextButton(onClick = onDismiss) { Text(tr("Anuluj", "Cancel")) }
         }
     )
 }

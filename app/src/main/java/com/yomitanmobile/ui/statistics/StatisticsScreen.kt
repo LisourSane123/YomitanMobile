@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -70,6 +71,7 @@ fun StatisticsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val weeklyWordsForCopy = remember(state.weeklyLearnedWords, isEnglish) {
@@ -89,10 +91,10 @@ fun StatisticsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Statystyki") },
+                title = { Text(tr("Statystyki", "Statistics")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Wróć")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -132,7 +134,7 @@ fun StatisticsScreen(
 
                 item {
                     Text(
-                        "Przegląd",
+                        tr("Przegląd", "Overview"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -169,7 +171,7 @@ fun StatisticsScreen(
                 if (state.dailyCounts.any { it.count > 0 }) {
                     item {
                         Text(
-                            "Fiszki dziennie",
+                            tr("Fiszki dziennie", "Flashcards per day"),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
@@ -186,7 +188,7 @@ fun StatisticsScreen(
 
                 item {
                     Text(
-                        "Słówka z ostatnich 7 dni",
+                        tr("Słówka z ostatnich 7 dni", "Words from the last 7 days"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
@@ -199,10 +201,10 @@ fun StatisticsScreen(
                         isEnglish = isEnglish,
                         onCopyClick = {
                             if (weeklyWordsForCopy.isBlank()) {
-                                Toast.makeText(context, "Brak słówek do skopiowania", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, tr("Brak słówek do skopiowania", "No words to copy"), Toast.LENGTH_SHORT).show()
                             } else {
                                 clipboardManager.setText(AnnotatedString(weeklyWordsForCopy))
-                                Toast.makeText(context, "Skopiowano listę słówek", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, tr("Skopiowano listę słówek", "Copied the words list"), Toast.LENGTH_SHORT).show()
                             }
                         }
                     )
@@ -556,6 +558,7 @@ private fun WeeklyLearnedWordsCard(
     isEnglish: Boolean,
     onCopyClick: () -> Unit
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -573,24 +576,24 @@ private fun WeeklyLearnedWordsCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Nauczone słowa: ${words.size}",
+                            tr("Nauczone słowa: ${words.size}", "Learned words: ${words.size}"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "Lista do szybkiego wysłania np. korepetytorowi",
+                            tr("Lista do szybkiego wysłania np. korepetytorowi", "A quick list to send, e.g. to a tutor"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onCopyClick, enabled = words.isNotEmpty()) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "Kopiuj listę słów")
+                        Icon(Icons.Default.ContentCopy, contentDescription = tr("Kopiuj listę słów", "Copy word list"))
                 }
             }
 
             if (words.isEmpty()) {
                 Text(
-                    "Brak wyeksportowanych słów w ostatnim tygodniu.",
+                    tr("Brak wyeksportowanych słów w ostatnim tygodniu.", "No exported words in the last week."),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -610,7 +613,7 @@ private fun WeeklyLearnedWordsCard(
                 }
                 if (words.size > previewLimit) {
                     Text(
-                        text = "...oraz ${words.size - previewLimit} kolejnych",
+                        text = tr("...oraz ${words.size - previewLimit} kolejnych", "...and ${words.size - previewLimit} more"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

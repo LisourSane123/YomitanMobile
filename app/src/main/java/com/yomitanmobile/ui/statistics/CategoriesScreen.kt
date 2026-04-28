@@ -25,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -37,14 +38,16 @@ fun CategoriesScreen(
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kategorie słów") },
+                title = { Text(tr("Kategorie słów", "Word categories")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Wróć")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -62,7 +65,7 @@ fun CategoriesScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Text("Kategorie kopanych słów (ostatnie 7 dni)", fontSize = 18.sp, modifier = Modifier.padding(bottom = 4.dp))
+                Text(tr("Kategorie kopanych słów (ostatnie 7 dni)", "Categories of learned words (last 7 days)"), fontSize = 18.sp, modifier = Modifier.padding(bottom = 4.dp))
             }
 
             items(state.categoryActivity) { cat ->

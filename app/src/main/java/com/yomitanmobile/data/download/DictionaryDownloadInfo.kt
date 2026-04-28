@@ -6,13 +6,18 @@ package com.yomitanmobile.data.download
 data class DictionaryDownloadInfo(
     val id: String,
     val name: String,
-    val description: String,
+    val descriptionPl: String,
+    val descriptionEn: String,
     val category: DictionaryCategory,
     val url: String,
     val fileSize: String,
     val sha256: String? = null,
     val language: String = "EN"
 )
+
+fun DictionaryDownloadInfo.localizedDescription(isEnglish: Boolean): String {
+    return if (isEnglish) descriptionEn else descriptionPl
+}
 
 enum class DictionaryCategory {
     DICTIONARY,
@@ -30,7 +35,8 @@ object AvailableDictionaries {
     val jmdict = DictionaryDownloadInfo(
         id = "jmdict_english",
         name = "JMdict (English)",
-        description = "Główny słownik japońsko-angielski. ~200 000 wpisów. Najbardziej kompletny darmowy słownik.",
+        descriptionPl = "Główny słownik japońsko-angielski. ~200 000 wpisów. Najbardziej kompletny darmowy słownik.",
+        descriptionEn = "Main Japanese-English dictionary. ~200,000 entries. The most complete free dictionary.",
         category = DictionaryCategory.DICTIONARY,
         url = "https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMdict_english.zip",
         fileSize = "~15 MB",
@@ -42,7 +48,8 @@ object AvailableDictionaries {
         DictionaryDownloadInfo(
             id = "jmdict_forms",
             name = "JMdict Forms",
-            description = "Formy koniugacyjne i odmiany słów japońskich.",
+            descriptionPl = "Formy koniugacyjne i odmiany słów japońskich.",
+            descriptionEn = "Conjugation forms and inflections of Japanese words.",
             category = DictionaryCategory.DICTIONARY,
             url = "https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMdict_forms.zip",
             fileSize = "~6 MB",
@@ -51,7 +58,8 @@ object AvailableDictionaries {
         DictionaryDownloadInfo(
             id = "jmnedict",
             name = "JMnedict (Names)",
-            description = "Słownik japońskich nazw własnych – imiona, nazwy miejsc itp.",
+            descriptionPl = "Słownik japońskich nazw własnych – imiona, nazwy miejsc itp.",
+            descriptionEn = "Dictionary of Japanese proper names - personal names, place names, and more.",
             category = DictionaryCategory.DICTIONARY,
             url = "https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMnedict.zip",
             fileSize = "~12 MB",
@@ -60,7 +68,8 @@ object AvailableDictionaries {
         DictionaryDownloadInfo(
             id = "kanjidic",
             name = "KANJIDIC",
-            description = "Szczegółowe informacje o kanji – znaczenia, odczyty, JLPT, grade.",
+            descriptionPl = "Szczegółowe informacje o kanji – znaczenia, odczyty, JLPT, grade.",
+            descriptionEn = "Detailed kanji information - meanings, readings, JLPT, grade.",
             category = DictionaryCategory.KANJI,
             url = "https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/KANJIDIC_english.zip",
             fileSize = "~1 MB",
@@ -69,7 +78,8 @@ object AvailableDictionaries {
         DictionaryDownloadInfo(
             id = "jpdb_freq",
             name = "JPDB Frequency v2.2",
-            description = "Ranking częstotliwości z jpdb.io – anime, manga, visual novels. Najnowsza wersja.",
+            descriptionPl = "Ranking częstotliwości z jpdb.io – anime, manga, visual novels. Najnowsza wersja.",
+            descriptionEn = "Frequency ranking from jpdb.io - anime, manga, visual novels. Latest version.",
             category = DictionaryCategory.FREQUENCY,
             url = "https://github.com/Kuuuube/yomitan-dictionaries/raw/main/dictionaries/JPDB_v2.2_Frequency_2024-10-13.zip",
             fileSize = "~3 MB",
@@ -78,7 +88,8 @@ object AvailableDictionaries {
         DictionaryDownloadInfo(
             id = "kanjium_pitch",
             name = "Kanjium Pitch Accent",
-            description = "Słownik akcentu tonalnego (pitch accent) dla japońskiego. Pokazuje wzory akcentu dla słów.",
+            descriptionPl = "Słownik akcentu tonalnego (pitch accent) dla japońskiego. Pokazuje wzory akcentu dla słów.",
+            descriptionEn = "Japanese pitch accent dictionary. Shows pitch patterns for words.",
             category = DictionaryCategory.PITCH_ACCENT,
             url = "https://github.com/toasted-nutbread/yomichan-pitch-accent-dictionary/releases/download/1.0.0/kanjium_pitch_accents.zip",
             fileSize = "~1 MB",
