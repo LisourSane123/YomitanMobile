@@ -34,7 +34,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.datastore.preferences.core.edit
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import javax.inject.Inject
 
 sealed class DetailEvent {
@@ -352,10 +354,11 @@ class DetailViewModel @Inject constructor(
                     // Record export metadata in local DB if available, but keep Anki export successful
                     // even when local schema is stale.
                     runCatching {
-                        val exportedAt = System.currentTimeMillis()
-                        val localHour = Calendar.getInstance().apply {
-                            timeInMillis = exportedAt
-                        }.get(Calendar.HOUR_OF_DAY)
+                        val exportedAt = Instant.now().toEpochMilli()
+                        val localHour = LocalDateTime.ofInstant(
+                            Instant.ofEpochMilli(exportedAt),
+                            ZoneId.systemDefault()
+                        ).hour
                         val exportCategory = runCatching {
                             WordCategoryClassifier.classify(
                                 wordForExport.copy(

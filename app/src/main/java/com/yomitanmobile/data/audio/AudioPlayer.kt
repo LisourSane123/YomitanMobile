@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.util.Locale
+import java.util.UUID
 import javax.inject.Singleton
 
 @Singleton
@@ -53,7 +54,7 @@ class AudioPlayer(
         stopPlayback()
         _isPlaying.value = true
 
-        val utteranceId = "yomitan_speak_${System.currentTimeMillis()}"
+        val utteranceId = "yomitan_speak_${UUID.randomUUID()}"
         tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(id: String?) {
                 _isPlaying.value = true

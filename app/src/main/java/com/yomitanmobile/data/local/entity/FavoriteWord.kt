@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.time.Instant
 
 @Entity(
     tableName = "favorite_words",
@@ -28,5 +29,5 @@ data class FavoriteWord(
     val entryId: Long = 0,
 
     @ColumnInfo(name = "added_date")
-    val addedDate: Long = System.currentTimeMillis()
+    val addedDate: Long = Instant.now().toEpochMilli()
 )

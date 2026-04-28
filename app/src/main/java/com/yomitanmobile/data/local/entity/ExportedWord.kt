@@ -5,7 +5,9 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.yomitanmobile.util.WordCategoryClassifier
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 @Entity(
     tableName = "exported_words",
@@ -30,7 +32,7 @@ data class ExportedWord(
     val ankiNoteId: Long = 0,
 
     @ColumnInfo(name = "export_date")
-    val exportDate: Long = System.currentTimeMillis(),
+    val exportDate: Long = Instant.now().toEpochMilli(),
 
     @ColumnInfo(name = "export_hour")
     val exportHour: Int = localHourFromTimestamp(exportDate),
@@ -40,7 +42,5 @@ data class ExportedWord(
 )
 
 private fun localHourFromTimestamp(timestamp: Long): Int {
-    val calendar = Calendar.getInstance()
-    calendar.timeInMillis = timestamp
-    return calendar.get(Calendar.HOUR_OF_DAY)
+    return LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault()).hour
 }

@@ -21,7 +21,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 
 data class DailyCount(
@@ -212,7 +214,7 @@ class StatisticsViewModel @Inject constructor(
                 val allDates = exportedWordDao.getAllExportDates()
                 val dailyCounts = computeDailyCounts(allDates, 30)
 
-                val oneWeekAgo = System.currentTimeMillis() - WEEK_IN_MILLIS
+                val oneWeekAgo = Instant.now().minusMillis(WEEK_IN_MILLIS).toEpochMilli()
                 val weeklyLearnedWords = runCatching {
                     toWeeklyLearnedWords(exportedWordDao.getExportsSince(oneWeekAgo))
                 }.getOrElse {
@@ -271,23 +273,18 @@ class StatisticsViewModel @Inject constructor(
     }
 
     private fun computeDailyCounts(exportDates: List<Long>, days: Int): List<DailyCount> {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
+        val zoneId = ZoneId.systemDefault()
+        val today = LocalDate.now(zoneId)
 
         // Build list of last N days
         val result = mutableListOf<DailyCount>()
         for (d in (days - 1) downTo 0) {
-            val dayCal = Calendar.getInstance()
-            dayCal.timeInMillis = cal.timeInMillis
-            dayCal.add(Calendar.DAY_OF_YEAR, -d)
-            val dayStart = dayCal.timeInMillis
-            val dayEnd = dayStart + 24 * 60 * 60 * 1000L
+            val dayDate = today.minusDays(d.toLong())
+            val dayStart = dayDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val dayEnd = dayDate.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
 
             val count = exportDates.count { it in dayStart until dayEnd }
-            val label = "${String.format("%02d", dayCal.get(Calendar.DAY_OF_MONTH))}.${String.format("%02d", dayCal.get(Calendar.MONTH) + 1)}"
+            val label = "${String.format("%02d", dayDate.dayOfMonth)}.${String.format("%02d", dayDate.monthValue)}"
             result.add(DailyCount(dayLabel = label, count = count, dayTimestamp = dayStart))
         }
         return result

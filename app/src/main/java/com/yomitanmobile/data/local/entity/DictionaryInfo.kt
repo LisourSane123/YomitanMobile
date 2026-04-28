@@ -3,6 +3,7 @@ package com.yomitanmobile.data.local.entity
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import java.time.Instant
 
 @Entity(tableName = "dictionaries")
 data class DictionaryInfo(
@@ -28,5 +29,5 @@ data class DictionaryInfo(
     val priority: Int = 0,
 
     @ColumnInfo(name = "import_date")
-    val importDate: Long = System.currentTimeMillis()
+    val importDate: Long = Instant.now().toEpochMilli()
 )

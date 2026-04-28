@@ -687,7 +687,7 @@ class AnkiCardCreator(
                     })
                     val result = tts.synthesizeToFile(
                         text, null, tempFile,
-                        "yomitan_tts_${System.currentTimeMillis()}"
+                        "yomitan_tts_${UUID.randomUUID()}"
                     )
                     if (result != TextToSpeech.SUCCESS) {
                         if (!continuation.isCompleted) continuation.resume(false)

@@ -154,15 +154,7 @@ fun StatisticsScreen(
                     HourlyImmersionCard(
                         mostActiveHour = state.mostActiveHour,
                         mostActiveHourCount = state.mostActiveHourCount,
-                        hourlyActivity = state.hourlyActivity
-                    )
-                }
-
-                item {
-                    // Keep category overview small here; the detailed list is in Categories screen
-                    CategoryImmersionCard(
-                        mostActiveCategoryCount = state.mostActiveCategoryCount,
-                        categoryActivity = state.categoryActivity,
+                        hourlyActivity = state.hourlyActivity,
                         isEnglish = isEnglish
                     )
                 }
@@ -366,78 +358,13 @@ private fun CategoryDistributionCard(
 }
 
 @Composable
-private fun CategoryImmersionCard(
-    mostActiveCategoryCount: Int,
-    categoryActivity: List<CategoryActivity>,
-    isEnglish: Boolean
-) {
-    val topCategories = categoryActivity
-        .filter { it.count > 0 }
-        .sortedByDescending { it.count }
-        .take(6)
-    val mostActiveCategory = topCategories.firstOrNull()
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                "Kategorie kopanych słów (7 dni)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            if (mostActiveCategory != null && mostActiveCategoryCount > 0) {
-                val localizedMostActive = WordCategoryClassifier.displayName(
-                    mostActiveCategory.categoryCode,
-                    isEnglish
-                )
-                Text(
-                    "Najczęstsza kategoria: $localizedMostActive",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "Liczba słów: $mostActiveCategoryCount",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    "Brak danych kategorii z ostatniego tygodnia.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (topCategories.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                topCategories.forEachIndexed { index, item ->
-                    val localizedLabel = WordCategoryClassifier.displayName(item.categoryCode, isEnglish)
-                    Text(
-                        text = "${index + 1}. $localizedLabel -> ${item.count}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun HourlyImmersionCard(
     mostActiveHour: Int?,
     mostActiveHourCount: Int,
-    hourlyActivity: List<HourlyActivity>
+    hourlyActivity: List<HourlyActivity>,
+    isEnglish: Boolean = false
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val topHours = hourlyActivity
         .filter { it.count > 0 }
         .sortedByDescending { it.count }
@@ -455,7 +382,7 @@ private fun HourlyImmersionCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                "Aktywność godzinowa (7 dni)",
+                tr("Aktywność godzinowa (7 dni)", "Hourly activity (7 days)"),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )

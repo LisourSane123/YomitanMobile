@@ -33,7 +33,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 
 /**
@@ -123,12 +124,11 @@ class SearchViewModel @Inject constructor(
             try {
                 val prefs = appContext.dataStore.data.first()
                 val goalCount = prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0
-                val startOfDay = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
+                val zoneId = ZoneId.systemDefault()
+                val startOfDay = LocalDate.now(zoneId)
+                    .atStartOfDay(zoneId)
+                    .toInstant()
+                    .toEpochMilli()
                 val todayCount = exportedWordDao.getExportedCountSince(startOfDay)
                 _dailyGoal.value = DailyGoalState(goalCount = goalCount, todayCount = todayCount)
             } catch (_: Exception) { }
