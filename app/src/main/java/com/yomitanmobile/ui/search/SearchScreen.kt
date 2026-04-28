@@ -166,32 +166,6 @@ fun SearchScreen(
                         }
                     )
                 },
-                leadingIcon = {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                when (searchMode) {
-                                    SearchMode.JAPANESE -> MaterialTheme.colorScheme.primary
-                                    SearchMode.ENGLISH -> MaterialTheme.colorScheme.tertiary
-                                    SearchMode.ROMAJI -> MaterialTheme.colorScheme.secondary
-                                }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = searchMode.label,
-                            color = when (searchMode) {
-                                SearchMode.JAPANESE -> MaterialTheme.colorScheme.onPrimary
-                                SearchMode.ENGLISH -> MaterialTheme.colorScheme.onTertiary
-                                SearchMode.ROMAJI -> MaterialTheme.colorScheme.onSecondary
-                            },
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                },
                 trailingIcon = {
                     AnimatedVisibility(visible = query.isNotBlank(), enter = fadeIn(), exit = fadeOut()) {
                         IconButton(onClick = viewModel::clearQuery) {
