@@ -152,7 +152,7 @@ object WordCategoryClassifier {
 
     private fun isAsciiKeyword(keyword: String): Boolean {
         return keyword.all {
-            it.isLetterOrDigit() || it == ' ' || it == '-' || it == '+'
+            it.code <= 0x7F && (it.isLetterOrDigit() || it == ' ' || it == '-' || it == '+')
         }
     }
 
