@@ -241,6 +241,7 @@ class SearchViewModel @Inject constructor(
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
     fun onQueryChange(newQuery: String) {
+        applyAutoSearchModeIfNeeded(newQuery)
         _query.value = newQuery
     }
 
@@ -254,11 +255,13 @@ class SearchViewModel @Inject constructor(
         if (normalized == lastInjectedExternalQuery && normalized == _query.value) return
 
         lastInjectedExternalQuery = normalized
+        applyAutoSearchModeIfNeeded(normalized)
         _query.value = normalized
     }
 
     fun clearQuery() {
         _query.value = ""
+        _searchMode.value = SearchMode.JAPANESE
         _isSearching.value = false
     }
 
