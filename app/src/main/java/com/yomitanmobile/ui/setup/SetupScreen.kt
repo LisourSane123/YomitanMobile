@@ -31,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -46,6 +47,7 @@ fun SetupScreen(
     val setupState by viewModel.setupState.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
 
     Surface(modifier = Modifier.fillMaxSize()) {
         AnimatedContent(
@@ -69,7 +71,7 @@ fun SetupScreen(
                     onContinue = onSetupComplete
                 )
                 SetupState.ERROR -> ErrorContent(
-                    message = errorMessage ?: "Nieznany błąd",
+                    message = errorMessage ?: if (isEnglish) "Unknown error" else "Nieznany błąd",
                     onRetry = { viewModel.retry() },
                     onSkip = {
                         viewModel.skip()
@@ -148,7 +150,7 @@ private fun WelcomeContent(
                 modifier = Modifier.size(24.dp)
             )
             Spacer(Modifier.size(12.dp))
-            Text("Pobierz rekomendowane (~19 MB)", fontSize = 16.sp)
+            Text(text = "Download recommended (~19 MB)", fontSize = 16.sp)
         }
 
         Spacer(Modifier.height(12.dp))
@@ -159,13 +161,13 @@ private fun WelcomeContent(
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text("Pobierz tylko JMdict (~15 MB)", fontSize = 14.sp)
+            Text("Download JMdict only (~15 MB)", fontSize = 14.sp)
         }
 
         Spacer(Modifier.height(16.dp))
 
         TextButton(onClick = onSkip) {
-            Text("Pomiń — zaimportuję ręcznie")
+            Text("Skip — I'll import manually")
         }
     }
 }
@@ -174,6 +176,7 @@ private fun WelcomeContent(
 private fun DownloadingContent(
     progress: com.yomitanmobile.data.download.DownloadProgress?
 ) {
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -189,11 +192,11 @@ private fun DownloadingContent(
         Spacer(Modifier.height(32.dp))
 
         val phaseText = when (progress?.phase) {
-            DownloadPhase.DOWNLOADING -> "Pobieranie ${progress.dictionaryName}…"
-            DownloadPhase.IMPORTING -> "Importowanie ${progress.dictionaryName}…"
-            DownloadPhase.COMPLETED -> "Gotowe!"
-            DownloadPhase.ERROR -> "Błąd!"
-            null -> "Przygotowywanie…"
+            DownloadPhase.DOWNLOADING -> if (isEnglish) "Downloading ${progress.dictionaryName}…" else "Pobieranie ${progress.dictionaryName}…"
+            DownloadPhase.IMPORTING -> if (isEnglish) "Importing ${progress.dictionaryName}…" else "Importowanie ${progress.dictionaryName}…"
+            DownloadPhase.COMPLETED -> if (isEnglish) "Done!" else "Gotowe!"
+            DownloadPhase.ERROR -> if (isEnglish) "Error!" else "Błąd!"
+            null -> if (isEnglish) "Preparing…" else "Przygotowywanie…"
         }
 
         Text(
@@ -222,7 +225,7 @@ private fun DownloadingContent(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Text(
-                "To może zająć kilka minut…",
+                text = if (isEnglish) "This may take a few minutes…" else "To może zająć kilka minut…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -234,6 +237,7 @@ private fun DownloadingContent(
 
 @Composable
 private fun CompletedContent(onContinue: () -> Unit) {
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -251,7 +255,7 @@ private fun CompletedContent(onContinue: () -> Unit) {
         Spacer(Modifier.height(24.dp))
 
         Text(
-            "Słownik zainstalowany!",
+            text = if (isEnglish) "Dictionary installed!" else "Słownik zainstalowany!",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.tertiary
@@ -260,9 +264,15 @@ private fun CompletedContent(onContinue: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         Text(
-            "JMdict (English) został pomyślnie pobrany i zaimportowany.\n" +
+            text = if (isEnglish) {
+                "JMdict (English) has been successfully downloaded and imported.\n" +
+                "You can now search words offline.\n\n" +
+                "Pronunciation via TTS is available automatically through Google TTS."
+            } else {
+                "JMdict (English) został pomyślnie pobrany i zaimportowany.\n" +
                 "Możesz teraz wyszukiwać słowa offline.\n\n" +
-                "Wymowa TTS jest dostępna automatycznie przez Google TTS.",
+                "Wymowa TTS jest dostępna automatycznie przez Google TTS."
+            },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             lineHeight = 24.sp
@@ -276,7 +286,7 @@ private fun CompletedContent(onContinue: () -> Unit) {
                 .fillMaxWidth()
                 .height(56.dp)
         ) {
-            Text("Rozpocznij wyszukiwanie", fontSize = 16.sp)
+            Text(text = if (isEnglish) "Start searching" else "Rozpocznij wyszukiwanie", fontSize = 16.sp)
         }
     }
 }
@@ -287,6 +297,7 @@ private fun ErrorContent(
     onRetry: () -> Unit,
     onSkip: () -> Unit
 ) {
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -304,7 +315,7 @@ private fun ErrorContent(
         Spacer(Modifier.height(24.dp))
 
         Text(
-            "Błąd pobierania",
+            text = if (isEnglish) "Download error" else "Błąd pobierania",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.error
@@ -322,7 +333,7 @@ private fun ErrorContent(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            "Sprawdź połączenie z internetem i spróbuj ponownie.",
+            text = if (isEnglish) "Check your internet connection and try again." else "Sprawdź połączenie z internetem i spróbuj ponownie.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -336,7 +347,7 @@ private fun ErrorContent(
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text("Spróbuj ponownie")
+            Text(text = if (isEnglish) "Try again" else "Spróbuj ponownie")
         }
 
         Spacer(Modifier.height(12.dp))
@@ -345,7 +356,7 @@ private fun ErrorContent(
             onClick = onSkip,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Pomiń")
+            Text(if (isEnglish) "Skip" else "Pomiń")
         }
     }
 }

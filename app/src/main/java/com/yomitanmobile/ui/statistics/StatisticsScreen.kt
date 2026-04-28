@@ -388,22 +388,22 @@ private fun HourlyImmersionCard(
             )
 
             if (mostActiveHour != null && mostActiveHourCount > 0) {
-                Text(
-                    "Najbardziej aktywna pora: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "Skopanych słów: $mostActiveHourCount",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                        Text(
+                            text = if (isEnglish) "Most active time: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}" else "Najbardziej aktywna pora: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isEnglish) "Mined words: $mostActiveHourCount" else "Skopanych słów: $mostActiveHourCount",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
             } else {
-                Text(
-                    "Brak danych aktywności godzinowej z ostatniego tygodnia.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                        Text(
+                            text = if (isEnglish) "No hourly activity data from the last week." else "Brak danych aktywności godzinowej z ostatniego tygodnia.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
             }
 
             if (topHours.isNotEmpty()) {
@@ -427,6 +427,7 @@ private fun StreakCard(
     todayCount: Int
 ) {
     val goalMet = todayCount >= dailyGoal
+    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -451,19 +452,23 @@ private fun StreakCard(
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Streak",
+                    if (isEnglish) "Streak" else "Streak",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    if (streak > 0) "$streak ${if (streak == 1) "dzień" else "dni"} z rzędu!"
-                    else "Zacznij streak! Cel: $dailyGoal fiszek/dzień",
+                    text = if (streak > 0) {
+                        if (isEnglish) "$streak ${if (streak == 1) "day" else "days"} in a row!"
+                        else "$streak ${if (streak == 1) "dzień" else "dni"} z rzędu!"
+                    } else {
+                        if (isEnglish) "Start a streak! Goal: $dailyGoal cards/day" else "Zacznij streak! Cel: $dailyGoal fiszek/dzień"
+                    },
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    "Dzisiaj: $todayCount / $dailyGoal",
+                    text = if (isEnglish) "Today: $todayCount / $dailyGoal" else "Dzisiaj: $todayCount / $dailyGoal",
                     fontSize = 12.sp,
                     color = if (goalMet) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     fontWeight = if (goalMet) FontWeight.Bold else FontWeight.Normal
@@ -570,7 +575,7 @@ private fun DailyFlashcardChart(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(16.dp), tint = goalColor)
                     Spacer(Modifier.width(4.dp))
-                    Text("Cel: $dailyGoal fiszek/dzień", fontSize = 12.sp, color = goalColor)
+                    Text(text = if (isEnglish) "Goal: $dailyGoal cards/day" else "Cel: $dailyGoal fiszek/dzień", fontSize = 12.sp, color = goalColor)
                 }
                 Spacer(Modifier.height(8.dp))
             }

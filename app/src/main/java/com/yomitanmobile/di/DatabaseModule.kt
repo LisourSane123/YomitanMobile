@@ -33,7 +33,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            .addMigrations(AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8)
+            .addMigrations(AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
@@ -118,5 +118,11 @@ object DatabaseModule {
     @Singleton
     fun provideKanjiDao(database: AppDatabase): KanjiDao {
         return database.kanjiDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSentenceDao(database: AppDatabase): com.yomitanmobile.data.local.dao.SentenceDao {
+        return database.sentenceDao()
     }
 }

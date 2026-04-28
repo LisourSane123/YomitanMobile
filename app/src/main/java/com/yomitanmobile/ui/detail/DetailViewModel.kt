@@ -10,9 +10,9 @@ import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
+import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
-import com.yomitanmobile.data.sentence.OnlineSentenceService
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.MergedWordEntry
@@ -55,7 +55,7 @@ class DetailViewModel @Inject constructor(
     private val repository: DictionaryRepository,
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
-    private val onlineSentenceService: OnlineSentenceService,
+    private val sentenceDao: SentenceDao,
     private val exportedWordDao: ExportedWordDao,
     private val favoriteWordDao: FavoriteWordDao,
     @ApplicationContext private val appContext: Context
@@ -320,13 +320,16 @@ class DetailViewModel @Inject constructor(
         try {
             val stylePrefs = loadCardStylePreferences()
 
-            val wordForExport = if (stylePrefs.useOnlineSentenceApi && stylePrefs.onlineSentenceApiConsentGranted) {
+            // Fetch sentences from local database
+            val wordForExport = if (stylePrefs.showSentence) {
                 val lookup = word.expression.ifBlank { word.reading }
-                val onlineSentence = onlineSentenceService.fetchSentenceForWord(lookup)
-                if (onlineSentence != null && onlineSentence.japanese.isNotBlank()) {
+                val localSentences = sentenceDao.getSentencesByExpressionSuspend(lookup)
+                
+                if (localSentences.isNotEmpty()) {
+                    val bestSentence = localSentences.first()
                     word.copy(
-                        exampleSentence = onlineSentence.japanese,
-                        exampleSentenceTranslation = onlineSentence.translation.ifBlank { word.exampleSentenceTranslation }
+                        exampleSentence = bestSentence.sentenceJapanese,
+                        exampleSentenceTranslation = bestSentence.sentenceEnglish
                     )
                 } else {
                     word
