@@ -18,14 +18,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Info
@@ -35,7 +33,6 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -52,7 +49,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -75,16 +71,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.MainActivity
-import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.datastore.preferences.core.edit
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,10 +91,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
-    val dictionaries by viewModel.dictionaries.collectAsState()
     val isImporting by viewModel.isImporting.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
-    var showDeleteDialog by remember { mutableStateOf<String?>(null) }
     var showDeckEditDialog by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -110,9 +100,6 @@ fun SettingsScreen(
     var currentThemeMode by remember { mutableStateOf("system") }
     var currentLanguage by remember { mutableStateOf("system") }
     var dailyGoalCount by remember { mutableStateOf(0f) }
-    var sentenceApiConsentGranted by remember { mutableStateOf(false) }
-    var showSentenceApiConsentDialog by remember { mutableStateOf(false) }
-    var showCardQualityInDetails by remember { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
 
     // Load current deck name, theme mode and daily goal
@@ -121,46 +108,9 @@ fun SettingsScreen(
         currentDeckName = prefs[MainActivity.ANKI_DECK_NAME] ?: ""
         currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
         dailyGoalCount = (prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0).toFloat()
-        sentenceApiConsentGranted = prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] ?: false
-        showCardQualityInDetails = prefs[MainActivity.DETAIL_SHOW_CARD_QUALITY] ?: true
         // Language is stored in SharedPreferences (needed for synchronous read at startup)
         val langPrefs = context.getSharedPreferences(MainActivity.LANG_PREFS_NAME, android.content.Context.MODE_PRIVATE)
         currentLanguage = langPrefs.getString(MainActivity.LANG_PREFS_KEY, "system") ?: "system"
-    }
-
-    if (showSentenceApiConsentDialog) {
-        AlertDialog(
-            onDismissRequest = { showSentenceApiConsentDialog = false },
-            title = { Text(tr("Zgoda na API zdań", "Sentence API consent")) },
-            text = {
-                Text(
-                    tr(
-                        "Aplikacja będzie wysyłać wyszukiwane słowo do zewnętrznego API tylko w celu pobrania przykładowego zdania. Zgodę możesz odwołać w dowolnym momencie.",
-                        "The app will send the searched word to an external API only to fetch an example sentence. You can revoke consent at any time."
-                    )
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    sentenceApiConsentGranted = true
-                    coroutineScope.launch {
-                        context.dataStore.edit { prefs ->
-                            prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] = true
-                        }
-                    }
-                    showSentenceApiConsentDialog = false
-                }) {
-                    Text(tr("Wyrażam zgodę", "I agree"))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showSentenceApiConsentDialog = false
-                }) {
-                    Text(tr("Anuluj", "Cancel"))
-                }
-            }
-        )
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -195,29 +145,6 @@ fun SettingsScreen(
         }
     }
 
-    showDeleteDialog?.let { dictionaryName ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            title = { Text(tr("Usuń słownik", "Delete dictionary")) },
-            text = {
-                Text(
-                    tr(
-                        "Czy na pewno chcesz usunąć słownik \"$dictionaryName\" i wszystkie jego wpisy?",
-                        "Are you sure you want to delete dictionary \"$dictionaryName\" and all its entries?"
-                    )
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.deleteDictionary(dictionaryName); showDeleteDialog = null }) {
-                    Text(tr("Usuń", "Delete"), color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) { Text(tr("Anuluj", "Cancel")) }
-            }
-        )
-    }
-
     if (showDeckEditDialog) {
         var editedDeckName by remember { mutableStateOf(currentDeckName.ifBlank { "Mining Deck" }) }
         AlertDialog(
@@ -240,60 +167,6 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    val name = InputSanitizer.sanitizeDeckName(editedDeckName)
-                    currentDeckName = name
-                    coroutineScope.launch {
-                        context.dataStore.edit { prefs ->
-                            prefs[MainActivity.ANKI_DECK_NAME] = name
-                        }
-                    }
-                    showDeckEditDialog = false
-                }) {
-                    Text(tr("Zapisz", "Save"))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeckEditDialog = false }) { Text(tr("Anuluj", "Cancel")) }
-            }
-        )
-    }
-
-    if (showPrivacyDialog) {
-        AlertDialog(
-            onDismissRequest = { showPrivacyDialog = false },
-            title = { Text(tr("Polityka Prywatności", "Privacy Policy")) },
-            text = {
-                LazyColumn {
-                    item {
-                        Text(
-                            text = tr(
-                                "Aplikacja działa w pełni offline (lokalnie). Nie zbieramy, nie przechowujemy, ani nie wysyłamy żadnych danych osobistych na zewnętrzne serwery. Wymaga połączenia z internetem jedynie w celu pobrania słowników od dostawców zewnętrznych.",
-                                "The app works fully offline (locally). We do not collect, store, or send any personal data to external servers. Internet access is required only to download dictionaries from third-party providers."
-                            ),
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showPrivacyDialog = false }) { Text("OK") }
-            }
-        )
-    }
-
-    if (showLicensesDialog) {
-        AlertDialog(
-            onDismissRequest = { showLicensesDialog = false },
-            title = { Text(tr("O aplikacji i licencje", "About app and licenses")) },
-            text = {
-                LazyColumn {
-                    item {
-                        Text(tr("Wersja aplikacji: 1.0.0", "App version: 1.0.0"), fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            tr(
-                                "Aplikacja korzysta z otwartych słowników do działania. Dostępne słowniki m.in. JMdict oraz KANJIDIC są udostępniane na licencjach Creative Commons Attribution-ShareAlike 4.0 International lub podobnych.\n\nWłasność i prawa autorskie:",
                                 "The app uses open dictionaries. Available dictionaries including JMdict and KANJIDIC are shared under Creative Commons Attribution-ShareAlike 4.0 International licenses or similar.\n\nOwnership and copyrights:"
                             ),
                             fontWeight = FontWeight.Bold
@@ -404,33 +277,6 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                                 )
                             }
-                        }
-                    }
-                }
-            }
-
-            // Installed dictionaries
-            if (dictionaries.isNotEmpty()) {
-                item {
-                    Text(
-                        tr("Zainstalowane słowniki (${dictionaries.size})", "Installed dictionaries (${dictionaries.size})"),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-
-                items(dictionaries, key = { it.id }) { dict ->
-                    DictionaryCard(dictionary = dict, onDelete = { showDeleteDialog = dict.name })
-                }
-            } else if (!isImporting) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-                            Spacer(Modifier.height(8.dp))
-                            Text(tr("Brak zainstalowanych słowników", "No installed dictionaries"), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                         }
                     }
                 }
@@ -560,91 +406,6 @@ fun SettingsScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    }
-                }
-            }
-
-            // TTS info
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.RecordVoiceOver,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                tr("Wymowa TTS", "TTS pronunciation"),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                tr(
-                                    "Wymowa japońska przez Google TTS. Po otwarciu słowa wymowa odtwarza się automatycznie.",
-                                    "Japanese pronunciation via Google TTS. After opening a word, pronunciation plays automatically."
-                                ),
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Card quality section toggle
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.EmojiEvents,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                tr("Pokaż jakość fiszki", "Show card quality"),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                tr(
-                                    "Wyświetla sekcję oceny jakości na ekranie szczegółów słowa.",
-                                    "Shows quality scoring section on the word detail screen."
-                                ),
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                        Switch(
-                            checked = showCardQualityInDetails,
-                            onCheckedChange = { enabled ->
-                                showCardQualityInDetails = enabled
-                                coroutineScope.launch {
-                                    context.dataStore.edit { prefs ->
-                                        prefs[MainActivity.DETAIL_SHOW_CARD_QUALITY] = enabled
-                                    }
-                                }
-                            }
-                        )
                     }
                 }
             }
@@ -827,61 +588,6 @@ fun SettingsScreen(
                 )
             }
 
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Shield,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                tr("Zgoda na API zdań", "Sentence API consent"),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                tr(
-                                    "Wymagane do pobierania przykładowych zdań z internetu. Użycie API włączasz osobno w stylu fiszki.",
-                                    "Required to fetch example sentences from the internet. API usage is enabled separately in card style."
-                                ),
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                        Switch(
-                            checked = sentenceApiConsentGranted,
-                            onCheckedChange = { enabled ->
-                                if (!enabled) {
-                                    sentenceApiConsentGranted = false
-                                    coroutineScope.launch {
-                                        context.dataStore.edit { prefs ->
-                                            prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] = false
-                                            prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] = false
-                                        }
-                                    }
-                                } else if (!sentenceApiConsentGranted) {
-                                    showSentenceApiConsentDialog = true
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
             // ═══════════════════════════════════════
             // SECTION: Informacje (About)
             // ═══════════════════════════════════════
@@ -968,33 +674,6 @@ private fun SettingsClickableItem(
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DictionaryCard(dictionary: DictionaryInfo, onDelete: () -> Unit) {
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
-    val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
-    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(dictionary.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text("${dictionary.entryCount} ${tr("wpisów", "entries")}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (dictionary.revision.isNotBlank()) {
-                    Text("${tr("Wersja", "Version")}: ${dictionary.revision}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                }
-                Text("${tr("Dodano", "Added")}: ${dateFormat.format(Date(dictionary.importDate))}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = tr("Usuń słownik", "Delete dictionary"), tint = MaterialTheme.colorScheme.error)
             }
         }
     }
