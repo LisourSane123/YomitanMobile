@@ -50,7 +50,7 @@ fun AppNavHost(
                 },
                 focusSearch = focusSearch,
                 initialQuery = sharedSearchQuery,
-                onNavigateToCategories = { navController.navigate(Screen.Categories.route) }
+                onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) }
             )
         }
 

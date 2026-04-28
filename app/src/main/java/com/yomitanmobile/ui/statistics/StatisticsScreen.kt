@@ -2,6 +2,7 @@ package com.yomitanmobile.ui.statistics
 
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -60,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.util.WordCategoryClassifier
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +76,16 @@ fun StatisticsScreen(
     val context = LocalContext.current
     val weeklyWordsForCopy = remember(state.weeklyLearnedWords, isEnglish) {
         StatisticsViewModel.buildWeeklyLearnedWordsCopyText(state.weeklyLearnedWords, isEnglish)
+    }
+    val allTimeCategoryStats = remember(state.categoryActivityAllTime, isEnglish) {
+        val countsByCode = state.categoryActivityAllTime.associate { it.categoryCode to it.count }
+        WordCategoryClassifier.mostImportantCategories(isEnglish).map { (code, label) ->
+            CategoryActivity(
+                categoryCode = code,
+                categoryLabel = label,
+                count = countsByCode[code] ?: 0
+            )
+        }
     }
 
     Scaffold(
@@ -165,6 +178,13 @@ fun StatisticsScreen(
                     )
                 }
 
+                item {
+                    CategoryDistributionCard(
+                        categoryStats = allTimeCategoryStats,
+                        isEnglish = isEnglish
+                    )
+                }
+
                 // Chart section
                 if (state.dailyCounts.any { it.count > 0 }) {
                     item {
@@ -209,6 +229,155 @@ fun StatisticsScreen(
                 }
 
                 item { Spacer(Modifier.height(32.dp)) }
+            }
+        }
+    }
+}
+
+private val CategoryChartColors = listOf(
+    Color(0xFFEF5350),
+    Color(0xFF42A5F5),
+    Color(0xFF66BB6A),
+    Color(0xFFFFCA28),
+    Color(0xFFAB47BC),
+    Color(0xFF26A69A),
+    Color(0xFFFF7043),
+    Color(0xFF7E57C2),
+    Color(0xFF8D6E63),
+    Color(0xFFEC407A),
+    Color(0xFF29B6F6),
+    Color(0xFFD4E157)
+)
+
+@Composable
+private fun CategoryDistributionCard(
+    categoryStats: List<CategoryActivity>,
+    isEnglish: Boolean
+) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val colorByCode = remember(categoryStats) {
+        categoryStats.mapIndexed { index, stat ->
+            stat.categoryCode to CategoryChartColors[index % CategoryChartColors.size]
+        }.toMap()
+    }
+    val nonZeroStats = categoryStats.filter { it.count > 0 }
+    val totalCount = nonZeroStats.sumOf { it.count }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                tr("Kategorie kopanych slow", "Mined word categories"),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                tr(
+                    "Rozklad wszystkich skopanych slow wedlug kategorii.",
+                    "Distribution of all mined words by category."
+                ),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+            )
+
+            if (totalCount <= 0) {
+                Text(
+                    tr(
+                        "Brak danych kategorii. Skop pierwsze slowa, aby zobaczyc wykres.",
+                        "No category data yet. Mine your first words to see the chart."
+                    ),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                )
+            } else {
+                val donutCenterColor = MaterialTheme.colorScheme.surface
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(modifier = Modifier.size(220.dp)) {
+                        var startAngle = -90f
+                        nonZeroStats.forEach { stat ->
+                            val sweep = 360f * stat.count.toFloat() / totalCount.toFloat()
+                            drawArc(
+                                color = colorByCode[stat.categoryCode] ?: Color.Gray,
+                                startAngle = startAngle,
+                                sweepAngle = sweep,
+                                useCenter = true
+                            )
+                            startAngle += sweep
+                        }
+
+                        drawCircle(
+                            color = donutCenterColor,
+                            radius = size.minDimension * 0.28f
+                        )
+                    }
+
+                    Text(
+                        text = totalCount.toString(),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Text(
+                    tr("Top 3 kategorie", "Top 3 categories"),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                nonZeroStats
+                    .sortedByDescending { it.count }
+                    .take(3)
+                    .forEachIndexed { index, stat ->
+                        val percent = if (totalCount == 0) 0f else (stat.count.toFloat() * 100f / totalCount.toFloat())
+                        val color = colorByCode[stat.categoryCode] ?: Color.Gray
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(color = color, shape = CircleShape)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "${index + 1}. ${stat.categoryLabel}: ${String.format(Locale.getDefault(), "%.1f", percent)}% (${stat.count})",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                Text(
+                    tr("Wszystkie kategorie", "All categories"),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+
+                categoryStats.forEach { stat ->
+                    val color = colorByCode[stat.categoryCode] ?: Color.Gray
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(color = color, shape = CircleShape)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "${stat.categoryLabel}: ${stat.count}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                        )
+                    }
+                }
             }
         }
     }

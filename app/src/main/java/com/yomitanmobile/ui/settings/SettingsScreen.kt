@@ -4,8 +4,6 @@ import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -70,7 +67,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -82,7 +78,6 @@ import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.util.InputSanitizer
-import com.yomitanmobile.util.WordCategoryClassifier
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -105,7 +100,6 @@ fun SettingsScreen(
     val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val dictionaries by viewModel.dictionaries.collectAsState()
-    val minedCategoryStats by viewModel.minedCategoryStats.collectAsState()
     val isImporting by viewModel.isImporting.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
     var showDeleteDialog by remember { mutableStateOf<String?>(null) }
@@ -413,23 +407,6 @@ fun SettingsScreen(
                         }
                     }
                 }
-            }
-
-            item {
-                DictionaryCategoryDistributionCard(
-                    categoryStats = minedCategoryStats,
-                    title = tr("Kategorie kopanych słów", "Mined word categories"),
-                    subtitle = tr(
-                        "Rozkład wszystkich skopanych słów według kategorii.",
-                        "Distribution of all mined words by category."
-                    ),
-                    top3Title = tr("Top 3 kategorie", "Top 3 categories"),
-                    allCategoriesTitle = tr("Wszystkie kategorie", "All categories"),
-                    emptyText = tr(
-                        "Brak danych kategorii. Skop pierwsze słowa, aby zobaczyć wykres.",
-                        "No category data yet. Mine your first words to see the chart."
-                    )
-                )
             }
 
             // Installed dictionaries
@@ -925,155 +902,6 @@ fun SettingsScreen(
             }
 
             item { Spacer(Modifier.height(32.dp)) }
-        }
-    }
-}
-
-private val CategoryChartColors = listOf(
-    Color(0xFFEF5350),
-    Color(0xFF42A5F5),
-    Color(0xFF66BB6A),
-    Color(0xFFFFCA28),
-    Color(0xFFAB47BC),
-    Color(0xFF26A69A),
-    Color(0xFFFF7043),
-    Color(0xFF7E57C2),
-    Color(0xFF8D6E63),
-    Color(0xFFEC407A),
-    Color(0xFF29B6F6),
-    Color(0xFFD4E157)
-)
-
-@Composable
-private fun DictionaryCategoryDistributionCard(
-    categoryStats: List<MinedCategoryStat>,
-    title: String,
-    subtitle: String,
-    top3Title: String,
-    allCategoriesTitle: String,
-    emptyText: String
-) {
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
-    val colorByCode = remember(categoryStats) {
-        categoryStats.mapIndexed { index, stat ->
-            stat.code to CategoryChartColors[index % CategoryChartColors.size]
-        }.toMap()
-    }
-    val nonZeroStats = categoryStats.filter { it.count > 0 }
-    val totalCount = nonZeroStats.sumOf { it.count }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                title,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                subtitle,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-            )
-
-            if (totalCount <= 0) {
-                Text(
-                    emptyText,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-                )
-            } else {
-                val donutCenterColor = MaterialTheme.colorScheme.surface
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Canvas(modifier = Modifier.size(220.dp)) {
-                        var startAngle = -90f
-                        nonZeroStats.forEach { stat ->
-                            val sweep = 360f * stat.count.toFloat() / totalCount.toFloat()
-                            drawArc(
-                                color = colorByCode[stat.code] ?: Color.Gray,
-                                startAngle = startAngle,
-                                sweepAngle = sweep,
-                                useCenter = true
-                            )
-                            startAngle += sweep
-                        }
-
-                        drawCircle(
-                            color = donutCenterColor,
-                            radius = size.minDimension * 0.28f
-                        )
-                    }
-
-                    Text(
-                        text = totalCount.toString(),
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Text(
-                    top3Title,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                nonZeroStats
-                    .sortedByDescending { it.count }
-                    .take(3)
-                    .forEachIndexed { index, stat ->
-                        val localizedLabel = WordCategoryClassifier.displayName(stat.code, isEnglish)
-                        val percent = if (totalCount == 0) 0f else (stat.count.toFloat() * 100f / totalCount.toFloat())
-                        val color = colorByCode[stat.code] ?: Color.Gray
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(color = color, shape = CircleShape)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = "${index + 1}. $localizedLabel: ${String.format(Locale.getDefault(), "%.1f", percent)}% (${stat.count})",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                Text(
-                    allCategoriesTitle,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-
-                categoryStats.forEach { stat ->
-                    val localizedLabel = WordCategoryClassifier.displayName(stat.code, isEnglish)
-                    val color = colorByCode[stat.code] ?: Color.Gray
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(color = color, shape = CircleShape)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "$localizedLabel: ${stat.count}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
-                        )
-                    }
-                }
-            }
         }
     }
 }

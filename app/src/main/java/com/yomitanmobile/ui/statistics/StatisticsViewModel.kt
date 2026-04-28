@@ -61,6 +61,7 @@ data class StatisticsState(
     val mostActiveHour: Int? = null,
     val mostActiveHourCount: Int = 0,
     val categoryActivity: List<CategoryActivity> = emptyList(),
+    val categoryActivityAllTime: List<CategoryActivity> = emptyList(),
     val mostActiveCategory: String? = null,
     val mostActiveCategoryCount: Int = 0,
     val isLoading: Boolean = true
@@ -231,6 +232,12 @@ class StatisticsViewModel @Inject constructor(
                     Log.e(logTag, "Failed to load category activity", it)
                     emptyList()
                 }
+                val categoryActivityAllTime = runCatching {
+                    toCategoryActivity(exportedWordDao.getCategoryActivityAll().first())
+                }.getOrElse {
+                    Log.e(logTag, "Failed to load all-time category activity", it)
+                    emptyList()
+                }
                 val mostActiveCategory = findMostActiveCategory(categoryActivity)
 
                 // Compute streak
@@ -249,6 +256,7 @@ class StatisticsViewModel @Inject constructor(
                     mostActiveHour = mostActiveHour?.hour,
                     mostActiveHourCount = mostActiveHour?.count ?: 0,
                     categoryActivity = categoryActivity,
+                    categoryActivityAllTime = categoryActivityAllTime,
                     mostActiveCategory = mostActiveCategory?.categoryLabel,
                     mostActiveCategoryCount = mostActiveCategory?.count ?: 0,
                     isLoading = false

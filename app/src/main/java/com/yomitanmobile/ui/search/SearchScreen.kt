@@ -75,7 +75,7 @@ fun SearchScreen(
     onWordClick: (Long) -> Unit,
     onSettingsClick: () -> Unit,
     onFavoritesClick: () -> Unit = {},
-    onNavigateToCategories: () -> Unit,
+    onNavigateToStatistics: () -> Unit,
     focusSearch: Boolean = false,
     initialQuery: String? = null,
     viewModel: SearchViewModel = hiltViewModel()
@@ -92,7 +92,7 @@ fun SearchScreen(
     val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
-    // Quick stats removed; icon will navigate to Categories screen
+    // Quick stats icon navigates to Statistics screen
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -118,7 +118,7 @@ fun SearchScreen(
         }
     }
 
-    // Quick stats dialog removed; navigation goes to Categories screen instead
+    // Quick stats dialog removed; navigation goes to Statistics screen instead
 
     Scaffold(
         topBar = {
@@ -132,8 +132,8 @@ fun SearchScreen(
                     IconButton(onClick = onFavoritesClick) {
                         Icon(Icons.Default.Favorite, contentDescription = tr("Ulubione", "Favorites"))
                     }
-                    IconButton(onClick = onNavigateToCategories) {
-                        Icon(Icons.Default.BarChart, contentDescription = tr("Kategorie słów", "Word categories"))
+                    IconButton(onClick = onNavigateToStatistics) {
+                        Icon(Icons.Default.BarChart, contentDescription = tr("Statystyki", "Statistics"))
                     }
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = tr("Ustawienia", "Settings"))
