@@ -173,7 +173,8 @@ fun StatisticsScreen(
                     item {
                             DailyFlashcardChart(
                                 dailyCounts = state.dailyCounts,
-                                dailyGoal = state.dailyGoal
+                                dailyGoal = state.dailyGoal,
+                                isEnglish = isEnglish
                             )
                     }
                 }
@@ -558,7 +559,8 @@ private fun WeeklyLearnedWordsCard(
 @Composable
 private fun DailyFlashcardChart(
     dailyCounts: List<DailyCount>,
-    dailyGoal: Int
+    dailyGoal: Int,
+    isEnglish: Boolean = false
 ) {
     val barColor = MaterialTheme.colorScheme.primary
     val goalColor = Color(0xFFFF6D00)

@@ -14,6 +14,7 @@ import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
 import com.yomitanmobile.dataStore
+import com.yomitanmobile.data.sentence.OnlineSentenceService
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.PitchAccentStyle
@@ -56,6 +57,7 @@ class DetailViewModel @Inject constructor(
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
     private val sentenceDao: SentenceDao,
+    private val onlineSentenceService: OnlineSentenceService,
     private val exportedWordDao: ExportedWordDao,
     private val favoriteWordDao: FavoriteWordDao,
     @ApplicationContext private val appContext: Context
@@ -323,7 +325,10 @@ class DetailViewModel @Inject constructor(
             // Fetch sentences from local database
             val wordForExport = if (stylePrefs.showSentence) {
                 val lookup = word.expression.ifBlank { word.reading }
-                val localSentences = sentenceDao.getSentencesByExpressionSuspend(lookup)
+                val localSentences = sentenceDao.getSentencesByExpressionOrReading(
+                    expression = lookup,
+                    reading = word.reading.ifBlank { lookup }
+                )
                 
                 if (localSentences.isNotEmpty()) {
                     val bestSentence = localSentences.first()
@@ -331,6 +336,19 @@ class DetailViewModel @Inject constructor(
                         exampleSentence = bestSentence.sentenceJapanese,
                         exampleSentenceTranslation = bestSentence.sentenceEnglish
                     )
+                } else if (stylePrefs.useOnlineSentenceApi && stylePrefs.onlineSentenceApiConsentGranted) {
+                    val onlineSentence = runCatching {
+                        onlineSentenceService.fetchSentenceForWord(lookup)
+                    }.getOrNull()
+
+                    if (onlineSentence != null) {
+                        word.copy(
+                            exampleSentence = onlineSentence.japanese,
+                            exampleSentenceTranslation = onlineSentence.translation
+                        )
+                    } else {
+                        word
+                    }
                 } else {
                     word
                 }
