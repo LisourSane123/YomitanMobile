@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -77,6 +78,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.datastore.preferences.core.edit
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,7 +95,13 @@ fun SettingsScreen(
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val isImporting by viewModel.isImporting.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
+    val backups by viewModel.backups.collectAsState()
+    val isBackingUp by viewModel.isBackingUp.collectAsState()
+    val isRestoring by viewModel.isRestoring.collectAsState()
     var showDeckEditDialog by remember { mutableStateOf(false) }
+    var showBackupDialog by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    var selectedBackupForRestore by remember { mutableStateOf<File?>(null) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var currentDeckName by remember { mutableStateOf("") }
@@ -141,6 +149,18 @@ fun SettingsScreen(
                     ).show()
                 is SettingsEvent.ImportError ->
                     Toast.makeText(context, tr("Błąd importu: ${event.message}", "Import error: ${event.message}"), Toast.LENGTH_LONG).show()
+                is SettingsEvent.BackupSuccess -> {
+                    Toast.makeText(context, tr("Kopia zapasowa utworzona", "Backup created"), Toast.LENGTH_LONG).show()
+                    showBackupDialog = false
+                }
+                is SettingsEvent.BackupError ->
+                    Toast.makeText(context, tr("Błąd: ${event.message}", "Error: ${event.message}"), Toast.LENGTH_LONG).show()
+                is SettingsEvent.RestoreSuccess -> {
+                    Toast.makeText(context, tr("Przywrócono z kopii. Proszę zrestartować aplikację.", "Restored. Please restart the app."), Toast.LENGTH_LONG).show()
+                    showRestoreDialog = false
+                }
+                is SettingsEvent.RestoreError ->
+                    Toast.makeText(context, tr("Błąd przywracania: ${event.message}", "Restore error: ${event.message}"), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -182,6 +202,45 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeckEditDialog = false }) {
+                    Text(tr("Anuluj", "Cancel"))
+                }
+            }
+        )
+    }
+
+    if (showRestoreDialog && selectedBackupForRestore != null) {
+        val backup = selectedBackupForRestore
+        AlertDialog(
+            onDismissRequest = { showRestoreDialog = false },
+            title = { Text(tr("Przywróć kopię zapasową", "Restore backup")) },
+            text = {
+                Column {
+                    Text(
+                        tr(
+                            "Czy na pewno chcesz przywrócić tę kopię zapasową?\n${backup?.name ?: ""}\n\nAktualne dane zostaną zastąpione.",
+                            "Are you sure you want to restore this backup?\n${backup?.name ?: ""}\n\nCurrent data will be replaced."
+                        ),
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        tr("Aplikacja musi być zrestartowana po przywróceniu.", "App must be restarted after restore."),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (selectedBackupForRestore != null) {
+                        viewModel.restoreBackup(selectedBackupForRestore!!)
+                    }
+                }, enabled = !isRestoring) {
+                    Text(tr("Przywróć", "Restore"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreDialog = false }, enabled = !isRestoring) {
                     Text(tr("Anuluj", "Cancel"))
                 }
             }
@@ -619,6 +678,102 @@ fun SettingsScreen(
                                     },
                                     label = { Text(label) }
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ═══════════════════════════════════════
+            // SECTION: Kopia zapasowa (Backup)
+            // ═══════════════════════════════════════
+            item {
+                SectionHeader(
+                    icon = Icons.Default.CloudDownload,
+                    title = tr("Kopia zapasowa", "Backup & Restore")
+                )
+            }
+
+            item {
+                Button(
+                    onClick = { 
+                        if (!isBackingUp) {
+                            viewModel.createBackup()
+                        }
+                    },
+                    enabled = !isBackingUp && !isRestoring,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isBackingUp) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 1.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(tr("Utwórz kopię zapasową", "Create backup"))
+                }
+            }
+
+            if (backups.isNotEmpty()) {
+                item {
+                    Text(
+                        tr("Dostępne kopie (${backups.size}):", "Available backups (${backups.size}):"),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+
+                items(backups.size) { index ->
+                    val backup = backups[index]
+                    val timestamp = backup.name.replace("backup_", "")
+                    
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    timestamp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    backup.absolutePath,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+                            
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedBackupForRestore = backup
+                                        showRestoreDialog = true
+                                    },
+                                    enabled = !isRestoring,
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    if (isRestoring && selectedBackupForRestore == backup) {
+                                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.dp)
+                                    } else {
+                                        Text(tr("Przywróć", "Restore"), fontSize = 11.sp)
+                                    }
+                                }
+                                
+                                OutlinedButton(
+                                    onClick = { viewModel.deleteBackup(backup) },
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text(tr("Usuń", "Delete"), fontSize = 11.sp)
+                                }
                             }
                         }
                     }
