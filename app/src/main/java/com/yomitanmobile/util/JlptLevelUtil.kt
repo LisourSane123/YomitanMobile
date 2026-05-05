@@ -26,24 +26,57 @@ object JlptLevelUtil {
 
     /**
      * Estimate JLPT level based on word expression and frequency.
-     * Returns null if the word doesn't match any known JLPT word
-     * and no frequency is available.
+     * 
+     * Strategy:
+     * 1. Check against curated JLPT vocabulary list (most reliable)
+     * 2. If not found and frequency data available, estimate from frequency ranking
+     *    (lower frequency number = more common = tends to be lower JLPT level)
+     * 3. Falls back to null only if no data available
      */
     fun getLevel(expression: String, frequency: Int = 0): JlptLevel? {
         // First check the curated list
         val knownLevel = JLPT_WORDS[expression]
         if (knownLevel != null) return knownLevel
 
-        // Fallback: estimate from frequency
+        // Fallback: estimate from frequency (lower number = higher frequency = more basic)
+        // Frequency rankings typically: 1-500 (most common), 500-2000, 2000-8000, 8000-15000, 15000+
         if (frequency > 0) {
             return when {
-                frequency <= 500 -> JlptLevel.N5
-                frequency <= 1500 -> JlptLevel.N4
-                frequency <= 5000 -> JlptLevel.N3
-                frequency <= 12000 -> JlptLevel.N2
-                frequency <= 25000 -> JlptLevel.N1
-                else -> null
+                frequency <= 500 -> JlptLevel.N5       // Top 500 most common words
+                frequency <= 2000 -> JlptLevel.N4      // Top 2000
+                frequency <= 8000 -> JlptLevel.N3      // Top 8000
+                frequency <= 15000 -> JlptLevel.N2     // Top 15000
+                frequency <= 50000 -> JlptLevel.N1     // Top 50000 (remaining common words)
+                else -> null                           // Beyond common vocabulary
             }
+        }
+
+        return null
+    }
+
+    /**
+     * Estimate JLPT level checking multiple expression variants.
+     * Useful for searching through alternative expressions and readings.
+     * Returns the first match found, or null if none match.
+     */
+    fun getLevelWithFallback(
+        primaryExpression: String,
+        alternativeExpressions: List<String> = emptyList(),
+        frequency: Int = 0
+    ): JlptLevel? {
+        // Try primary expression first
+        var result = getLevel(primaryExpression, frequency)
+        if (result != null) return result
+
+        // Try alternatives
+        for (alt in alternativeExpressions) {
+            result = getLevel(alt, 0)  // Don't use frequency multiple times
+            if (result != null) return result
+        }
+
+        // Final fallback: use frequency on original
+        if (frequency > 0) {
+            return getLevel(primaryExpression, frequency)
         }
 
         return null
@@ -76,7 +109,15 @@ object JlptLevelUtil {
             "椅子", "本", "鉛筆", "紙", "眼鏡", "時計", "鍵", "財布", "傘", "靴",
             "服", "色", "数", "一", "二", "三", "四", "五", "六", "七",
             "八", "九", "十", "百", "千", "万", "円", "何", "誰", "どこ",
-            "いつ", "どう", "なぜ", "どれ", "この", "その", "あの", "ここ", "そこ", "あそこ"
+            "いつ", "どう", "なぜ", "どれ", "この", "その", "あの", "ここ", "そこ", "あそこ",
+            // Hiragana variants for N5
+            "たべる", "のむ", "みる", "きく", "よむ", "かく", "はなす", "いく", "くる", "かえる",
+            "かう", "うる", "おしえる", "ならう", "べんきょう", "がっこう", "せんせい", "がくせい", "ともだち", "かぞく",
+            "あにき", "あねさん", "おとうと", "いもうと", "こども", "おとこ", "おんな", "ひと",
+            "にほん", "にほんご", "えいご", "ことば", "なまえ", "じかん", "きょう", "あした", "きのう", "あさ",
+            "ひる", "よる", "まいにち", "まいしゅう", "まいつき", "いま", "あと", "まえ", "うえ", "した",
+            "みぎ", "ひだり", "なか", "そと", "ちかく", "とおい", "おおきい", "ちいさい", "あたらしい", "ふるい",
+            "たかい", "やすい", "よい", "わるい", "おおい", "すくない", "ながい", "みじかい", "はやい", "おそい"
         ).forEach { put(it, n5) }
 
         // ===== N4 (~ 1500 words) =====
@@ -98,7 +139,10 @@ object JlptLevelUtil {
             "入学", "研究", "練習", "準備", "計画", "予定", "予約", "申し込み", "お祝い", "お礼",
             "お土産", "プレゼント", "趣味", "興味", "夢", "将来", "目標", "理由", "原因", "結果",
             "場所", "住所", "近所", "交通", "信号", "交差点", "橋", "坂", "港", "空港",
-            "会社", "仕事", "アルバイト", "給料", "店", "客", "品物", "値段", "割引", "荷物"
+            "会社", "仕事", "アルバイト", "給料", "店", "客", "品物", "値段", "割引", "荷物",
+            // Hiragana variants for common N4 verbs
+            "とどける", "とどく", "はこぶ", "おくる", "うけける", "うけとる", "かえす", "かりる", "かす",
+            "はらう", "えらぶ", "きめる", "きまる", "かわる", "かえる", "つづける", "つづく", "はじめる", "おわる"
         ).forEach { put(it, n4) }
 
         // ===== N3 (~ 3750 words) =====
