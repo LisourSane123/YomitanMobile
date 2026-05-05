@@ -137,7 +137,7 @@ class SearchViewModel @Inject constructor(
 
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     val searchResults: StateFlow<List<MergedWordEntry>> = kotlinx.coroutines.flow.combine(_query, _searchMode) { q, mode -> q to mode }
-        .debounce(300L)
+        .debounce(100L)
         .distinctUntilChanged()
         .flatMapLatest { (q, mode) ->
             if (q.isBlank()) {
