@@ -2,13 +2,10 @@ package com.yomitanmobile.util
 
 /**
  * JLPT (Japanese Language Proficiency Test) level lookup utility.
- * Provides approximate JLPT levels for common Japanese words based on
- * well-known JLPT vocabulary lists.
+ * Extracts JLPT levels from JMDict tags (e.g., "jlpt-1", "jlpt-2", etc.)
  * 
+ * JMDict format: tags are stored in the partsOfSpeech field and include JLPT level
  * Levels: N5 (easiest) → N1 (hardest)
- * 
- * This uses a frequency-based heuristic when exact data isn't available:
- * words with lower frequency numbers (more common) tend to be lower JLPT levels.
  */
 object JlptLevelUtil {
 
@@ -25,29 +22,28 @@ object JlptLevelUtil {
     }
 
     /**
-     * Estimate JLPT level based on word expression and frequency.
+     * Extract JLPT level from JMDict tags.
+     * Tags are typically in format "jlpt-1", "jlpt-2", "jlpt-3", "jlpt-4", "jlpt-5"
+     * where jlpt-1 = N1 (hardest), jlpt-5 = N5 (easiest)
      * 
-     * Strategy:
-     * 1. Check against curated JLPT vocabulary list (most reliable)
-     * 2. If not found and frequency data available, estimate from frequency ranking
-     *    (lower frequency number = more common = tends to be lower JLPT level)
-     * 3. Falls back to null only if no data available
+     * Falls back to frequency-based estimation if no JLPT tag found.
      */
-    fun getLevel(expression: String, frequency: Int = 0): JlptLevel? {
-        // First check the curated list
-        val knownLevel = JLPT_WORDS[expression]
-        if (knownLevel != null) return knownLevel
+    fun getLevel(tagsString: String, frequency: Int = 0): JlptLevel? {
+        // First try to extract JLPT tag from tags string
+        if (tagsString.isNotBlank()) {
+            val jlptTag = extractJlptTag(tagsString)
+            if (jlptTag != null) return jlptTag
+        }
 
         // Fallback: estimate from frequency (lower number = higher frequency = more basic)
-        // Frequency rankings typically: 1-500 (most common), 500-2000, 2000-8000, 8000-15000, 15000+
         if (frequency > 0) {
             return when {
                 frequency <= 500 -> JlptLevel.N5       // Top 500 most common words
                 frequency <= 2000 -> JlptLevel.N4      // Top 2000
                 frequency <= 8000 -> JlptLevel.N3      // Top 8000
                 frequency <= 15000 -> JlptLevel.N2     // Top 15000
-                frequency <= 50000 -> JlptLevel.N1     // Top 50000 (remaining common words)
-                else -> null                           // Beyond common vocabulary
+                frequency <= 50000 -> JlptLevel.N1     // Top 50000
+                else -> null
             }
         }
 
@@ -55,151 +51,37 @@ object JlptLevelUtil {
     }
 
     /**
-     * Estimate JLPT level checking multiple expression variants.
-     * Useful for searching through alternative expressions and readings.
-     * Returns the first match found, or null if none match.
+     * Extract JLPT level from JMDict tags and parts of speech.
+     * Looks through tags and partsOfSpeech for JLPT level information.
      */
-    fun getLevelWithFallback(
-        primaryExpression: String,
-        alternativeExpressions: List<String> = emptyList(),
+    fun getLevelFromTags(
+        tagsAndPartsOfSpeech: String,
         frequency: Int = 0
     ): JlptLevel? {
-        // Try primary expression first
-        var result = getLevel(primaryExpression, frequency)
-        if (result != null) return result
+        return getLevel(tagsAndPartsOfSpeech, frequency)
+    }
 
-        // Try alternatives
-        for (alt in alternativeExpressions) {
-            result = getLevel(alt, 0)  // Don't use frequency multiple times
-            if (result != null) return result
-        }
+    /**
+     * Extract JLPT tag from a comma-separated tags string.
+     * Looks for patterns like "jlpt-1", "jlpt-2", "jlpt-3", "jlpt-4", "jlpt-5"
+     * where jlpt-1 = N1, jlpt-2 = N2, jlpt-3 = N3, jlpt-4 = N4, jlpt-5 = N5
+     */
+    private fun extractJlptTag(tagsString: String): JlptLevel? {
+        if (tagsString.isBlank()) return null
 
-        // Final fallback: use frequency on original
-        if (frequency > 0) {
-            return getLevel(primaryExpression, frequency)
+        val tags = tagsString.split(",").map { it.trim().lowercase() }
+        
+        for (tag in tags) {
+            when {
+                tag.contains("jlpt-1") || tag == "jlpt-1" -> return JlptLevel.N1
+                tag.contains("jlpt-2") || tag == "jlpt-2" -> return JlptLevel.N2
+                tag.contains("jlpt-3") || tag == "jlpt-3" -> return JlptLevel.N3
+                tag.contains("jlpt-4") || tag == "jlpt-4" -> return JlptLevel.N4
+                tag.contains("jlpt-5") || tag == "jlpt-5" -> return JlptLevel.N5
+            }
         }
 
         return null
     }
 
-    /**
-     * Core JLPT vocabulary list.
-     * Contains representative words from each JLPT level.
-     */
-    private val JLPT_WORDS: Map<String, JlptLevel> = buildMap {
-        // ===== N5 (~ 800 words, most basic) =====
-        val n5 = JlptLevel.N5
-        listOf(
-            "食べる", "飲む", "見る", "聞く", "読む", "書く", "話す", "行く", "来る", "帰る",
-            "買う", "売る", "教える", "習う", "勉強", "学校", "先生", "学生", "友達", "家族",
-            "お父さん", "お母さん", "兄", "姉", "弟", "妹", "子供", "男", "女", "人",
-            "日本", "日本語", "英語", "言葉", "名前", "時間", "今日", "明日", "昨日", "朝",
-            "昼", "夜", "毎日", "毎週", "毎月", "今", "後", "前", "上", "下",
-            "右", "左", "中", "外", "近く", "遠い", "大きい", "小さい", "新しい", "古い",
-            "高い", "安い", "良い", "悪い", "多い", "少ない", "長い", "短い", "早い", "遅い",
-            "白い", "黒い", "赤い", "青い", "暑い", "寒い", "暖かい", "涼しい", "天気", "雨",
-            "水", "花", "山", "川", "海", "空", "犬", "猫", "魚", "鳥",
-            "目", "耳", "口", "手", "足", "頭", "体", "病気", "元気", "好き",
-            "嫌い", "欲しい", "たい", "ある", "いる", "する", "なる", "できる", "分かる", "知る",
-            "思う", "言う", "使う", "作る", "持つ", "待つ", "立つ", "座る", "走る", "歩く",
-            "泳ぐ", "飛ぶ", "入る", "出る", "開ける", "閉める", "始まる", "終わる", "起きる", "寝る",
-            "食事", "料理", "肉", "野菜", "果物", "卵", "パン", "米", "茶", "牛乳",
-            "電車", "車", "自転車", "駅", "道", "地図", "電話", "手紙", "新聞", "雑誌",
-            "テレビ", "映画", "音楽", "写真", "旅行", "散歩", "部屋", "窓", "ドア", "机",
-            "椅子", "本", "鉛筆", "紙", "眼鏡", "時計", "鍵", "財布", "傘", "靴",
-            "服", "色", "数", "一", "二", "三", "四", "五", "六", "七",
-            "八", "九", "十", "百", "千", "万", "円", "何", "誰", "どこ",
-            "いつ", "どう", "なぜ", "どれ", "この", "その", "あの", "ここ", "そこ", "あそこ",
-            // Hiragana variants for N5
-            "たべる", "のむ", "みる", "きく", "よむ", "かく", "はなす", "いく", "くる", "かえる",
-            "かう", "うる", "おしえる", "ならう", "べんきょう", "がっこう", "せんせい", "がくせい", "ともだち", "かぞく",
-            "あにき", "あねさん", "おとうと", "いもうと", "こども", "おとこ", "おんな", "ひと",
-            "にほん", "にほんご", "えいご", "ことば", "なまえ", "じかん", "きょう", "あした", "きのう", "あさ",
-            "ひる", "よる", "まいにち", "まいしゅう", "まいつき", "いま", "あと", "まえ", "うえ", "した",
-            "みぎ", "ひだり", "なか", "そと", "ちかく", "とおい", "おおきい", "ちいさい", "あたらしい", "ふるい",
-            "たかい", "やすい", "よい", "わるい", "おおい", "すくない", "ながい", "みじかい", "はやい", "おそい"
-        ).forEach { put(it, n5) }
-
-        // ===== N4 (~ 1500 words) =====
-        val n4 = JlptLevel.N4
-        listOf(
-            "届ける", "届く", "届け", "運ぶ", "送る", "受ける", "受け取る", "返す", "借りる", "貸す",
-            "払う", "選ぶ", "決める", "決まる", "変わる", "変える", "続ける", "続く", "始める", "終える",
-            "止める", "止まる", "動く", "動かす", "回す", "回る", "集める", "集まる", "並ぶ", "並べる",
-            "落とす", "落ちる", "拾う", "捨てる", "壊す", "壊れる", "直す", "治る", "乾く", "濡れる",
-            "焼く", "焼ける", "煮る", "沸く", "沸かす", "冷える", "冷やす", "温める", "包む", "開く",
-            "閉じる", "押す", "引く", "触る", "握る", "投げる", "打つ", "切る", "折る", "曲げる",
-            "伸ばす", "縮む", "太る", "痩せる", "育てる", "育つ", "生まれる", "死ぬ", "殺す", "助ける",
-            "困る", "叱る", "褒める", "怒る", "泣く", "笑う", "驚く", "喜ぶ", "悲しむ", "楽しむ",
-            "経験", "経済", "政治", "社会", "文化", "歴史", "科学", "技術", "産業", "貿易",
-            "輸出", "輸入", "会議", "意見", "相談", "約束", "連絡", "報告", "説明", "紹介",
-            "特別", "普通", "簡単", "複雑", "必要", "大切", "重要", "自由", "安全", "危険",
-            "季節", "春", "夏", "秋", "冬", "風", "雪", "雲", "星", "月",
-            "地震", "火事", "事故", "問題", "答え", "質問", "試験", "宿題", "授業", "卒業",
-            "入学", "研究", "練習", "準備", "計画", "予定", "予約", "申し込み", "お祝い", "お礼",
-            "お土産", "プレゼント", "趣味", "興味", "夢", "将来", "目標", "理由", "原因", "結果",
-            "場所", "住所", "近所", "交通", "信号", "交差点", "橋", "坂", "港", "空港",
-            "会社", "仕事", "アルバイト", "給料", "店", "客", "品物", "値段", "割引", "荷物",
-            // Hiragana variants for common N4 verbs
-            "とどける", "とどく", "はこぶ", "おくる", "うけける", "うけとる", "かえす", "かりる", "かす",
-            "はらう", "えらぶ", "きめる", "きまる", "かわる", "かえる", "つづける", "つづく", "はじめる", "おわる"
-        ).forEach { put(it, n4) }
-
-        // ===== N3 (~ 3750 words) =====
-        val n3 = JlptLevel.N3
-        listOf(
-            "確認", "確かめる", "確か", "認める", "許す", "禁止", "制限", "規則", "法律", "権利",
-            "義務", "責任", "担当", "役割", "地位", "立場", "態度", "行動", "実行", "実現",
-            "達成", "成功", "失敗", "挑戦", "努力", "我慢", "辛抱", "忍耐", "覚悟", "決心",
-            "感動", "感謝", "反省", "後悔", "同情", "共感", "理解", "誤解", "偏見", "差別",
-            "平等", "公平", "正義", "道徳", "倫理", "常識", "知識", "教養", "能力", "才能",
-            "個性", "性格", "性質", "特徴", "印象", "表現", "表情", "雰囲気", "環境", "条件",
-            "状況", "状態", "事情", "事実", "真実", "現実", "理想", "想像", "空想", "仮定",
-            "推測", "予想", "期待", "希望", "願望", "要望", "要求", "提案", "主張", "意志",
-            "手段", "方法", "方針", "制度", "仕組み", "構造", "組織", "機関", "施設", "設備",
-            "材料", "素材", "資源", "資料", "情報", "データ", "統計", "調査", "分析", "評価",
-            "比較", "対照", "対策", "措置", "処理", "管理", "運営", "経営", "投資", "利益",
-            "損害", "被害", "影響", "効果", "結論", "判断", "決定", "選択", "基準", "標準",
-            "合格", "不合格", "採用", "解雇", "退職", "就職", "転職", "昇進", "降格", "異動",
-            "通勤", "出張", "休暇", "残業", "会話", "議論", "討論", "演説", "講演", "発表",
-            "申請", "届出", "届け出", "契約", "取引", "交渉", "折衝", "妥協", "調整", "仲介"
-        ).forEach { put(it, n3) }
-
-        // ===== N2 (~ 6000 words) =====
-        val n2 = JlptLevel.N2
-        listOf(
-            "把握", "概要", "趣旨", "要旨", "骨子", "概念", "定義", "前提", "仮説", "証拠",
-            "根拠", "論拠", "矛盾", "一貫", "整合", "合理", "妥当", "適切", "的確", "正確",
-            "精密", "詳細", "具体", "抽象", "総合", "包括", "網羅", "系統", "分類", "範囲",
-            "領域", "分野", "専門", "基礎", "応用", "発展", "進歩", "革新", "改革", "改善",
-            "促進", "推進", "実施", "遂行", "達する", "至る", "及ぶ", "及ぼす", "関わる", "携わる",
-            "従事", "従う", "伴う", "生じる", "発生", "出現", "消滅", "除去", "排除", "廃止",
-            "撤回", "撤退", "中止", "中断", "再開", "継続", "維持", "保持", "保護", "保障",
-            "確保", "保存", "保管", "蓄積", "貯蓄", "節約", "消費", "浪費", "無駄", "効率",
-            "生産", "製造", "加工", "開発", "発明", "発見", "探求", "追求", "究明", "解明",
-            "透明", "公開", "公表", "暴露", "隠蔽", "秘密", "機密", "内部", "外部", "周辺",
-            "中心", "核心", "本質", "根本", "源泉", "起源", "由来", "伝統", "慣習", "風習",
-            "趨勢", "傾向", "動向", "推移", "変遷", "変動", "波及", "拡大", "縮小", "増大",
-            "減少", "増減", "上昇", "下降", "急激", "緩やか", "徐々", "次第", "段階", "過程",
-            "展開", "展望", "見通し", "見込み", "可能性", "蓋然性", "確率", "頻度", "割合", "比率"
-        ).forEach { put(it, n2) }
-
-        // ===== N1 (~ 10000 words) =====
-        val n1 = JlptLevel.N1
-        listOf(
-            "遵守", "厳守", "墨守", "固守", "死守", "堅持", "保全", "温存", "存続", "永続",
-            "恒久", "不変", "不朽", "普遍", "遍在", "偏在", "局在", "散在", "混在", "共存",
-            "併存", "並存", "対峙", "対立", "拮抗", "均衡", "調和", "融合", "統一", "統合",
-            "合併", "併合", "吸収", "包含", "内包", "含蓄", "暗示", "示唆", "喚起", "触発",
-            "誘発", "惹起", "招来", "招致", "誘致", "勧誘", "斡旋", "仲裁", "調停", "和解",
-            "妥結", "締結", "批准", "承認", "認可", "許認可", "免許", "資格", "適格", "不適格",
-            "適任", "不適任", "有能", "無能", "卓越", "秀逸", "優秀", "精鋭", "精通", "熟達",
-            "熟練", "円熟", "洗練", "精錬", "鍛錬", "修練", "修行", "苦行", "難行", "荒行",
-            "懇願", "哀願", "嘆願", "請願", "陳情", "要請", "督促", "催促", "促す", "急かす",
-            "焦る", "焦燥", "苛立つ", "憤慨", "憤怒", "激怒", "逆上", "逆鱗", "顰蹙", "軽蔑",
-            "侮辱", "冒涜", "蹂躙", "迫害", "弾圧", "抑圧", "圧迫", "束縛", "拘束", "制約",
-            "制裁", "懲罰", "処罰", "罰則", "刑罰", "厳罰", "極刑", "死刑", "無罪", "冤罪",
-            "鎮静", "沈静", "収束", "終息", "安堵", "安寧", "泰然", "悠然", "超然", "毅然"
-        ).forEach { put(it, n1) }
-    }
 }
