@@ -22,31 +22,18 @@ object JlptLevelUtil {
     }
 
     /**
-     * Extract JLPT level from JMDict tags.
+     * Extract JLPT level only from JMDict tags.
      * Tags are typically in format "jlpt-1", "jlpt-2", "jlpt-3", "jlpt-4", "jlpt-5"
-     * where jlpt-1 = N1 (hardest), jlpt-5 = N5 (easiest)
-     * 
-     * Falls back to frequency-based estimation if no JLPT tag found.
+     * where jlpt-1 = N1 (hardest), jlpt-5 = N5 (easiest).
+     *
+     * No frequency fallback is used: result is either a JLPT level from tags or null.
      */
-    fun getLevel(tagsString: String, frequency: Int = 0): JlptLevel? {
+    fun getLevel(tagsString: String): JlptLevel? {
         // First try to extract JLPT tag from tags string
         if (tagsString.isNotBlank()) {
             val jlptTag = extractJlptTag(tagsString)
             if (jlptTag != null) return jlptTag
         }
-
-        // Fallback: estimate from frequency (lower number = higher frequency = more basic)
-        if (frequency > 0) {
-            return when {
-                frequency <= 500 -> JlptLevel.N5       // Top 500 most common words
-                frequency <= 2000 -> JlptLevel.N4      // Top 2000
-                frequency <= 8000 -> JlptLevel.N3      // Top 8000
-                frequency <= 15000 -> JlptLevel.N2     // Top 15000
-                frequency <= 50000 -> JlptLevel.N1     // Top 50000
-                else -> null
-            }
-        }
-
         return null
     }
 
@@ -55,33 +42,59 @@ object JlptLevelUtil {
      * Looks through tags and partsOfSpeech for JLPT level information.
      */
     fun getLevelFromTags(
-        tagsAndPartsOfSpeech: String,
-        frequency: Int = 0
+        tagsAndPartsOfSpeech: String
     ): JlptLevel? {
-        return getLevel(tagsAndPartsOfSpeech, frequency)
+        return getLevel(tagsAndPartsOfSpeech)
     }
 
     /**
-     * Extract JLPT tag from a comma-separated tags string.
-     * Looks for patterns like "jlpt-1", "jlpt-2", "jlpt-3", "jlpt-4", "jlpt-5"
-     * where jlpt-1 = N1, jlpt-2 = N2, jlpt-3 = N3, jlpt-4 = N4, jlpt-5 = N5
+     * Extract JLPT tag from a tags string.
+     * Accepts common formats like: "jlpt-1", "jlpt-n1", "n1", "n2", etc.
      */
     private fun extractJlptTag(tagsString: String): JlptLevel? {
         if (tagsString.isBlank()) return null
 
-        val tags = tagsString.split(",").map { it.trim().lowercase() }
+        // Parse tag-like chunks to avoid false positives (e.g. "jlpt-3000").
+        val chunks = tagsString
+            .lowercase()
+            .split(',', ';', '|', '/')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        // Accepted forms:
+        // - jlpt-1 / jlpt_1 / jlpt 1
+        // - jlpt-n1 / jlpt_n1 / jlpt n1
+        // - n1, n2, n3, n4, n5 (standalone, when surrounded by non-alphanumeric)
+        // Also allows optional separators between n and digit: "jlpt n 1".
+        val jlptPrefixPattern = Regex("""(?<![a-z0-9])jlpt[\s:_-]*n?[\s:_-]*([1-5])(?![a-z0-9])""")
+        val standaloneLevelPattern = Regex("""(?<![a-z0-9])n([1-5])(?![a-z0-9])""")
+
+        val matches = mutableListOf<Int>()
         
-        for (tag in tags) {
-            when {
-                tag.contains("jlpt-1") || tag == "jlpt-1" -> return JlptLevel.N1
-                tag.contains("jlpt-2") || tag == "jlpt-2" -> return JlptLevel.N2
-                tag.contains("jlpt-3") || tag == "jlpt-3" -> return JlptLevel.N3
-                tag.contains("jlpt-4") || tag == "jlpt-4" -> return JlptLevel.N4
-                tag.contains("jlpt-5") || tag == "jlpt-5" -> return JlptLevel.N5
+        for (chunk in chunks) {
+            // Try jlpt-prefixed pattern first
+            jlptPrefixPattern.find(chunk)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { matches.add(it) }
+            
+            // Try standalone n1-n5 pattern if no jlpt prefix found in this chunk
+            if (!chunk.contains("jlpt")) {
+                standaloneLevelPattern.find(chunk)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { matches.add(it) }
             }
         }
 
-        return null
+        if (matches.isEmpty()) return null
+
+        // If multiple JLPT tags are present across merged entries,
+        // prefer the most advanced/hardest level (N1) to avoid underestimating difficulty.
+        val mostAdvanced = matches.minOrNull() ?: return null
+        return when (mostAdvanced) {
+            1 -> JlptLevel.N1
+            2 -> JlptLevel.N2
+            3 -> JlptLevel.N3
+            4 -> JlptLevel.N4
+            5 -> JlptLevel.N5
+            else -> null
+        }
     }
+
 
 }

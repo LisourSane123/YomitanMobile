@@ -306,8 +306,7 @@ private fun WordDetailContent(
                     Text(freqLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Medium)
                 }
                 val jlptLevel = JlptLevelUtil.getLevel(
-                    tagsString = entry.partsOfSpeech.joinToString(", "),
-                    frequency = entry.frequency
+                    tagsString = entry.partsOfSpeech.joinToString(", ")
                 )
                 if (jlptLevel != null) {
                     Spacer(Modifier.height(6.dp))
