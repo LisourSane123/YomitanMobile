@@ -52,7 +52,10 @@ class YomitanDictionaryParser @Inject constructor() {
         const val MAX_TERM_BANK_BYTES = 25 * 1024 * 1024
         const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
         const val MAX_META_BANK_BYTES = 25 * 1024 * 1024
-        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 200L * 1024L * 1024L
+        // Increase total uncompressed bytes limit to 1 GB to accommodate
+        // larger community dictionaries like Jitendex.
+        // Adjust this if you expect even larger imports on low-memory devices.
+        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 1024L * 1024L * 1024L // 1 GB
     }
 
     private val json = Json {
