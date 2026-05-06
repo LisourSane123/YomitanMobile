@@ -49,7 +49,7 @@ object AvailableDictionaries {
         descriptionPl = "Najnowsze JMdict ze wsparciem tagów JLPT (N1-N5). Zalecane dla nauki JLPT.",
         descriptionEn = "Latest JMdict with full JLPT tag support (N1-N5). Recommended for JLPT study.",
         category = DictionaryCategory.DICTIONARY,
-        url = "https://github.com/stephenmk/Jitendex/releases/latest/download/Jitendex_en.zip",
+        url = "https://github.com/MarvNC/yomitan-dictionaries/raw/main/dictionaries/Jitendex_en.zip",
         fileSize = "~18 MB",
         language = "EN"
     )
