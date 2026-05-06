@@ -43,7 +43,19 @@ object AvailableDictionaries {
         language = "EN"
     )
 
+    val jitendex = DictionaryDownloadInfo(
+        id = "jitendex",
+        name = "Jitendex (JA→EN + JLPT)",
+        descriptionPl = "Najnowsze JMdict ze wsparciem tagów JLPT (N1-N5). Zalecane dla nauki JLPT.",
+        descriptionEn = "Latest JMdict with full JLPT tag support (N1-N5). Recommended for JLPT study.",
+        category = DictionaryCategory.DICTIONARY,
+        url = "https://github.com/stephenmk/Jitendex/releases/latest/download/Jitendex_en.zip",
+        fileSize = "~18 MB",
+        language = "EN"
+    )
+
     val all: List<DictionaryDownloadInfo> = listOf(
+        jitendex,
         jmdict,
         DictionaryDownloadInfo(
             id = "jmdict_forms",
@@ -103,10 +115,10 @@ object AvailableDictionaries {
 
     /**
      * Recommended dictionaries for first-time setup.
-     * JMdict (main dictionary), JPDB Frequency, Kanjium Pitch Accent.
+     * Jitendex (with JLPT support), JPDB Frequency, Kanjium Pitch Accent.
      */
     val recommended: List<DictionaryDownloadInfo> = listOf(
-        jmdict,
+        jitendex,
         all.first { it.id == "jpdb_freq" },
         all.first { it.id == "kanjium_pitch" }
     )

@@ -1,5 +1,6 @@
 package com.yomitanmobile.data.parser
 
+import android.util.Log
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.KanjiEntry
@@ -396,16 +397,28 @@ class YomitanDictionaryParser @Inject constructor() {
             definitions
         )
 
+        val partsOfSpeech = listOfNotNull(
+            definitionTags.takeIf { it.isNotBlank() },
+            termTags.takeIf { it.isNotBlank() }
+        ).joinToString(", ")
+        
+        // Debug logging (safe for tests and release)
+        if (expression.isNotBlank() && (definitionTags.isNotBlank() || termTags.isNotBlank())) {
+            try {
+                Log.d("YomitanParser", "Parsed: expr='$expression', definitionTags='$definitionTags', termTags='$termTags', partsOfSpeech='$partsOfSpeech'")
+            } catch (_: Throwable) {
+                // Logging might fail in tests - that's ok
+                println("YomitanParser: expr='$expression', partsOfSpeech='$partsOfSpeech'")
+            }
+        }
+
         return DictionaryEntry(
             expression = expression,
             reading = reading.ifBlank { expression },
             definition = encodedDefinitions,
             frequency = 0, // Actual frequency comes from frequency dictionaries via term_meta_bank
             pitchAccent = "",
-            partsOfSpeech = listOfNotNull(
-                definitionTags.takeIf { it.isNotBlank() },
-                termTags.takeIf { it.isNotBlank() }
-            ).joinToString(", "),
+            partsOfSpeech = partsOfSpeech,
             dictionaryName = dictionaryName,
             sequenceNumber = sequenceNumber
         )

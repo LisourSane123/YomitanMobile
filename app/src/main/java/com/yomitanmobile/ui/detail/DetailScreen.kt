@@ -305,9 +305,10 @@ private fun WordDetailContent(
                 if (freqLabel.isNotBlank()) {
                     Text(freqLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Medium)
                 }
-                val jlptLevel = JlptLevelUtil.getLevel(
-                    tagsString = entry.partsOfSpeech.joinToString(", ")
-                )
+                val tagsString = entry.partsOfSpeech.joinToString(", ")
+                android.util.Log.d("JlptDebug", "Word: ${entry.primaryExpression}, partsOfSpeech=[${entry.partsOfSpeech}], tagsString='$tagsString'")
+                val jlptLevel = JlptLevelUtil.getLevel(tagsString)
+                android.util.Log.d("JlptDebug", "Extracted JLPT level: $jlptLevel")
                 if (jlptLevel != null) {
                     Spacer(Modifier.height(6.dp))
                     Text(

@@ -127,7 +127,7 @@ private fun WelcomeContent(
 
         Text(
             "Pobierz rekomendowane słowniki, aby w pełni korzystać z aplikacji:\n" +
-                "• JMdict — główny słownik (~200K wpisów)\n" +
+                "• Jitendex — JMdict ze wsparciem JLPT (N1-N5) ⭐\n" +
                 "• JPDB Frequency — ranking częstotliwości\n" +
                 "• Kanjium — akcent tonalny (pitch accent)",
             style = MaterialTheme.typography.bodyLarge,
@@ -150,7 +150,7 @@ private fun WelcomeContent(
                 modifier = Modifier.size(24.dp)
             )
             Spacer(Modifier.size(12.dp))
-            Text(text = "Download recommended (~19 MB)", fontSize = 16.sp)
+            Text(text = "Download recommended + JLPT (~20 MB)", fontSize = 16.sp)
         }
 
         Spacer(Modifier.height(12.dp))

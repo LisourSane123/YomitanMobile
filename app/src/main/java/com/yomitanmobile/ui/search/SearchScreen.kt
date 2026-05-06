@@ -494,9 +494,12 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = freqLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
             }
+            val tagsString = entry.partsOfSpeech.joinToString(", ")
+            android.util.Log.d("JlptDebug", "SearchScreen - Word: ${entry.primaryExpression}, partsOfSpeech=[${entry.partsOfSpeech}], tagsString='$tagsString'")
             val jlptLevel = JlptLevelUtil.getLevel(
-                tagsString = entry.partsOfSpeech.joinToString(", ")
+                tagsString = tagsString
             )
+            android.util.Log.d("JlptDebug", "SearchScreen - Extracted JLPT level: $jlptLevel")
             if (jlptLevel != null) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
