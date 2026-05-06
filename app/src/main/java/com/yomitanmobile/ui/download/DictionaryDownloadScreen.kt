@@ -334,11 +334,21 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                     DownloadPhase.ERROR -> {
                         Icon(Icons.Default.Error, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text(
-                            tr("Błąd: ${progress.dictionaryName}", "Error: ${progress.dictionaryName}"),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Column {
+                            Text(
+                                tr("Błąd: ${progress.dictionaryName}", "Error: ${progress.dictionaryName}"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (!progress.errorMessage.isNullOrBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    progress.errorMessage,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }

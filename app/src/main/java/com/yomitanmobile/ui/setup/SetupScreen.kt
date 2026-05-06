@@ -195,7 +195,8 @@ private fun DownloadingContent(
             DownloadPhase.DOWNLOADING -> if (isEnglish) "Downloading ${progress.dictionaryName}…" else "Pobieranie ${progress.dictionaryName}…"
             DownloadPhase.IMPORTING -> if (isEnglish) "Importing ${progress.dictionaryName}…" else "Importowanie ${progress.dictionaryName}…"
             DownloadPhase.COMPLETED -> if (isEnglish) "Done!" else "Gotowe!"
-            DownloadPhase.ERROR -> if (isEnglish) "Error!" else "Błąd!"
+            DownloadPhase.ERROR -> progress?.errorMessage?.takeIf { it.isNotBlank() }
+                ?: if (isEnglish) "Error!" else "Błąd!"
             null -> if (isEnglish) "Preparing…" else "Przygotowywanie…"
         }
 
@@ -228,6 +229,14 @@ private fun DownloadingContent(
                 text = if (isEnglish) "This may take a few minutes…" else "To może zająć kilka minut…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else if (progress?.phase == DownloadPhase.ERROR && !progress.errorMessage.isNullOrBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = progress.errorMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center
             )
         } else {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())

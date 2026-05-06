@@ -23,7 +23,8 @@ data class DownloadProgress(
     val dictionaryName: String,
     val bytesDownloaded: Long,
     val totalBytes: Long,
-    val phase: DownloadPhase
+    val phase: DownloadPhase,
+    val errorMessage: String? = null
 ) {
     val progressPercent: Float
         get() = if (totalBytes > 0) bytesDownloaded.toFloat() / totalBytes else 0f
@@ -132,7 +133,8 @@ class DictionaryDownloadManager(
                     }
                 } catch (e: Exception) {
                     _currentDownload.value = _currentDownload.value?.copy(
-                        phase = DownloadPhase.ERROR
+                        phase = DownloadPhase.ERROR,
+                        errorMessage = e.message ?: "Unknown error"
                     )
                     DownloadResult.Error(info.name, e.message ?: "Unknown error")
                 } finally {
