@@ -169,6 +169,15 @@ private fun WelcomeContent(
         TextButton(onClick = onSkip) {
             Text("Skip — I'll import manually")
         }
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = "Jitendex download: https://jitendex.org/pages/downloads.html",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }
 

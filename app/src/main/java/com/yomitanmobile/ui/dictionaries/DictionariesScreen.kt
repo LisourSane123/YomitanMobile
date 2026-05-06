@@ -107,8 +107,8 @@ fun DictionariesScreen(
                     Spacer(Modifier.padding(8.dp))
                     Text(
                         text = tr(
-                            "Pobierz rekomendowany słownik Jitendex\nze wsparciem poziomu JLPT (N1-N5):\n\nhttps://github.com/stephenmk/Jitendex/releases",
-                            "Download the recommended Jitendex dictionary\nwith full JLPT level support (N1-N5):\n\nhttps://github.com/stephenmk/Jitendex/releases"
+                            "Pobierz rekomendowany słownik Jitendex\nze wsparciem poziomu JLPT (N1-N5):\n\nhttps://jitendex.org/pages/downloads.html",
+                            "Download the recommended Jitendex dictionary\nwith full JLPT level support (N1-N5):\n\nhttps://jitendex.org/pages/downloads.html"
                         ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
