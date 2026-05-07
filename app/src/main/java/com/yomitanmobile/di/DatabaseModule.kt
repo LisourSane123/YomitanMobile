@@ -38,6 +38,7 @@ object DatabaseModule {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
                     ensureExportedWordsColumns(db)
+                    applyPerformancePragmas(db)
                 }
             })
 
@@ -47,6 +48,22 @@ object DatabaseModule {
         }
 
         return builder.build()
+    }
+
+    /**
+     * Connection-scoped SQLite tuning. cache_size = -10000 reserves ~10MB of page
+     * cache, temp_store=MEMORY keeps temporary B-trees off disk during sorts and
+     * FTS rebuild. Both make dictionary import noticeably faster while staying
+     * safe under power loss (synchronous and journal_mode are left at Room
+     * defaults, which is WAL + NORMAL).
+     */
+    private fun applyPerformancePragmas(db: SupportSQLiteDatabase) {
+        try {
+            db.execSQL("PRAGMA temp_store = MEMORY")
+            db.execSQL("PRAGMA cache_size = -10000")
+        } catch (_: Exception) {
+            // PRAGMA tuning is best-effort; never fail to open the DB over it.
+        }
     }
 
     private fun ensureExportedWordsColumns(db: SupportSQLiteDatabase) {

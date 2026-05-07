@@ -105,8 +105,13 @@ class AnkiCardCreator(
             }
             .audio { margin: 8px 0; }
             .sentence {
-                font-size: 14px; color: #b0bec5; margin-top: 8px; font-style: italic;
-                text-align: center; line-height: 1.35;
+                font-size: 14px; color: #b0bec5; margin-top: 8px;
+                text-align: center; line-height: 1.4;
+            }
+            .sentence-jp { font-style: italic; }
+            .sentence-translation {
+                font-size: 12px; color: #90a4ae; margin-top: 4px;
+                font-style: normal; opacity: 0.95;
             }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
             .kanji-breakdown { font-size: 16px; color: #ccc; margin-top: 15px; padding: 12px; background: #252525; border-radius: 8px; text-align: left; } .kanji-item { margin-bottom: 8px; } .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
@@ -167,9 +172,14 @@ class AnkiCardCreator(
             }
             .audio { margin: 8px 0; }
             .sentence {
-                font-size: ${prefs.backSentenceFontSize}px; color: #bbb; margin-top: 8px; font-style: italic;
-                text-align: center; line-height: 1.35;
+                font-size: ${prefs.backSentenceFontSize}px; color: #bbb; margin-top: 8px;
+                text-align: center; line-height: 1.4;
                 ${if (!prefs.showSentence) "display: none;" else ""}
+            }
+            .sentence-jp { font-style: italic; }
+            .sentence-translation {
+                font-size: ${(prefs.backSentenceFontSize - 2).coerceAtLeast(10)}px;
+                color: #90a4ae; margin-top: 4px; font-style: normal; opacity: 0.95;
             }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
             .kanji-breakdown { font-size: 16px; color: #ccc; margin-top: 15px; padding: 12px; background: #252525; border-radius: 8px; text-align: left; } .kanji-item { margin-bottom: 8px; } .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
@@ -217,7 +227,10 @@ class AnkiCardCreator(
                     <div class="reading">たべる</div>
                     <div class="pitch">$previewPitch</div>
                     <div class="meaning">1. to eat<br>2. to live on (e.g. a salary); to live off; to subsist on</div>
-                    <div class="sentence">毎日野菜を食べます。<br><small>I eat vegetables every day.</small></div>
+                    <div class="sentence">
+                        <div class="sentence-jp">毎日野菜を食べます。</div>
+                        <div class="sentence-translation">I eat vegetables every day.</div>
+                    </div>
                 </div>
             </body>
             </html>
@@ -615,11 +628,19 @@ class AnkiCardCreator(
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
             sentence = buildString {
-                append(InputSanitizer.escapeHtml(entry.exampleSentence))
-                if (entry.exampleSentenceTranslation.isNotBlank()) {
-                    append("<br><small>")
-                    append(InputSanitizer.escapeHtml(entry.exampleSentenceTranslation))
-                    append("</small>")
+                val jp = entry.exampleSentence
+                if (jp.isNotBlank()) {
+                    append("<div class=\"sentence-jp\">")
+                    append(InputSanitizer.escapeHtml(jp))
+                    append("</div>")
+                }
+                val translation = entry.exampleSentenceTranslation
+                if (translation.isNotBlank()) {
+                    // Translation only renders on the back because {{Sentence}} is
+                    // referenced exclusively by CARD_BACK_TEMPLATE.
+                    append("<div class=\"sentence-translation\">")
+                    append(InputSanitizer.escapeHtml(translation))
+                    append("</div>")
                 }
             }
         )

@@ -93,12 +93,14 @@ class DictionaryRepositoryImpl @Inject constructor(
             var totalFreqUpdates = 0
             var totalPitchUpdates = 0
 
-            // Use streaming parser — entries are inserted in batches as they're parsed
+            // Use streaming parser — entries are inserted in batches as they're parsed.
+            // Larger batches mean fewer transaction commits; SQLite handles 2000+ inserts
+            // per transaction comfortably and this measurably shortens dictionary import.
+            val batchSize = 2000
             val parseResult = parser.parseFromZipStreaming(
                 inputStream = inputStream,
                 onProgress = onProgress,
                 onBatch = { batch, _ ->
-                    val batchSize = 500
                     batch.chunked(batchSize).forEach { chunk ->
                         dictionaryDao.insertAll(chunk)
                     }
@@ -115,7 +117,6 @@ class DictionaryRepositoryImpl @Inject constructor(
                     }
                 },
                 onKanjiBatch = { batch, _ ->
-                    val batchSize = 500
                     batch.chunked(batchSize).forEach { chunk ->
                         kanjiDao.insertAll(chunk)
                     }
