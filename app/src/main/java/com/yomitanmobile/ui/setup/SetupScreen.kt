@@ -68,7 +68,8 @@ fun SetupScreen(
                     progress = downloadProgress
                 )
                 SetupState.COMPLETED -> CompletedContent(
-                    onContinue = onSetupComplete
+                    onContinue = onSetupComplete,
+                    onDebug = { viewModel.debugLogSampleEntries() }
                 )
                 SetupState.ERROR -> ErrorContent(
                     message = errorMessage ?: if (isEnglish) "Unknown error" else "Nieznany błąd",
@@ -254,7 +255,7 @@ private fun DownloadingContent(
 }
 
 @Composable
-private fun CompletedContent(onContinue: () -> Unit) {
+private fun CompletedContent(onContinue: () -> Unit, onDebug: () -> Unit) {
     val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
     Column(
         modifier = Modifier
@@ -284,12 +285,12 @@ private fun CompletedContent(onContinue: () -> Unit) {
         Text(
             text = if (isEnglish) {
                 "JMdict (English) has been successfully downloaded and imported.\n" +
-                "You can now search words offline.\n\n" +
-                "Pronunciation via TTS is available automatically through Google TTS."
+                    "You can now search words offline.\n\n" +
+                    "Pronunciation via TTS is available automatically through Google TTS."
             } else {
                 "JMdict (English) został pomyślnie pobrany i zaimportowany.\n" +
-                "Możesz teraz wyszukiwać słowa offline.\n\n" +
-                "Wymowa TTS jest dostępna automatycznie przez Google TTS."
+                    "Możesz teraz wyszukiwać słowa offline.\n\n" +
+                    "Wymowa TTS jest dostępna automatycznie przez Google TTS."
             },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
@@ -305,6 +306,12 @@ private fun CompletedContent(onContinue: () -> Unit) {
                 .height(56.dp)
         ) {
             Text(text = if (isEnglish) "Start searching" else "Rozpocznij wyszukiwanie", fontSize = 16.sp)
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        TextButton(onClick = onDebug) {
+            Text(text = "Debug JLPT (logs)")
         }
     }
 }

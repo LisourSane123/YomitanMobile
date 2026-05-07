@@ -13,6 +13,7 @@ import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
+import com.yomitanmobile.data.local.entity.Sentence
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.data.sentence.OnlineSentenceService
 import com.yomitanmobile.domain.model.CardStylePreferences
@@ -70,6 +71,9 @@ class DetailViewModel @Inject constructor(
     private val _entry = MutableStateFlow<MergedWordEntry?>(null)
     val entry: StateFlow<MergedWordEntry?> = _entry.asStateFlow()
 
+    private val _exampleSentences = MutableStateFlow<List<Sentence>>(emptyList())
+    val exampleSentences: StateFlow<List<Sentence>> = _exampleSentences.asStateFlow()
+
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -94,7 +98,7 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             val word = getWordDetailUseCase.invoke(entryId)
-            _entry.value = word?.let { baseWord ->
+            val loadedEntry = word?.let { baseWord ->
                 val normalizedReading = baseWord.reading.ifBlank { baseWord.expression }
                 val relatedEntries = runCatching {
                     repository.getEntriesByReading(normalizedReading)
@@ -105,13 +109,46 @@ class DetailViewModel @Inject constructor(
                     .ifEmpty { listOf(baseWord) }
 
                 val merged = MergedWordEntry.mergeEntries(mergeInput)
-                merged.firstOrNull { entryId in it.entryIds }
+                val selected: MergedWordEntry? = merged.firstOrNull { entryId in it.entryIds }
                     ?: merged.firstOrNull { it.primaryId == entryId }
                     ?: merged.firstOrNull()
+
+                if (selected != null) {
+                    _exampleSentences.value = loadExampleSentences(selected)
+                    enrichWithLocalSentence(selected)
+                } else {
+                    _exampleSentences.value = emptyList()
+                    null
+                }
             }
+            _entry.value = loadedEntry
             _isLoading.value = false
             checkFavoriteStatus()
         }
+    }
+
+    private suspend fun loadExampleSentences(entry: MergedWordEntry): List<Sentence> {
+        val lookupExpression = entry.primaryExpression.ifBlank { entry.reading }
+        val lookupReading = entry.reading.ifBlank { lookupExpression }
+        if (lookupExpression.isBlank() && lookupReading.isBlank()) return emptyList()
+
+        return runCatching {
+            sentenceDao.getSentencesByExpressionOrReading(
+                expression = lookupExpression,
+                reading = lookupReading
+            )
+        }.getOrDefault(emptyList())
+    }
+
+    private suspend fun enrichWithLocalSentence(entry: MergedWordEntry): MergedWordEntry {
+        if (entry.exampleSentence.isNotBlank()) return entry
+
+        val sentence = _exampleSentences.value.firstOrNull() ?: return entry
+
+        return entry.copy(
+            exampleSentence = sentence.sentenceJapanese,
+            exampleSentenceTranslation = sentence.sentenceEnglish
+        )
     }
 
     private fun checkFavoriteStatus() {

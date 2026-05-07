@@ -198,4 +198,12 @@ class DictionaryRepositoryImpl @Inject constructor(
             0
         }
     }
+
+    override suspend fun getSampleEntries(limit: Int): List<WordEntry> {
+        return try {
+            dictionaryDao.getSampleEntries(limit).map { it.toDomain() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
 }

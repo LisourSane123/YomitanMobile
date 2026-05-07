@@ -22,4 +22,7 @@ interface DictionaryRepository {
     suspend fun deleteDictionary(dictionaryName: String)
     fun getImportedDictionaries(): Flow<List<DictionaryInfo>>
     suspend fun getEntryCount(): Int
+
+    // Debug helper: fetch a small sample of entries (domain model) for inspection
+    suspend fun getSampleEntries(limit: Int = 50): List<com.yomitanmobile.domain.model.WordEntry>
 }

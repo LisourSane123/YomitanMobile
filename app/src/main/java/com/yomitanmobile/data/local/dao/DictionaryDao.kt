@@ -20,26 +20,28 @@ interface DictionaryDao {
         SELECT dictionary_entries.* FROM dictionary_entries
         JOIN dictionary_entries_fts ON dictionary_entries.rowid = dictionary_entries_fts.rowid
         WHERE dictionary_entries_fts MATCH :query
-        ORDER BY CASE WHEN dictionary_entries.frequency > 0 THEN 0 ELSE 1 END,
+        ORDER BY CASE WHEN LOWER(dictionary_entries.dictionary_name) LIKE '%jitendex%' THEN 0 WHEN LOWER(dictionary_entries.dictionary_name) LIKE '%jmdict%' THEN 1 ELSE 2 END,
+                 CASE WHEN dictionary_entries.frequency > 0 THEN 0 ELSE 1 END,
                  dictionary_entries.frequency ASC,
                  LENGTH(dictionary_entries.expression) ASC
         LIMIT :limit
     """)
     fun searchFts(query: String, limit: Int = 50): Flow<List<DictionaryEntry>>
 
-    @Query("SELECT * FROM dictionary_entries WHERE expression = :expression ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
+    @Query("SELECT * FROM dictionary_entries WHERE expression = :expression ORDER BY CASE WHEN LOWER(dictionary_name) LIKE '%jitendex%' THEN 0 WHEN LOWER(dictionary_name) LIKE '%jmdict%' THEN 1 ELSE 2 END, CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
     fun findByExpression(expression: String): Flow<List<DictionaryEntry>>
 
-    @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
+    @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN LOWER(dictionary_name) LIKE '%jitendex%' THEN 0 WHEN LOWER(dictionary_name) LIKE '%jmdict%' THEN 1 ELSE 2 END, CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
     fun findByReading(reading: String): Flow<List<DictionaryEntry>>
 
-    @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
+    @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN LOWER(dictionary_name) LIKE '%jitendex%' THEN 0 WHEN LOWER(dictionary_name) LIKE '%jmdict%' THEN 1 ELSE 2 END, CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
     suspend fun getByReading(reading: String): List<DictionaryEntry>
 
     @Query("""
         SELECT * FROM dictionary_entries 
         WHERE expression LIKE :prefix || '%' OR reading LIKE :prefix || '%'
-        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
+        ORDER BY CASE WHEN LOWER(dictionary_name) LIKE '%jitendex%' THEN 0 WHEN LOWER(dictionary_name) LIKE '%jmdict%' THEN 1 ELSE 2 END,
+                 CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
                  frequency ASC, LENGTH(expression) ASC
         LIMIT :limit
     """)
@@ -57,6 +59,7 @@ interface DictionaryDao {
                 WHEN reading = :query THEN 1
                 ELSE 2
             END,
+            CASE WHEN LOWER(dictionary_name) LIKE '%jitendex%' THEN 0 WHEN LOWER(dictionary_name) LIKE '%jmdict%' THEN 1 ELSE 2 END,
             CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
             frequency ASC,
             LENGTH(expression) ASC
@@ -82,6 +85,8 @@ interface DictionaryDao {
     @Query("SELECT COUNT(*) FROM dictionary_entries WHERE dictionary_name = :dictionaryName")
     suspend fun getEntryCountForDictionary(dictionaryName: String): Int
 
+    @Query("SELECT * FROM dictionary_entries LIMIT :limit")
+    suspend fun getSampleEntries(limit: Int = 50): List<DictionaryEntry>
     @Query("INSERT INTO dictionary_entries_fts(dictionary_entries_fts) VALUES('rebuild')")
     suspend fun rebuildFtsIndex()
 
@@ -93,7 +98,8 @@ interface DictionaryDao {
         SELECT dictionary_entries.* FROM dictionary_entries
         JOIN dictionary_entries_fts ON dictionary_entries.rowid = dictionary_entries_fts.rowid
         WHERE dictionary_entries_fts MATCH :query
-        ORDER BY CASE WHEN dictionary_entries.frequency > 0 THEN 0 ELSE 1 END,
+        ORDER BY CASE WHEN LOWER(dictionary_entries.dictionary_name) LIKE '%jitendex%' THEN 0 WHEN LOWER(dictionary_entries.dictionary_name) LIKE '%jmdict%' THEN 1 ELSE 2 END,
+                 CASE WHEN dictionary_entries.frequency > 0 THEN 0 ELSE 1 END,
                  dictionary_entries.frequency ASC,
                  LENGTH(dictionary_entries.expression) ASC
         LIMIT :limit

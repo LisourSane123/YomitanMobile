@@ -5,6 +5,7 @@ data class WordEntry(
     val expression: String,
     val reading: String,
     val definitions: List<String>,
+    val meaningBlocks: List<MeaningBlock> = emptyList(),
     val frequency: Int = 0,
     val pitchAccent: String = "",
     val partsOfSpeech: String = "",
@@ -13,7 +14,10 @@ data class WordEntry(
     val exampleSentenceTranslation: String = "",
     val audioFile: String = ""
 ) {
-    fun definitionText(): String = definitions.joinToString("; ")
+    fun definitionText(): String = when {
+        meaningBlocks.isNotEmpty() -> meaningBlocks.joinToString("\n") { it.meaning }
+        else -> definitions.joinToString("\n")
+    }
 
     fun displayText(): String = expression.ifBlank { reading }
 

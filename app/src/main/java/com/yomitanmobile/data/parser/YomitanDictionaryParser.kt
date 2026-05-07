@@ -4,6 +4,8 @@ import android.util.Log
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.KanjiEntry
+import com.yomitanmobile.domain.model.MeaningBlock
+import com.yomitanmobile.domain.model.MeaningExample
 
 import com.yomitanmobile.domain.model.ImportProgress
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +26,7 @@ import java.io.ByteArrayOutputStream
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.yomitanmobile.util.InputSanitizer
 
 data class ParseResult(
     val dictionaryName: String,
@@ -387,7 +390,12 @@ class YomitanDictionaryParser @Inject constructor() {
         val reading = safeString(term[1])
         val definitionTags = safeString(term[2])
         // term[4] is the dictionary sort score, NOT frequency rank
-        val definitions = parseDefinitions(term[5])
+        val meaningBlocks = parseMeaningBlocks(term[5])
+        val definitions = if (meaningBlocks.isNotEmpty()) {
+            meaningBlocks.map { it.meaning }
+        } else {
+            parseDefinitions(term[5])
+        }
         val sequenceNumber = if (term.size > 6) {
             try { term[6].jsonPrimitive.intOrNull ?: 0 } catch (_: Exception) { 0 }
         } else 0
@@ -395,14 +403,17 @@ class YomitanDictionaryParser @Inject constructor() {
 
         if (expression.isBlank() && reading.isBlank()) return null
 
-        val encodedDefinitions = json.encodeToString(
-            ListSerializer(String.serializer()),
-            definitions
-        )
+        val encodedDefinitions = if (meaningBlocks.isNotEmpty()) {
+            json.encodeToString(ListSerializer(MeaningBlock.serializer()), meaningBlocks)
+        } else {
+            json.encodeToString(ListSerializer(String.serializer()), definitions)
+        }
 
+        val structuredPartsOfSpeech = extractStructuredPartOfSpeechTags(term[5])
         val partsOfSpeech = listOfNotNull(
             definitionTags.takeIf { it.isNotBlank() },
-            termTags.takeIf { it.isNotBlank() }
+            termTags.takeIf { it.isNotBlank() },
+            structuredPartsOfSpeech.takeIf { it.isNotEmpty() }?.joinToString(", ")
         ).joinToString(", ")
         
         // Debug logging (safe for tests and release)
@@ -427,34 +438,290 @@ class YomitanDictionaryParser @Inject constructor() {
         )
     }
 
-    private fun parseDefinitions(element: JsonElement): List<String> {
-        return when (element) {
-            is JsonPrimitive -> listOf(element.content)
-            is JsonArray -> {
-                element.mapNotNull { item ->
-                    try {
-                        when (item) {
-                            is JsonPrimitive -> item.content
-                            is JsonObject -> parseStructuredContent(item)
-                            is JsonArray -> {
-                                item.mapNotNull { subItem ->
-                                    when (subItem) {
-                                        is JsonPrimitive -> subItem.content
-                                        is JsonObject -> parseStructuredContent(subItem)
-                                        else -> null
-                                    }
-                                }.joinToString("; ")
-                            }
-                            else -> null
+    private fun parseMeaningBlocks(element: JsonElement): List<MeaningBlock> {
+        val blocks = mutableListOf<MeaningBlock>()
+
+        fun walk(node: JsonElement) {
+            when (node) {
+                is JsonArray -> node.forEach { walk(it) }
+                is JsonObject -> {
+                    val type = node["type"]?.jsonPrimitive?.content
+                    if (type == "structured-content") {
+                        val content = node["content"]
+                        if (content != null) {
+                            extractMeaningBlocksFromStructuredContent(content, blocks)
                         }
-                    } catch (_: Exception) {
-                        null
                     }
-                }.filter { it.isNotBlank() }
+                }
+                else -> Unit
             }
-            is JsonObject -> listOfNotNull(parseStructuredContent(element))
+        }
+
+        walk(element)
+        return blocks
+    }
+
+    private fun extractStructuredPartOfSpeechTags(element: JsonElement): List<String> {
+        val tags = mutableListOf<String>()
+
+        fun walk(node: JsonElement) {
+            when (node) {
+                is JsonArray -> node.forEach { walk(it) }
+                is JsonObject -> {
+                    val content = node["data"]?.jsonObject?.get("content")?.jsonPrimitive?.content
+                    when {
+                        content == "part-of-speech-info" -> {
+                            val code = node["data"]?.jsonObject?.get("code")?.jsonPrimitive?.content
+                                ?: node["content"]?.let { extractPlainText(it) }
+                            if (!code.isNullOrBlank() && code !in tags) {
+                                tags.add(code)
+                            }
+                        }
+                        node["content"] != null -> walk(node["content"]!!)
+                    }
+                }
+                else -> Unit
+            }
+        }
+
+        walk(element)
+        return tags
+    }
+
+    private fun extractMeaningBlocksFromStructuredContent(element: JsonElement, output: MutableList<MeaningBlock>) {
+        when (element) {
+            is JsonArray -> element.forEach { child ->
+                if (child is JsonObject) {
+                    val content = child["data"]?.jsonObject?.get("content")?.jsonPrimitive?.content
+                    when (content) {
+                        "sense-group" -> parseSenseGroup(child)?.let(output::add)
+                        "redirect-glossary" -> Unit
+                        else -> {
+                            val nested = child["content"]
+                            if (nested != null) extractMeaningBlocksFromStructuredContent(nested, output)
+                        }
+                    }
+                }
+            }
+            is JsonObject -> {
+                val content = element["data"]?.jsonObject?.get("content")?.jsonPrimitive?.content
+                when (content) {
+                    "sense-group" -> parseSenseGroup(element)?.let(output::add)
+                    else -> element["content"]?.let { extractMeaningBlocksFromStructuredContent(it, output) }
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private data class SenseParseResult(
+        val meanings: List<String>,
+        val examples: List<MeaningExample>
+    )
+
+    private fun parseSenseGroup(node: JsonObject): MeaningBlock? {
+        val children = node["content"]
+        if (children !is JsonArray) return null
+
+        val meanings = mutableListOf<String>()
+        val examples = mutableListOf<MeaningExample>()
+
+        children.forEach { child ->
+            if (child !is JsonObject) return@forEach
+
+            val childContent = child["data"]?.jsonObject?.get("content")?.jsonPrimitive?.content
+            when {
+                childContent == "sense" -> {
+                    val sense = parseSense(child)
+                    meanings.addAll(sense.meanings)
+                    examples.addAll(sense.examples)
+                }
+            }
+        }
+
+        val meaningText = meanings.joinToString("; ").trim()
+        if (meaningText.isBlank()) return null
+
+        return MeaningBlock(
+            meaning = meaningText,
+            examples = examples
+        )
+    }
+
+    private fun parseSense(node: JsonObject): SenseParseResult {
+        val children = node["content"]
+        val meanings = mutableListOf<String>()
+        val examples = mutableListOf<MeaningExample>()
+
+        fun visit(element: JsonElement) {
+            when (element) {
+                is JsonArray -> element.forEach { visit(it) }
+                is JsonObject -> {
+                    val childContent = element["data"]?.jsonObject?.get("content")?.jsonPrimitive?.content
+                    when {
+                        childContent == "glossary" -> extractGlossaryItems(element).let(meanings::addAll)
+                        childContent == "extra-info" -> extractExampleSentences(element).let(examples::addAll)
+                        else -> element["content"]?.let { visit(it) }
+                    }
+                }
+                else -> Unit
+            }
+        }
+
+        if (children != null) visit(children)
+        return SenseParseResult(meanings, examples)
+    }
+
+    private fun extractGlossaryItems(node: JsonObject): List<String> {
+        val content = node["content"]
+        return when (content) {
+            is JsonArray -> content.mapNotNull { item -> extractPlainText(item).takeIf { it.isNotBlank() } }
+            is JsonObject -> listOfNotNull(extractPlainText(content).takeIf { it.isNotBlank() })
             else -> emptyList()
         }
+    }
+
+    private fun extractExampleSentences(node: JsonObject): List<MeaningExample> {
+        val content = node["content"]
+        if (content !is JsonObject) return emptyList()
+
+        val exampleNode = content["content"] as? JsonArray ?: return emptyList()
+        var sentenceHtml = ""
+        var translation = ""
+
+        exampleNode.forEach { child ->
+            if (child !is JsonObject) return@forEach
+            when (child["data"]?.jsonObject?.get("content")?.jsonPrimitive?.content) {
+                "example-sentence-a" -> sentenceHtml = renderHtml(child["content"])
+                "example-sentence-b" -> translation = extractPlainText(child["content"]) 
+            }
+        }
+
+        val sentenceText = extractPlainText(childContentForPlainText(exampleNode))
+
+        return if (sentenceHtml.isNotBlank() || translation.isNotBlank()) {
+            listOf(MeaningExample(sentenceHtml = sentenceHtml, sentenceText = sentenceText, translation = translation))
+        } else {
+            emptyList()
+        }
+    }
+
+    private fun childContentForPlainText(exampleNode: JsonArray): JsonElement? {
+        exampleNode.forEach { child ->
+            if (child is JsonObject && child["data"]?.jsonObject?.get("content")?.jsonPrimitive?.content == "example-sentence-a") {
+                return child["content"]
+            }
+        }
+        return null
+    }
+
+    private fun renderHtml(element: JsonElement?): String {
+        return when (element) {
+            null -> ""
+            is JsonPrimitive -> InputSanitizer.escapeHtml(element.content)
+            is JsonArray -> element.joinToString(separator = "") { renderHtml(it) }
+            is JsonObject -> {
+                val tag = element["tag"]?.jsonPrimitive?.content
+                val content = element["content"]
+                when (tag) {
+                    "ruby" -> {
+                        if (content is JsonArray && content.size >= 2) {
+                            val base = renderHtml(content[0])
+                            val ruby = renderHtml(content[1])
+                            "<ruby>$base<rt>$ruby</rt></ruby>"
+                        } else {
+                            renderHtml(content)
+                        }
+                    }
+                    "rt" -> renderHtml(content)
+                    "span", "div", "a", "b", "i", "em", "strong" -> renderHtml(content)
+                    else -> when {
+                        content != null -> renderHtml(content)
+                        element["text"] != null -> InputSanitizer.escapeHtml(element["text"]!!.jsonPrimitive.content)
+                        else -> ""
+                    }
+                }
+            }
+            else -> ""
+        }
+    }
+
+    private fun extractPlainText(element: JsonElement?): String {
+        return when (element) {
+            null -> ""
+            is JsonPrimitive -> element.content
+            is JsonArray -> element.joinToString(separator = "") { extractPlainText(it) }
+            is JsonObject -> {
+                val content = element["content"]
+                when {
+                    element["text"] != null -> element["text"]!!.jsonPrimitive.content
+                    content != null -> extractPlainText(content)
+                    else -> ""
+                }
+            }
+            else -> ""
+        }
+    }
+
+    private fun normalizePartOfSpeech(code: String): String? {
+        return when (code.lowercase()) {
+            "n" -> "noun"
+            "vt" -> "transitive"
+            "vi" -> "intransitive"
+            "v1" -> "1-dan verb"
+            "vs" -> "suru verb"
+            "adj-i" -> "i-adjective"
+            "adj-na" -> "na-adjective"
+            "*" -> null
+            else -> code
+        }
+    }
+
+    private fun parseDefinitions(element: JsonElement): List<String> {
+        return when (element) {
+            is JsonPrimitive -> splitMeaningLines(element.content)
+            is JsonArray -> {
+                element.flatMap { item -> parseDefinitionItem(item) }
+            }
+            is JsonObject -> parseStructuredContent(element)
+                ?.let { splitMeaningLines(it) }
+                ?: emptyList()
+            else -> emptyList()
+        }
+    }
+
+    private fun parseDefinitionItem(item: JsonElement): List<String> {
+        return try {
+            when (item) {
+                is JsonPrimitive -> splitMeaningLines(item.content)
+                is JsonObject -> {
+                    parseStructuredContent(item)
+                        ?.let { splitMeaningLines(it) }
+                        ?: emptyList()
+                }
+                is JsonArray -> {
+                    val flattened = item.mapNotNull { subItem ->
+                        when (subItem) {
+                            is JsonPrimitive -> subItem.content
+                            is JsonObject -> parseStructuredContent(subItem)
+                            else -> null
+                        }
+                    }.filter { it.isNotBlank() }
+
+                    if (flattened.isEmpty()) emptyList() else listOf(flattened.joinToString(", "))
+                }
+                else -> emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun splitMeaningLines(text: String): List<String> {
+        return text
+            .split('\n')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
     }
 
     private fun parseStructuredContent(obj: JsonObject): String? {
@@ -485,12 +752,32 @@ class YomitanDictionaryParser @Inject constructor() {
                 is JsonPrimitive -> element.content
                 is JsonArray -> {
                     val parts = element.map { extractTextFromContent(it) }.filter { it.isNotBlank() }
-                    // Check if children are list items (li tags) — join with "; "
+                    val inlineTags = setOf("span", "ruby", "rt", "rp", "a", "b", "i", "em", "strong")
+
+                    // List items represent separate meanings.
                     val hasListItems = element.any { it is JsonObject && it.jsonObject["tag"]?.jsonPrimitive?.content == "li" }
                     if (hasListItems) {
-                        parts.joinToString("; ")
+                        parts.joinToString("\n")
                     } else {
-                        parts.joinToString(", ")
+                        // Inline ruby/span fragments should stay as one sentence (no commas between tokens).
+                        val hasInlineNodes = element.any {
+                            it is JsonObject && it.jsonObject["tag"]?.jsonPrimitive?.content in inlineTags
+                        }
+                        val hasOnlyInlineOrPrimitive = element.all {
+                            it is JsonPrimitive ||
+                                (it is JsonObject && (
+                                    it.jsonObject["tag"]?.jsonPrimitive?.content in inlineTags ||
+                                        it.jsonObject["type"]?.jsonPrimitive?.content == "text" ||
+                                        it.jsonObject["text"] != null
+                                    ))
+                        }
+
+                        if (hasInlineNodes && hasOnlyInlineOrPrimitive) {
+                            parts.joinToString(separator = "")
+                        } else {
+                            // Non-inline arrays are treated as synonym-like lists.
+                            parts.joinToString(", ")
+                        }
                     }
                 }
                 is JsonObject -> {

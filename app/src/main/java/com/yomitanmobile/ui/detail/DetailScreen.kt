@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,7 +64,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.domain.model.MeaningBlock
+import com.yomitanmobile.domain.model.MeaningExample
+import com.yomitanmobile.data.local.entity.Sentence
+import com.yomitanmobile.util.SentenceRubyFormatter
 import com.yomitanmobile.util.JlptLevelUtil
+import com.yomitanmobile.util.PartOfSpeechFormatter
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.text.HtmlCompat
+import android.widget.TextView
+import androidx.compose.ui.graphics.toArgb
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,6 +82,7 @@ fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val entry by viewModel.entry.collectAsState()
+    val exampleSentences by viewModel.exampleSentences.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isExporting by viewModel.isExporting.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
@@ -220,6 +231,7 @@ fun DetailScreen(
             else -> {
                 WordDetailContent(
                     entry = entry!!,
+                    exampleSentences = exampleSentences,
                     isPlaying = isPlaying,
                     ttsReady = ttsReady,
                     onPlayAudio = viewModel::playAudio,
@@ -235,6 +247,7 @@ fun DetailScreen(
 @Composable
 private fun WordDetailContent(
     entry: MergedWordEntry,
+    exampleSentences: List<Sentence>,
     isPlaying: Boolean,
     ttsReady: Boolean,
     onPlayAudio: () -> Unit,
@@ -263,28 +276,6 @@ private fun WordDetailContent(
                 Spacer(Modifier.height(8.dp))
                 if (entry.reading.isNotBlank() && entry.reading != entry.primaryExpression) {
                     Text(entry.reading, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
-                }
-
-                if (entry.exampleSentence.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = entry.exampleSentence,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
-                    if (entry.exampleSentenceTranslation.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = entry.exampleSentenceTranslation,
-                            fontSize = 12.sp,
-                            fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                            lineHeight = 16.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
                 }
 
                 // Alternative expressions/forms
@@ -353,31 +344,68 @@ private fun WordDetailContent(
             Spacer(Modifier.height(12.dp))
         }
 
-        // Definitions
-        SectionCard(title = tr("Znaczenie", "Meaning")) {
-            entry.definitions.forEachIndexed { index, definition ->
-                if (index > 0) Divider(modifier = Modifier.padding(vertical = 8.dp))
-                Row {
-                    Text("${index + 1}. ", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    Text(definition, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+        // Word type section (if available)
+        val wordTypeLabels = PartOfSpeechFormatter.formatTags(entry.partsOfSpeech)
+        if (wordTypeLabels.isNotEmpty()) {
+            SectionCard(
+                title = tr("Typ wyrazenia", "Word Type"),
+                content = {
+                    Text(
+                        text = wordTypeLabels.joinToString(", "),
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // Parts of speech
-        if (entry.partsOfSpeech.isNotEmpty()) {
-            SectionCard(title = tr("Część mowy", "Part of speech")) {
-                Text(entry.partsOfSpeech.joinToString(", "), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            )
             Spacer(Modifier.height(12.dp))
         }
 
-        // Dictionary source
-        if (entry.dictionaryName.isNotBlank()) {
-            Text(tr("Źródło: ${entry.dictionaryName}", "Source: ${entry.dictionaryName}"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 4.dp))
-            Spacer(Modifier.height(16.dp))
+        // Meanings + examples
+        SectionCard(title = tr("Znaczenia", "Meanings")) {
+            val meaningBlocks = entry.meaningBlocks
+            if (meaningBlocks.isNotEmpty()) {
+                meaningBlocks.forEachIndexed { index, block ->
+                    if (index > 0) Divider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    MeaningBlockContent(
+                        block = block,
+                        index = index,
+                        targetExpression = entry.primaryExpression.ifBlank { entry.reading },
+                        targetReading = entry.reading.ifBlank { entry.primaryExpression }
+                    )
+                }
+            } else {
+                entry.definitions.forEachIndexed { index, definition ->
+                    if (index > 0) Divider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                "${index + 1}. ",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                            Text(
+                                definition,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        val example = exampleSentences.getOrNull(index)
+                        if (example != null) {
+                            Spacer(Modifier.height(10.dp))
+                            ExampleSentenceCard(
+                                sentenceHtml = example.sentenceJapanese,
+                                translation = example.sentenceEnglish
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(Modifier.height(32.dp))
@@ -385,7 +413,11 @@ private fun WordDetailContent(
 }
 
 @Composable
-private fun SectionCard(title: String, content: @Composable () -> Unit) {
+private fun SectionCard(
+    title: String,
+    subtitle: String? = null,
+    content: @Composable () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -393,7 +425,108 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 8.dp))
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    fontStyle = FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
             content()
+        }
+    }
+}
+
+@Composable
+private fun MeaningBlockContent(
+    block: MeaningBlock,
+    index: Int,
+    targetExpression: String,
+    targetReading: String
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "${index + 1}. ",
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 4.dp)
+            )
+            Text(
+                block.meaning,
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        block.examples.forEach { example ->
+            Spacer(Modifier.height(10.dp))
+            ExampleSentenceCard(
+                sentenceHtml = example.sentenceHtml,
+                translation = example.translation,
+                targetExpression = targetExpression,
+                targetReading = targetReading
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExampleSentenceCard(
+    sentenceHtml: String,
+    translation: String,
+    targetExpression: String = "",
+    targetReading: String = ""
+) {
+    val sentenceColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val translationColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+
+    val displayHtml = if (sentenceHtml.contains("<ruby>")) {
+        sentenceHtml
+    } else if (targetExpression.isNotBlank() || targetReading.isNotBlank()) {
+        val rubyHtml = SentenceRubyFormatter.buildRubyHtml(sentenceHtml, targetExpression, targetReading)
+        if (rubyHtml.isBlank()) sentenceHtml else rubyHtml
+    } else {
+        sentenceHtml
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            AndroidView(
+                factory = { context ->
+                    TextView(context).apply {
+                        setTextColor(sentenceColor.toArgb())
+                        textSize = 14f
+                        setLineSpacing(0f, 1.15f)
+                    }
+                },
+                update = { textView ->
+                    textView.setTextColor(sentenceColor.toArgb())
+                    textView.text = HtmlCompat.fromHtml(displayHtml, HtmlCompat.FROM_HTML_MODE_COMPACT)
+                }
+            )
+
+            if (translation.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = translation,
+                    fontSize = 12.sp,
+                    fontStyle = FontStyle.Italic,
+                    color = translationColor,
+                    lineHeight = 16.sp
+                )
+            }
         }
     }
 }

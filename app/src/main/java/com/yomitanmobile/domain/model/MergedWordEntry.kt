@@ -9,6 +9,7 @@ data class MergedWordEntry(
     val primaryExpression: String,
     val reading: String,
     val definitions: List<String>,
+    val meaningBlocks: List<MeaningBlock> = emptyList(),
     val alternativeExpressions: List<String>,
     val frequency: Int = 0,
     val pitchAccent: String = "",
@@ -21,10 +22,10 @@ data class MergedWordEntry(
 ) {
     fun displayText(): String = primaryExpression.ifBlank { reading }
 
-    fun definitionText(): String = definitions.mapIndexed { i, d -> "${i + 1}. $d" }.joinToString("; ")
+    fun definitionText(): String = definitions.mapIndexed { index, definition -> "${index + 1}. $definition" }.joinToString("\n")
 
     fun definitionTextShort(): String {
-        val joined = definitions.mapIndexed { i, d -> "${i + 1}. $d" }.joinToString("; ")
+        val joined = definitions.mapIndexed { index, definition -> "${index + 1}. $definition" }.joinToString("\n")
         return if (joined.length > 120) joined.take(117) + "..." else joined
     }
 
@@ -47,6 +48,7 @@ data class MergedWordEntry(
         expression = primaryExpression,
         reading = reading,
         definitions = definitions,
+        meaningBlocks = meaningBlocks,
         frequency = frequency,
         pitchAccent = pitchAccent,
         partsOfSpeech = partsOfSpeech.joinToString(", "),
@@ -76,6 +78,7 @@ data class MergedWordEntry(
         /**
          * Merge a list of [WordEntry] items into consolidated [MergedWordEntry] items.
          * Groups entries by expression + reading. Within each group:
+         * - Prefers the highest-priority dictionary (Jitendex first, then JMdict)
          * - Picks the best expression (prefers kanji forms, then frequency)
          * - Collects all unique alternative expressions
          * - Merges all unique definitions
@@ -84,7 +87,6 @@ data class MergedWordEntry(
         fun mergeEntries(entries: List<WordEntry>): List<MergedWordEntry> {
             if (entries.isEmpty()) return emptyList()
 
-            // Use LinkedHashMap to preserve order of first appearance (from SQL query)
             val groups = LinkedHashMap<Pair<String, String>, MutableList<WordEntry>>()
             for (entry in entries) {
                 val key = buildMergeKey(entry)
@@ -92,8 +94,10 @@ data class MergedWordEntry(
             }
 
             return groups.values.map { group ->
-                // Sort: prefer entries with kanji and frequency
-                val sorted = group.sortedWith(
+                val preferredPriority = group.minOf { dictionaryPriority(it.dictionaryName) }
+                val preferredGroup = group.filter { dictionaryPriority(it.dictionaryName) == preferredPriority }
+
+                val sorted = preferredGroup.sortedWith(
                     compareByDescending<WordEntry> { containsKanji(it.expression) }
                         .thenBy { if (it.frequency > 0) it.frequency else Int.MAX_VALUE }
                 )
@@ -102,50 +106,43 @@ data class MergedWordEntry(
                 val primaryExpression = primary.expression
                 val reading = primary.reading.ifBlank { primaryExpression }
 
-                // Collect all unique expressions
-                val allExpressions = group.map { it.expression }
+                val allExpressions = preferredGroup.map { it.expression }
                     .filter { it.isNotBlank() }
                     .distinct()
 
-                // Alternative expressions (excluding the primary)
-                val alternatives = allExpressions
-                    .filter { it != primaryExpression }
+                val alternatives = allExpressions.filter { it != primaryExpression }
 
-                // Merge all definitions, deduplicate
-                val allDefinitions = group
+                val allDefinitions = preferredGroup
                     .flatMap { it.definitions }
                     .filter { it.isNotBlank() }
                     .distinct()
 
-                // Merge parts of speech, deduplicate
-                val allPartsOfSpeech = group
+                val meaningBlocks = preferredGroup
+                    .map { it.meaningBlocks }
+                    .firstOrNull { it.isNotEmpty() }
+                    ?: emptyList()
+
+                val allPartsOfSpeech = preferredGroup
                     .map { it.partsOfSpeech }
                     .filter { it.isNotBlank() }
                     .distinct()
 
-                // Best frequency (lowest positive number)
-                val bestFrequency = group
+                val bestFrequency = preferredGroup
                     .map { it.frequency }
                     .filter { it > 0 }
                     .minOrNull() ?: 0
 
-                // First non-empty pitch accent
-                val pitchAccent = group
+                val pitchAccent = preferredGroup
                     .map { it.pitchAccent }
                     .firstOrNull { it.isNotBlank() } ?: ""
 
-                // First non-empty example sentence
-                val example = group.firstOrNull {
-                    it.exampleSentence.isNotBlank()
-                }
+                val example = preferredGroup.firstOrNull { it.exampleSentence.isNotBlank() }
 
-                // First non-empty audio
-                val audioFile = group
+                val audioFile = preferredGroup
                     .map { it.audioFile }
                     .firstOrNull { it.isNotBlank() } ?: ""
 
-                // First non-empty dictionary name
-                val dictionaryName = group
+                val dictionaryName = preferredGroup
                     .map { it.dictionaryName }
                     .firstOrNull { it.isNotBlank() } ?: ""
 
@@ -154,6 +151,7 @@ data class MergedWordEntry(
                     primaryExpression = primaryExpression,
                     reading = reading,
                     definitions = allDefinitions,
+                    meaningBlocks = meaningBlocks,
                     alternativeExpressions = alternatives,
                     frequency = bestFrequency,
                     pitchAccent = pitchAccent,
@@ -165,13 +163,21 @@ data class MergedWordEntry(
                     audioFile = audioFile
                 )
             }
-                // Preserve order from SQL query (already sorted by relevance + frequency)
         }
 
         private fun buildMergeKey(entry: WordEntry): Pair<String, String> {
-            val expressionKey = entry.expression.ifBlank { entry.reading }
-            val readingKey = entry.reading.ifBlank { entry.expression }
-            return expressionKey to readingKey
+            val expression = entry.expression.trim()
+            val reading = entry.reading.trim()
+            return expression.ifBlank { reading } to reading.ifBlank { expression }
+        }
+
+        private fun dictionaryPriority(dictionaryName: String): Int {
+            val normalized = dictionaryName.lowercase()
+            return when {
+                normalized.contains("jitendex") -> 0
+                normalized.contains("jmdict") -> 1
+                else -> 2
+            }
         }
     }
 }

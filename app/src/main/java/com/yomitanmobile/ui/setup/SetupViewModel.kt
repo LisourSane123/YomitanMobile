@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import android.util.Log
+import com.yomitanmobile.util.JlptLevelUtil
 
 enum class SetupState {
     WELCOME,
@@ -85,5 +87,23 @@ class SetupViewModel @Inject constructor(
     fun retry() {
         _errorMessage.value = null
         startJmDictDownload()
+    }
+
+    /**
+     * Debug helper: fetch sample entries and log headword, partsOfSpeech and computed JLPT level.
+     */
+    fun debugLogSampleEntries(limit: Int = 50) {
+        viewModelScope.launch {
+            try {
+                val samples = repository.getSampleEntries(limit)
+                for (entry in samples) {
+                    val tags = entry.partsOfSpeech
+                    val jlpt = JlptLevelUtil.getLevel(tags)
+                    Log.d("JlptDebug", "expression=${entry.expression}, reading=${entry.reading}, partsOfSpeech=$tags, jlpt=$jlpt")
+                }
+            } catch (e: Exception) {
+                Log.e("JlptDebug", "debugLogSampleEntries failed: ${e.message}")
+            }
+        }
     }
 }

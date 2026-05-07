@@ -98,4 +98,34 @@ class MergedWordEntryTest {
         assertTrue(merged.any { it.reading == "せい" && it.entryIds == listOf(20L) })
         assertTrue(merged.any { it.reading == "なま" && it.entryIds == listOf(21L) })
     }
+
+    @Test
+    fun mergeEntries_prefersJitendexWhenBothDictionariesExist() {
+        val entries = listOf(
+            WordEntry(
+                id = 30,
+                expression = "食べる",
+                reading = "たべる",
+                definitions = listOf("JMdict fallback definition"),
+                dictionaryName = "JMdict (English)"
+            ),
+            WordEntry(
+                id = 31,
+                expression = "食べる",
+                reading = "たべる",
+                definitions = listOf("Jitendex primary definition"),
+                dictionaryName = "Jitendex (JA→EN + JLPT)",
+                partsOfSpeech = "v1 vt"
+            )
+        )
+
+        val merged = MergedWordEntry.mergeEntries(entries)
+
+        assertEquals(1, merged.size)
+
+        val single = merged.first()
+        assertEquals(listOf("Jitendex primary definition"), single.definitions)
+        assertEquals("Jitendex (JA→EN + JLPT)", single.dictionaryName)
+        assertEquals(listOf("v1 vt"), single.partsOfSpeech)
+    }
 }

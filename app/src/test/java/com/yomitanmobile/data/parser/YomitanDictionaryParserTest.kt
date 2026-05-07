@@ -1,5 +1,8 @@
 package com.yomitanmobile.data.parser
 
+import com.yomitanmobile.domain.model.MeaningBlock
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -11,6 +14,8 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class YomitanDictionaryParserTest {
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     @Test
     fun parseFromZipStreaming_usesTemporaryDictionaryNameForBatches() = runBlocking {
@@ -103,6 +108,108 @@ class YomitanDictionaryParserTest {
         // Verify partsOfSpeech format is comma-separated as expected
         assertTrue("Format should be comma-separated", 
             entry1.partsOfSpeech.contains(", "))
+    }
+
+    @Test
+    fun parseFromZipStreaming_extractsMeaningBlocksAndExamplesFromJitendexStructuredContent() = runBlocking {
+        val parser = YomitanDictionaryParser()
+        val parsedEntries = mutableListOf<com.yomitanmobile.data.local.entity.DictionaryEntry>()
+
+        val zipBytes = createZip(
+            mapOf(
+                "index.json" to "{\"title\":\"JitendexTest\",\"format\":\"3\",\"revision\":\"1\"}",
+                "term_bank_1.json" to """[
+                    [
+                        "母語話者",
+                        "ぼごわしゃ",
+                        "",
+                        "",
+                        0,
+                        [
+                            {
+                                "type": "structured-content",
+                                "content": [
+                                    {
+                                        "tag": "div",
+                                        "data": { "content": "sense-group" },
+                                        "content": [
+                                            {
+                                                "tag": "span",
+                                                "data": { "class": "tag", "code": "n", "content": "part-of-speech-info" },
+                                                "content": "noun"
+                                            },
+                                            {
+                                                "tag": "div",
+                                                "data": { "content": "sense" },
+                                                "content": [
+                                                    {
+                                                        "tag": "ul",
+                                                        "data": { "content": "glossary" },
+                                                        "content": { "tag": "li", "content": "native speaker" }
+                                                    },
+                                                    {
+                                                        "tag": "div",
+                                                        "data": { "content": "extra-info" },
+                                                        "content": {
+                                                            "tag": "div",
+                                                            "data": { "class": "extra-box", "content": "example-sentence" },
+                                                            "content": [
+                                                                {
+                                                                    "tag": "div",
+                                                                    "data": { "content": "example-sentence-a" },
+                                                                    "content": {
+                                                                        "tag": "span",
+                                                                        "lang": "ja",
+                                                                        "content": [
+                                                                            {
+                                                                                "tag": "ruby",
+                                                                                "content": ["彼", { "tag": "rt", "content": "かれ" }]
+                                                                            },
+                                                                            "が英語を話します。"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                {
+                                                                    "tag": "div",
+                                                                    "data": { "content": "example-sentence-b" },
+                                                                    "content": {
+                                                                        "tag": "span",
+                                                                        "lang": "en",
+                                                                        "content": "He speaks English."
+                                                                    }
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ],
+                        1921830,
+                        ""
+                    ]
+                ]"""
+            )
+        )
+
+        parser.parseFromZipStreaming(
+            inputStream = ByteArrayInputStream(zipBytes),
+            onBatch = { batch, _ -> parsedEntries.addAll(batch) }
+        )
+
+        assertEquals(1, parsedEntries.size)
+
+        val entry = parsedEntries.first()
+        assertTrue(entry.partsOfSpeech.contains("n"))
+
+        val blocks = json.decodeFromString(ListSerializer(MeaningBlock.serializer()), entry.definition)
+        assertEquals(1, blocks.size)
+        assertTrue(blocks.first().meaning.contains("native speaker"))
+        assertTrue(blocks.first().examples.first().sentenceHtml.contains("<ruby>彼<rt>かれ</rt></ruby>"))
+        assertEquals("He speaks English.", blocks.first().examples.first().translation)
     }
 
     private fun createZip(files: Map<String, String>): ByteArray {

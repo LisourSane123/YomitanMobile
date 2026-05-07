@@ -16,6 +16,7 @@ import com.yomitanmobile.domain.model.PitchAccentStyle
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.util.InputSanitizer
 import com.yomitanmobile.util.SentenceContextHighlighter
+import com.yomitanmobile.util.SentenceRubyFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -615,7 +616,7 @@ class AnkiCardCreator(
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
             sentence = buildString {
-                append(InputSanitizer.escapeHtml(entry.exampleSentence))
+                append(SentenceRubyFormatter.buildRubyHtml(entry.exampleSentence, entry.expression, entry.reading))
                 if (entry.exampleSentenceTranslation.isNotBlank()) {
                     append("<br><small>")
                     append(InputSanitizer.escapeHtml(entry.exampleSentenceTranslation))

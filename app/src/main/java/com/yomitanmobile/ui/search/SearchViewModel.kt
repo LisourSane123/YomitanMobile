@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
+import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.SearchHistory
 import com.yomitanmobile.dataStore
@@ -64,6 +65,7 @@ enum class SearchMode(val label: String) {
 class SearchViewModel @Inject constructor(
     private val searchDictionaryUseCase: SearchDictionaryUseCase,
     private val dictionaryDao: DictionaryDao,
+    private val sentenceDao: SentenceDao,
     private val searchHistoryDao: SearchHistoryDao,
     private val exportedWordDao: ExportedWordDao,
     @ApplicationContext private val appContext: Context
@@ -212,13 +214,14 @@ class SearchViewModel @Inject constructor(
                     .map { results ->
                         _isSearching.value = false
                         val merged = MergedWordEntry.mergeEntries(results)
+                        val enriched = enrichWithExampleSentences(merged)
                         val romajiCandidate = romajiQueryToHiragana(q)
                         if (romajiCandidate != null) {
-                            sortRomajiExactFirst(merged, romajiCandidate)
+                            sortRomajiExactFirst(enriched, romajiCandidate)
                         } else if (mode == SearchMode.ENGLISH && q.isNotBlank()) {
                             // Sort by how early the query appears in the definitions list
                             val queryLower = q.lowercase()
-                            merged.sortedWith(
+                            enriched.sortedWith(
                                 compareBy<MergedWordEntry> { entry ->
                                     val idx = entry.definitions.indexOfFirst {
                                         it.lowercase().contains(queryLower)
@@ -227,7 +230,7 @@ class SearchViewModel @Inject constructor(
                                 }.thenBy { if (it.frequency > 0) it.frequency else Int.MAX_VALUE }
                             )
                         } else {
-                            merged
+                            enriched
                         }
                     }
             }
@@ -296,6 +299,36 @@ class SearchViewModel @Inject constructor(
                 if (entry.frequency > 0) entry.frequency else Int.MAX_VALUE
             }
         )
+    }
+
+    private suspend fun enrichWithExampleSentences(entries: List<MergedWordEntry>): List<MergedWordEntry> {
+        return entries.mapIndexed { index, entry ->
+            if (index >= 15 || entry.exampleSentence.isNotBlank()) {
+                entry
+            } else {
+                val lookupExpression = entry.primaryExpression.ifBlank { entry.reading }
+                val lookupReading = entry.reading.ifBlank { lookupExpression }
+                if (lookupExpression.isBlank() && lookupReading.isBlank()) {
+                    entry
+                } else {
+                    val sentence = runCatching {
+                        sentenceDao.getSentencesByExpressionOrReading(
+                            expression = lookupExpression,
+                            reading = lookupReading
+                        ).firstOrNull()
+                    }.getOrNull()
+
+                    if (sentence != null) {
+                        entry.copy(
+                            exampleSentence = sentence.sentenceJapanese,
+                            exampleSentenceTranslation = sentence.sentenceEnglish
+                        )
+                    } else {
+                        entry
+                    }
+                }
+            }
+        }
     }
 
     private fun isRomajiExactMatch(

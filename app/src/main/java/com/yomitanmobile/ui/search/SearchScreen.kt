@@ -480,6 +480,25 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
+                if (entry.exampleSentence.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = entry.exampleSentence,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (entry.exampleSentenceTranslation.isNotBlank()) {
+                        Text(
+                            text = entry.exampleSentenceTranslation,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
                 if (entry.partsOfSpeech.isNotEmpty()) {
                     Text(
                         text = entry.partsOfSpeech.joinToString(", "),
