@@ -494,9 +494,7 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = freqLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
             }
-            val jlptLevel = JlptLevelUtil.getLevel(
-                tagsString = entry.partsOfSpeech.joinToString(", ")
-            )
+            val jlptLevel = JlptLevelUtil.fromDbValue(entry.jlptLevel)
             if (jlptLevel != null) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(

@@ -107,4 +107,51 @@ class JlptLevelUtilTest {
         val result = JlptLevelUtil.getLevel("")
         assertNull(result)
     }
+
+    // fromDbValue — used by the UI after JLPT is stored as a dedicated column
+
+    @Test
+    fun testFromDbValueN1() {
+        assertEquals(JlptLevelUtil.JlptLevel.N1, JlptLevelUtil.fromDbValue(1))
+    }
+
+    @Test
+    fun testFromDbValueN5() {
+        assertEquals(JlptLevelUtil.JlptLevel.N5, JlptLevelUtil.fromDbValue(5))
+    }
+
+    @Test
+    fun testFromDbValueZeroReturnsNull() {
+        assertNull(JlptLevelUtil.fromDbValue(0))
+    }
+
+    @Test
+    fun testFromDbValueOutOfRangeReturnsNull() {
+        assertNull(JlptLevelUtil.fromDbValue(6))
+        assertNull(JlptLevelUtil.fromDbValue(-1))
+    }
+
+    // extractAsInt — used by the parser during dictionary import
+
+    @Test
+    fun testExtractAsIntJlptTag() {
+        assertEquals(5, JlptLevelUtil.extractAsInt("ichi1 news1 jlpt-5"))
+        assertEquals(1, JlptLevelUtil.extractAsInt("jlpt-1 adj-i"))
+    }
+
+    @Test
+    fun testExtractAsIntNoFalsePositiveOnJlpt3000() {
+        assertEquals(0, JlptLevelUtil.extractAsInt("freq jlpt-3000"))
+    }
+
+    @Test
+    fun testExtractAsIntEmptyReturnsZero() {
+        assertEquals(0, JlptLevelUtil.extractAsInt(""))
+        assertEquals(0, JlptLevelUtil.extractAsInt("noun verb"))
+    }
+
+    @Test
+    fun testExtractAsIntJlptNFormat() {
+        assertEquals(2, JlptLevelUtil.extractAsInt("jlpt-n2 noun"))
+    }
 }

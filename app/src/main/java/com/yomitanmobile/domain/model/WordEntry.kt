@@ -11,7 +11,9 @@ data class WordEntry(
     val dictionaryName: String = "",
     val exampleSentence: String = "",
     val exampleSentenceTranslation: String = "",
-    val audioFile: String = ""
+    val audioFile: String = "",
+    // 0 = no JLPT data; 1-5 = N1-N5
+    val jlptLevel: Int = 0
 ) {
     fun definitionText(): String = definitions.joinToString("; ")
 

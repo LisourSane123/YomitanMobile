@@ -26,7 +26,8 @@ fun DictionaryEntry.toDomain(): WordEntry {
         dictionaryName = dictionaryName,
         exampleSentence = exampleSentence,
         exampleSentenceTranslation = exampleSentenceTranslation,
-        audioFile = audioFile
+        audioFile = audioFile,
+        jlptLevel = jlptLevel
     )
 }
 

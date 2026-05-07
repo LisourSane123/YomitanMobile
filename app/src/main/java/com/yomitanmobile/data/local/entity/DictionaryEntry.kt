@@ -49,5 +49,9 @@ data class DictionaryEntry(
     val exampleSentenceTranslation: String = "",
 
     @ColumnInfo(name = "audio_file")
-    val audioFile: String = ""
+    val audioFile: String = "",
+
+    // 0 = no JLPT tag; 1-5 = N1-N5 (jlpt-1..jlpt-5 from JMDict termTags)
+    @ColumnInfo(name = "jlpt_level")
+    val jlptLevel: Int = 0
 )

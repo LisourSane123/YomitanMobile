@@ -22,6 +22,35 @@ object JlptLevelUtil {
     }
 
     /**
+     * Convert a stored jlpt_level DB value (1-5) to a JlptLevel.
+     * Returns null for 0 (no JLPT data).
+     */
+    fun fromDbValue(n: Int): JlptLevel? = when (n) {
+        1 -> JlptLevel.N1
+        2 -> JlptLevel.N2
+        3 -> JlptLevel.N3
+        4 -> JlptLevel.N4
+        5 -> JlptLevel.N5
+        else -> null
+    }
+
+    /**
+     * Extract JLPT level from raw JMDict tag strings and return as DB int (0 = none, 1-5 = N1-N5).
+     * Used during dictionary import to populate the jlpt_level column directly.
+     * Pass definitionTags and termTags concatenated (or either one alone).
+     */
+    fun extractAsInt(rawTagsString: String): Int {
+        val level = extractJlptTag(rawTagsString) ?: return 0
+        return when (level) {
+            JlptLevel.N1 -> 1
+            JlptLevel.N2 -> 2
+            JlptLevel.N3 -> 3
+            JlptLevel.N4 -> 4
+            JlptLevel.N5 -> 5
+        }
+    }
+
+    /**
      * Extract JLPT level only from JMDict tags.
      * Tags are typically in format "jlpt-1", "jlpt-2", "jlpt-3", "jlpt-4", "jlpt-5"
      * where jlpt-1 = N1 (hardest), jlpt-5 = N5 (easiest).
@@ -29,7 +58,6 @@ object JlptLevelUtil {
      * No frequency fallback is used: result is either a JLPT level from tags or null.
      */
     fun getLevel(tagsString: String): JlptLevel? {
-        // First try to extract JLPT tag from tags string
         if (tagsString.isNotBlank()) {
             val jlptTag = extractJlptTag(tagsString)
             if (jlptTag != null) return jlptTag

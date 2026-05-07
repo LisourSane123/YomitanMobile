@@ -33,7 +33,7 @@ import com.yomitanmobile.data.local.entity.Sentence
         KanjiEntry::class,
         Sentence::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -48,6 +48,36 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE dictionary_entries ADD COLUMN jlpt_level INTEGER NOT NULL DEFAULT 0"
+                )
+                // Backfill from parts_of_speech for dictionaries already imported.
+                // Uses INSTR to locate "jlpt-N" tokens; the extra NOT LIKE check prevents
+                // multi-digit false matches such as "jlpt-3000" matching jlpt-3.
+                db.execSQL(
+                    """
+                    UPDATE dictionary_entries SET jlpt_level =
+                        CASE
+                            WHEN instr(lower(parts_of_speech), 'jlpt-1') > 0
+                                 AND instr(lower(parts_of_speech), 'jlpt-10') = 0 THEN 1
+                            WHEN instr(lower(parts_of_speech), 'jlpt-2') > 0
+                                 AND instr(lower(parts_of_speech), 'jlpt-20') = 0 THEN 2
+                            WHEN instr(lower(parts_of_speech), 'jlpt-3') > 0
+                                 AND instr(lower(parts_of_speech), 'jlpt-30') = 0 THEN 3
+                            WHEN instr(lower(parts_of_speech), 'jlpt-4') > 0
+                                 AND instr(lower(parts_of_speech), 'jlpt-40') = 0 THEN 4
+                            WHEN instr(lower(parts_of_speech), 'jlpt-5') > 0
+                                 AND instr(lower(parts_of_speech), 'jlpt-50') = 0 THEN 5
+                            ELSE 0
+                        END
+                    WHERE jlpt_level = 0
+                    """.trimIndent()
+                )
+            }
+        }
 
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {

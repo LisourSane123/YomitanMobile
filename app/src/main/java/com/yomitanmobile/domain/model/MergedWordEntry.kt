@@ -17,7 +17,9 @@ data class MergedWordEntry(
     val entryIds: List<Long> = emptyList(),
     val exampleSentence: String = "",
     val exampleSentenceTranslation: String = "",
-    val audioFile: String = ""
+    val audioFile: String = "",
+    // 0 = no JLPT; 1-5 = N1-N5. Populated from jlpt_level DB column.
+    val jlptLevel: Int = 0
 ) {
     fun displayText(): String = primaryExpression.ifBlank { reading }
 
@@ -53,7 +55,8 @@ data class MergedWordEntry(
         dictionaryName = dictionaryName,
         exampleSentence = exampleSentence,
         exampleSentenceTranslation = exampleSentenceTranslation,
-        audioFile = audioFile
+        audioFile = audioFile,
+        jlptLevel = jlptLevel
     )
 
     companion object {
@@ -149,6 +152,10 @@ data class MergedWordEntry(
                     .map { it.dictionaryName }
                     .firstOrNull { it.isNotBlank() } ?: ""
 
+                // JLPT level: pick the highest number (N5=5 = easiest/earliest level)
+                // because the word should be known from the lowest JLPT tier it appears in.
+                val jlptLevel = group.maxOfOrNull { it.jlptLevel } ?: 0
+
                 MergedWordEntry(
                     primaryId = primary.id,
                     primaryExpression = primaryExpression,
@@ -162,7 +169,8 @@ data class MergedWordEntry(
                     entryIds = group.map { it.id },
                     exampleSentence = example?.exampleSentence ?: "",
                     exampleSentenceTranslation = example?.exampleSentenceTranslation ?: "",
-                    audioFile = audioFile
+                    audioFile = audioFile,
+                    jlptLevel = jlptLevel
                 )
             }
                 // Preserve order from SQL query (already sorted by relevance + frequency)

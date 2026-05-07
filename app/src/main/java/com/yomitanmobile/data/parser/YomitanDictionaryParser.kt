@@ -3,7 +3,7 @@ package com.yomitanmobile.data.parser
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.KanjiEntry
-
+import com.yomitanmobile.util.JlptLevelUtil
 import com.yomitanmobile.domain.model.ImportProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -396,18 +396,30 @@ class YomitanDictionaryParser @Inject constructor() {
             definitions
         )
 
+        // term[3] = rules (conjugation paradigm tags: v1, v5u, adj-i…) — stored as part
+        // of partsOfSpeech below so it is available for display but not used by the
+        // built-in deconjugator (which applies its own rule tables).
+        val rules = if (term.size > 3) safeString(term[3]) else ""
+
+        val combinedTags = listOfNotNull(
+            definitionTags.takeIf { it.isNotBlank() },
+            rules.takeIf { it.isNotBlank() },
+            termTags.takeIf { it.isNotBlank() }
+        ).joinToString(", ")
+
+        // Extract JLPT once at import time so the UI can use it directly.
+        val jlptLevel = JlptLevelUtil.extractAsInt("$definitionTags $termTags")
+
         return DictionaryEntry(
             expression = expression,
             reading = reading.ifBlank { expression },
             definition = encodedDefinitions,
             frequency = 0, // Actual frequency comes from frequency dictionaries via term_meta_bank
             pitchAccent = "",
-            partsOfSpeech = listOfNotNull(
-                definitionTags.takeIf { it.isNotBlank() },
-                termTags.takeIf { it.isNotBlank() }
-            ).joinToString(", "),
+            partsOfSpeech = combinedTags,
             dictionaryName = dictionaryName,
-            sequenceNumber = sequenceNumber
+            sequenceNumber = sequenceNumber,
+            jlptLevel = jlptLevel
         )
     }
 
