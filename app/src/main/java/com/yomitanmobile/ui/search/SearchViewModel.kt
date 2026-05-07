@@ -14,6 +14,7 @@ import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import com.yomitanmobile.util.DeconjugationCandidate
 import com.yomitanmobile.util.JapaneseDeconjugator
+import com.yomitanmobile.util.JlptVocabulary
 import com.yomitanmobile.util.RomajiConverter
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -230,12 +231,23 @@ class SearchViewModel @Inject constructor(
                             merged
                         }
                     }
+                    .map { results -> results.map(::enrichWithJlptFallback) }
             }
         }
         .catch { _ ->
             emit(emptyList())
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Fill in JLPT level from the built-in vocabulary when the dictionary's own
+     * tags didn't supply one. Dictionary-supplied levels always take precedence.
+     */
+    private fun enrichWithJlptFallback(entry: MergedWordEntry): MergedWordEntry {
+        if (entry.jlptLevel > 0) return entry
+        val level = JlptVocabulary.getLevel(entry.primaryExpression, entry.reading)
+        return if (level > 0) entry.copy(jlptLevel = level) else entry
+    }
 
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()

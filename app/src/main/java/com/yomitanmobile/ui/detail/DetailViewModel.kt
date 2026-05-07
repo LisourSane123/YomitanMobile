@@ -22,6 +22,7 @@ import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
 import com.yomitanmobile.util.InputSanitizer
+import com.yomitanmobile.util.JlptVocabulary
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -105,9 +106,16 @@ class DetailViewModel @Inject constructor(
                     .ifEmpty { listOf(baseWord) }
 
                 val merged = MergedWordEntry.mergeEntries(mergeInput)
-                merged.firstOrNull { entryId in it.entryIds }
+                val picked = merged.firstOrNull { entryId in it.entryIds }
                     ?: merged.firstOrNull { it.primaryId == entryId }
                     ?: merged.firstOrNull()
+                picked?.let { entry ->
+                    if (entry.jlptLevel > 0) entry
+                    else {
+                        val level = JlptVocabulary.getLevel(entry.primaryExpression, entry.reading)
+                        if (level > 0) entry.copy(jlptLevel = level) else entry
+                    }
+                }
             }
             _isLoading.value = false
             checkFavoriteStatus()

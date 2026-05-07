@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.util.JlptLevelUtil
+import com.yomitanmobile.util.PartsOfSpeechFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -364,9 +365,10 @@ private fun WordDetailContent(
         Spacer(Modifier.height(12.dp))
 
         // Parts of speech
-        if (entry.partsOfSpeech.isNotEmpty()) {
+        val posLabel = PartsOfSpeechFormatter.format(entry.partsOfSpeech.joinToString(" "))
+        if (posLabel.isNotEmpty()) {
             SectionCard(title = tr("Część mowy", "Part of speech")) {
-                Text(entry.partsOfSpeech.joinToString(", "), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(posLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(12.dp))
         }

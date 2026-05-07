@@ -67,6 +67,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.util.WordCategoryClassifier
 import com.yomitanmobile.util.JlptLevelUtil
+import com.yomitanmobile.util.PartsOfSpeechFormatter
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -480,9 +481,10 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
-                if (entry.partsOfSpeech.isNotEmpty()) {
+                val posLabel = PartsOfSpeechFormatter.format(entry.partsOfSpeech.joinToString(" "))
+                if (posLabel.isNotEmpty()) {
                     Text(
-                        text = entry.partsOfSpeech.joinToString(", "),
+                        text = posLabel,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.padding(top = 4.dp)
