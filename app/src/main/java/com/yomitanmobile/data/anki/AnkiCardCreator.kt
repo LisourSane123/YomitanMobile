@@ -56,55 +56,56 @@ class AnkiCardCreator(
             </div>
         """
 
-        // Back-side ordering follows Yomitan's popup: expression and reading
-        // first (with pitch + frequency badges immediately under), then a
-        // numbered list of senses where each gloss carries its own example
-        // sentence. {{Sentence}} now only fires for "unattached" examples
-        // (online Tatoeba responses, pre-seeded SentenceDao rows) — Jitendex
-        // examples live inside {{Meaning}} so they sit under the right gloss.
-        // KanjiBreakdown stays last; the user explicitly asked for it back.
+        // Flat layout — sections separated by horizontal rules instead of
+        // background boxes. The Meaning field contains its own POS line and
+        // example sentences, so {{Sentence}} only fires for unattached
+        // example data (online Tatoeba / pre-seeded SentenceDao). Order:
+        // expression → reading → pitch → frequency → meanings → audio →
+        // kanji breakdown. Each `{{#Foo}}…{{/Foo}}` section auto-renders
+        // its own divider so the dividers don't pile up when a field is
+        // empty.
         const val CARD_BACK_TEMPLATE = """
             <div class="back">
                 <div class="expression">{{Front}}</div>
                 <div class="reading">{{Reading}}</div>
-                {{#PitchAccent}}<div class="pitch">{{PitchAccent}}</div>{{/PitchAccent}}
-                {{#Frequency}}<div class="freq">{{Frequency}}</div>{{/Frequency}}
+                {{#PitchAccent}}<hr><div class="pitch">{{PitchAccent}}</div>{{/PitchAccent}}
+                {{#Frequency}}<hr><div class="freq">{{Frequency}}</div>{{/Frequency}}
                 <hr>
                 <div class="meaning">{{Meaning}}</div>
-                {{#Sentence}}<div class="sentence">{{Sentence}}</div>{{/Sentence}}
+                {{#Sentence}}<hr><div class="sentence">{{Sentence}}</div>{{/Sentence}}
                 <div class="audio">{{Audio}}</div>
-                {{#KanjiBreakdown}}<div class="kanji-breakdown">{{KanjiBreakdown}}</div>{{/KanjiBreakdown}}
+                {{#KanjiBreakdown}}<hr><div class="kanji-breakdown">{{KanjiBreakdown}}</div>{{/KanjiBreakdown}}
             </div>
         """
 
         const val CARD_CSS = """
             .card {
                 font-family: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
-                font-size: 20px;
+                font-size: 18px;
                 text-align: center;
                 color: #e0e0e0;
                 background-color: #1a1a1a;
                 padding: 20px;
             }
             .expression { font-size: 48px; font-weight: bold; color: #ffffff; }
-            .reading { font-size: 28px; color: #80cbc4; margin: 10px 0; }
+            .reading { font-size: 28px; color: #80cbc4; margin: 8px 0; }
             .meaning {
-                font-size: 18px; color: #e0e0e0; margin: 12px 0;
-                text-align: left; padding: 12px 16px; background: #2a2a2a; border-radius: 8px;
-                border-left: 3px solid #80cbc4;
+                font-size: 18px; color: #e0e0e0;
+                text-align: left;
+            }
+            .pos-line {
+                font-size: 13px; font-style: italic; color: #80cbc4;
+                margin: 0 0 10px 0; text-align: left;
+                letter-spacing: 0.02em;
             }
             .meanings { margin: 0; padding: 0 0 0 1.6em; }
-            .meaning-item {
-                margin-bottom: 10px; line-height: 1.45;
-            }
+            .meaning-item { margin-bottom: 10px; line-height: 1.45; }
             .meaning-item:last-child { margin-bottom: 0; }
             .meaning-item .gloss { color: #e0e0e0; }
             .meaning-ex {
-                margin: 6px 0 4px 0;
-                padding: 6px 10px;
-                background: #1f1f1f;
+                margin: 4px 0 2px 0;
+                padding-left: 10px;
                 border-left: 2px solid #80cbc4;
-                border-radius: 4px;
             }
             .meaning-ex-jp {
                 font-size: 14px; color: #cfd8dc; line-height: 1.4;
@@ -114,14 +115,10 @@ class AnkiCardCreator(
                 font-style: italic; line-height: 1.3;
             }
             .pitch {
-                font-size: 16px; color: #ff8a65; margin: 8px 0;
-                padding: 6px 12px; background: #2a2a2a; border-radius: 6px;
-                display: inline-block;
+                font-size: 16px; color: #ff8a65; margin: 4px 0;
             }
             .freq {
                 font-size: 13px; color: #aaa; margin: 4px 0;
-                padding: 2px 10px; background: #333; border-radius: 12px;
-                display: inline-block;
             }
             .front-context {
                 font-size: 14px; color: #cfd8dc; margin-top: 8px;
@@ -136,8 +133,8 @@ class AnkiCardCreator(
             }
             .audio { margin: 8px 0; }
             .sentence {
-                font-size: 14px; color: #b0bec5; margin-top: 8px;
-                text-align: center; line-height: 1.4;
+                font-size: 14px; color: #b0bec5; margin: 4px 0;
+                text-align: left; line-height: 1.4;
             }
             .sentence-jp { font-style: italic; }
             .sentence-translation {
@@ -148,18 +145,18 @@ class AnkiCardCreator(
                 height: 1px; background: #3a3a3a; margin: 8px auto;
                 width: 60%; opacity: 0.5;
             }
-            hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
+            hr { border: none; border-top: 1px solid #444; margin: 14px 0; }
             .kanji-breakdown {
-                font-size: 16px; color: #ccc; margin-top: 18px; padding: 12px;
-                background: #252525; border-radius: 8px; text-align: left;
+                font-size: 16px; color: #ccc;
+                text-align: left;
             }
             .kanji-breakdown-title {
                 font-size: 12px; color: #80cbc4; text-transform: uppercase;
-                letter-spacing: 0.08em; margin-bottom: 8px;
+                letter-spacing: 0.08em; margin-bottom: 6px;
             }
-            .kanji-item { margin-bottom: 8px; line-height: 1.4; }
+            .kanji-item { margin-bottom: 6px; line-height: 1.4; }
             .kanji-item:last-child { margin-bottom: 0; }
-            .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
+            .kanji-char { font-size: 22px; color: #fff; margin-right: 8px; font-weight: bold; }
             .kanji-readings { font-size: 13px; color: #b0bec5; }
             .kanji-meanings { font-size: 13px; color: #cfd8dc; margin-top: 2px; }
         """
@@ -187,20 +184,22 @@ class AnkiCardCreator(
                 padding: 20px;
             }
             .expression { font-size: ${prefs.expressionFontSize}px; font-weight: $fontWeight; color: ${prefs.expressionColor}; }
-            .reading { font-size: ${prefs.readingFontSize}px; color: ${prefs.readingColor}; margin: 10px 0; }
+            .reading { font-size: ${prefs.readingFontSize}px; color: ${prefs.readingColor}; margin: 8px 0; }
             .meaning {
-                font-size: ${prefs.meaningFontSize}px; color: ${prefs.meaningColor}; margin: 12px 0;
-                text-align: left; padding: 12px 16px; background: #2a2a2a; border-radius: 8px;
-                border-left: 3px solid ${prefs.accentColor};
+                font-size: ${prefs.meaningFontSize}px; color: ${prefs.meaningColor};
+                text-align: left;
+            }
+            .pos-line {
+                font-size: 13px; font-style: italic; color: ${prefs.accentColor};
+                margin: 0 0 10px 0; text-align: left; letter-spacing: 0.02em;
             }
             .meanings { margin: 0; padding: 0 0 0 1.6em; }
             .meaning-item { margin-bottom: 10px; line-height: 1.45; }
             .meaning-item:last-child { margin-bottom: 0; }
             .meaning-item .gloss { color: ${prefs.meaningColor}; }
             .meaning-ex {
-                margin: 6px 0 4px 0; padding: 6px 10px;
-                background: #1f1f1f; border-left: 2px solid ${prefs.accentColor};
-                border-radius: 4px;
+                margin: 4px 0 2px 0; padding-left: 10px;
+                border-left: 2px solid ${prefs.accentColor};
                 ${if (!prefs.showSentence) "display: none;" else ""}
             }
             .meaning-ex-jp {
@@ -211,15 +210,11 @@ class AnkiCardCreator(
                 color: #90a4ae; margin-top: 2px; font-style: italic; line-height: 1.3;
             }
             .pitch {
-                font-size: 16px; color: #ff8a65; margin: 8px 0;
-                padding: 6px 12px; background: #2a2a2a; border-radius: 6px;
-                display: inline-block;
+                font-size: 16px; color: #ff8a65; margin: 4px 0;
                 ${if (!prefs.showPitchAccent) "display: none;" else ""}
             }
             .freq {
                 font-size: 13px; color: #aaa; margin: 4px 0;
-                padding: 2px 10px; background: #333; border-radius: 12px;
-                display: inline-block;
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
             .front-context {
@@ -236,8 +231,8 @@ class AnkiCardCreator(
             }
             .audio { margin: 8px 0; }
             .sentence {
-                font-size: ${prefs.backSentenceFontSize}px; color: #bbb; margin-top: 8px;
-                text-align: center; line-height: 1.4;
+                font-size: ${prefs.backSentenceFontSize}px; color: #bbb; margin: 4px 0;
+                text-align: left; line-height: 1.4;
                 ${if (!prefs.showSentence) "display: none;" else ""}
             }
             .sentence-jp { font-style: italic; }
@@ -249,18 +244,17 @@ class AnkiCardCreator(
                 height: 1px; background: #3a3a3a; margin: 8px auto;
                 width: 60%; opacity: 0.5;
             }
-            hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
+            hr { border: none; border-top: 1px solid #444; margin: 14px 0; }
             .kanji-breakdown {
-                font-size: 16px; color: #ccc; margin-top: 18px; padding: 12px;
-                background: #252525; border-radius: 8px; text-align: left;
+                font-size: 16px; color: #ccc; text-align: left;
             }
             .kanji-breakdown-title {
                 font-size: 12px; color: ${prefs.accentColor}; text-transform: uppercase;
-                letter-spacing: 0.08em; margin-bottom: 8px;
+                letter-spacing: 0.08em; margin-bottom: 6px;
             }
-            .kanji-item { margin-bottom: 8px; line-height: 1.4; }
+            .kanji-item { margin-bottom: 6px; line-height: 1.4; }
             .kanji-item:last-child { margin-bottom: 0; }
-            .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
+            .kanji-char { font-size: 22px; color: #fff; margin-right: 8px; font-weight: bold; }
             .kanji-readings { font-size: 13px; color: #b0bec5; }
             .kanji-meanings { font-size: 13px; color: #cfd8dc; margin-top: 2px; }
             """.trimIndent()
@@ -303,10 +297,13 @@ class AnkiCardCreator(
                 <div class="back">
                     <div class="expression">食べる</div>
                     <div class="reading">たべる</div>
+                    <hr>
                     <div class="pitch">$previewPitch</div>
+                    <hr>
                     <div class="freq">★★★ Top 1K</div>
                     <hr>
                     <div class="meaning">
+                      <div class="pos-line">ichidan verb, transitive verb</div>
                       <ol class="meanings">
                         <li class="meaning-item">
                           <span class="gloss">to eat</span>
@@ -320,6 +317,7 @@ class AnkiCardCreator(
                         </li>
                       </ol>
                     </div>
+                    <hr>
                     <div class="kanji-breakdown">
                       <div class="kanji-breakdown-title">Kanji</div>
                       <div class="kanji-item">
@@ -746,27 +744,31 @@ class AnkiCardCreator(
         }
         
         // Examples whose definitionIndex is set come from Jitendex and belong
-        // INSIDE the meaning column under their gloss. The unattached ones
+        // INSIDE the meaning column under their gloss. The unattached fallback
         // (online Tatoeba responses, pre-seeded SentenceDao, plain JMDict
-        // imports) drop into the legacy {{Sentence}} block at the bottom.
+        // single-pair fields) drops into {{Sentence}} only when there are NO
+        // attached examples — otherwise the parser-mirrored exampleSentence
+        // would duplicate the first attached gloss example at the bottom.
         val attachedExamples = entry.examples.filter { it.definitionIndex >= 0 }
-        val unattachedExamples = entry.examples.filter { it.definitionIndex < 0 }
-            .ifEmpty {
-                if (entry.exampleSentence.isNotBlank()) {
-                    listOf(
-                        com.yomitanmobile.domain.model.ExamplePair(
-                            jp = entry.exampleSentence,
-                            en = entry.exampleSentenceTranslation
-                        )
-                    )
-                } else emptyList()
-            }
+        val unattachedExamples: List<com.yomitanmobile.domain.model.ExamplePair> = when {
+            attachedExamples.isNotEmpty() ->
+                entry.examples.filter { it.definitionIndex < 0 }
+            entry.exampleSentence.isNotBlank() -> listOf(
+                com.yomitanmobile.domain.model.ExamplePair(
+                    jp = entry.exampleSentence,
+                    en = entry.exampleSentenceTranslation
+                )
+            )
+            else -> emptyList()
+        }
+
+        val posLabel = com.yomitanmobile.util.PartsOfSpeechFormatter.format(entry.partsOfSpeech)
 
         return AnkiCard(
             front = frontContent,
             frontContext = frontContext,
             reading = InputSanitizer.escapeHtml(entry.reading),
-            meaning = formatMeaningForCard(entry.definitions, attachedExamples),
+            meaning = formatMeaningForCard(entry.definitions, attachedExamples, posLabel),
             pitchAccent = pitchHtml,
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
@@ -789,13 +791,18 @@ class AnkiCardCreator(
     }
 
     /**
-     * Yomitan-style ordered list. Each gloss carries up to
-     * [MAX_EXAMPLES_PER_MEANING] example sentence(s) directly underneath, so
-     * the sentence visibly belongs to the meaning it illustrates.
+     * Yomitan-style meaning column.
+     *   • [posLabel] (e.g. "ichidan verb, transitive verb") sits at the top
+     *     in italic accent color so the user sees the grammar tag once,
+     *     before the gloss list.
+     *   • Each gloss is a numbered list item with up to
+     *     [MAX_EXAMPLES_PER_MEANING] example sentence(s) tucked directly
+     *     beneath it.
      */
     private fun formatMeaningForCard(
         definitions: List<String>,
-        attachedExamples: List<com.yomitanmobile.domain.model.ExamplePair>
+        attachedExamples: List<com.yomitanmobile.domain.model.ExamplePair>,
+        posLabel: String
     ): String {
         val meaningLines = definitions.asSequence()
             .mapIndexed { idx, def -> idx to def.trim().replace(";", ", ") }
@@ -807,6 +814,11 @@ class AnkiCardCreator(
         val examplesByDef = attachedExamples.groupBy { it.definitionIndex }
 
         return buildString {
+            if (posLabel.isNotBlank()) {
+                append("<div class=\"pos-line\">")
+                append(InputSanitizer.escapeHtml(posLabel))
+                append("</div>")
+            }
             append("<ol class=\"meanings\">")
             for ((origIdx, gloss) in meaningLines) {
                 append("<li class=\"meaning-item\">")
