@@ -48,14 +48,14 @@ class YomitanDictionaryParser @Inject constructor() {
 
     private companion object {
         const val TEMP_DICTIONARY_NAME = "temp"
-        const val BUFFER_SIZE = 8192
+        const val BUFFER_SIZE = 64 * 1024
         const val MAX_INDEX_JSON_BYTES = 1 * 1024 * 1024
         const val MAX_TERM_BANK_BYTES = 25 * 1024 * 1024
         const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
         const val MAX_META_BANK_BYTES = 25 * 1024 * 1024
         // Jitendex's structured-content JSON expands ~6-8x from its ~38 MB ZIP,
         // so the cap needs headroom over the original JMDict-only sizing.
-        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 500L * 1024L * 1024L
+        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 2L * 1024L * 1024L * 1024L
     }
 
     private val json = Json {
@@ -165,7 +165,7 @@ class YomitanDictionaryParser @Inject constructor() {
                             try {
                                 val content = readEntryTextLimited(name, MAX_KANJI_BANK_BYTES)
                                 val jsonArray = json.decodeFromString<JsonArray>(content)
-                                val KANJI_CHUNK_SIZE = 2000
+                                val KANJI_CHUNK_SIZE = 5000
                                 val batch = mutableListOf<KanjiEntry>()
 
                                 for (item in jsonArray) {
@@ -216,7 +216,7 @@ class YomitanDictionaryParser @Inject constructor() {
                                 val metaArray = json.decodeFromString<JsonArray>(content)
                                 val totalMetaEntries = metaArray.size
 
-                                val META_CHUNK_SIZE = 2000
+                                val META_CHUNK_SIZE = 5000
                                 var freqChunk = mutableListOf<FrequencyUpdate>()
                                 var pitchChunk = mutableMapOf<String, String>()
                                 var processedInFile = 0

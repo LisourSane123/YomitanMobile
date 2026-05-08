@@ -47,9 +47,9 @@ class DictionaryDownloadManager(
     private val repository: DictionaryRepository
 ) {
     companion object {
-        private const val BUFFER_SIZE = 8192
+        private const val BUFFER_SIZE = 64 * 1024
         private const val MAX_REDIRECTS = 5
-        private const val MAX_DOWNLOAD_BYTES = 250L * 1024L * 1024L
+        private const val MAX_DOWNLOAD_BYTES = 2L * 1024L * 1024L * 1024L
 
         private val ALLOWED_DOWNLOAD_HOSTS = setOf(
             "github.com",

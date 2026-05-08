@@ -96,7 +96,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             // Use streaming parser — entries are inserted in batches as they're parsed.
             // Larger batches mean fewer transaction commits; SQLite handles 2000+ inserts
             // per transaction comfortably and this measurably shortens dictionary import.
-            val batchSize = 2000
+            val batchSize = 5000
             val parseResult = parser.parseFromZipStreaming(
                 inputStream = inputStream,
                 onProgress = onProgress,
