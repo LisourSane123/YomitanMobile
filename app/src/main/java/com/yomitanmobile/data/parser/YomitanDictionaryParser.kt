@@ -4,6 +4,7 @@ import com.yomitanmobile.data.local.dao.FrequencyUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.util.JlptLevelUtil
+import com.yomitanmobile.domain.model.ExamplePair
 import com.yomitanmobile.domain.model.ImportProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,6 +15,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -51,7 +53,9 @@ class YomitanDictionaryParser @Inject constructor() {
         const val MAX_TERM_BANK_BYTES = 25 * 1024 * 1024
         const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
         const val MAX_META_BANK_BYTES = 25 * 1024 * 1024
-        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 200L * 1024L * 1024L
+        // Jitendex's structured-content JSON expands ~6-8x from its ~38 MB ZIP,
+        // so the cap needs headroom over the original JMDict-only sizing.
+        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 500L * 1024L * 1024L
     }
 
     private val json = Json {
@@ -383,6 +387,9 @@ class YomitanDictionaryParser @Inject constructor() {
         val reading = safeString(term[1])
         val definitionTags = safeString(term[2])
         // term[4] is the dictionary sort score, NOT frequency rank
+        val examples = extractExamples(term[5])
+        // parseDefinitions runs after extractExamples, but extractTextFromContent
+        // skips example containers so their text doesn't double up here.
         val definitions = parseDefinitions(term[5])
         val sequenceNumber = if (term.size > 6) {
             try { term[6].jsonPrimitive.intOrNull ?: 0 } catch (_: Exception) { 0 }
@@ -410,6 +417,16 @@ class YomitanDictionaryParser @Inject constructor() {
         // Extract JLPT once at import time so the UI can use it directly.
         val jlptLevel = JlptLevelUtil.extractAsInt("$definitionTags $termTags")
 
+        // Encode the full example list as JSON, then mirror the first pair into
+        // the legacy single-example columns for screens/Anki paths that haven't
+        // been updated to consume the list yet.
+        val encodedExamples = if (examples.isEmpty()) {
+            ""
+        } else {
+            json.encodeToString(ListSerializer(ExamplePair.serializer()), examples)
+        }
+        val firstExample = examples.firstOrNull()
+
         return DictionaryEntry(
             expression = expression,
             reading = reading.ifBlank { expression },
@@ -419,8 +436,122 @@ class YomitanDictionaryParser @Inject constructor() {
             partsOfSpeech = combinedTags,
             dictionaryName = dictionaryName,
             sequenceNumber = sequenceNumber,
-            jlptLevel = jlptLevel
+            exampleSentence = firstExample?.jp.orEmpty(),
+            exampleSentenceTranslation = firstExample?.en.orEmpty(),
+            jlptLevel = jlptLevel,
+            examplesJson = encodedExamples
         )
+    }
+
+    // ---------- Example sentence extraction (Jitendex format) ----------
+    //
+    // Jitendex embeds Tatoeba example sentences inside a structured-content node
+    // whose data.content marker contains "example" (the exact spelling has
+    // varied across Jitendex versions: "example", "example-sentence",
+    // "example-sentences"). Inside the container, JP and EN are split either by
+    // a `lang` attribute on a child div / span, or implicitly by script —
+    // kana/kanji = JP, ASCII Latin = EN.
+    //
+    // The walker is deliberately defensive: missing data, missing lang
+    // attributes, plain string children, deeply nested ul/li layouts all need
+    // to resolve to the same (jp, en) pair.
+
+    private fun extractExamples(definitionsElement: JsonElement): List<ExamplePair> {
+        val out = mutableListOf<ExamplePair>()
+        try {
+            walkForExamples(definitionsElement, out)
+        } catch (_: Exception) {
+            // Malformed structured-content shouldn't fail the whole import.
+        }
+        return out
+    }
+
+    private fun walkForExamples(element: JsonElement, out: MutableList<ExamplePair>) {
+        when (element) {
+            is JsonObject -> {
+                if (isExampleContainer(element)) {
+                    extractJpEnPair(element)?.let { out.add(it) }
+                    // Don't descend further into a matched container — the
+                    // pair is already extracted from this subtree.
+                    return
+                }
+                element["content"]?.let { walkForExamples(it, out) }
+            }
+            is JsonArray -> element.forEach { walkForExamples(it, out) }
+            else -> Unit
+        }
+    }
+
+    private fun isExampleContainer(obj: JsonObject): Boolean {
+        return try {
+            val data = obj["data"] as? JsonObject ?: return false
+            val content = data["content"]?.jsonPrimitive?.contentOrNull ?: return false
+            content.lowercase().contains("example")
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun extractJpEnPair(container: JsonObject): ExamplePair? {
+        val jpParts = mutableListOf<String>()
+        val enParts = mutableListOf<String>()
+        try {
+            walkLangSplit(container, inheritedLang = null, jpParts, enParts)
+        } catch (_: Exception) {
+            return null
+        }
+        val jp = jpParts.joinToString(" ").trim()
+        val en = enParts.joinToString(" ").trim()
+        return if (jp.isBlank()) null else ExamplePair(jp, en)
+    }
+
+    private fun walkLangSplit(
+        element: JsonElement,
+        inheritedLang: String?,
+        jp: MutableList<String>,
+        en: MutableList<String>
+    ) {
+        when (element) {
+            is JsonObject -> {
+                val lang = element["lang"]?.jsonPrimitive?.contentOrNull ?: inheritedLang
+                val text = element["text"]?.jsonPrimitive?.contentOrNull
+                if (text != null) appendTextByLang(text, lang, jp, en)
+                element["content"]?.let { walkLangSplit(it, lang, jp, en) }
+            }
+            is JsonArray -> element.forEach { walkLangSplit(it, inheritedLang, jp, en) }
+            is JsonPrimitive -> {
+                val s = element.contentOrNull ?: return
+                appendTextByLang(s, inheritedLang, jp, en)
+            }
+            else -> Unit
+        }
+    }
+
+    private fun appendTextByLang(
+        text: String,
+        lang: String?,
+        jp: MutableList<String>,
+        en: MutableList<String>
+    ) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        val langPrefix = lang?.lowercase()?.take(2)
+        when (langPrefix) {
+            "ja", "jp" -> jp.add(trimmed)
+            "en" -> en.add(trimmed)
+            // No lang attribute: split by script. This catches the case where
+            // Jitendex stores example children as plain strings inside an
+            // unmarked <div>.
+            else -> if (containsJapaneseScript(trimmed)) jp.add(trimmed) else en.add(trimmed)
+        }
+    }
+
+    private fun containsJapaneseScript(s: String): Boolean {
+        return s.any { c ->
+            c.code in 0x3040..0x309F ||  // hiragana
+            c.code in 0x30A0..0x30FF ||  // katakana
+            c.code in 0x4E00..0x9FFF     // CJK ideographs
+        }
     }
 
     private fun parseDefinitions(element: JsonElement): List<String> {
@@ -490,6 +621,10 @@ class YomitanDictionaryParser @Inject constructor() {
                     }
                 }
                 is JsonObject -> {
+                    // Example containers are extracted separately via extractExamples();
+                    // skip them here so the flat-text definition doesn't duplicate the
+                    // sentence text inside the meaning column.
+                    if (isExampleContainer(element)) return ""
                     val tag = element["tag"]?.jsonPrimitive?.content
                     val content = element["content"]
                     val text = element["text"]

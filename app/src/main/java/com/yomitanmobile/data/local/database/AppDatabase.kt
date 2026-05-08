@@ -33,7 +33,7 @@ import com.yomitanmobile.data.local.entity.Sentence
         KanjiEntry::class,
         Sentence::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -48,6 +48,17 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE dictionary_entries ADD COLUMN examples_json TEXT NOT NULL DEFAULT ''"
+                )
+                // No backfill — only Jitendex (and similar enriched dicts) carry
+                // examples. Users on plain JMDict simply have empty lists until
+                // they re-import.
+            }
+        }
 
         val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {

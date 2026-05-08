@@ -53,5 +53,10 @@ data class DictionaryEntry(
 
     // 0 = no JLPT tag; 1-5 = N1-N5 (jlpt-1..jlpt-5 from JMDict termTags)
     @ColumnInfo(name = "jlpt_level")
-    val jlptLevel: Int = 0
+    val jlptLevel: Int = 0,
+
+    // JSON-serialized List<ExamplePair> — extracted from Jitendex structured-content
+    // example containers. Empty for dictionaries without embedded examples (plain JMDict).
+    @ColumnInfo(name = "examples_json")
+    val examplesJson: String = ""
 )

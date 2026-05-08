@@ -266,19 +266,32 @@ private fun WordDetailContent(
                     Text(entry.reading, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
                 }
 
-                if (entry.exampleSentence.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
+                // Show example sentences with translations. Prefer the full list
+                // from Jitendex (entry.examples); fall back to the legacy single-pair
+                // fields (used by online Tatoeba / pre-seeded SentenceDao paths).
+                val displayExamples = when {
+                    entry.examples.isNotEmpty() -> entry.examples.take(3)
+                    entry.exampleSentence.isNotBlank() -> listOf(
+                        com.yomitanmobile.domain.model.ExamplePair(
+                            jp = entry.exampleSentence,
+                            en = entry.exampleSentenceTranslation
+                        )
+                    )
+                    else -> emptyList()
+                }
+                displayExamples.forEachIndexed { idx, ex ->
+                    Spacer(Modifier.height(if (idx == 0) 6.dp else 6.dp))
                     Text(
-                        text = entry.exampleSentence,
+                        text = ex.jp,
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp,
                         modifier = Modifier.padding(horizontal = 8.dp)
                     )
-                    if (entry.exampleSentenceTranslation.isNotBlank()) {
+                    if (ex.en.isNotBlank()) {
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = entry.exampleSentenceTranslation,
+                            text = ex.en,
                             fontSize = 12.sp,
                             fontStyle = FontStyle.Italic,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
@@ -286,6 +299,14 @@ private fun WordDetailContent(
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
                     }
+                }
+                if (entry.examples.size > 3) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "+${entry.examples.size - 3}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
                 }
 
                 // Alternative expressions/forms

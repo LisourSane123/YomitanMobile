@@ -330,35 +330,42 @@ class DetailViewModel @Inject constructor(
         try {
             val stylePrefs = loadCardStylePreferences()
 
-            // Fetch sentences from local database
+            // Sentence-source priority order:
+            //   1. Jitendex examples already attached to the entry (preferred)
+            //   2. Pre-seeded local SentenceDao matches
+            //   3. Online Tatoeba API (only with explicit user consent)
             val wordForExport = if (stylePrefs.showSentence) {
                 val lookup = word.expression.ifBlank { word.reading }
-                val localSentences = sentenceDao.getSentencesByExpressionOrReading(
-                    expression = lookup,
-                    reading = word.reading.ifBlank { lookup }
-                )
-                
-                if (localSentences.isNotEmpty()) {
-                    val bestSentence = localSentences.first()
-                    word.copy(
-                        exampleSentence = bestSentence.sentenceJapanese,
-                        exampleSentenceTranslation = bestSentence.sentenceEnglish
+                if (word.examples.isNotEmpty()) {
+                    // Already populated from the dictionary import — leave as-is.
+                    // AnkiCardCreator consumes word.examples directly.
+                    word
+                } else {
+                    val localSentences = sentenceDao.getSentencesByExpressionOrReading(
+                        expression = lookup,
+                        reading = word.reading.ifBlank { lookup }
                     )
-                } else if (stylePrefs.useOnlineSentenceApi && stylePrefs.onlineSentenceApiConsentGranted) {
-                    val onlineSentence = runCatching {
-                        onlineSentenceService.fetchSentenceForWord(lookup)
-                    }.getOrNull()
-
-                    if (onlineSentence != null) {
+                    if (localSentences.isNotEmpty()) {
+                        val bestSentence = localSentences.first()
                         word.copy(
-                            exampleSentence = onlineSentence.japanese,
-                            exampleSentenceTranslation = onlineSentence.translation
+                            exampleSentence = bestSentence.sentenceJapanese,
+                            exampleSentenceTranslation = bestSentence.sentenceEnglish
                         )
+                    } else if (stylePrefs.useOnlineSentenceApi && stylePrefs.onlineSentenceApiConsentGranted) {
+                        val onlineSentence = runCatching {
+                            onlineSentenceService.fetchSentenceForWord(lookup)
+                        }.getOrNull()
+                        if (onlineSentence != null) {
+                            word.copy(
+                                exampleSentence = onlineSentence.japanese,
+                                exampleSentenceTranslation = onlineSentence.translation
+                            )
+                        } else {
+                            word
+                        }
                     } else {
                         word
                     }
-                } else {
-                    word
                 }
             } else {
                 word

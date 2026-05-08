@@ -113,6 +113,10 @@ class AnkiCardCreator(
                 font-size: 12px; color: #90a4ae; margin-top: 4px;
                 font-style: normal; opacity: 0.95;
             }
+            .sentence-divider {
+                height: 1px; background: #3a3a3a; margin: 8px auto;
+                width: 60%; opacity: 0.5;
+            }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
             .kanji-breakdown { font-size: 16px; color: #ccc; margin-top: 15px; padding: 12px; background: #252525; border-radius: 8px; text-align: left; } .kanji-item { margin-bottom: 8px; } .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
         """
@@ -180,6 +184,10 @@ class AnkiCardCreator(
             .sentence-translation {
                 font-size: ${(prefs.backSentenceFontSize - 2).coerceAtLeast(10)}px;
                 color: #90a4ae; margin-top: 4px; font-style: normal; opacity: 0.95;
+            }
+            .sentence-divider {
+                height: 1px; background: #3a3a3a; margin: 8px auto;
+                width: 60%; opacity: 0.5;
             }
             hr { border: none; border-top: 1px solid #444; margin: 15px 0; }
             .kanji-breakdown { font-size: 16px; color: #ccc; margin-top: 15px; padding: 12px; background: #252525; border-radius: 8px; text-align: left; } .kanji-item { margin-bottom: 8px; } .kanji-char { font-size: 24px; color: #fff; margin-right: 8px; font-weight: bold; }
@@ -628,19 +636,34 @@ class AnkiCardCreator(
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
             sentence = buildString {
-                val jp = entry.exampleSentence
-                if (jp.isNotBlank()) {
-                    append("<div class=\"sentence-jp\">")
-                    append(InputSanitizer.escapeHtml(jp))
-                    append("</div>")
+                // Prefer the full Jitendex example list when present — each pair
+                // becomes a JP block + translation block on the back. Translation
+                // never appears on the front because {{Sentence}} is referenced
+                // exclusively by CARD_BACK_TEMPLATE.
+                val pairs = if (entry.examples.isNotEmpty()) {
+                    entry.examples.take(3)
+                } else if (entry.exampleSentence.isNotBlank()) {
+                    listOf(
+                        com.yomitanmobile.domain.model.ExamplePair(
+                            jp = entry.exampleSentence,
+                            en = entry.exampleSentenceTranslation
+                        )
+                    )
+                } else {
+                    emptyList()
                 }
-                val translation = entry.exampleSentenceTranslation
-                if (translation.isNotBlank()) {
-                    // Translation only renders on the back because {{Sentence}} is
-                    // referenced exclusively by CARD_BACK_TEMPLATE.
-                    append("<div class=\"sentence-translation\">")
-                    append(InputSanitizer.escapeHtml(translation))
-                    append("</div>")
+                pairs.forEachIndexed { idx, ex ->
+                    if (idx > 0) append("<div class=\"sentence-divider\"></div>")
+                    if (ex.jp.isNotBlank()) {
+                        append("<div class=\"sentence-jp\">")
+                        append(InputSanitizer.escapeHtml(ex.jp))
+                        append("</div>")
+                    }
+                    if (ex.en.isNotBlank()) {
+                        append("<div class=\"sentence-translation\">")
+                        append(InputSanitizer.escapeHtml(ex.en))
+                        append("</div>")
+                    }
                 }
             }
         )

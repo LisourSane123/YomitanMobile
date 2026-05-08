@@ -32,6 +32,22 @@ enum class DictionaryCategory {
  */
 object AvailableDictionaries {
 
+    // Recommended primary dictionary. Jitendex is a Yomitan-format JMDict
+    // derivative that ships JLPT tags + Tatoeba example sentences embedded as
+    // structured-content nodes — both consumed by YomitanDictionaryParser.
+    val jitendex = DictionaryDownloadInfo(
+        id = "jitendex",
+        name = "Jitendex (Recommended)",
+        descriptionPl = "Wzbogacony JMdict z przykładowymi zdaniami i tagami JLPT. Zalecany słownik główny.",
+        descriptionEn = "Enriched JMDict with example sentences and JLPT tags. Recommended primary dictionary.",
+        category = DictionaryCategory.DICTIONARY,
+        url = "https://github.com/stephenmk/stephenmk.github.io/releases/latest/download/jitendex-yomitan.zip",
+        fileSize = "~37 MB",
+        language = "EN"
+    )
+
+    // Fallback option for users who prefer a smaller download or who already
+    // import their own JMDict-derived data. Lacks JLPT tags and example sentences.
     val jmdict = DictionaryDownloadInfo(
         id = "jmdict_english",
         name = "JMdict (English)",
@@ -44,6 +60,7 @@ object AvailableDictionaries {
     )
 
     val all: List<DictionaryDownloadInfo> = listOf(
+        jitendex,
         jmdict,
         DictionaryDownloadInfo(
             id = "jmdict_forms",
@@ -103,10 +120,10 @@ object AvailableDictionaries {
 
     /**
      * Recommended dictionaries for first-time setup.
-     * JMdict (main dictionary), JPDB Frequency, Kanjium Pitch Accent.
+     * Jitendex (primary, with JLPT + examples), JPDB Frequency, Kanjium Pitch Accent.
      */
     val recommended: List<DictionaryDownloadInfo> = listOf(
-        jmdict,
+        jitendex,
         all.first { it.id == "jpdb_freq" },
         all.first { it.id == "kanjium_pitch" }
     )

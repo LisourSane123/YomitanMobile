@@ -13,7 +13,10 @@ data class WordEntry(
     val exampleSentenceTranslation: String = "",
     val audioFile: String = "",
     // 0 = no JLPT data; 1-5 = N1-N5
-    val jlptLevel: Int = 0
+    val jlptLevel: Int = 0,
+    // Examples from the dictionary (Jitendex) — first one mirrors the legacy
+    // exampleSentence / exampleSentenceTranslation fields.
+    val examples: List<ExamplePair> = emptyList()
 ) {
     fun definitionText(): String = definitions.joinToString("; ")
 
