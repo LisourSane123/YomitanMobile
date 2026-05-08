@@ -266,48 +266,10 @@ private fun WordDetailContent(
                     Text(entry.reading, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
                 }
 
-                // Show example sentences with translations. Prefer the full list
-                // from Jitendex (entry.examples); fall back to the legacy single-pair
-                // fields (used by online Tatoeba / pre-seeded SentenceDao paths).
-                val displayExamples = when {
-                    entry.examples.isNotEmpty() -> entry.examples.take(3)
-                    entry.exampleSentence.isNotBlank() -> listOf(
-                        com.yomitanmobile.domain.model.ExamplePair(
-                            jp = entry.exampleSentence,
-                            en = entry.exampleSentenceTranslation
-                        )
-                    )
-                    else -> emptyList()
-                }
-                displayExamples.forEachIndexed { idx, ex ->
-                    Spacer(Modifier.height(if (idx == 0) 6.dp else 6.dp))
-                    Text(
-                        text = ex.jp,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
-                    if (ex.en.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = ex.en,
-                            fontSize = 12.sp,
-                            fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                            lineHeight = 16.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
-                }
-                if (entry.examples.size > 3) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "+${entry.examples.size - 3}",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
+                // Examples no longer render in the header card — they appear
+                // directly under their corresponding meaning in the "Znaczenie"
+                // section below, so the user sees which sense each sentence
+                // illustrates.
 
                 // Alternative expressions/forms
                 if (entry.alternativeExpressions.isNotEmpty()) {
@@ -372,13 +334,75 @@ private fun WordDetailContent(
             Spacer(Modifier.height(12.dp))
         }
 
-        // Definitions
+        // Definitions, with the example sentence(s) for each meaning rendered
+        // directly underneath. Examples whose definitionIndex is -1 are
+        // unattached (legacy data, online Tatoeba results, plain JMDict
+        // imports) — those are shown after the last meaning.
         SectionCard(title = tr("Znaczenie", "Meaning")) {
+            val examplesByDef = entry.examples.groupBy { it.definitionIndex }
             entry.definitions.forEachIndexed { index, definition ->
                 if (index > 0) Divider(modifier = Modifier.padding(vertical = 8.dp))
                 Row {
                     Text("${index + 1}. ", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Text(definition, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                }
+                examplesByDef[index]?.take(3)?.forEachIndexed { exIdx, ex ->
+                    Spacer(Modifier.height(if (exIdx == 0) 6.dp else 4.dp))
+                    Text(
+                        text = ex.jp,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        lineHeight = 20.sp,
+                        modifier = Modifier.padding(start = 20.dp)
+                    )
+                    if (ex.en.isNotBlank()) {
+                        Text(
+                            text = ex.en,
+                            fontSize = 12.sp,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(start = 20.dp)
+                        )
+                    }
+                }
+            }
+
+            // Unattached examples (definitionIndex == -1) — older data path or
+            // online Tatoeba responses where we can't tie the sentence to a
+            // specific gloss.
+            val unattached = examplesByDef[-1].orEmpty()
+                .ifEmpty {
+                    if (entry.examples.isEmpty() && entry.exampleSentence.isNotBlank()) {
+                        listOf(
+                            com.yomitanmobile.domain.model.ExamplePair(
+                                jp = entry.exampleSentence,
+                                en = entry.exampleSentenceTranslation
+                            )
+                        )
+                    } else emptyList()
+                }
+            if (unattached.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Divider()
+                Spacer(Modifier.height(6.dp))
+                unattached.take(3).forEachIndexed { idx, ex ->
+                    if (idx > 0) Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = ex.jp,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        lineHeight = 20.sp
+                    )
+                    if (ex.en.isNotBlank()) {
+                        Text(
+                            text = ex.en,
+                            fontSize = 12.sp,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 16.sp
+                        )
+                    }
                 }
             }
         }

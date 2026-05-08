@@ -113,6 +113,13 @@ object PartsOfSpeechFormatter {
         "gai1", "gai2"
     )
 
+    // Visual / metadata markers that show up in Yomitan termTags but are not
+    // real grammar info. "P" = priority form; the unicode glyphs come from
+    // Jitendex's badge tags. Filtering them keeps the POS chip readable.
+    private val NON_POS_NOISE = setOf(
+        "P", "★", "priority", "form"
+    )
+
     private val JLPT_REGEX = Regex("""(?i)^jlpt[\s_-]?n?[\s_-]?[1-5]$""")
     private val NF_REGEX = Regex("""(?i)^nf\d+$""")
     private val SPLIT_REGEX = Regex("""[,;\s]+""")
@@ -128,6 +135,7 @@ object PartsOfSpeechFormatter {
             val trimmed = token.trim()
             if (trimmed.isEmpty()) continue
             if (trimmed in FREQUENCY_TAGS) continue
+            if (trimmed in NON_POS_NOISE) continue
             if (JLPT_REGEX.matches(trimmed)) continue
             if (NF_REGEX.matches(trimmed)) continue
             seen.add(POS_LABELS[trimmed] ?: trimmed)

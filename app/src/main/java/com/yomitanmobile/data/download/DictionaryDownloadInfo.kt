@@ -59,8 +59,24 @@ object AvailableDictionaries {
         language = "EN"
     )
 
+    // Companion dictionary that ships JLPT level tags for ~8000 vocabulary
+    // entries. Jitendex itself does not embed JLPT data, so we install this
+    // alongside it. Format: term_meta_bank "freq" entries whose displayValue
+    // is "N1"-"N5" — picked up by YomitanDictionaryParser as JLPT levels.
+    val jlptVocab = DictionaryDownloadInfo(
+        id = "jlpt_vocab",
+        name = "JLPT Vocab Tags",
+        descriptionPl = "Tagi poziomów JLPT (N1–N5) dla słów. Uzupełnienie do Jitendex.",
+        descriptionEn = "JLPT level tags (N1-N5) for vocabulary. Companion to Jitendex.",
+        category = DictionaryCategory.FREQUENCY,
+        url = "https://github.com/stephenmk/yomitan-jlpt-vocab/releases/latest/download/jlpt.zip",
+        fileSize = "~80 KB",
+        language = "EN"
+    )
+
     val all: List<DictionaryDownloadInfo> = listOf(
         jitendex,
+        jlptVocab,
         jmdict,
         DictionaryDownloadInfo(
             id = "jmdict_forms",
@@ -124,6 +140,7 @@ object AvailableDictionaries {
      */
     val recommended: List<DictionaryDownloadInfo> = listOf(
         jitendex,
+        jlptVocab,
         all.first { it.id == "jpdb_freq" },
         all.first { it.id == "kanjium_pitch" }
     )

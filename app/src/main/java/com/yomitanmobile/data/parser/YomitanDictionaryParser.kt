@@ -1,6 +1,7 @@
 package com.yomitanmobile.data.parser
 
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
+import com.yomitanmobile.data.local.dao.JlptUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.util.JlptLevelUtil
@@ -75,7 +76,8 @@ class YomitanDictionaryParser @Inject constructor() {
         onProgress: (ImportProgress) -> Unit = {},
         onBatch: suspend (List<DictionaryEntry>, String) -> Unit,
         onMetaBatch: suspend (List<FrequencyUpdate>, Map<String, String>) -> Unit = { _, _ -> },
-        onKanjiBatch: suspend (List<KanjiEntry>, String) -> Unit = { _, _ -> }
+        onKanjiBatch: suspend (List<KanjiEntry>, String) -> Unit = { _, _ -> },
+        onJlptBatch: suspend (List<JlptUpdate>) -> Unit = { }
     ): ParseResult = withContext(Dispatchers.IO) {
 
         var indexJson: String? = null
@@ -219,6 +221,7 @@ class YomitanDictionaryParser @Inject constructor() {
                                 val META_CHUNK_SIZE = 5000
                                 var freqChunk = mutableListOf<FrequencyUpdate>()
                                 var pitchChunk = mutableMapOf<String, String>()
+                                var jlptChunk = mutableListOf<JlptUpdate>()
                                 var processedInFile = 0
 
                                 for (metaElement in metaArray) {
@@ -230,10 +233,22 @@ class YomitanDictionaryParser @Inject constructor() {
 
                                         when (type) {
                                             "freq" -> {
-                                                val freq = parseFrequencyValue(meta[2])
-                                                if (freq > 0) {
+                                                // The yomitan-jlpt-vocab dictionary
+                                                // smuggles JLPT levels through the
+                                                // "freq" channel: value=-1, displayValue="N1".
+                                                // Detect that first; if the displayValue
+                                                // doesn't look like a JLPT level, fall
+                                                // through to plain frequency handling.
+                                                val jlptLevel = parseJlptLevelFromMeta(meta[2])
+                                                if (jlptLevel > 0) {
                                                     val reading = parseFrequencyReading(meta[2])
-                                                    freqChunk.add(FrequencyUpdate(expr, reading, freq))
+                                                    jlptChunk.add(JlptUpdate(expr, reading, jlptLevel))
+                                                } else {
+                                                    val freq = parseFrequencyValue(meta[2])
+                                                    if (freq > 0) {
+                                                        val reading = parseFrequencyReading(meta[2])
+                                                        freqChunk.add(FrequencyUpdate(expr, reading, freq))
+                                                    }
                                                 }
                                             }
                                             "pitch" -> {
@@ -248,9 +263,13 @@ class YomitanDictionaryParser @Inject constructor() {
                                     processedInFile++
 
                                     // Emit in chunks to avoid accumulating huge maps
-                                    if (freqChunk.size + pitchChunk.size >= META_CHUNK_SIZE) {
+                                    if (freqChunk.size + pitchChunk.size + jlptChunk.size >= META_CHUNK_SIZE) {
                                         totalFreqUpdates += freqChunk.size
                                         totalPitchUpdates += pitchChunk.size
+                                        if (jlptChunk.isNotEmpty()) {
+                                            onJlptBatch(jlptChunk)
+                                            jlptChunk = mutableListOf()
+                                        }
                                         onMetaBatch(freqChunk, pitchChunk)
                                         freqChunk = mutableListOf()
                                         pitchChunk = mutableMapOf()
@@ -273,6 +292,9 @@ class YomitanDictionaryParser @Inject constructor() {
                                     totalFreqUpdates += freqChunk.size
                                     totalPitchUpdates += pitchChunk.size
                                     onMetaBatch(freqChunk, pitchChunk)
+                                }
+                                if (jlptChunk.isNotEmpty()) {
+                                    onJlptBatch(jlptChunk)
                                 }
                                 filesProcessed++
 
@@ -362,6 +384,33 @@ class YomitanDictionaryParser @Inject constructor() {
         }
     }
 
+    /**
+     * Detects JLPT levels piggybacked on Yomitan's `freq` meta entries.
+     *
+     * The community `yomitan-jlpt-vocab` dictionary stores its data as
+     * `["相", "freq", {"reading": "あい", "frequency": {"value": -1, "displayValue": "N1"}}]`
+     * — value -1 (so it doesn't pollute frequency tables) plus a displayValue
+     * of "N1"-"N5". Returns 0 when no JLPT level is found.
+     */
+    private fun parseJlptLevelFromMeta(element: JsonElement): Int {
+        return try {
+            if (element !is JsonObject) return 0
+            val freqField = element["frequency"] as? JsonObject ?: return 0
+            val displayValue = freqField["displayValue"]?.jsonPrimitive?.contentOrNull?.trim()
+                ?: return 0
+            jlptLabelToLevel(displayValue)
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    private fun jlptLabelToLevel(label: String): Int {
+        // Accept "N1"…"N5" (any case) or just "1"…"5".
+        val cleaned = label.trim().lowercase().removePrefix("n").trim()
+        val n = cleaned.toIntOrNull() ?: return 0
+        return if (n in 1..5) n else 0
+    }
+
     private fun parsePitchValue(element: JsonElement): String {
         return try {
             if (element !is JsonObject) return ""
@@ -386,11 +435,6 @@ class YomitanDictionaryParser @Inject constructor() {
         val expression = safeString(term[0])
         val reading = safeString(term[1])
         val definitionTags = safeString(term[2])
-        // term[4] is the dictionary sort score, NOT frequency rank
-        val examples = extractExamples(term[5])
-        // parseDefinitions runs after extractExamples, but extractTextFromContent
-        // skips example containers so their text doesn't double up here.
-        val definitions = parseDefinitions(term[5])
         val sequenceNumber = if (term.size > 6) {
             try { term[6].jsonPrimitive.intOrNull ?: 0 } catch (_: Exception) { 0 }
         } else 0
@@ -398,24 +442,56 @@ class YomitanDictionaryParser @Inject constructor() {
 
         if (expression.isBlank() && reading.isBlank()) return null
 
-        val encodedDefinitions = json.encodeToString(
-            ListSerializer(String.serializer()),
-            definitions
-        )
-
         // term[3] = rules (conjugation paradigm tags: v1, v5u, adj-i…) — stored as part
         // of partsOfSpeech below so it is available for display but not used by the
         // built-in deconjugator (which applies its own rule tables).
         val rules = if (term.size > 3) safeString(term[3]) else ""
 
-        val combinedTags = listOfNotNull(
-            definitionTags.takeIf { it.isNotBlank() },
-            rules.takeIf { it.isNotBlank() },
-            termTags.takeIf { it.isNotBlank() }
-        ).joinToString(", ")
+        // Try Jitendex's sense-groups layout first. When detected, each <li
+        // data-content="sense"> becomes one definition; POS codes are pulled from
+        // <span data-content="part-of-speech-info"> so they don't leak into the
+        // gloss text; example sentences carry definitionIndex back to their sense.
+        val jitendex = tryParseJitendexStructure(term[5])
+        val definitions: List<String>
+        val examples: List<ExamplePair>
+        val posFromContent: List<String>
+        if (jitendex != null) {
+            definitions = jitendex.definitions
+            examples = jitendex.examples
+            posFromContent = jitendex.posCodes
+        } else {
+            // Plain JMDict / generic Yomitan dictionary — flat string definitions
+            // plus a defensive walk for any "example"-marked containers.
+            definitions = parseDefinitions(term[5])
+            examples = extractExamples(term[5])
+            posFromContent = emptyList()
+        }
+
+        // Tag-source priority:
+        //   • Jitendex (posFromContent non-empty): rules + structured-content POS
+        //     codes. definitionTags here is a visual badge ("★ priority form"),
+        //     not real grammar info, so we drop it to keep the POS chip clean.
+        //   • Plain JMDict / others: definitionTags is the canonical POS list.
+        val combinedTags = if (posFromContent.isNotEmpty()) {
+            listOfNotNull(
+                rules.takeIf { it.isNotBlank() },
+                posFromContent.joinToString(" ")
+            ).joinToString(", ")
+        } else {
+            listOfNotNull(
+                definitionTags.takeIf { it.isNotBlank() },
+                rules.takeIf { it.isNotBlank() },
+                termTags.takeIf { it.isNotBlank() }
+            ).joinToString(", ")
+        }
 
         // Extract JLPT once at import time so the UI can use it directly.
         val jlptLevel = JlptLevelUtil.extractAsInt("$definitionTags $termTags")
+
+        val encodedDefinitions = json.encodeToString(
+            ListSerializer(String.serializer()),
+            definitions
+        )
 
         // Encode the full example list as JSON, then mirror the first pair into
         // the legacy single-example columns for screens/Anki paths that haven't
@@ -441,6 +517,191 @@ class YomitanDictionaryParser @Inject constructor() {
             jlptLevel = jlptLevel,
             examplesJson = encodedExamples
         )
+    }
+
+    // ---------- Jitendex sense-aware parser ----------
+    //
+    // Jitendex's structured-content layout:
+    //
+    //   structured-content
+    //     └── ul data-content="sense-groups"
+    //           └── li data-content="sense-group"
+    //                 ├── span data-content="part-of-speech-info" (one or more)
+    //                 │     data: { code: "v1" }, content: "1-dan"
+    //                 └── ol
+    //                       └── li data-content="sense"  ← each is a separate definition
+    //                             ├── ul data-content="glossary"
+    //                             │     └── li content: "to eat"
+    //                             └── div data-content="extra-info"
+    //                                   └── div data-content="example-sentence"
+    //                                         ├── div data-content="example-sentence-a" (JP)
+    //                                         └── div data-content="example-sentence-b" (EN)
+    //
+    // We walk this structure, emitting one definition per sense, and tagging
+    // each example with its sense index. POS codes are pulled from the
+    // "part-of-speech-info" span and skipped from the gloss flat-text.
+
+    private data class JitendexParseResult(
+        val definitions: List<String>,
+        val examples: List<ExamplePair>,
+        val posCodes: List<String>
+    )
+
+    private fun tryParseJitendexStructure(definitionsElement: JsonElement): JitendexParseResult? {
+        val arr = definitionsElement as? JsonArray ?: return null
+
+        val definitions = mutableListOf<String>()
+        val examples = mutableListOf<ExamplePair>()
+        val posCodes = LinkedHashSet<String>()
+        var matched = false
+
+        try {
+            for (defElement in arr) {
+                val sc = defElement as? JsonObject ?: continue
+                if (sc["type"]?.jsonPrimitive?.contentOrNull != "structured-content") continue
+                val topContent = sc["content"] ?: continue
+                val topItems = elementAsList(topContent)
+
+                for (item in topItems) {
+                    val node = item as? JsonObject ?: continue
+                    val dc = nodeDataContent(node)
+                    if (dc != "sense-groups") continue
+
+                    matched = true
+                    val groups = elementAsList(node["content"]).filterIsInstance<JsonObject>()
+                    for (group in groups) {
+                        val groupContent = elementAsList(group["content"])
+                        for (gItem in groupContent) {
+                            val gObj = gItem as? JsonObject ?: continue
+                            val gDc = nodeDataContent(gObj)
+                            when {
+                                gDc == "part-of-speech-info" -> {
+                                    val code = gObj["data"]?.jsonObject?.get("code")
+                                        ?.jsonPrimitive?.contentOrNull?.trim()
+                                    if (!code.isNullOrBlank()) posCodes.add(code)
+                                }
+                                gObj["tag"]?.jsonPrimitive?.contentOrNull == "ol" -> {
+                                    val senses = elementAsList(gObj["content"])
+                                        .filterIsInstance<JsonObject>()
+                                    for (sense in senses) {
+                                        val idx = definitions.size
+                                        val text = extractSenseGloss(sense)
+                                        if (text.isNotBlank()) definitions.add(text)
+                                        // Even if text is blank, examples still attach to
+                                        // the most recent definition index (idx-1) — but
+                                        // skip if no definitions exist yet.
+                                        val attachIdx = if (text.isNotBlank()) idx else idx - 1
+                                        if (attachIdx >= 0) {
+                                            collectSenseExamples(sense, attachIdx, examples)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // Defensive: any parse failure falls through to the legacy flat path.
+            return null
+        }
+
+        return if (matched && definitions.isNotEmpty()) {
+            JitendexParseResult(definitions, examples, posCodes.toList())
+        } else null
+    }
+
+    private fun extractSenseGloss(sense: JsonObject): String {
+        val items = elementAsList(sense["content"])
+        val glosses = mutableListOf<String>()
+        for (item in items) {
+            val obj = item as? JsonObject ?: continue
+            val dc = nodeDataContent(obj)
+            // Only the <ul data-content="glossary"> children are real gloss text.
+            // Everything else (extra-info wrappers, cross-references, attribution)
+            // is rendered separately and must not pollute the meaning column.
+            if (dc != "glossary") continue
+            val children = elementAsList(obj["content"]).filterIsInstance<JsonObject>()
+            for (li in children) {
+                val text = extractTextFromContent(li["content"] ?: continue).trim()
+                if (text.isNotBlank()) glosses.add(text)
+            }
+        }
+        return glosses.joinToString("; ")
+    }
+
+    private fun collectSenseExamples(
+        sense: JsonObject,
+        senseIndex: Int,
+        out: MutableList<ExamplePair>
+    ) {
+        walkForJitendexExamples(sense, senseIndex, out)
+    }
+
+    private fun walkForJitendexExamples(
+        element: JsonElement,
+        senseIndex: Int,
+        out: MutableList<ExamplePair>
+    ) {
+        when (element) {
+            is JsonObject -> {
+                val dc = nodeDataContent(element)
+                if (dc == "example-sentence") {
+                    extractJitendexExamplePair(element)?.let {
+                        out.add(it.copy(definitionIndex = senseIndex))
+                    }
+                    return
+                }
+                element["content"]?.let { walkForJitendexExamples(it, senseIndex, out) }
+            }
+            is JsonArray -> element.forEach {
+                walkForJitendexExamples(it, senseIndex, out)
+            }
+            else -> Unit
+        }
+    }
+
+    private fun extractJitendexExamplePair(container: JsonObject): ExamplePair? {
+        var jp = ""
+        var en = ""
+        val items = elementAsList(container["content"])
+        for (item in items) {
+            val obj = item as? JsonObject ?: continue
+            val dc = nodeDataContent(obj)?.lowercase().orEmpty()
+            when {
+                // Jitendex variants: "example-sentence-a" / "-japanese", "-b" / "-english"
+                dc.contains("example-sentence-a") || dc.contains("japanese") -> {
+                    jp = extractTextFromContent(obj["content"] ?: continue).trim()
+                }
+                dc.contains("example-sentence-b") || dc.contains("english") -> {
+                    en = extractTextFromContent(obj["content"] ?: continue).trim()
+                }
+            }
+        }
+        // Fallback to the lang-attribute splitter if the data-content markers
+        // didn't match (older Jitendex variants).
+        if (jp.isBlank()) {
+            val jpParts = mutableListOf<String>()
+            val enParts = mutableListOf<String>()
+            walkLangSplit(container, null, jpParts, enParts)
+            jp = jpParts.joinToString(" ").trim()
+            if (en.isBlank()) en = enParts.joinToString(" ").trim()
+        }
+        return if (jp.isBlank()) null else ExamplePair(jp, en)
+    }
+
+    private fun nodeDataContent(node: JsonObject): String? {
+        val data = node["data"] as? JsonObject ?: return null
+        return data["content"]?.jsonPrimitive?.contentOrNull
+    }
+
+    private fun elementAsList(element: JsonElement?): List<JsonElement> {
+        return when (element) {
+            null -> emptyList()
+            is JsonArray -> element.toList()
+            is JsonObject -> listOf(element)
+            else -> listOf(element)
+        }
     }
 
     // ---------- Example sentence extraction (Jitendex format) ----------
@@ -486,7 +747,17 @@ class YomitanDictionaryParser @Inject constructor() {
         return try {
             val data = obj["data"] as? JsonObject ?: return false
             val content = data["content"]?.jsonPrimitive?.contentOrNull ?: return false
-            content.lowercase().contains("example")
+            // Match only the example-sentence wrapper (legacy "example",
+            // current "example-sentence", plural "example-sentences"). The
+            // looser substring check would also swallow "example-keyword" —
+            // a span that highlights the target word INSIDE the JP sentence —
+            // and dropping it would erase the head verb from the displayed
+            // example.
+            val lower = content.lowercase().trim()
+            lower == "example" ||
+                lower == "example-sentence" ||
+                lower == "example-sentences" ||
+                lower == "example-sentence-list"
         } catch (_: Exception) {
             false
         }
@@ -500,7 +771,10 @@ class YomitanDictionaryParser @Inject constructor() {
         } catch (_: Exception) {
             return null
         }
-        val jp = jpParts.joinToString(" ").trim()
+        // Japanese has no inter-word spacing — joining with " " would insert
+        // visible gaps between every ruby/span fragment. EN keeps " " because
+        // multi-span EN sentences (rare) still need word boundaries.
+        val jp = jpParts.joinToString("").trim()
         val en = enParts.joinToString(" ").trim()
         return if (jp.isBlank()) null else ExamplePair(jp, en)
     }
@@ -513,6 +787,17 @@ class YomitanDictionaryParser @Inject constructor() {
     ) {
         when (element) {
             is JsonObject -> {
+                val tag = element["tag"]?.jsonPrimitive?.contentOrNull
+                // <rt>/<rp> hold furigana readings. If we descend into them, the
+                // kana reading gets concatenated with its kanji ("食た" instead of
+                // "食"), making the displayed sentence unreadable.
+                if (tag == "rt" || tag == "rp") return
+                val dc = nodeDataContent(element)
+                // Footnote markers like "[1]" attach below the EN line in the
+                // source format but visually belong to the attribution section,
+                // not the sentence text.
+                if (dc == "attribution-footnote") return
+
                 val lang = element["lang"]?.jsonPrimitive?.contentOrNull ?: inheritedLang
                 val text = element["text"]?.jsonPrimitive?.contentOrNull
                 if (text != null) appendTextByLang(text, lang, jp, en)
@@ -617,7 +902,7 @@ class YomitanDictionaryParser @Inject constructor() {
                     if (hasListItems) {
                         parts.joinToString("; ")
                     } else {
-                        parts.joinToString(", ")
+                        parts.joinToString("")
                     }
                 }
                 is JsonObject -> {
@@ -625,12 +910,30 @@ class YomitanDictionaryParser @Inject constructor() {
                     // skip them here so the flat-text definition doesn't duplicate the
                     // sentence text inside the meaning column.
                     if (isExampleContainer(element)) return ""
-                    val tag = element["tag"]?.jsonPrimitive?.content
+                    val tag = element["tag"]?.jsonPrimitive?.contentOrNull
+                    // Furigana readings live inside <ruby><rt>…</rt></ruby>. The
+                    // base text appears as siblings of <rt> and is what the user
+                    // actually reads; <rt> would otherwise concatenate the kana
+                    // reading next to its kanji ("食た" instead of "食").
+                    if (tag == "rt" || tag == "rp") return ""
+
+                    val dc = nodeDataContent(element)
+                    // Jitendex marks part-of-speech labels, attribution footnotes,
+                    // and form-list headers with these data-content values. They
+                    // belong to other display sections (POS chip / source link)
+                    // and must not bleed into the gloss text.
+                    if (dc == "part-of-speech-info" ||
+                        dc == "attribution-footnote" ||
+                        dc == "forms-label" ||
+                        dc == "tag" ||
+                        dc == "attribution"
+                    ) return ""
+
                     val content = element["content"]
                     val text = element["text"]
                     when {
                         // For inline tags like span/ruby, extract content without extra separator
-                        tag in setOf("span", "ruby", "rt", "rp", "a", "b", "i", "em", "strong") ->
+                        tag in setOf("span", "ruby", "a", "b", "i", "em", "strong") ->
                             content?.let { extractTextFromContent(it) } ?: text?.let { safeString(it) } ?: ""
                         content != null -> extractTextFromContent(content)
                         text != null -> safeString(text)

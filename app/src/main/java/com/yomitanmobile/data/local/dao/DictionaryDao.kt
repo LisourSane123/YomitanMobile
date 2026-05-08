@@ -13,6 +13,12 @@ data class FrequencyUpdate(
     val frequency: Int
 )
 
+data class JlptUpdate(
+    val expression: String,
+    val reading: String?,
+    val level: Int
+)
+
 @Dao
 interface DictionaryDao {
 
@@ -134,6 +140,24 @@ interface DictionaryDao {
     suspend fun updatePitchAccentBatch(batch: Map<String, String>) {
         for ((expression, pitchAccent) in batch) {
             updatePitchAccentForce(expression, pitchAccent)
+        }
+    }
+
+    @Query("UPDATE dictionary_entries SET jlpt_level = :level WHERE expression = :expression AND reading = :reading AND jlpt_level = 0")
+    suspend fun updateJlptLevelWithReading(expression: String, reading: String, level: Int)
+
+    @Query("UPDATE dictionary_entries SET jlpt_level = :level WHERE expression = :expression AND jlpt_level = 0")
+    suspend fun updateJlptLevelByExpression(expression: String, level: Int)
+
+    @androidx.room.Transaction
+    suspend fun updateJlptLevelBatch(batch: List<JlptUpdate>) {
+        for (update in batch) {
+            val reading = update.reading?.trim().orEmpty()
+            if (reading.isNotBlank()) {
+                updateJlptLevelWithReading(update.expression, reading, update.level)
+            } else {
+                updateJlptLevelByExpression(update.expression, update.level)
+            }
         }
     }
 }

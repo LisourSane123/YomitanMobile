@@ -92,6 +92,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             var dictionaryNameFromBatch: String
             var totalFreqUpdates = 0
             var totalPitchUpdates = 0
+            var totalJlptUpdates = 0
 
             // Use streaming parser — entries are inserted in batches as they're parsed.
             // Larger batches mean fewer transaction commits; SQLite handles 2000+ inserts
@@ -121,6 +122,12 @@ class DictionaryRepositoryImpl @Inject constructor(
                         kanjiDao.insertAll(chunk)
                     }
                     totalKanjiInserted += batch.size
+                },
+                onJlptBatch = { jlptUpdates ->
+                    if (jlptUpdates.isNotEmpty()) {
+                        dictionaryDao.updateJlptLevelBatch(jlptUpdates)
+                        totalJlptUpdates += jlptUpdates.size
+                    }
                 }
             )
 
@@ -148,7 +155,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             }
 
             val entryCount = if (parseResult.isMetaDictionary) {
-                totalFreqUpdates + totalPitchUpdates
+                totalFreqUpdates + totalPitchUpdates + totalJlptUpdates
             } else {
                 totalInserted + totalKanjiInserted
             }
