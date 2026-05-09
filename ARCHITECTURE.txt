@@ -1,0 +1,296 @@
+YomitanMobile — Architecture & Integration Guide for AI Coding Agents
+======================================================================
+
+Last verified: 2026-05-09 (commit ~77dd9b9 + section divider work).
+Audience: an AI coding agent picking up an unfamiliar feature in this
+repo. Keep it concise — read CLAUDE.md for the high-level overview, this
+file for the detail you need before editing.
+
+----------------------------------------------------------------------
+1. THREE-LAYER PROJECT (data / domain / ui), wired with Hilt
+----------------------------------------------------------------------
+
+domain/
+  - Pure Kotlin. No Android, no Room, no kotlinx.serialization in
+    public APIs. Models: WordEntry, MergedWordEntry, ExamplePair,
+    AnkiCard, CardStylePreferences, ImportProgress, ImportResult.
+  - DictionaryRepository is the only abstraction boundary. Use
+    cases (SearchDictionaryUseCase, GetWordDetailUseCase,
+    DictionaryManagementUseCases) sit above it.
+
+data/
+  - data/local: Room DB (AppDatabase v11) + DAOs.
+  - data/parser: streaming Yomitan ZIP parser (term banks, kanji
+    banks, term meta banks).
+  - data/repository: DictionaryRepositoryImpl — wraps DAOs and parser.
+  - data/anki: AnkiCardCreator integrates with AnkiDroid via
+    AddContentApi + raw content provider for CSS/template updates.
+  - data/download: dictionary catalog and download manager.
+  - data/sentence: optional online Tatoeba lookup (no longer gated by
+    consent — controlled solely by the Card Style preference).
+
+ui/
+  - Jetpack Compose + MVVM. Each screen has a paired ViewModel.
+  - Navigation: ui/navigation/AppNavHost.kt with sealed Screen routes.
+  - Localization: util/LocaleHelper.isEnglish(config). Each screen has
+    `val isEnglish = LocaleHelper.isEnglish(LocalConfiguration.current)`
+    and an inline `tr(pl, en)` helper.
+
+di/
+  - AppModule (singletons), DatabaseModule (Room + DAOs +
+    performance PRAGMAs in onOpen), RepositoryModule (interface →
+    impl bindings).
+
+----------------------------------------------------------------------
+2. SEARCH PIPELINE
+----------------------------------------------------------------------
+
+Trigger: SearchScreen text input → SearchViewModel.onQueryChanged.
+
+JP path:
+  SearchViewModel
+    → JapaneseDeconjugator.candidateForms(query) — rule-based
+      generator, cap 24 candidates, depth 3
+    → SearchDictionaryUseCase.invokeWithAlternatives(query, candidates)
+    → For each candidate (sequential .first() per candidate):
+         repository.searchCombined(q)
+           → DictionaryDao.searchCombined (LIKE-style + exact match)
+    → Merge by entry id
+  → SearchViewModel applies MergedWordEntry.mergeEntries
+    (groups by (expression, reading), picks primary by kanji + freq)
+  → JlptVocabulary fallback runs per merged entry where jlpt_level == 0
+  → UI renders MergedWordEntry list
+
+EN mode:
+  SearchDictionaryUseCase.invokeEnglish → repository.searchByDefinition
+  → FTS over the `definition` column (JSON-encoded gloss list).
+
+Romaji mode:
+  RomajiConverter.convert(romaji) → hiragana → JP path.
+
+Debounce: 100 ms inside SearchViewModel before kicking off a search.
+
+Known cost: invokeWithAlternatives runs per-candidate `first()` calls.
+For long candidate lists this is observably slow on cold runs.
+If you need to optimize, do it here, not deeper in the DAO.
+
+----------------------------------------------------------------------
+3. DICTIONARY IMPORT (Yomitan ZIP format)
+----------------------------------------------------------------------
+
+Trigger: DictionaryDownloadScreen / SetupScreen calls
+DictionaryManagementUseCases → repository.importDictionary(stream).
+
+Repository.importDictionary:
+  beginBulkImport()           — PRAGMA synchronous=OFF + journal=MEMORY
+  parser.parseFromZipStreaming(...)
+    callbacks emit:
+      onBatch (terms)         — batched insertAll into dictionary_entries
+      onMetaBatch (freq, pitch) — frequency / pitch updates
+      onJlptBatch             — JLPT level updates
+      onKanjiBatch            — kanji_entries inserts
+  rebuildFtsIndex
+  endBulkImport()             — restore synchronous=NORMAL + journal=WAL
+
+Parser layout detection (YomitanDictionaryParser.parseTermEntry):
+  • term[2] definitionTags, term[3] rules, term[7] termTags
+  • term[5] definitions: tries Jitendex sense-aware structure first
+    (sense-groups → sense-group → POS span + ol of li[sense]),
+    falls back to flat parseDefinitions for plain JMDict.
+  • Rt/rp ruby readings stripped from text extraction so example
+    sentences don't show "食たべる" mid-sentence.
+  • POS codes (v1, vt, …) read from <span data-content="part-of-speech-info">
+    and combined with rules.
+
+JLPT detection paths (priority order at lookup):
+  1. tag-based: jlpt-1..jlpt-5 in definitionTags/termTags →
+     JlptLevelUtil.extractAsInt at parse time, written to jlpt_level.
+  2. companion meta-bank (yomitan-jlpt-vocab): freq channel with
+     value=-1 + displayValue="N1".."N5" → routed to JlptUpdate /
+     updateJlptLevelBatch (only updates rows where jlpt_level == 0).
+  3. JlptVocabulary curated list, applied at view time
+     (DetailViewModel/SearchViewModel) when jlpt_level is still 0.
+
+Schema invariants:
+  • dictionary_entries has examples_json column (DB v11) holding
+    List<ExamplePair> with definitionIndex.
+  • dictionary_entries has jlpt_level column (DB v10).
+  • dictionary_entries_fts is a Room-managed FTS4 external-content
+    table; it auto-syncs via triggers on every insert/update.
+    Bulk-import path still works because the rebuild at the end
+    handles any drift.
+
+Performance dials (bulk import):
+  parser.BUFFER_SIZE                   = 256 KB
+  repository.batchSize                 = 10000
+  repository.beginBulkImport pragmas   = synchronous OFF, journal MEMORY
+
+----------------------------------------------------------------------
+4. ANKI CARD EXPORT
+----------------------------------------------------------------------
+
+Entry point: DetailViewModel.exportToAnki → performExport.
+
+Sentence-source priority:
+  1. entry.examples (Jitendex, attached per gloss via definitionIndex)
+  2. local SentenceDao seed (~22 hardcoded rows, migration v8 → v9)
+  3. Online Tatoeba via OnlineSentenceService (only when
+     stylePrefs.useOnlineSentenceApi is true — no separate consent flag)
+
+AnkiCardCreator.createAnkiCard builds an AnkiCard with these fields:
+  Front, FrontContext, Reading, Meaning, PitchAccent, Frequency,
+  Audio, Sentence, KanjiBreakdown.
+
+Meaning field structure (formatMeaningForCard):
+  <div class="pos-line">ichidan verb, transitive verb</div>
+  <ol class="meanings">
+    <li class="meaning-item">
+      <span class="gloss">to eat</span>
+      <div class="meaning-ex">
+        <div class="meaning-ex-jp">…</div>
+        <div class="meaning-ex-en">…</div>
+      </div>
+    </li>
+    …
+  </ol>
+
+Sentence field: only renders unattached examples (those with
+definitionIndex < 0). Jitendex-sourced examples never duplicate here.
+
+AnkiDroid model:
+  MODEL_NAME = "Yomitan-Mobile-v7"   — DO NOT BUMP unless FIELD_NAMES
+  changes. CSS + template updates are pushed to existing models via
+  the content provider (updateModelCss / updateModelTemplates), so
+  redesign work applies retroactively to ALL cards using this model.
+  This is intentional but worth flagging — a "freeze design" feature
+  would require bumping the model name.
+
+----------------------------------------------------------------------
+5. CARD STYLE PREFERENCES
+----------------------------------------------------------------------
+
+Stored in DataStore (keys defined in MainActivity companion).
+Loaded by CardStyleScreen (for editing) and DetailViewModel (for
+export). CardStylePreferences data class is the in-memory shape.
+
+Toggleable bits that reach the CSS via buildCssFromPreferences:
+  • showPitchAccent / showFrequency / showSentence / showFrontContextSentence
+  • showSectionDividers  — controls `hr { display: none }`
+  • randomFontsEnabled / randomVoicesEnabled (export-time random pick)
+
+The legacy onlineSentenceApiConsentGranted flag was removed; the
+matching dialog and DataStore key are gone too. Existing devices
+keep the orphaned key in their preference file; it's just ignored.
+
+----------------------------------------------------------------------
+6. WIDGETS
+----------------------------------------------------------------------
+
+widget/SearchWidgetProvider, widget/QuickSearchWidgetProvider.
+Each widget instantiates its own Room database via
+Room.databaseBuilder(...) inside onUpdate. This is wasteful — the
+Hilt-provided AppDatabase already exists in the app process — but
+removing it requires plumbing a Hilt EntryPoint into the widget
+context. Don't fix unless you're already touching this code.
+
+----------------------------------------------------------------------
+7. LOCALE HANDLING (EN ↔ PL)
+----------------------------------------------------------------------
+
+util/LocaleHelper.isEnglish(config) walks the LocaleList top-to-
+bottom: returns English the first time it sees `en`, Polish the
+first time it sees `pl`, English fallback otherwise. Replace any new
+inline `locales.get(0).language.equals("en", true)` checks with
+this helper.
+
+Strings are inline `tr(pl, en)` calls — there's a values/strings.xml
++ values-pl/strings.xml pair for the few strings that are accessed
+from the manifest (app_name etc.) but most UI text is hardcoded in
+Compose. Leave it alone unless you are doing a full i18n migration.
+
+----------------------------------------------------------------------
+8. POTENTIAL PROBLEMS / DEAD CODE / OPEN ITEMS
+----------------------------------------------------------------------
+
+(a) SearchDictionaryUseCase.invokeJapaneseSmart and .invokeReactive
+    are defined but unused. Safe to delete unless you plan to
+    migrate SearchViewModel onto invokeReactive.
+
+(b) DictionaryDao.searchPrefix, .findByExpression, .findByReading
+    are declared as Flow-returning queries but never called outside
+    the DAO file. Safe candidates for deletion.
+
+(c) JapaneseDeconjugator.candidateForms × repository.searchCombined
+    runs sequentially per candidate (SearchDictionaryUseCase line 47).
+    Cold-search latency can spike for verbs with many inflection
+    candidates. The original CLAUDE.md flagged this as a known issue.
+    A coroutine-async map of candidates → searchCombined would
+    parallelize without changing the merge semantics.
+
+(d) Widget Room instantiation creates a fresh AppDatabase per
+    widget update (SearchWidgetProvider:52). Plumb a Hilt EntryPoint
+    instead.
+
+(e) MainActivity.SENTENCE_API_CONSENT_GRANTED key has been removed
+    from code but still exists in users' DataStore files until
+    overwritten. Functionally inert.
+
+(f) JlptVocabulary is a hand-curated kana-only lookup. Now that
+    yomitan-jlpt-vocab is in the recommended bundle (covers ~16k
+    entries with N1-N5 levels via the meta-bank channel), the
+    inline curated list is mostly redundant. It still helps users
+    who haven't installed JLPT Vocab Tags yet.
+
+(g) ARCHITECTURE.txt and CLAUDE.md drift. Whenever you touch DB
+    schema, tag extraction, or the parser's structured-content
+    walker, update CLAUDE.md (Architecture section) AND this file's
+    relevant section.
+
+(h) Hardcoded strings in Compose screens. Migration to
+    string resources is incomplete. The existing values/strings.xml
+    has ~25 keys; the rest of the UI uses inline `tr(pl, en)`.
+    Acceptable for a 2-language app; would block adding a third.
+
+(i) MAX_TOTAL_UNCOMPRESSED_BYTES is 2 GB (parser companion). Most
+    Yomitan dicts decompress to well under 1 GB. The 2 GB cap is a
+    safety upper bound, not a quality target.
+
+(j) AnkiCard model bump policy: NEVER bump MODEL_NAME unless
+    FIELD_NAMES changes. CSS / template updates flow via content
+    provider to existing models; bumping would orphan v7 cards.
+
+----------------------------------------------------------------------
+9. WHEN ADDING A FEATURE — WHERE THINGS GO
+----------------------------------------------------------------------
+
+  New search scoring / merging  → MergedWordEntry.mergeEntries
+  New dictionary tag           → YomitanDictionaryParser tag extraction
+                                 + PartsOfSpeechFormatter labels
+  New schema column            → DictionaryEntry + new Migration_X_Y +
+                                 DictionaryMapper (toDomain/toEntity)
+  New card field               → AnkiCard, FIELD_NAMES, CARD_BACK_TEMPLATE,
+                                 createAnkiCard, AND consider bumping
+                                 MODEL_NAME (this IS a breaking change).
+  New CSS knob                 → CardStylePreferences boolean +
+                                 MainActivity DataStore key +
+                                 CardStyleScreen UI + buildCssFromPreferences.
+  New screen                   → ui/<feature>/{Screen, ViewModel} +
+                                 AppNavHost route + Hilt-provided VM.
+
+----------------------------------------------------------------------
+10. TESTS
+----------------------------------------------------------------------
+
+Run: ./gradlew :app:testDebugUnitTest
+Single class: ./gradlew :app:testDebugUnitTest --tests "FQCN"
+
+Test-coverage hot spots to update when changing logic:
+  YomitanDictionaryParserTest        — basic ZIP shape parsing
+  YomitanExampleParsingTest          — lang-split fallback walker
+  YomitanJitendexFormatTest          — sense-groups + furigana strip
+  YomitanJlptMetaTest                — JLPT through freq channel
+  LocaleHelperTest                   — EN/PL ranking + fallback
+
+If you change DB schema, add a Migration test before merging.
+
+End of file. Update the "Last verified" date when you touch this.

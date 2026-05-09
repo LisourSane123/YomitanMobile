@@ -38,7 +38,11 @@ data class CardStylePreferences(
     val randomVoicesEnabled: Boolean = false,
     val randomVoices: Set<String> = emptySet(),
     val useOnlineSentenceApi: Boolean = false,
-    val onlineSentenceApiConsentGranted: Boolean = false
+    // When false, the back-side <hr> dividers between sections (header,
+    // pitch, frequency, meaning, sentence, audio, kanji) are hidden via CSS
+    // for a flatter look. Defaults to true to match the section-separated
+    // layout that ships with the app.
+    val showSectionDividers: Boolean = true
 ) {
     companion object {
         val FONT_FAMILIES = listOf(

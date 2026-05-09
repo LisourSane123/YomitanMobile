@@ -321,7 +321,7 @@ class DetailViewModel @Inject constructor(
             randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false,
             randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet(),
             useOnlineSentenceApi = prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] ?: false,
-            onlineSentenceApiConsentGranted = prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] ?: false
+            showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true
         )
     }
 
@@ -351,7 +351,7 @@ class DetailViewModel @Inject constructor(
                             exampleSentence = bestSentence.sentenceJapanese,
                             exampleSentenceTranslation = bestSentence.sentenceEnglish
                         )
-                    } else if (stylePrefs.useOnlineSentenceApi && stylePrefs.onlineSentenceApiConsentGranted) {
+                    } else if (stylePrefs.useOnlineSentenceApi) {
                         val onlineSentence = runCatching {
                             onlineSentenceService.fetchSentenceForWord(lookup)
                         }.getOrNull()

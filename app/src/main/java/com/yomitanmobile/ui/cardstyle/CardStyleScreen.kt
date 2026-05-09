@@ -113,8 +113,7 @@ fun CardStyleScreen(
     var randomVoicesEnabled by remember { mutableStateOf(false) }
     var randomVoices by remember { mutableStateOf<Set<String>>(emptySet()) }
     var useOnlineSentenceApi by remember { mutableStateOf(false) }
-    var sentenceApiConsentGranted by remember { mutableStateOf(false) }
-    var showSentenceApiConsentDialog by remember { mutableStateOf(false) }
+    var showSectionDividers by remember { mutableStateOf(true) }
     var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var activeTts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
 
@@ -162,7 +161,7 @@ fun CardStyleScreen(
         randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false
         randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
         useOnlineSentenceApi = prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] ?: false
-        sentenceApiConsentGranted = prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] ?: false
+        showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true
     }
 
     fun currentPreferences() = CardStylePreferences(
@@ -188,7 +187,7 @@ fun CardStyleScreen(
         randomVoicesEnabled = randomVoicesEnabled,
         randomVoices = randomVoices,
         useOnlineSentenceApi = useOnlineSentenceApi,
-        onlineSentenceApiConsentGranted = sentenceApiConsentGranted
+        showSectionDividers = showSectionDividers
     )
 
     fun savePreferences() {
@@ -216,7 +215,7 @@ fun CardStyleScreen(
                 prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] = randomVoicesEnabled
                 prefs[MainActivity.TTS_RANDOM_VOICES] = randomVoices
                 prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] = useOnlineSentenceApi
-                prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] = sentenceApiConsentGranted
+                prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] = showSectionDividers
             }
         }
     }
@@ -224,50 +223,13 @@ fun CardStyleScreen(
     var previewExpanded by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (showSentenceApiConsentDialog) {
-        AlertDialog(
-            onDismissRequest = { showSentenceApiConsentDialog = false },
-            title = { Text(tr("Zgoda na API zdań", "Sentence API consent")) },
-            text = {
-                Text(
-                    tr(
-                        "Po włączeniu aplikacja będzie wysyłać wyszukiwane słowo do zewnętrznego API w celu pobrania przykładowego zdania. Możesz cofnąć zgodę w Ustawieniach.",
-                        "When enabled, the app will send the searched word to an external API to fetch an example sentence. You can revoke consent in Settings."
-                    )
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    sentenceApiConsentGranted = true
-                    useOnlineSentenceApi = true
-                    coroutineScope.launch {
-                        context.dataStore.edit { prefs ->
-                            prefs[MainActivity.SENTENCE_API_CONSENT_GRANTED] = true
-                        }
-                    }
-                    showSentenceApiConsentDialog = false
-                }) {
-                    Text(tr("Wyrażam zgodę", "I agree"))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    useOnlineSentenceApi = false
-                    showSentenceApiConsentDialog = false
-                }) {
-                    Text(tr("Anuluj", "Cancel"))
-                }
-            }
-        )
-    }
-
     // Preview HTML updates live (without saving)
     val previewHtml = remember(
         expressionBold, expressionFontSize, readingFontSize, meaningFontSize,
         frontContextSentenceFontSize, backSentenceFontSize,
         selectedFont, backgroundColor, expressionColor, readingColor,
         meaningColor, accentColor, showPitchAccent, showFrequency, showSentence,
-        showFrontContextSentence, pitchAccentStyle
+        showFrontContextSentence, pitchAccentStyle, showSectionDividers
     ) {
         AnkiCardCreator.buildPreviewHtml(currentPreferences())
     }
@@ -632,15 +594,22 @@ fun CardStyleScreen(
                 ) {
                     Switch(
                         checked = useOnlineSentenceApi,
-                        onCheckedChange = { enabled ->
-                            if (!enabled) {
-                                useOnlineSentenceApi = false
-                            } else if (sentenceApiConsentGranted) {
-                                useOnlineSentenceApi = true
-                            } else {
-                                showSentenceApiConsentDialog = true
-                            }
-                        }
+                        onCheckedChange = { useOnlineSentenceApi = it }
+                    )
+                }
+            }
+
+            item {
+                SettingRow(
+                    title = tr("Linie rozdzielające sekcje", "Section divider lines"),
+                    subtitle = tr(
+                        "Pokaż linie oddzielające czytanie, akcent, znaczenie, zdania i kanji",
+                        "Show lines separating reading, pitch, meaning, sentences, and kanji"
+                    )
+                ) {
+                    Switch(
+                        checked = showSectionDividers,
+                        onCheckedChange = { showSectionDividers = it }
                     )
                 }
             }

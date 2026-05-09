@@ -261,6 +261,7 @@ class AnkiCardCreator(
             hr {
                 border: none; border-top: 1px solid #555;
                 margin: 16px 0; opacity: 0.7;
+                ${if (!prefs.showSectionDividers) "display: none;" else ""}
             }
             .kanji-breakdown {
                 font-size: 16px; color: #ccc; text-align: left;

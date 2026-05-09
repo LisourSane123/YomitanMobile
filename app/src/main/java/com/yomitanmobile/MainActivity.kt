@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
         val TTS_RANDOM_VOICES_ENABLED = booleanPreferencesKey("tts_random_voices_enabled")
         val TTS_RANDOM_VOICES = stringSetPreferencesKey("tts_random_voices")
         val CARD_USE_ONLINE_SENTENCE_API = booleanPreferencesKey("card_use_online_sentence_api")
-        val SENTENCE_API_CONSENT_GRANTED = booleanPreferencesKey("sentence_api_consent_granted")
+        val CARD_SHOW_SECTION_DIVIDERS = booleanPreferencesKey("card_show_section_dividers")
 
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
