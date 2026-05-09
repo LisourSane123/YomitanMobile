@@ -70,7 +70,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.datastore.preferences.core.edit
+import androidx.compose.material3.OutlinedTextField
 import com.yomitanmobile.MainActivity
+import com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT
+import com.yomitanmobile.data.ai.AiProvider
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.CardStylePreferences
@@ -114,6 +117,10 @@ fun CardStyleScreen(
     var randomVoices by remember { mutableStateOf<Set<String>>(emptySet()) }
     var useOnlineSentenceApi by remember { mutableStateOf(false) }
     var showSectionDividers by remember { mutableStateOf(true) }
+    var aiSummaryEnabled by remember { mutableStateOf(false) }
+    var aiProvider by remember { mutableStateOf(AiProvider.GEMINI) }
+    var aiApiKey by remember { mutableStateOf("") }
+    var aiPrompt by remember { mutableStateOf(AI_DEFAULT_PROMPT) }
     var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var activeTts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
 
@@ -162,6 +169,10 @@ fun CardStyleScreen(
         randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
         useOnlineSentenceApi = prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] ?: false
         showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true
+        aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false
+        aiProvider = AiProvider.fromStorage(prefs[MainActivity.CARD_AI_PROVIDER])
+        aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: ""
+        aiPrompt = prefs[MainActivity.CARD_AI_PROMPT] ?: AI_DEFAULT_PROMPT
     }
 
     fun currentPreferences() = CardStylePreferences(
@@ -187,7 +198,11 @@ fun CardStyleScreen(
         randomVoicesEnabled = randomVoicesEnabled,
         randomVoices = randomVoices,
         useOnlineSentenceApi = useOnlineSentenceApi,
-        showSectionDividers = showSectionDividers
+        showSectionDividers = showSectionDividers,
+        aiSummaryEnabled = aiSummaryEnabled,
+        aiProvider = aiProvider,
+        aiApiKey = aiApiKey,
+        aiPrompt = aiPrompt
     )
 
     fun savePreferences() {
@@ -216,6 +231,10 @@ fun CardStyleScreen(
                 prefs[MainActivity.TTS_RANDOM_VOICES] = randomVoices
                 prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] = useOnlineSentenceApi
                 prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] = showSectionDividers
+                prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] = aiSummaryEnabled
+                prefs[MainActivity.CARD_AI_PROVIDER] = aiProvider.storageValue
+                prefs[MainActivity.CARD_AI_API_KEY] = aiApiKey
+                prefs[MainActivity.CARD_AI_PROMPT] = aiPrompt
             }
         }
     }
@@ -611,6 +630,96 @@ fun CardStyleScreen(
                         checked = showSectionDividers,
                         onCheckedChange = { showSectionDividers = it }
                     )
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = tr("Streszczenie AI", "AI summary"),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = tr(
+                                        "Dołącz krótkie streszczenie wygenerowane przez AI pod akcentem, nad znaczeniem.",
+                                        "Attach a short AI-generated summary below the pitch accent, above the meaning."
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                            Switch(
+                                checked = aiSummaryEnabled,
+                                onCheckedChange = { aiSummaryEnabled = it }
+                            )
+                        }
+
+                        if (aiSummaryEnabled) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = tr("Dostawca", "Provider"),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                AiProvider.values().forEach { p ->
+                                    FilterChip(
+                                        selected = aiProvider == p,
+                                        onClick = { aiProvider = p },
+                                        label = { Text(p.displayName) }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = aiApiKey,
+                                onValueChange = { aiApiKey = it },
+                                label = { Text(tr("Klucz API", "API key")) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = tr(
+                                    "Prompt (placeholdery: {expression}, {reading}, {meaning}, {language})",
+                                    "Prompt (placeholders: {expression}, {reading}, {meaning}, {language})"
+                                ),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = aiPrompt,
+                                onValueChange = { aiPrompt = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp),
+                                maxLines = 8
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TextButton(onClick = { aiPrompt = AI_DEFAULT_PROMPT }) {
+                                Text(tr("Przywróć domyślny prompt", "Reset to default prompt"))
+                            }
+                        }
+                    }
                 }
             }
 

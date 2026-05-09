@@ -1,5 +1,8 @@
 package com.yomitanmobile.domain.model
 
+import com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT
+import com.yomitanmobile.data.ai.AiProvider
+
 enum class PitchAccentStyle(val storageValue: String) {
     LEGACY("legacy"),
     DOT_LINE("dot_line");
@@ -42,7 +45,15 @@ data class CardStylePreferences(
     // pitch, frequency, meaning, sentence, audio, kanji) are hidden via CSS
     // for a flatter look. Defaults to true to match the section-separated
     // layout that ships with the app.
-    val showSectionDividers: Boolean = true
+    val showSectionDividers: Boolean = true,
+    // Optional AI summary integration. When [aiSummaryEnabled] is true and
+    // [aiApiKey] is non-blank, DetailViewModel calls AiSummaryService at
+    // export time and renders the result in the back-side Summary slot
+    // (rendered between pitch/frequency and the meaning column).
+    val aiSummaryEnabled: Boolean = false,
+    val aiProvider: AiProvider = AiProvider.GEMINI,
+    val aiApiKey: String = "",
+    val aiPrompt: String = AI_DEFAULT_PROMPT
 ) {
     companion object {
         val FONT_FAMILIES = listOf(

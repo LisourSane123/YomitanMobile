@@ -6,6 +6,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.MainActivity
+import com.yomitanmobile.data.ai.AiSummaryResult
+import com.yomitanmobile.data.ai.AiSummaryService
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
@@ -23,6 +25,7 @@ import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
 import com.yomitanmobile.util.InputSanitizer
 import com.yomitanmobile.util.JlptVocabulary
+import com.yomitanmobile.util.LocaleHelper
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -59,6 +62,7 @@ class DetailViewModel @Inject constructor(
     private val audioPlayer: AudioPlayer,
     private val sentenceDao: SentenceDao,
     private val onlineSentenceService: OnlineSentenceService,
+    private val aiSummaryService: AiSummaryService,
     private val exportedWordDao: ExportedWordDao,
     private val favoriteWordDao: FavoriteWordDao,
     @ApplicationContext private val appContext: Context
@@ -321,7 +325,14 @@ class DetailViewModel @Inject constructor(
             randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false,
             randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet(),
             useOnlineSentenceApi = prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] ?: false,
-            showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true
+            showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true,
+            aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false,
+            aiProvider = com.yomitanmobile.data.ai.AiProvider.fromStorage(
+                prefs[MainActivity.CARD_AI_PROVIDER]
+            ),
+            aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: "",
+            aiPrompt = prefs[MainActivity.CARD_AI_PROMPT]
+                ?: com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT
         )
     }
 
@@ -375,12 +386,43 @@ class DetailViewModel @Inject constructor(
             val kanjiChars = wordForExport.expression.filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }.map { it.toString() }.distinct()
             val kanjiData = if (kanjiChars.isNotEmpty()) repository.getKanjis(kanjiChars) else emptyList()
 
+            // AI summary is opt-in (CARD_AI_SUMMARY_ENABLED) and requires
+            // a user-supplied API key. Failures don't block the export —
+            // we just emit the card without a summary section. The
+            // user-language flag drives the {language} placeholder so
+            // Polish users get Polish summaries by default.
+            val aiSummaryText = if (
+                stylePrefs.aiSummaryEnabled &&
+                stylePrefs.aiApiKey.isNotBlank()
+            ) {
+                val isEnglish = LocaleHelper.isEnglish(appContext.resources.configuration)
+                val language = if (isEnglish) "English" else "Polish"
+                val result = aiSummaryService.generateSummary(
+                    provider = stylePrefs.aiProvider,
+                    apiKey = stylePrefs.aiApiKey,
+                    promptTemplate = stylePrefs.aiPrompt,
+                    word = wordForExport.expression,
+                    reading = wordForExport.reading,
+                    meanings = wordForExport.definitions,
+                    language = language
+                )
+                when (result) {
+                    is AiSummaryResult.Success -> result.text
+                    is AiSummaryResult.Failure -> {
+                        Log.w(logTag, "AI summary failed: ${result.message}")
+                        ""
+                    }
+                    AiSummaryResult.Disabled -> ""
+                }
+            } else ""
+
             val result = ankiCardCreator.exportToAnki(
                 entry = wordForExport,
                 kanjiData = kanjiData,
                 tts = audioPlayer.getTts(),
                 deckName = deckName,
-                stylePrefs = stylePrefs
+                stylePrefs = stylePrefs,
+                aiSummaryText = aiSummaryText
             )
             result.fold(
                 onSuccess = { noteId ->

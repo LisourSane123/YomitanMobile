@@ -69,6 +69,15 @@ class MainActivity : ComponentActivity() {
         val CARD_USE_ONLINE_SENTENCE_API = booleanPreferencesKey("card_use_online_sentence_api")
         val CARD_SHOW_SECTION_DIVIDERS = booleanPreferencesKey("card_show_section_dividers")
 
+        // AI summary integration. Gated behind CARD_AI_SUMMARY_ENABLED so the
+        // network call only happens when the user explicitly opts in. The
+        // prompt is a template — placeholders like {expression}, {reading},
+        // {meaning}, {language} get substituted before the call.
+        val CARD_AI_SUMMARY_ENABLED = booleanPreferencesKey("card_ai_summary_enabled")
+        val CARD_AI_PROVIDER = stringPreferencesKey("card_ai_provider")
+        val CARD_AI_API_KEY = stringPreferencesKey("card_ai_api_key")
+        val CARD_AI_PROMPT = stringPreferencesKey("card_ai_prompt")
+
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
 

@@ -42,12 +42,17 @@ class AnkiCardCreator(
         private const val DEFAULT_PITCH_KANA_COLOR = "#80cbc4"
 
         const val DEFAULT_DECK_NAME = "Mining Deck"
-        const val MODEL_NAME = "Yomitan-Mobile-v7"
+        // Bumped from v7 to v8 because we added the Summary field — that's a
+        // schema change Anki tracks per-model. Existing v7 cards stay where
+        // they are with their old layout; new exports land on v8 with the
+        // AI summary slot. Never bump unless FIELD_NAMES actually changes.
+        const val MODEL_NAME = "Yomitan-Mobile-v8"
         private const val LEGACY_MODEL_NAME = "Yomitan-Mobile"
         private const val LEGACY_MODEL_NAME_V4 = "Yomitan-Mobile-v4"
+        private const val LEGACY_MODEL_NAME_V7 = "Yomitan-Mobile-v7"
         const val PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
 
-        val FIELD_NAMES = arrayOf("Front", "FrontContext", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence", "KanjiBreakdown")
+        val FIELD_NAMES = arrayOf("Front", "FrontContext", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence", "KanjiBreakdown", "Summary")
 
         const val CARD_FRONT_TEMPLATE = """
             <div class="front">
@@ -73,6 +78,7 @@ class AnkiCardCreator(
                 </div>
                 {{#PitchAccent}}<hr><div class="section"><div class="pitch">{{PitchAccent}}</div></div>{{/PitchAccent}}
                 {{#Frequency}}<hr><div class="section"><div class="freq">{{Frequency}}</div></div>{{/Frequency}}
+                {{#Summary}}<hr><div class="section summary-section"><div class="summary">{{Summary}}</div></div>{{/Summary}}
                 <hr>
                 <div class="section meaning-section">
                     <div class="meaning">{{Meaning}}</div>
@@ -100,6 +106,11 @@ class AnkiCardCreator(
             .meaning {
                 font-size: 18px; color: #e0e0e0;
                 text-align: left;
+            }
+            .summary-section { padding: 4px 0; }
+            .summary {
+                font-size: 15px; color: #d7d7d7; text-align: left;
+                line-height: 1.5; white-space: pre-wrap;
             }
             .pos-line {
                 font-size: 13px; font-style: italic; color: #80cbc4;
@@ -197,6 +208,12 @@ class AnkiCardCreator(
             .section { padding: 4px 0; }
             .header-section { padding-top: 0; }
             .meaning-section { padding: 6px 0; }
+            .summary-section { padding: 4px 0; }
+            .summary {
+                font-size: ${(prefs.meaningFontSize - 3).coerceAtLeast(12)}px;
+                color: #d7d7d7; text-align: left;
+                line-height: 1.5; white-space: pre-wrap;
+            }
             .expression { font-size: ${prefs.expressionFontSize}px; font-weight: $fontWeight; color: ${prefs.expressionColor}; }
             .reading { font-size: ${prefs.readingFontSize}px; color: ${prefs.readingColor}; margin: 6px 0 0 0; }
             .meaning {
@@ -597,7 +614,8 @@ class AnkiCardCreator(
             MODEL_NAME -> 0
             LEGACY_MODEL_NAME -> 1
             LEGACY_MODEL_NAME_V4 -> 2
-            else -> 3
+            LEGACY_MODEL_NAME_V7 -> 3
+            else -> 4
         }
     }
 
@@ -741,7 +759,8 @@ class AnkiCardCreator(
         entry: WordEntry,
         audioFileName: String = "",
         randomFont: String? = null,
-        stylePrefs: CardStylePreferences? = null
+        stylePrefs: CardStylePreferences? = null,
+        aiSummaryText: String = ""
     ): AnkiCard {
         val pitchHtml = buildPitchAccentHtml(
             entry.reading.ifBlank { entry.expression },
@@ -782,6 +801,13 @@ class AnkiCardCreator(
 
         val posLabel = com.yomitanmobile.util.PartsOfSpeechFormatter.format(entry.partsOfSpeech)
 
+        // Sanitize the AI summary: it comes from a third-party LLM and may
+        // include HTML or scripts. We escape it to text-only and rely on
+        // CSS `white-space: pre-wrap` for line breaks.
+        val summaryHtml = if (aiSummaryText.isNotBlank()) {
+            InputSanitizer.escapeHtml(aiSummaryText.trim())
+        } else ""
+
         return AnkiCard(
             front = frontContent,
             frontContext = frontContext,
@@ -790,6 +816,7 @@ class AnkiCardCreator(
             pitchAccent = pitchHtml,
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
+            summary = summaryHtml,
             sentence = buildString {
                 unattachedExamples.take(3).forEachIndexed { idx, ex ->
                     if (idx > 0) append("<div class=\"sentence-divider\"></div>")
@@ -954,7 +981,7 @@ class AnkiCardCreator(
         }
     }
 
-    suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null, kanjiData: List<com.yomitanmobile.data.local.entity.KanjiEntry> = emptyList()): Result<Long> {
+    suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null, kanjiData: List<com.yomitanmobile.data.local.entity.KanjiEntry> = emptyList(), aiSummaryText: String = ""): Result<Long> {
         val audioFileName = if (tts != null) {
             val textForTts = entry.reading.ifBlank { entry.expression }
             if (stylePrefs != null && stylePrefs.randomVoicesEnabled && stylePrefs.randomVoices.isNotEmpty()) {
@@ -1007,7 +1034,8 @@ class AnkiCardCreator(
             }
         } else ""
 
-        val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs).copy(kanjiBreakdown = kanjiHtml)
+        val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs, aiSummaryText)
+            .copy(kanjiBreakdown = kanjiHtml)
         return addNote(card, deckName, stylePrefs)
     }
 
