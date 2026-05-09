@@ -90,7 +90,7 @@ fun SearchScreen(
     val importedWordsCount by viewModel.importedWordsCount.collectAsState()
     val categoryStats by viewModel.categoryStats.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     // Quick stats icon navigates to Statistics screen

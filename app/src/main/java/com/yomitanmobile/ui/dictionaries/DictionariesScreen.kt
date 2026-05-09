@@ -51,7 +51,7 @@ fun DictionariesScreen(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     val dictionaries by viewModel.dictionaries.collectAsStateWithLifecycle()
@@ -136,7 +136,7 @@ fun DictionariesScreen(
 
 @Composable
 private fun DictionaryCard(dictionary: DictionaryInfo, onDelete: () -> Unit) {
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
 

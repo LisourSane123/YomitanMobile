@@ -57,24 +57,29 @@ class AnkiCardCreator(
         """
 
         // Flat layout — sections separated by horizontal rules instead of
-        // background boxes. The Meaning field contains its own POS line and
-        // example sentences, so {{Sentence}} only fires for unattached
-        // example data (online Tatoeba / pre-seeded SentenceDao). Order:
-        // expression → reading → pitch → frequency → meanings → audio →
-        // kanji breakdown. Each `{{#Foo}}…{{/Foo}}` section auto-renders
-        // its own divider so the dividers don't pile up when a field is
-        // empty.
+        // background boxes. Each section is wrapped in its own .section
+        // block with consistent vertical padding so neighbouring parts
+        // (reading + pitch, meaning + examples, kanji breakdown) don't
+        // visually merge into one another. {{Sentence}} only fires for
+        // unattached example data (online Tatoeba / pre-seeded
+        // SentenceDao). Order: header (expression + reading) → pitch →
+        // frequency → meanings → unattached sentences → audio → kanji
+        // breakdown.
         const val CARD_BACK_TEMPLATE = """
             <div class="back">
-                <div class="expression">{{Front}}</div>
-                <div class="reading">{{Reading}}</div>
-                {{#PitchAccent}}<hr><div class="pitch">{{PitchAccent}}</div>{{/PitchAccent}}
-                {{#Frequency}}<hr><div class="freq">{{Frequency}}</div>{{/Frequency}}
+                <div class="section header-section">
+                    <div class="expression">{{Front}}</div>
+                    <div class="reading">{{Reading}}</div>
+                </div>
+                {{#PitchAccent}}<hr><div class="section"><div class="pitch">{{PitchAccent}}</div></div>{{/PitchAccent}}
+                {{#Frequency}}<hr><div class="section"><div class="freq">{{Frequency}}</div></div>{{/Frequency}}
                 <hr>
-                <div class="meaning">{{Meaning}}</div>
-                {{#Sentence}}<hr><div class="sentence">{{Sentence}}</div>{{/Sentence}}
-                <div class="audio">{{Audio}}</div>
-                {{#KanjiBreakdown}}<hr><div class="kanji-breakdown">{{KanjiBreakdown}}</div>{{/KanjiBreakdown}}
+                <div class="section meaning-section">
+                    <div class="meaning">{{Meaning}}</div>
+                </div>
+                {{#Sentence}}<hr><div class="section"><div class="sentence">{{Sentence}}</div></div>{{/Sentence}}
+                {{#Audio}}<hr><div class="section audio-section"><div class="audio">{{Audio}}</div></div>{{/Audio}}
+                {{#KanjiBreakdown}}<hr><div class="section kanji-section"><div class="kanji-breakdown">{{KanjiBreakdown}}</div></div>{{/KanjiBreakdown}}
             </div>
         """
 
@@ -87,8 +92,11 @@ class AnkiCardCreator(
                 background-color: #1a1a1a;
                 padding: 20px;
             }
+            .section { padding: 4px 0; }
+            .header-section { padding-top: 0; }
             .expression { font-size: 48px; font-weight: bold; color: #ffffff; }
-            .reading { font-size: 28px; color: #80cbc4; margin: 8px 0; }
+            .reading { font-size: 26px; color: #80cbc4; margin: 6px 0 0 0; }
+            .meaning-section { padding: 6px 0; }
             .meaning {
                 font-size: 18px; color: #e0e0e0;
                 text-align: left;
@@ -145,16 +153,19 @@ class AnkiCardCreator(
                 height: 1px; background: #3a3a3a; margin: 8px auto;
                 width: 60%; opacity: 0.5;
             }
-            hr { border: none; border-top: 1px solid #444; margin: 14px 0; }
+            hr {
+                border: none; border-top: 1px solid #555;
+                margin: 16px 0; opacity: 0.7;
+            }
             .kanji-breakdown {
                 font-size: 16px; color: #ccc;
                 text-align: left;
             }
             .kanji-breakdown-title {
                 font-size: 12px; color: #80cbc4; text-transform: uppercase;
-                letter-spacing: 0.08em; margin-bottom: 6px;
+                letter-spacing: 0.08em; margin-bottom: 8px;
             }
-            .kanji-item { margin-bottom: 6px; line-height: 1.4; }
+            .kanji-item { margin-bottom: 8px; line-height: 1.4; }
             .kanji-item:last-child { margin-bottom: 0; }
             .kanji-char { font-size: 22px; color: #fff; margin-right: 8px; font-weight: bold; }
             .kanji-readings { font-size: 13px; color: #b0bec5; }
@@ -183,8 +194,11 @@ class AnkiCardCreator(
                 background-color: ${prefs.cardBackgroundColor};
                 padding: 20px;
             }
+            .section { padding: 4px 0; }
+            .header-section { padding-top: 0; }
+            .meaning-section { padding: 6px 0; }
             .expression { font-size: ${prefs.expressionFontSize}px; font-weight: $fontWeight; color: ${prefs.expressionColor}; }
-            .reading { font-size: ${prefs.readingFontSize}px; color: ${prefs.readingColor}; margin: 8px 0; }
+            .reading { font-size: ${prefs.readingFontSize}px; color: ${prefs.readingColor}; margin: 6px 0 0 0; }
             .meaning {
                 font-size: ${prefs.meaningFontSize}px; color: ${prefs.meaningColor};
                 text-align: left;
@@ -244,15 +258,18 @@ class AnkiCardCreator(
                 height: 1px; background: #3a3a3a; margin: 8px auto;
                 width: 60%; opacity: 0.5;
             }
-            hr { border: none; border-top: 1px solid #444; margin: 14px 0; }
+            hr {
+                border: none; border-top: 1px solid #555;
+                margin: 16px 0; opacity: 0.7;
+            }
             .kanji-breakdown {
                 font-size: 16px; color: #ccc; text-align: left;
             }
             .kanji-breakdown-title {
                 font-size: 12px; color: ${prefs.accentColor}; text-transform: uppercase;
-                letter-spacing: 0.08em; margin-bottom: 6px;
+                letter-spacing: 0.08em; margin-bottom: 8px;
             }
-            .kanji-item { margin-bottom: 6px; line-height: 1.4; }
+            .kanji-item { margin-bottom: 8px; line-height: 1.4; }
             .kanji-item:last-child { margin-bottom: 0; }
             .kanji-char { font-size: 22px; color: #fff; margin-right: 8px; font-weight: bold; }
             .kanji-readings { font-size: 13px; color: #b0bec5; }

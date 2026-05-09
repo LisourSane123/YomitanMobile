@@ -3,6 +3,7 @@ package com.yomitanmobile.data.repository
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.KanjiDao
+import com.yomitanmobile.data.local.database.AppDatabase
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.data.local.entity.KanjiEntry
@@ -28,8 +29,32 @@ class DictionaryRepositoryImpl @Inject constructor(
     private val dictionaryDao: DictionaryDao,
     private val dictionaryInfoDao: DictionaryInfoDao,
     private val kanjiDao: KanjiDao,
-    private val parser: YomitanDictionaryParser
+    private val parser: YomitanDictionaryParser,
+    private val database: AppDatabase
 ) : DictionaryRepository {
+
+    /**
+     * SQLite tuning that's only safe during the import itself: synchronous=OFF
+     * skips fsync per transaction, journal_mode=MEMORY keeps the rollback
+     * journal in RAM. PRAGMA isn't expressible through Room @Query (it
+     * returns no rows), so we go through the support helper directly. Each
+     * helper restores the durable defaults afterwards in a finally.
+     */
+    private fun beginBulkImport() {
+        runCatching {
+            val db = database.openHelper.writableDatabase
+            db.execSQL("PRAGMA synchronous = OFF")
+            db.execSQL("PRAGMA journal_mode = MEMORY")
+        }
+    }
+
+    private fun endBulkImport() {
+        runCatching {
+            val db = database.openHelper.writableDatabase
+            db.execSQL("PRAGMA synchronous = NORMAL")
+            db.execSQL("PRAGMA journal_mode = WAL")
+        }
+    }
 
     override suspend fun getKanjis(kanjiList: List<String>): List<KanjiEntry> {
         return kanjiDao.getKanjis(kanjiList)
@@ -86,6 +111,13 @@ class DictionaryRepositoryImpl @Inject constructor(
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit
     ): ImportResult = withContext(Dispatchers.IO) {
+        // Drop synchronous=OFF + journal=MEMORY for the duration of the
+        // import. Cuts fsync per transaction and avoids WAL bookkeeping
+        // during what is effectively a one-shot bulk load. Restored to safer
+        // settings in the finally block — cards added afterwards still
+        // hit a durable journal_mode=WAL.
+        beginBulkImport()
+
         try {
             var totalInserted = 0
             var totalKanjiInserted = 0
@@ -95,9 +127,9 @@ class DictionaryRepositoryImpl @Inject constructor(
             var totalJlptUpdates = 0
 
             // Use streaming parser — entries are inserted in batches as they're parsed.
-            // Larger batches mean fewer transaction commits; SQLite handles 2000+ inserts
-            // per transaction comfortably and this measurably shortens dictionary import.
-            val batchSize = 5000
+            // 10000 fits comfortably in one transaction and roughly halves the
+            // transaction-commit overhead vs. 5000.
+            val batchSize = 10000
             val parseResult = parser.parseFromZipStreaming(
                 inputStream = inputStream,
                 onProgress = onProgress,
@@ -181,6 +213,11 @@ class DictionaryRepositoryImpl @Inject constructor(
                 entriesImported = 0,
                 errorMessage = e.message ?: "Unknown error during import"
             )
+        } finally {
+            // Always restore durable settings before the user starts adding
+            // search history / favorites / Anki exports — those rows must not
+            // be at risk of disappearing on a power cycle.
+            endBulkImport()
         }
     }
 

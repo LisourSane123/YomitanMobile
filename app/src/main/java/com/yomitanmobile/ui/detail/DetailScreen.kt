@@ -78,7 +78,7 @@ fun DetailScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val ttsReady by viewModel.ttsReady.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     val context = LocalContext.current
@@ -600,7 +600,7 @@ private fun DeckSelectionDialog(
     onDismiss: () -> Unit
 ) {
     var newDeckName by remember { mutableStateOf("") }
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     AlertDialog(

@@ -74,7 +74,7 @@ fun DictionaryDownloadScreen(
     val isDownloading by viewModel.isDownloading.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val installedDictionaries by viewModel.installedDictionaries.collectAsState()
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val snackbarHostState = remember { SnackbarHostState() }
 

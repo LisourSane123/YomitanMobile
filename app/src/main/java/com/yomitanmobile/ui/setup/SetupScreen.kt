@@ -47,7 +47,7 @@ fun SetupScreen(
     val setupState by viewModel.setupState.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
 
     Surface(modifier = Modifier.fillMaxSize()) {
         AnimatedContent(
@@ -176,7 +176,7 @@ private fun WelcomeContent(
 private fun DownloadingContent(
     progress: com.yomitanmobile.data.download.DownloadProgress?
 ) {
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -237,7 +237,7 @@ private fun DownloadingContent(
 
 @Composable
 private fun CompletedContent(onContinue: () -> Unit) {
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -297,7 +297,7 @@ private fun ErrorContent(
     onRetry: () -> Unit,
     onSkip: () -> Unit
 ) {
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     Column(
         modifier = Modifier
             .fillMaxSize()

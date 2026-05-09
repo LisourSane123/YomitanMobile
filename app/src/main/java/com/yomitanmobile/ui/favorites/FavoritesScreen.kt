@@ -58,7 +58,7 @@ fun FavoritesScreen(
     viewModel: FavoritesViewModel = hiltViewModel()
 ) {
     val favorites by viewModel.favorites.collectAsState()
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     var showClearAllDialog by remember { mutableStateOf(false) }
 

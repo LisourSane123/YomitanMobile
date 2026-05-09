@@ -138,10 +138,20 @@ object AvailableDictionaries {
      * Recommended dictionaries for first-time setup.
      * Jitendex (primary, with JLPT + examples), JPDB Frequency, Kanjium Pitch Accent.
      */
+    // Recommended bundle = the four sources actually consumed by the app:
+    //   • Jitendex — primary term dictionary (search results, definitions,
+    //     parts of speech, example sentences attached to senses)
+    //   • JLPT Vocab Tags — populates the JLPT badge for ~3200 entries per level
+    //   • JPDB Frequency — populates the frequency rank shown above each word
+    //   • Kanjium Pitch Accent — populates the pitch accent diagram
+    //   • KANJIDIC — populates the kanji breakdown on Anki cards
+    // Without KANJIDIC the kanji breakdown stays blank, so it has to be in
+    // the recommended set, not buried under "advanced".
     val recommended: List<DictionaryDownloadInfo> = listOf(
         jitendex,
         jlptVocab,
         all.first { it.id == "jpdb_freq" },
-        all.first { it.id == "kanjium_pitch" }
+        all.first { it.id == "kanjium_pitch" },
+        all.first { it.id == "kanjidic" }
     )
 }

@@ -86,7 +86,7 @@ fun CardStyleScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
     // Style state
@@ -876,7 +876,7 @@ private fun ColorPickerRow(
     presetColors: List<String>,
     onColorSelected: (String) -> Unit
 ) {
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     var showCustomPicker by remember { mutableStateOf(false) }
     var customR by remember { mutableFloatStateOf(128f) }

@@ -70,7 +70,7 @@ fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -428,7 +428,7 @@ private fun StreakCard(
     todayCount: Int
 ) {
     val goalMet = todayCount >= dailyGoal
-    val isEnglish = LocalConfiguration.current.locales.get(0).language.equals("en", ignoreCase = true)
+    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),

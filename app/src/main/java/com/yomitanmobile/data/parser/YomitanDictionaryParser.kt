@@ -49,7 +49,10 @@ class YomitanDictionaryParser @Inject constructor() {
 
     private companion object {
         const val TEMP_DICTIONARY_NAME = "temp"
-        const val BUFFER_SIZE = 64 * 1024
+        // 256 KB buffer halves the number of ZIP read syscalls per term bank
+        // file and noticeably speeds up the read side of the import without
+        // a meaningful memory cost (the buffer is reused across entries).
+        const val BUFFER_SIZE = 256 * 1024
         const val MAX_INDEX_JSON_BYTES = 1 * 1024 * 1024
         const val MAX_TERM_BANK_BYTES = 25 * 1024 * 1024
         const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
