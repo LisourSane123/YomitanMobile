@@ -9,11 +9,11 @@ import android.view.View
 import android.widget.RemoteViews
 import com.yomitanmobile.MainActivity
 import com.yomitanmobile.R
-import com.yomitanmobile.data.local.database.AppDatabase
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import androidx.room.Room
 
 class SearchWidgetProvider : AppWidgetProvider() {
 
@@ -28,6 +28,12 @@ class SearchWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        // SupervisorJob scope is reused across widget updates so the work
+        // gets cancelled cleanly if the process is torn down. Previously
+        // each onUpdate spun a fresh GlobalScope-style coroutine that
+        // outlived the receiver.
+        private val widgetScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
         private fun updateAppWidget(
             context: Context,
             appWidgetManager: AppWidgetManager,
@@ -46,16 +52,18 @@ class SearchWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
             views.setOnClickPendingIntent(R.id.widget_search_bar, pendingIntent)
 
-            // Load a random favorite word for "Word of the Day"
-            CoroutineScope(Dispatchers.IO).launch {
+            // Use the app-wide singleton DAO via Hilt's EntryPoint instead
+            // of building a fresh AppDatabase per update — that path opened
+            // a new SQLite connection on every refresh, missed our shared
+            // PRAGMA tuning, and never benefited from Room's prepared
+            // statement cache (audit issue (d)).
+            widgetScope.launch {
                 try {
-                    val db = Room.databaseBuilder(
+                    val entryPoint = EntryPointAccessors.fromApplication(
                         context.applicationContext,
-                        AppDatabase::class.java,
-                        AppDatabase.DATABASE_NAME
-                    ).build()
-
-                    val favorite = db.favoriteWordDao().getRandomFavorite()
+                        WidgetEntryPoint::class.java
+                    )
+                    val favorite = entryPoint.favoriteWordDao().getRandomFavorite()
                     if (favorite != null) {
                         views.setViewVisibility(R.id.widget_word_section, View.VISIBLE)
                         views.setTextViewText(R.id.widget_word_expression, favorite.expression)
@@ -72,8 +80,6 @@ class SearchWidgetProvider : AppWidgetProvider() {
                     } else {
                         views.setViewVisibility(R.id.widget_word_section, View.GONE)
                     }
-
-                    db.close()
                     appWidgetManager.updateAppWidget(appWidgetId, views)
                 } catch (_: Exception) {
                     appWidgetManager.updateAppWidget(appWidgetId, views)

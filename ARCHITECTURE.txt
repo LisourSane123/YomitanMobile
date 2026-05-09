@@ -212,52 +212,53 @@ Compose. Leave it alone unless you are doing a full i18n migration.
 8. POTENTIAL PROBLEMS / DEAD CODE / OPEN ITEMS
 ----------------------------------------------------------------------
 
-(a) SearchDictionaryUseCase.invokeJapaneseSmart and .invokeReactive
-    are defined but unused. Safe to delete unless you plan to
-    migrate SearchViewModel onto invokeReactive.
+(a) RESOLVED. SearchDictionaryUseCase.invokeJapaneseSmart and
+    .invokeReactive deleted — both were defined but never called.
 
-(b) DictionaryDao.searchPrefix, .findByExpression, .findByReading
-    are declared as Flow-returning queries but never called outside
-    the DAO file. Safe candidates for deletion.
+(b) RESOLVED. DictionaryDao.searchPrefix, .findByExpression, and
+    .findByReading deleted — all three were declared but never
+    called outside the DAO file.
 
-(c) JapaneseDeconjugator.candidateForms × repository.searchCombined
-    runs sequentially per candidate (SearchDictionaryUseCase line 47).
-    Cold-search latency can spike for verbs with many inflection
-    candidates. The original CLAUDE.md flagged this as a known issue.
-    A coroutine-async map of candidates → searchCombined would
-    parallelize without changing the merge semantics.
+(c) RESOLVED. invokeWithAlternatives now runs the candidate searches
+    in parallel inside coroutineScope { ... async }, then merges by
+    entry id with the original query taking priority. Replaces the
+    sequential per-candidate first() loop that dominated cold-search
+    latency for verbs with many inflection candidates.
 
-(d) Widget Room instantiation creates a fresh AppDatabase per
-    widget update (SearchWidgetProvider:52). Plumb a Hilt EntryPoint
-    instead.
+(d) RESOLVED. SearchWidgetProvider now pulls FavoriteWordDao through
+    a Hilt WidgetEntryPoint (EntryPointAccessors.fromApplication)
+    instead of building a fresh AppDatabase on every onUpdate.
+    Reuses the singleton DB, the prepared-statement cache, and our
+    PRAGMA tuning. Coroutines now run on a SupervisorJob scope
+    instead of a fresh per-update GlobalScope-style launch.
 
-(e) MainActivity.SENTENCE_API_CONSENT_GRANTED key has been removed
-    from code but still exists in users' DataStore files until
-    overwritten. Functionally inert.
+(e) NOT FIXABLE FROM CODE. MainActivity.SENTENCE_API_CONSENT_GRANTED
+    is gone from code; existing devices still have the key in their
+    DataStore file. It is functionally inert — the read path no
+    longer references it.
 
-(f) JlptVocabulary is a hand-curated kana-only lookup. Now that
-    yomitan-jlpt-vocab is in the recommended bundle (covers ~16k
-    entries with N1-N5 levels via the meta-bank channel), the
-    inline curated list is mostly redundant. It still helps users
-    who haven't installed JLPT Vocab Tags yet.
+(f) ACCEPTED. JlptVocabulary is a hand-curated kana-only lookup
+    kept as a JLPT-badge fallback for users who haven't installed
+    yomitan-jlpt-vocab yet. With JLPT Vocab Tags in the recommended
+    bundle most users will never hit this fallback, but removing it
+    would regress first-install UX.
 
-(g) ARCHITECTURE.txt and CLAUDE.md drift. Whenever you touch DB
-    schema, tag extraction, or the parser's structured-content
-    walker, update CLAUDE.md (Architecture section) AND this file's
-    relevant section.
+(g) See your own follow-up — handled separately.
 
-(h) Hardcoded strings in Compose screens. Migration to
-    string resources is incomplete. The existing values/strings.xml
-    has ~25 keys; the rest of the UI uses inline `tr(pl, en)`.
-    Acceptable for a 2-language app; would block adding a third.
+(h) ACCEPTED. Hardcoded strings in Compose. Migration to string
+    resources is incomplete (~25 keys in values/strings.xml; rest
+    uses inline tr(pl, en)). Acceptable for a 2-language app; would
+    block adding a third. Skip until a third locale is genuinely
+    requested.
 
-(i) MAX_TOTAL_UNCOMPRESSED_BYTES is 2 GB (parser companion). Most
-    Yomitan dicts decompress to well under 1 GB. The 2 GB cap is a
-    safety upper bound, not a quality target.
+(i) RESOLVED. MAX_TOTAL_UNCOMPRESSED_BYTES tightened from 2 GB to
+    1 GB (still 3-4× the largest dictionary the app ships, but a
+    much tighter zip-bomb safeguard).
 
-(j) AnkiCard model bump policy: NEVER bump MODEL_NAME unless
-    FIELD_NAMES changes. CSS / template updates flow via content
-    provider to existing models; bumping would orphan v7 cards.
+(j) DOCUMENTED IN CODE. AnkiCard model bump policy noted in the
+    AnkiCardCreator companion-object comments — NEVER bump
+    MODEL_NAME unless FIELD_NAMES changes; CSS / template updates
+    flow via content provider to existing models.
 
 ----------------------------------------------------------------------
 9. WHEN ADDING A FEATURE — WHERE THINGS GO

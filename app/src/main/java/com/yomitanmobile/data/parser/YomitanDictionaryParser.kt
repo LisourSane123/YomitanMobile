@@ -57,9 +57,11 @@ class YomitanDictionaryParser @Inject constructor() {
         const val MAX_TERM_BANK_BYTES = 25 * 1024 * 1024
         const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
         const val MAX_META_BANK_BYTES = 25 * 1024 * 1024
-        // Jitendex's structured-content JSON expands ~6-8x from its ~38 MB ZIP,
-        // so the cap needs headroom over the original JMDict-only sizing.
-        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 2L * 1024L * 1024L * 1024L
+        // Jitendex's structured-content JSON expands ~6-8x from its ~38 MB
+        // ZIP — about 250-300 MB uncompressed. 1 GB is a safe upper bound
+        // that still rejects malicious zip-bombs without rejecting any
+        // dictionary the app actually ships in its download list.
+        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 1L * 1024L * 1024L * 1024L
     }
 
     private val json = Json {

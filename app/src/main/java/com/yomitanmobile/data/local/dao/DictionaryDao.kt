@@ -33,23 +33,8 @@ interface DictionaryDao {
     """)
     fun searchFts(query: String, limit: Int = 50): Flow<List<DictionaryEntry>>
 
-    @Query("SELECT * FROM dictionary_entries WHERE expression = :expression ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
-    fun findByExpression(expression: String): Flow<List<DictionaryEntry>>
-
-    @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
-    fun findByReading(reading: String): Flow<List<DictionaryEntry>>
-
     @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
     suspend fun getByReading(reading: String): List<DictionaryEntry>
-
-    @Query("""
-        SELECT * FROM dictionary_entries 
-        WHERE expression LIKE :prefix || '%' OR reading LIKE :prefix || '%'
-        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
-                 frequency ASC, LENGTH(expression) ASC
-        LIMIT :limit
-    """)
-    fun searchPrefix(prefix: String, limit: Int = 30): Flow<List<DictionaryEntry>>
 
     @Query("""
         SELECT * FROM dictionary_entries
