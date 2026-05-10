@@ -70,21 +70,23 @@ class AnkiCardCreator(
         // SentenceDao). Order: header (expression + reading) → pitch →
         // frequency → meanings → unattached sentences → audio → kanji
         // breakdown.
-        // Frequency moved out of the vertical section flow into a small
-        // corner badge anchored to the top-right of `.back`. This frees up
-        // the row it used to occupy and keeps the metadata visible without
-        // pushing the meaning column further down the screen. The badge is
-        // positioned absolutely (CSS) — see .freq-badge in CARD_CSS.
+        // Header block (expression + reading + small frequency line) is
+        // visually peeled off from the rest of the card by an unconditional
+        // <hr> that always sits right after it. Pitch and summary now use a
+        // *trailing* <hr> so consecutive sections don't double up dividers
+        // when the optional ones are missing. Trailing sections (sentence,
+        // audio, kanji) keep their pre-hr because they sit AFTER meaning and
+        // need to be separated from it.
         const val CARD_BACK_TEMPLATE = """
             <div class="back">
-                {{#Frequency}}<div class="freq-badge">{{Frequency}}</div>{{/Frequency}}
                 <div class="section header-section">
                     <div class="expression">{{Front}}</div>
                     <div class="reading">{{Reading}}</div>
+                    {{#Frequency}}<div class="freq">{{Frequency}}</div>{{/Frequency}}
                 </div>
-                {{#PitchAccent}}<hr><div class="section"><div class="pitch">{{PitchAccent}}</div></div>{{/PitchAccent}}
-                {{#Summary}}<hr><div class="section summary-section"><div class="summary">{{Summary}}</div></div>{{/Summary}}
                 <hr>
+                {{#PitchAccent}}<div class="section"><div class="pitch">{{PitchAccent}}</div></div><hr>{{/PitchAccent}}
+                {{#Summary}}<div class="section summary-section"><div class="summary">{{Summary}}</div></div><hr>{{/Summary}}
                 <div class="section meaning-section">
                     <div class="meaning">{{Meaning}}</div>
                 </div>
@@ -142,15 +144,8 @@ class AnkiCardCreator(
                 font-size: 16px; color: #ff8a65; margin: 4px 0;
             }
             .freq {
-                font-size: 13px; color: #aaa; margin: 4px 0;
-            }
-            .back { position: relative; }
-            .freq-badge {
-                position: absolute; top: 0; right: 0;
-                font-size: 11px; color: #cfd8dc;
-                background: rgba(255, 255, 255, 0.06);
-                border-radius: 10px; padding: 2px 8px;
-                line-height: 1.4; opacity: 0.9;
+                font-size: 12px; color: #aaa;
+                margin: 6px 0 0 0; opacity: 0.9;
             }
             .front-context {
                 font-size: 14px; color: #cfd8dc; margin-top: 8px;
@@ -258,16 +253,8 @@ class AnkiCardCreator(
                 ${if (!prefs.showPitchAccent) "display: none;" else ""}
             }
             .freq {
-                font-size: 13px; color: #aaa; margin: 4px 0;
-                ${if (!prefs.showFrequency) "display: none;" else ""}
-            }
-            .back { position: relative; }
-            .freq-badge {
-                position: absolute; top: 0; right: 0;
-                font-size: 11px; color: #cfd8dc;
-                background: rgba(255, 255, 255, 0.06);
-                border-radius: 10px; padding: 2px 8px;
-                line-height: 1.4; opacity: 0.9;
+                font-size: 12px; color: #aaa;
+                margin: 6px 0 0 0; opacity: 0.9;
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
             .front-context {
@@ -352,9 +339,11 @@ class AnkiCardCreator(
                 </div>
                 <hr>
                 <div class="back">
-                    <div class="freq-badge">★★★ Top 1K</div>
-                    <div class="expression">食べる</div>
-                    <div class="reading">たべる</div>
+                    <div class="section header-section">
+                        <div class="expression">食べる</div>
+                        <div class="reading">たべる</div>
+                        <div class="freq">★★★ Top 1K</div>
+                    </div>
                     <hr>
                     <div class="pitch">$previewPitch</div>
                     <hr>
