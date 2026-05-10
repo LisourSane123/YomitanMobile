@@ -40,7 +40,6 @@ data class CardStylePreferences(
     val randomFonts: Set<String> = emptySet(),
     val randomVoicesEnabled: Boolean = false,
     val randomVoices: Set<String> = emptySet(),
-    val useOnlineSentenceApi: Boolean = false,
     // When false, the back-side <hr> dividers between sections (header,
     // pitch, frequency, meaning, sentence, audio, kanji) are hidden via CSS
     // for a flatter look. Defaults to true to match the section-separated

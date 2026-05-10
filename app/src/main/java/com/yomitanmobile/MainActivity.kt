@@ -66,7 +66,6 @@ class MainActivity : ComponentActivity() {
         val CARD_RANDOM_FONTS = stringSetPreferencesKey("card_random_fonts")
         val TTS_RANDOM_VOICES_ENABLED = booleanPreferencesKey("tts_random_voices_enabled")
         val TTS_RANDOM_VOICES = stringSetPreferencesKey("tts_random_voices")
-        val CARD_USE_ONLINE_SENTENCE_API = booleanPreferencesKey("card_use_online_sentence_api")
         val CARD_SHOW_SECTION_DIVIDERS = booleanPreferencesKey("card_show_section_dividers")
 
         // AI summary integration. Gated behind CARD_AI_SUMMARY_ENABLED so the

@@ -116,7 +116,6 @@ fun CardStyleScreen(
     var randomFonts by remember { mutableStateOf<Set<String>>(emptySet()) }
     var randomVoicesEnabled by remember { mutableStateOf(false) }
     var randomVoices by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var useOnlineSentenceApi by remember { mutableStateOf(false) }
     var showSectionDividers by remember { mutableStateOf(true) }
     var aiSummaryEnabled by remember { mutableStateOf(false) }
     var aiProvider by remember { mutableStateOf(AiProvider.GEMINI) }
@@ -170,7 +169,6 @@ fun CardStyleScreen(
         randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet()
         randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false
         randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
-        useOnlineSentenceApi = prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] ?: false
         showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true
         aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false
         aiProvider = AiProvider.fromStorage(prefs[MainActivity.CARD_AI_PROVIDER])
@@ -202,7 +200,6 @@ fun CardStyleScreen(
         randomFonts = randomFonts,
         randomVoicesEnabled = randomVoicesEnabled,
         randomVoices = randomVoices,
-        useOnlineSentenceApi = useOnlineSentenceApi,
         showSectionDividers = showSectionDividers,
         aiSummaryEnabled = aiSummaryEnabled,
         aiProvider = aiProvider,
@@ -236,7 +233,6 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_RANDOM_FONTS] = randomFonts
                 prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] = randomVoicesEnabled
                 prefs[MainActivity.TTS_RANDOM_VOICES] = randomVoices
-                prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] = useOnlineSentenceApi
                 prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] = showSectionDividers
                 prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] = aiSummaryEnabled
                 prefs[MainActivity.CARD_AI_PROVIDER] = aiProvider.storageValue
@@ -611,18 +607,6 @@ fun CardStyleScreen(
                     Switch(
                         checked = showFrontContextSentence,
                         onCheckedChange = { showFrontContextSentence = it }
-                    )
-                }
-            }
-
-            item {
-                SettingRow(
-                    title = tr("Zdanie z internetu (API)", "Sentence from the internet (API)"),
-                    subtitle = tr("Pobieraj online zdanie do fiszki, gdy dostępne", "Fetch an online sentence for the card when available")
-                ) {
-                    Switch(
-                        checked = useOnlineSentenceApi,
-                        onCheckedChange = { useOnlineSentenceApi = it }
                     )
                 }
             }

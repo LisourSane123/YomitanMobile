@@ -16,7 +16,6 @@ import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
 import com.yomitanmobile.dataStore
-import com.yomitanmobile.data.sentence.OnlineSentenceService
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.PitchAccentStyle
@@ -69,7 +68,6 @@ class DetailViewModel @Inject constructor(
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
     private val sentenceDao: SentenceDao,
-    private val onlineSentenceService: OnlineSentenceService,
     private val aiSummaryService: AiSummaryService,
     private val exportedWordDao: ExportedWordDao,
     private val favoriteWordDao: FavoriteWordDao,
@@ -332,7 +330,6 @@ class DetailViewModel @Inject constructor(
             randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet(),
             randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false,
             randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet(),
-            useOnlineSentenceApi = prefs[MainActivity.CARD_USE_ONLINE_SENTENCE_API] ?: false,
             showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true,
             aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false,
             aiProvider = com.yomitanmobile.data.ai.AiProvider.fromStorage(
@@ -356,7 +353,10 @@ class DetailViewModel @Inject constructor(
             // Sentence-source priority order:
             //   1. Jitendex examples already attached to the entry (preferred)
             //   2. Pre-seeded local SentenceDao matches
-            //   3. Online Tatoeba API (only with explicit user consent)
+            // The online Tatoeba fallback was removed — Jitendex covers
+            // most words and the seeded SentenceDao handles common
+            // beginner words. Empty Sentence field just collapses the
+            // whole back-side block via the {{#Sentence}} mustache.
             val wordForExport = if (stylePrefs.showSentence) {
                 val lookup = word.expression.ifBlank { word.reading }
                 if (word.examples.isNotEmpty()) {
@@ -374,18 +374,6 @@ class DetailViewModel @Inject constructor(
                             exampleSentence = bestSentence.sentenceJapanese,
                             exampleSentenceTranslation = bestSentence.sentenceEnglish
                         )
-                    } else if (stylePrefs.useOnlineSentenceApi) {
-                        val onlineSentence = runCatching {
-                            onlineSentenceService.fetchSentenceForWord(lookup)
-                        }.getOrNull()
-                        if (onlineSentence != null) {
-                            word.copy(
-                                exampleSentence = onlineSentence.japanese,
-                                exampleSentenceTranslation = onlineSentence.translation
-                            )
-                        } else {
-                            word
-                        }
                     } else {
                         word
                     }

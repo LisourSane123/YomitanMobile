@@ -77,8 +77,9 @@ class AnkiCardCreator(
             <div class="back">
                 <div class="section header-section">
                     <div class="expression">{{Front}}</div>
-                    <div class="reading">{{Reading}}</div>
                     {{#Frequency}}<div class="freq">{{Frequency}}</div>{{/Frequency}}
+                    <hr class="word-divider">
+                    <div class="reading">{{Reading}}</div>
                 </div>
                 <hr>
                 {{#PitchAccent}}<div class="section"><div class="pitch">{{PitchAccent}}</div></div><hr>{{/PitchAccent}}
@@ -105,9 +106,14 @@ class AnkiCardCreator(
             val sb = StringBuilder()
             sb.append("<div class=\"back\">\n")
             sb.append("    <div class=\"section header-section\">\n")
+            // Order inside the header: expression → small frequency line →
+            // a thin word-divider → reading. The user asked for the
+            // ranking to live directly under the word, separated from the
+            // reading by its own line within the header block.
             sb.append("        <div class=\"expression\">{{Front}}</div>\n")
-            sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
             sb.append("        {{#Frequency}}<div class=\"freq\">{{Frequency}}</div>{{/Frequency}}\n")
+            sb.append("        <hr class=\"word-divider\">\n")
+            sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
             sb.append("    </div>\n")
             sb.append("    <hr>\n")
             for (section in sectionOrder) {
@@ -181,8 +187,19 @@ class AnkiCardCreator(
                 font-size: 16px; color: #ff8a65; margin: 4px 0;
             }
             .freq {
-                font-size: 12px; color: #aaa;
-                margin: 6px 0 0 0; opacity: 0.9;
+                font-size: 11px; color: #aaa;
+                margin: 4px 0 0 0; opacity: 0.85;
+                letter-spacing: 0.02em;
+            }
+            /*
+             * Thin in-header divider that separates the word block
+             * (expression + freq) from the reading. Narrower and
+             * dimmer than the section dividers so it reads as part
+             * of the header rather than a layer break.
+             */
+            .word-divider {
+                border: none; border-top: 1px solid #444;
+                margin: 8px auto; width: 50%; opacity: 0.5;
             }
             .front-context {
                 font-size: 14px; color: #cfd8dc; margin-top: 8px;
@@ -291,9 +308,14 @@ class AnkiCardCreator(
                 ${if (!prefs.showPitchAccent) "display: none;" else ""}
             }
             .freq {
-                font-size: 12px; color: #aaa;
-                margin: 6px 0 0 0; opacity: 0.9;
+                font-size: 11px; color: #aaa;
+                margin: 4px 0 0 0; opacity: 0.85;
+                letter-spacing: 0.02em;
                 ${if (!prefs.showFrequency) "display: none;" else ""}
+            }
+            .word-divider {
+                border: none; border-top: 1px solid #444;
+                margin: 8px auto; width: 50%; opacity: 0.5;
             }
             .front-context {
                 font-size: ${prefs.frontContextSentenceFontSize}px; color: #d7d7d7; margin-top: 8px;
@@ -386,8 +408,9 @@ class AnkiCardCreator(
                 <div class="back">
                     <div class="section header-section">
                         <div class="expression">食べる</div>
-                        <div class="reading">たべる</div>
                         <div class="freq">★★★ Top 1K</div>
+                        <hr class="word-divider">
+                        <div class="reading">たべる</div>
                     </div>
                     <hr>
                     <div class="section"><div class="pitch">$previewPitch</div></div>
@@ -812,10 +835,20 @@ class AnkiCardCreator(
                 put("qfmt", frontTemplate)
                 put("afmt", backTemplate)
             }
-            context.contentResolver.update(templateUri, values, null, null)
-        } catch (_: Exception) {
-            // Templates couldn't be updated (older AnkiDroid, permissions, etc.).
-            // The card still renders with whatever template was last installed.
+            val rows = context.contentResolver.update(templateUri, values, null, null)
+            if (rows == 0) {
+                // 0 rows updated means AnkiDroid silently rejected the
+                // change. Most often this is an older AnkiDroid build that
+                // doesn't expose templates as content provider rows. Logged
+                // (not thrown) so a stale template never blocks export.
+                android.util.Log.w(
+                    "AnkiCardCreator",
+                    "updateModelTemplates: 0 rows updated for model=$modelId. " +
+                        "Section reorder may not propagate to existing cards on this AnkiDroid version."
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("AnkiCardCreator", "updateModelTemplates failed", e)
         }
     }
 
