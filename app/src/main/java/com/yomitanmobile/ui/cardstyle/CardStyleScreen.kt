@@ -121,6 +121,7 @@ fun CardStyleScreen(
     var aiProvider by remember { mutableStateOf(AiProvider.GEMINI) }
     var aiApiKey by remember { mutableStateOf("") }
     var aiPrompt by remember { mutableStateOf(AI_DEFAULT_PROMPT) }
+    var aiModel by remember { mutableStateOf("") }
     var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var activeTts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
 
@@ -173,6 +174,7 @@ fun CardStyleScreen(
         aiProvider = AiProvider.fromStorage(prefs[MainActivity.CARD_AI_PROVIDER])
         aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: ""
         aiPrompt = prefs[MainActivity.CARD_AI_PROMPT] ?: AI_DEFAULT_PROMPT
+        aiModel = prefs[MainActivity.CARD_AI_MODEL] ?: ""
     }
 
     fun currentPreferences() = CardStylePreferences(
@@ -202,7 +204,8 @@ fun CardStyleScreen(
         aiSummaryEnabled = aiSummaryEnabled,
         aiProvider = aiProvider,
         aiApiKey = aiApiKey,
-        aiPrompt = aiPrompt
+        aiPrompt = aiPrompt,
+        aiModel = aiModel
     )
 
     fun savePreferences() {
@@ -235,6 +238,7 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_AI_PROVIDER] = aiProvider.storageValue
                 prefs[MainActivity.CARD_AI_API_KEY] = aiApiKey
                 prefs[MainActivity.CARD_AI_PROMPT] = aiPrompt
+                prefs[MainActivity.CARD_AI_MODEL] = aiModel
             }
         }
     }
@@ -693,6 +697,22 @@ fun CardStyleScreen(
                                 value = aiApiKey,
                                 onValueChange = { aiApiKey = it },
                                 label = { Text(tr("Klucz API", "API key")) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = aiModel,
+                                onValueChange = { aiModel = it },
+                                label = {
+                                    Text(
+                                        tr(
+                                            "Nazwa modelu (puste = ${aiProvider.defaultModel})",
+                                            "Model name (blank = ${aiProvider.defaultModel})"
+                                        )
+                                    )
+                                },
+                                placeholder = { Text(aiProvider.defaultModel) },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )

@@ -53,7 +53,14 @@ data class CardStylePreferences(
     val aiSummaryEnabled: Boolean = false,
     val aiProvider: AiProvider = AiProvider.GEMINI,
     val aiApiKey: String = "",
-    val aiPrompt: String = AI_DEFAULT_PROMPT
+    val aiPrompt: String = AI_DEFAULT_PROMPT,
+    /**
+     * Optional override for the model name. Blank = use the provider's
+     * baked-in defaultModel. Lets the user pin a specific model
+     * (gemini-2.5-flash, deepseek-reasoner, gpt-4o, …) without code
+     * changes.
+     */
+    val aiModel: String = ""
 ) {
     companion object {
         val FONT_FAMILIES = listOf(

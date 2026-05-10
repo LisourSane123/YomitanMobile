@@ -74,7 +74,8 @@ class AiSummaryService @Inject constructor() {
         word: String,
         reading: String,
         meanings: List<String>,
-        language: String
+        language: String,
+        modelOverride: String = ""
     ): AiSummaryResult = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) return@withContext AiSummaryResult.Disabled
         if (word.isBlank() && reading.isBlank()) return@withContext AiSummaryResult.Disabled
@@ -87,18 +88,24 @@ class AiSummaryService @Inject constructor() {
             language = language
         )
 
+        // The user can pin a specific model via the settings text field;
+        // a blank override falls back to the provider's defaultModel. This
+        // lets people switch to gemini-2.5-flash, deepseek-reasoner, or
+        // gpt-4o without us shipping a new release.
+        val model = modelOverride.trim().ifBlank { provider.defaultModel }
+
         try {
             when (provider) {
-                AiProvider.GEMINI -> callGemini(apiKey, resolvedPrompt)
+                AiProvider.GEMINI -> callGemini(apiKey, resolvedPrompt, model)
                 AiProvider.DEEPSEEK -> callOpenAiCompatible(
                     endpoint = "https://api.deepseek.com/chat/completions",
-                    model = AiProvider.DEEPSEEK.defaultModel,
+                    model = model,
                     apiKey = apiKey,
                     prompt = resolvedPrompt
                 )
                 AiProvider.OPENAI -> callOpenAiCompatible(
                     endpoint = "https://api.openai.com/v1/chat/completions",
-                    model = AiProvider.OPENAI.defaultModel,
+                    model = model,
                     apiKey = apiKey,
                     prompt = resolvedPrompt
                 )
@@ -128,10 +135,10 @@ class AiSummaryService @Inject constructor() {
     // Body: {"contents":[{"parts":[{"text":"<prompt>"}]}]}
     // Response path: candidates[0].content.parts[0].text
 
-    private fun callGemini(apiKey: String, prompt: String): AiSummaryResult {
+    private fun callGemini(apiKey: String, prompt: String, model: String): AiSummaryResult {
         val urlString =
             "https://generativelanguage.googleapis.com/v1beta/models/" +
-            AiProvider.GEMINI.defaultModel +
+            java.net.URLEncoder.encode(model, "UTF-8") +
             ":generateContent?key=" + java.net.URLEncoder.encode(apiKey, "UTF-8")
         if (!isAllowedUrl(urlString)) {
             return AiSummaryResult.Failure("Endpoint not allowed")

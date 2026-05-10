@@ -16,7 +16,7 @@ enum class AiProvider(
     val displayName: String,
     val defaultModel: String
 ) {
-    GEMINI("gemini", "Google Gemini", "gemini-2.0-flash"),
+    GEMINI("gemini", "Google Gemini", "gemini-3.1-flash-lite"),
     DEEPSEEK("deepseek", "DeepSeek", "deepseek-chat"),
     OPENAI("openai", "OpenAI", "gpt-4o-mini");
 

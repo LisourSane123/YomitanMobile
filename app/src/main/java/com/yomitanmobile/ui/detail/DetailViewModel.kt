@@ -340,7 +340,8 @@ class DetailViewModel @Inject constructor(
             ),
             aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: "",
             aiPrompt = prefs[MainActivity.CARD_AI_PROMPT]
-                ?: com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT
+                ?: com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT,
+            aiModel = prefs[MainActivity.CARD_AI_MODEL] ?: ""
         )
     }
 
@@ -412,7 +413,8 @@ class DetailViewModel @Inject constructor(
                     word = wordForExport.expression,
                     reading = wordForExport.reading,
                     meanings = wordForExport.definitions,
-                    language = language
+                    language = language,
+                    modelOverride = stylePrefs.aiModel
                 )
                 when (result) {
                     is AiSummaryResult.Success -> result.text

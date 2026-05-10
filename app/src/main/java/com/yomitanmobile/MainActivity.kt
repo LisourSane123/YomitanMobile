@@ -77,6 +77,10 @@ class MainActivity : ComponentActivity() {
         val CARD_AI_PROVIDER = stringPreferencesKey("card_ai_provider")
         val CARD_AI_API_KEY = stringPreferencesKey("card_ai_api_key")
         val CARD_AI_PROMPT = stringPreferencesKey("card_ai_prompt")
+        // Optional per-provider model override. When blank, AiSummaryService
+        // falls back to AiProvider.defaultModel (Gemini → gemini-3.1-flash-lite,
+        // DeepSeek → deepseek-chat, OpenAI → gpt-4o-mini).
+        val CARD_AI_MODEL = stringPreferencesKey("card_ai_model")
 
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
