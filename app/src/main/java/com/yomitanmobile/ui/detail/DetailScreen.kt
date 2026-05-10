@@ -21,10 +21,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -88,12 +92,16 @@ fun DetailScreen(
     var availableDecks by remember { mutableStateOf<List<String>>(emptyList()) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
     var duplicateInfo by remember { mutableStateOf("" to "") }
+    // Tracks whether the user clicked the plain or the AI-flavored
+    // export button. Carried across deck-pick / duplicate / permission
+    // round-trips so dialog confirmations don't lose the choice.
+    var pendingIncludeAi by remember { mutableStateOf(false) }
 
     val ankiPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            viewModel.exportToAnki()
+            viewModel.exportToAnki(pendingIncludeAi)
         } else {
             Toast.makeText(context, tr("Uprawnienia do AnkiDroid zostały odrzucone.", "AnkiDroid permissions were denied."), Toast.LENGTH_LONG).show()
         }
@@ -105,7 +113,7 @@ fun DetailScreen(
             existingDecks = availableDecks,
             onDeckSelected = { deckName ->
                 showDeckDialog = false
-                viewModel.exportToAnkiWithDeck(deckName)
+                viewModel.exportToAnkiWithDeck(deckName, pendingIncludeAi)
             },
             onDismiss = { showDeckDialog = false }
         )
@@ -125,7 +133,7 @@ fun DetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showDuplicateDialog = false
-                    viewModel.forceExport()
+                    viewModel.forceExport(pendingIncludeAi)
                 }) {
                     Text(tr("Eksportuj ponownie", "Export again"))
                 }
@@ -186,8 +194,12 @@ fun DetailScreen(
                                 tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
+                        // Plain export — no AI summary, fast.
                         IconButton(
-                            onClick = { viewModel.exportToAnki() },
+                            onClick = {
+                                pendingIncludeAi = false
+                                viewModel.exportToAnki(includeAiSummary = false)
+                            },
                             enabled = !isExporting
                         ) {
                             if (isExporting) {
@@ -202,6 +214,51 @@ fun DetailScreen(
                                     contentDescription = tr("Eksportuj do Anki", "Export to Anki"),
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
+                            }
+                        }
+                        // AI-flavored export — calls the LLM for a summary.
+                        // Visually distinct: gradient pill + sparkle icon
+                        // so it's obvious which one will hit the API.
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 4.dp)
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFF7E57C2),
+                                            Color(0xFFEC407A)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    pendingIncludeAi = true
+                                    viewModel.exportToAnki(includeAiSummary = true)
+                                },
+                                enabled = !isExporting,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                if (isExporting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color.White
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.AutoAwesome,
+                                        contentDescription = tr(
+                                            "Eksportuj do Anki ze streszczeniem AI",
+                                            "Export to Anki with AI summary"
+                                        ),
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
                     }

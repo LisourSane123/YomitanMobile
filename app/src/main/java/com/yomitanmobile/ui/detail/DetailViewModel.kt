@@ -176,7 +176,7 @@ class DetailViewModel @Inject constructor(
         audioPlayer.stopPlayback()
     }
 
-    fun exportToAnki() {
+    fun exportToAnki(includeAiSummary: Boolean = false) {
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
         viewModelScope.launch {
@@ -217,7 +217,7 @@ class DetailViewModel @Inject constructor(
                     return@launch
                 }
 
-                performExport(word, sanitizedDeck)
+                performExport(word, sanitizedDeck, includeAiSummary)
             } catch (exception: Exception) {
                 Log.e(logTag, "Export pre-check failed", exception)
                 _events.emit(DetailEvent.AnkiExportError(exception.message ?: "Unknown error"))
@@ -225,7 +225,7 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun forceExport() {
+    fun forceExport(includeAiSummary: Boolean = false) {
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
         viewModelScope.launch {
@@ -234,7 +234,7 @@ class DetailViewModel @Inject constructor(
                     .map { it[MainActivity.ANKI_DECK_NAME] }
                     .first() ?: "Mining Deck"
                 val savedDeck = InputSanitizer.sanitizeDeckName(savedDeckRaw)
-                performExport(word, savedDeck)
+                performExport(word, savedDeck, includeAiSummary)
             } catch (exception: Exception) {
                 Log.e(logTag, "Force export failed", exception)
                 _events.emit(DetailEvent.AnkiExportError(exception.message ?: "Unknown error"))
@@ -242,7 +242,7 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun exportToAnkiWithDeck(deckName: String) {
+    fun exportToAnkiWithDeck(deckName: String, includeAiSummary: Boolean = false) {
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
         val sanitizedDeck = InputSanitizer.sanitizeDeckName(deckName)
@@ -266,7 +266,7 @@ class DetailViewModel @Inject constructor(
                     return@launch
                 }
 
-                performExport(word, sanitizedDeck)
+                performExport(word, sanitizedDeck, includeAiSummary)
             } catch (exception: Exception) {
                 Log.e(logTag, "Export with deck failed", exception)
                 _events.emit(DetailEvent.AnkiExportError(exception.message ?: "Unknown error"))
@@ -345,7 +345,11 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    private suspend fun performExport(word: WordEntry, deckName: String) {
+    private suspend fun performExport(
+        word: WordEntry,
+        deckName: String,
+        includeAiSummary: Boolean
+    ) {
         _isExporting.value = true
         try {
             val stylePrefs = loadCardStylePreferences()
@@ -386,13 +390,16 @@ class DetailViewModel @Inject constructor(
             val kanjiChars = wordForExport.expression.filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }.map { it.toString() }.distinct()
             val kanjiData = if (kanjiChars.isNotEmpty()) repository.getKanjis(kanjiChars) else emptyList()
 
-            // AI summary is opt-in (CARD_AI_SUMMARY_ENABLED) and requires
-            // a user-supplied API key. Failures don't block the export —
-            // we just emit the card without a summary section. The
-            // user-language flag drives the {language} placeholder so
-            // Polish users get Polish summaries by default.
+            // AI summary is opt-in PER EXPORT — the caller chooses with the
+            // [includeAiSummary] flag (two distinct buttons in the detail
+            // screen). The CARD_AI_SUMMARY_ENABLED preference no longer
+            // gates this; only the API key is still required. Failures
+            // don't block the export — we just emit the card without a
+            // summary section. The user-language flag drives the
+            // {language} placeholder so Polish users get Polish summaries
+            // by default.
             val aiSummaryText = if (
-                stylePrefs.aiSummaryEnabled &&
+                includeAiSummary &&
                 stylePrefs.aiApiKey.isNotBlank()
             ) {
                 val isEnglish = LocaleHelper.isEnglish(appContext.resources.configuration)

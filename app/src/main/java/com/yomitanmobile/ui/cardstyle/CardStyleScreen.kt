@@ -723,8 +723,8 @@ fun CardStyleScreen(
                                 )
                                 Text(
                                     text = tr(
-                                        "Dołącz krótkie streszczenie wygenerowane przez AI pod akcentem, nad znaczeniem.",
-                                        "Attach a short AI-generated summary below the pitch accent, above the meaning."
+                                        "Skonfiguruj dostawcę AI i klucz. Wybór czy dołączyć streszczenie do fiszki dokonujesz osobnym przyciskiem przy eksporcie.",
+                                        "Configure the AI provider and API key. Whether to include the summary on a card is chosen per-export with the dedicated AI button."
                                     ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
