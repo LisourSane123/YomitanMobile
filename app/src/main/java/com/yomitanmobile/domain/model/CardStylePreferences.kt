@@ -60,7 +60,14 @@ data class CardStylePreferences(
      * (gemini-2.5-flash, deepseek-reasoner, gpt-4o, …) without code
      * changes.
      */
-    val aiModel: String = ""
+    val aiModel: String = "",
+    /**
+     * User-controlled order of back-side sections (pitch, summary,
+     * meaning, sentence, audio, kanji). The header block above the
+     * layer divider is fixed and not part of this list. Default order
+     * matches [CardSection.defaultOrder].
+     */
+    val sectionOrder: List<CardSection> = CardSection.defaultOrder()
 ) {
     companion object {
         val FONT_FAMILIES = listOf(

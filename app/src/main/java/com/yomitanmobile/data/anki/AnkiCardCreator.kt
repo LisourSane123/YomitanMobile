@@ -61,22 +61,18 @@ class AnkiCardCreator(
             </div>
         """
 
-        // Flat layout — sections separated by horizontal rules instead of
-        // background boxes. Each section is wrapped in its own .section
-        // block with consistent vertical padding so neighbouring parts
-        // (reading + pitch, meaning + examples, kanji breakdown) don't
-        // visually merge into one another. {{Sentence}} only fires for
-        // unattached example data (online Tatoeba / pre-seeded
-        // SentenceDao). Order: header (expression + reading) → pitch →
-        // frequency → meanings → unattached sentences → audio → kanji
-        // breakdown.
         // Header block (expression + reading + small frequency line) is
         // visually peeled off from the rest of the card by an unconditional
-        // <hr> that always sits right after it. Pitch and summary now use a
-        // *trailing* <hr> so consecutive sections don't double up dividers
-        // when the optional ones are missing. Trailing sections (sentence,
-        // audio, kanji) keep their pre-hr because they sit AFTER meaning and
-        // need to be separated from it.
+        // <hr> that always sits right after it. Each subsequent section
+        // ends with its own <hr>; the bottom-most visible <hr> is hidden
+        // via the `hr:last-of-type { display: none }` CSS rule so the card
+        // doesn't show a dangling line under the final section. This
+        // makes the section order trivially reorderable — every section
+        // is a self-contained block with a trailing separator.
+        //
+        // The kept-around CARD_BACK_TEMPLATE constant is the fallback for
+        // tests / previews that don't have a CardStylePreferences in
+        // hand. Real exports go through buildBackTemplate(sectionOrder).
         const val CARD_BACK_TEMPLATE = """
             <div class="back">
                 <div class="section header-section">
@@ -90,11 +86,52 @@ class AnkiCardCreator(
                 <div class="section meaning-section">
                     <div class="meaning">{{Meaning}}</div>
                 </div>
-                {{#Sentence}}<hr><div class="section"><div class="sentence">{{Sentence}}</div></div>{{/Sentence}}
-                {{#Audio}}<hr><div class="section audio-section"><div class="audio">{{Audio}}</div></div>{{/Audio}}
-                {{#KanjiBreakdown}}<hr><div class="section kanji-section"><div class="kanji-breakdown">{{KanjiBreakdown}}</div></div>{{/KanjiBreakdown}}
+                <hr>
+                {{#Sentence}}<div class="section"><div class="sentence">{{Sentence}}</div></div><hr>{{/Sentence}}
+                {{#Audio}}<div class="section audio-section"><div class="audio">{{Audio}}</div></div><hr>{{/Audio}}
+                {{#KanjiBreakdown}}<div class="section kanji-section"><div class="kanji-breakdown">{{KanjiBreakdown}}</div></div><hr>{{/KanjiBreakdown}}
             </div>
         """
+
+        /**
+         * Builds the back-side template HTML using the user's chosen
+         * [sectionOrder]. The header block is fixed; only the back-half
+         * sections are reorderable. Meaning is always rendered (no mustache
+         * wrapper) — every other section is wrapped in its own
+         * `{{#Field}}…{{/Field}}` so empty data collapses the entire block,
+         * trailing `<hr>` included.
+         */
+        fun buildBackTemplate(sectionOrder: List<com.yomitanmobile.domain.model.CardSection>): String {
+            val sb = StringBuilder()
+            sb.append("<div class=\"back\">\n")
+            sb.append("    <div class=\"section header-section\">\n")
+            sb.append("        <div class=\"expression\">{{Front}}</div>\n")
+            sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
+            sb.append("        {{#Frequency}}<div class=\"freq\">{{Frequency}}</div>{{/Frequency}}\n")
+            sb.append("    </div>\n")
+            sb.append("    <hr>\n")
+            for (section in sectionOrder) {
+                sb.append("    ").append(blockHtmlFor(section)).append("\n")
+            }
+            sb.append("</div>")
+            return sb.toString()
+        }
+
+        private fun blockHtmlFor(section: com.yomitanmobile.domain.model.CardSection): String =
+            when (section) {
+                com.yomitanmobile.domain.model.CardSection.PITCH ->
+                    """{{#PitchAccent}}<div class="section"><div class="pitch">{{PitchAccent}}</div></div><hr>{{/PitchAccent}}"""
+                com.yomitanmobile.domain.model.CardSection.SUMMARY ->
+                    """{{#Summary}}<div class="section summary-section"><div class="summary">{{Summary}}</div></div><hr>{{/Summary}}"""
+                com.yomitanmobile.domain.model.CardSection.MEANING ->
+                    """<div class="section meaning-section"><div class="meaning">{{Meaning}}</div></div><hr>"""
+                com.yomitanmobile.domain.model.CardSection.SENTENCE ->
+                    """{{#Sentence}}<div class="section"><div class="sentence">{{Sentence}}</div></div><hr>{{/Sentence}}"""
+                com.yomitanmobile.domain.model.CardSection.AUDIO ->
+                    """{{#Audio}}<div class="section audio-section"><div class="audio">{{Audio}}</div></div><hr>{{/Audio}}"""
+                com.yomitanmobile.domain.model.CardSection.KANJI ->
+                    """{{#KanjiBreakdown}}<div class="section kanji-section"><div class="kanji-breakdown">{{KanjiBreakdown}}</div></div><hr>{{/KanjiBreakdown}}"""
+            }
 
         const val CARD_CSS = """
             .card {
@@ -176,6 +213,7 @@ class AnkiCardCreator(
                 border: none; border-top: 1px solid #555;
                 margin: 16px 0; opacity: 0.7;
             }
+            .back > hr:last-of-type { display: none; }
             .kanji-breakdown {
                 font-size: 16px; color: #ccc;
                 text-align: left;
@@ -289,6 +327,13 @@ class AnkiCardCreator(
                 margin: 16px 0; opacity: 0.7;
                 ${if (!prefs.showSectionDividers) "display: none;" else ""}
             }
+            /*
+             * Each section ends with its own <hr> for predictable
+             * spacing under user-controlled reordering, but the
+             * very last <hr> is just a dangling line under the
+             * final visible section — drop it.
+             */
+            .back > hr:last-of-type { display: none; }
             .kanji-breakdown {
                 font-size: 16px; color: #ccc; text-align: left;
             }
@@ -345,9 +390,9 @@ class AnkiCardCreator(
                         <div class="freq">★★★ Top 1K</div>
                     </div>
                     <hr>
-                    <div class="pitch">$previewPitch</div>
+                    <div class="section"><div class="pitch">$previewPitch</div></div>
                     <hr>
-                    <div class="meaning">
+                    <div class="section meaning-section"><div class="meaning">
                       <div class="pos-line">ichidan verb, transitive verb</div>
                       <ol class="meanings">
                         <li class="meaning-item">
@@ -361,16 +406,17 @@ class AnkiCardCreator(
                           <span class="gloss">to live on (e.g. a salary), to live off, to subsist on</span>
                         </li>
                       </ol>
-                    </div>
+                    </div></div>
                     <hr>
-                    <div class="kanji-breakdown">
+                    <div class="section kanji-section"><div class="kanji-breakdown">
                       <div class="kanji-breakdown-title">Kanji</div>
                       <div class="kanji-item">
                         <span class="kanji-char">食</span>
                         <span class="kanji-readings">On: ショク &nbsp; Kun: た.べる, く.う</span>
                         <div class="kanji-meanings">eat, food</div>
                       </div>
-                    </div>
+                    </div></div>
+                    <hr>
                 </div>
             </body>
             </html>
@@ -593,7 +639,10 @@ class AnkiCardCreator(
         }
     }
 
-    private fun getOrCreateModel(css: String = CARD_CSS): Long? {
+    private fun getOrCreateModel(
+        css: String = CARD_CSS,
+        backTemplate: String = CARD_BACK_TEMPLATE
+    ): Long? {
         val modelList = ankiApi.modelList ?: run {
             return null
         }
@@ -608,15 +657,15 @@ class AnkiCardCreator(
 
         if (compatibleModelId != null) {
             updateModelCss(compatibleModelId, css)
-            // Also push the latest front/back templates so users who already
-            // have the v7 model installed get the redesigned layout (numbered
-            // glosses with examples nested) without us bumping to v8 and
-            // leaving an orphaned model in their AnkiDroid.
-            updateModelTemplates(compatibleModelId, CARD_FRONT_TEMPLATE, CARD_BACK_TEMPLATE)
+            // Push the current front/back templates so layout changes
+            // (re-orderable sections, AI summary slot, etc.) propagate to
+            // existing v8 cards without bumping the model name and
+            // leaving an orphan model in the user's AnkiDroid deck.
+            updateModelTemplates(compatibleModelId, CARD_FRONT_TEMPLATE, backTemplate)
             return compatibleModelId
         }
 
-        return createCompatibleModel(css)
+        return createCompatibleModel(css, backTemplate)
     }
 
     private fun modelNamePriority(name: String): Int {
@@ -641,7 +690,10 @@ class AnkiCardCreator(
         }
     }
 
-    private fun createCompatibleModel(css: String): Long? {
+    private fun createCompatibleModel(
+        css: String,
+        backTemplate: String = CARD_BACK_TEMPLATE
+    ): Long? {
         val candidateNames = buildList {
             add(MODEL_NAME)
             for (index in 1..MAX_MODEL_CREATE_RETRIES) {
@@ -656,7 +708,7 @@ class AnkiCardCreator(
                     FIELD_NAMES,
                     arrayOf("Card 1"),
                     arrayOf(CARD_FRONT_TEMPLATE),
-                    arrayOf(CARD_BACK_TEMPLATE),
+                    arrayOf(backTemplate),
                     css,
                     null,
                     null
@@ -674,6 +726,7 @@ class AnkiCardCreator(
 
             if (existingCandidateId != null && isModelCompatible(existingCandidateId)) {
                 updateModelCss(existingCandidateId, css)
+                updateModelTemplates(existingCandidateId, CARD_FRONT_TEMPLATE, backTemplate)
                 return existingCandidateId
             }
         }
@@ -685,7 +738,8 @@ class AnkiCardCreator(
         modelId: Long,
         deckId: Long,
         fields: Array<String>,
-        css: String
+        css: String,
+        backTemplate: String = CARD_BACK_TEMPLATE
     ): Result<Long> {
         val firstAttempt = runCatching {
             ankiApi.addNote(modelId, deckId, fields, null)
@@ -701,7 +755,7 @@ class AnkiCardCreator(
             firstError?.message?.contains("Incorrect flds argument", true) ?: false
 
         if (shouldRetryWithFreshModel) {
-            val fallbackModelId = createCompatibleModel(css)
+            val fallbackModelId = createCompatibleModel(css, backTemplate)
             if (fallbackModelId != null && fallbackModelId != modelId) {
                 val retryAttempt = runCatching {
                     ankiApi.addNote(fallbackModelId, deckId, fields, null)
@@ -911,7 +965,11 @@ class AnkiCardCreator(
             val deckId = getOrCreateDeck(deckName)
                 ?: return@withContext Result.failure(IllegalStateException("Failed to create/find deck"))
             val css = if (stylePrefs != null) buildCssFromPreferences(stylePrefs) else CARD_CSS
-            val modelId = getOrCreateModel(css)
+            val backTemplate = buildBackTemplate(
+                stylePrefs?.sectionOrder
+                    ?: com.yomitanmobile.domain.model.CardSection.defaultOrder()
+            )
+            val modelId = getOrCreateModel(css, backTemplate)
                 ?: return@withContext Result.failure(IllegalStateException("Failed to create/find note type"))
 
 
@@ -919,7 +977,8 @@ class AnkiCardCreator(
                 modelId = modelId,
                 deckId = deckId,
                 fields = card.toFieldArray(),
-                css = css
+                css = css,
+                backTemplate = backTemplate
             )
         } catch (e: Exception) {
             Result.failure(e)

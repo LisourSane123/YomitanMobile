@@ -341,7 +341,10 @@ class DetailViewModel @Inject constructor(
             aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: "",
             aiPrompt = prefs[MainActivity.CARD_AI_PROMPT]
                 ?: com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT,
-            aiModel = prefs[MainActivity.CARD_AI_MODEL] ?: ""
+            aiModel = prefs[MainActivity.CARD_AI_MODEL] ?: "",
+            sectionOrder = com.yomitanmobile.domain.model.CardSection.decode(
+                prefs[MainActivity.CARD_SECTION_ORDER]
+            )
         )
     }
 

@@ -76,6 +76,7 @@ import com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT
 import com.yomitanmobile.data.ai.AiProvider
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.dataStore
+import com.yomitanmobile.domain.model.CardSection
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.PitchAccentStyle
 import kotlinx.coroutines.flow.first
@@ -122,6 +123,7 @@ fun CardStyleScreen(
     var aiApiKey by remember { mutableStateOf("") }
     var aiPrompt by remember { mutableStateOf(AI_DEFAULT_PROMPT) }
     var aiModel by remember { mutableStateOf("") }
+    var sectionOrder by remember { mutableStateOf(CardSection.defaultOrder()) }
     var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var activeTts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
 
@@ -175,6 +177,7 @@ fun CardStyleScreen(
         aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: ""
         aiPrompt = prefs[MainActivity.CARD_AI_PROMPT] ?: AI_DEFAULT_PROMPT
         aiModel = prefs[MainActivity.CARD_AI_MODEL] ?: ""
+        sectionOrder = CardSection.decode(prefs[MainActivity.CARD_SECTION_ORDER])
     }
 
     fun currentPreferences() = CardStylePreferences(
@@ -205,7 +208,8 @@ fun CardStyleScreen(
         aiProvider = aiProvider,
         aiApiKey = aiApiKey,
         aiPrompt = aiPrompt,
-        aiModel = aiModel
+        aiModel = aiModel,
+        sectionOrder = sectionOrder
     )
 
     fun savePreferences() {
@@ -239,6 +243,7 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_AI_API_KEY] = aiApiKey
                 prefs[MainActivity.CARD_AI_PROMPT] = aiPrompt
                 prefs[MainActivity.CARD_AI_MODEL] = aiModel
+                prefs[MainActivity.CARD_SECTION_ORDER] = CardSection.encode(sectionOrder)
             }
         }
     }
@@ -634,6 +639,81 @@ fun CardStyleScreen(
                         checked = showSectionDividers,
                         onCheckedChange = { showSectionDividers = it }
                     )
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = tr("Kolejność sekcji", "Section order"),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = tr(
+                                "Przeciągaj strzałkami żeby zmienić kolejność sekcji pod nagłówkiem (akcent, znaczenie, kanji itd.).",
+                                "Use the arrows to reorder the sections below the header (pitch, meaning, kanji, etc.)."
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        sectionOrder.forEachIndexed { index, section ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${index + 1}. " +
+                                        if (isEnglish) section.englishLabel else section.polishLabel,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = {
+                                        if (index > 0) {
+                                            sectionOrder = sectionOrder.toMutableList().apply {
+                                                add(index - 1, removeAt(index))
+                                            }
+                                        }
+                                    },
+                                    enabled = index > 0
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowUp,
+                                        contentDescription = tr("Wyżej", "Move up")
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (index < sectionOrder.size - 1) {
+                                            sectionOrder = sectionOrder.toMutableList().apply {
+                                                add(index + 1, removeAt(index))
+                                            }
+                                        }
+                                    },
+                                    enabled = index < sectionOrder.size - 1
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = tr("Niżej", "Move down")
+                                    )
+                                }
+                            }
+                        }
+                        TextButton(onClick = { sectionOrder = CardSection.defaultOrder() }) {
+                            Text(tr("Przywróć domyślną kolejność", "Reset to default order"))
+                        }
+                    }
                 }
             }
 

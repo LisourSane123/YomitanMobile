@@ -82,6 +82,12 @@ class MainActivity : ComponentActivity() {
         // DeepSeek → deepseek-chat, OpenAI → gpt-4o-mini).
         val CARD_AI_MODEL = stringPreferencesKey("card_ai_model")
 
+        // Comma-separated list of CardSection.storageValue, e.g.
+        // "pitch,summary,meaning,sentence,audio,kanji". CardSection.decode
+        // tolerates missing/extra tokens so an old saved order doesn't
+        // hide new sections after an upgrade.
+        val CARD_SECTION_ORDER = stringPreferencesKey("card_section_order")
+
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
 
