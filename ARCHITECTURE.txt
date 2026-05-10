@@ -3,8 +3,10 @@ YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 
 Last verified: 2026-05-10 (commit ~a5dbf34 — header word-divider, AI
 summary integration, reorderable sections, model bumped to v8, online
-sentence API removed; freq line moved under reading + preview now
-honors sectionOrder).
+sentence API removed; preview honors sectionOrder; freq line dropped
+from header + word-divider made bolder; reorder propagation hardened
+against stale AnkiDroid template caches via skipPrimaryName variant
+fallback; AI summary now opt-in per-export via dedicated UI button).
 Audience: an AI coding agent picking up an unfamiliar feature in this
 repo. Keep it concise — read CLAUDE.md for the high-level overview, this
 file for the detail you need before editing.
@@ -171,9 +173,14 @@ definitionIndex < 0). Jitendex-sourced examples never duplicate here.
 Header layout (top of the back side, fixed — not part of the
 reorderable section list):
   expression
-  .word-divider <hr>   ← thin in-header rule, 50% width, dim
+  .word-divider <hr>   ← BOLD in-header rule, 60% width, 3px,
+                          deliberately heavier than the section
+                          dividers so the word↔reading split reads
+                          as a clear header beat
   reading
-  small frequency line ← under the reading, smaller letters
+The Frequency field is still part of FIELD_NAMES (model schema is
+unchanged at v8) but the header no longer renders it — users asked
+for a cleaner header.
 Followed by an unconditional full-width <hr> (the "layer divider")
 that separates header from the reorderable sections below.
 
@@ -204,11 +211,14 @@ AnkiDroid model:
 
 Template push diagnostics:
   updateModelTemplates inspects rows-affected from
-  contentResolver.update; rows == 0 logs Log.w("AnkiCardCreator",
-  "0 rows updated…") because some older AnkiDroid builds don't
-  expose the templates URI as a writable row. The export still
-  succeeds; existing cards just keep the previous template until the
-  user re-creates the model in AnkiDroid.
+  contentResolver.update and now returns Boolean. On rows == 0 (older
+  AnkiDroid silently dropping template writes) it logs and returns
+  false; getOrCreateModel then falls through to createCompatibleModel
+  with skipPrimaryName = true, which spawns the next free
+  Yomitan-Mobile-v8-N variant whose template matches the current
+  section order. Pre-existing cards stay valid on the original model;
+  new exports land on the variant. Modern AnkiDroid (where the write
+  succeeds) keeps using the single canonical model — no orphans.
 
 ----------------------------------------------------------------------
 5. CARD STYLE PREFERENCES

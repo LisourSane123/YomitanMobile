@@ -79,7 +79,6 @@ class AnkiCardCreator(
                     <div class="expression">{{Front}}</div>
                     <hr class="word-divider">
                     <div class="reading">{{Reading}}</div>
-                    {{#Frequency}}<div class="freq">{{Frequency}}</div>{{/Frequency}}
                 </div>
                 <hr>
                 {{#PitchAccent}}<div class="section"><div class="pitch">{{PitchAccent}}</div></div><hr>{{/PitchAccent}}
@@ -106,12 +105,13 @@ class AnkiCardCreator(
             val sb = StringBuilder()
             sb.append("<div class=\"back\">\n")
             sb.append("    <div class=\"section header-section\">\n")
-            // Header order: expression → thin word-divider → reading →
-            // small frequency line directly under the reading.
+            // Header order: expression → bold word-divider → reading.
+            // The Frequency field is still on the model schema (so cards
+            // keep working) but no longer rendered — users asked for a
+            // cleaner header.
             sb.append("        <div class=\"expression\">{{Front}}</div>\n")
             sb.append("        <hr class=\"word-divider\">\n")
             sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
-            sb.append("        {{#Frequency}}<div class=\"freq\">{{Frequency}}</div>{{/Frequency}}\n")
             sb.append("    </div>\n")
             sb.append("    <hr>\n")
             for (section in sectionOrder) {
@@ -190,14 +190,14 @@ class AnkiCardCreator(
                 letter-spacing: 0.02em;
             }
             /*
-             * Thin in-header divider that separates the word block
-             * (expression + freq) from the reading. Narrower and
-             * dimmer than the section dividers so it reads as part
-             * of the header rather than a layer break.
+             * Bold in-header divider between expression and reading.
+             * Drawn deliberately heavier than the regular section
+             * dividers so the word↔reading split reads as a clear
+             * header beat — users asked for a more prominent line here.
              */
             .word-divider {
-                border: none; border-top: 1px solid #444;
-                margin: 8px auto; width: 50%; opacity: 0.5;
+                border: none; border-top: 3px solid #aaa;
+                margin: 12px auto; width: 60%; opacity: 0.9;
             }
             .front-context {
                 font-size: 14px; color: #cfd8dc; margin-top: 8px;
@@ -312,8 +312,8 @@ class AnkiCardCreator(
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
             .word-divider {
-                border: none; border-top: 1px solid #444;
-                margin: 8px auto; width: 50%; opacity: 0.5;
+                border: none; border-top: 3px solid #aaa;
+                margin: 12px auto; width: 60%; opacity: 0.9;
             }
             .front-context {
                 font-size: ${prefs.frontContextSentenceFontSize}px; color: #d7d7d7; margin-top: 8px;
@@ -414,7 +414,6 @@ class AnkiCardCreator(
                         <div class="expression">食べる</div>
                         <hr class="word-divider">
                         <div class="reading">たべる</div>
-                        <div class="freq">★★★ Top 1K</div>
                     </div>
                     <hr>
                     $sectionsHtml
@@ -713,8 +712,17 @@ class AnkiCardCreator(
             // (re-orderable sections, AI summary slot, etc.) propagate to
             // existing v8 cards without bumping the model name and
             // leaving an orphan model in the user's AnkiDroid deck.
-            updateModelTemplates(compatibleModelId, CARD_FRONT_TEMPLATE, backTemplate)
-            return compatibleModelId
+            val pushed = updateModelTemplates(compatibleModelId, CARD_FRONT_TEMPLATE, backTemplate)
+            if (pushed) {
+                return compatibleModelId
+            }
+            // Older AnkiDroid silently dropped the template write — the
+            // existing model still has its old back template, so a new
+            // section order would never render. Spawn a numbered variant
+            // (Yomitan-Mobile-v8-1, -2, …) so this and future exports
+            // land on a model whose template matches the current order.
+            // Pre-existing cards stay valid on the original model.
+            return createCompatibleModel(css, backTemplate, skipPrimaryName = true)
         }
 
         return createCompatibleModel(css, backTemplate)
@@ -742,12 +750,20 @@ class AnkiCardCreator(
         }
     }
 
+    /**
+     * @param skipPrimaryName when true, never reuses or recreates
+     * [MODEL_NAME] — used when the caller already determined that
+     * model's template can't be updated and needs a fresh variant.
+     * Without this guard, the existing-model fallback below would loop
+     * back into the same broken model.
+     */
     private fun createCompatibleModel(
         css: String,
-        backTemplate: String = CARD_BACK_TEMPLATE
+        backTemplate: String = CARD_BACK_TEMPLATE,
+        skipPrimaryName: Boolean = false
     ): Long? {
         val candidateNames = buildList {
-            add(MODEL_NAME)
+            if (!skipPrimaryName) add(MODEL_NAME)
             for (index in 1..MAX_MODEL_CREATE_RETRIES) {
                 add("$MODEL_NAME-$index")
             }
@@ -770,6 +786,13 @@ class AnkiCardCreator(
             if (createdModelId != null) {
                 return createdModelId
             }
+
+            // When falling through from a failed-template-update path we
+            // must NOT reuse an existing variant either — that variant
+            // either has the same stale template or comes from an older
+            // export. Skip straight to the next numbered name so we end
+            // up on a freshly created model with the current order.
+            if (skipPrimaryName) continue
 
             val existingCandidateId = ankiApi.modelList
                 ?.entries
@@ -857,8 +880,20 @@ class AnkiCardCreator(
      * ord 0 because [createCompatibleModel] always creates a single
      * "Card 1" template per model.
      */
-    private fun updateModelTemplates(modelId: Long, frontTemplate: String, backTemplate: String) {
-        try {
+    /**
+     * @return true if AnkiDroid accepted the template push (>= 1 row
+     * updated), false if the write was silently dropped or threw. The
+     * boolean lets [getOrCreateModel] decide whether to fall through to
+     * a fresh numbered variant so section reorder still propagates on
+     * older AnkiDroid builds that don't expose templates as writable
+     * content-provider rows.
+     */
+    private fun updateModelTemplates(
+        modelId: Long,
+        frontTemplate: String,
+        backTemplate: String
+    ): Boolean {
+        return try {
             val templateUri = Uri.parse("content://com.ichi2.anki.flashcards/models/$modelId/templates/0")
             val values = ContentValues().apply {
                 put("qfmt", frontTemplate)
@@ -866,18 +901,18 @@ class AnkiCardCreator(
             }
             val rows = context.contentResolver.update(templateUri, values, null, null)
             if (rows == 0) {
-                // 0 rows updated means AnkiDroid silently rejected the
-                // change. Most often this is an older AnkiDroid build that
-                // doesn't expose templates as content provider rows. Logged
-                // (not thrown) so a stale template never blocks export.
                 android.util.Log.w(
                     "AnkiCardCreator",
                     "updateModelTemplates: 0 rows updated for model=$modelId. " +
-                        "Section reorder may not propagate to existing cards on this AnkiDroid version."
+                        "Falling through to a versioned variant so reorder still applies."
                 )
+                false
+            } else {
+                true
             }
         } catch (e: Exception) {
             android.util.Log.w("AnkiCardCreator", "updateModelTemplates failed", e)
+            false
         }
     }
 
