@@ -51,6 +51,14 @@ sealed class DetailEvent {
     object AnkiNotInstalled : DetailEvent()
     data class AnkiDeckSelectionRequired(val decks: List<String>) : DetailEvent()
     data class AlreadyExported(val expression: String, val deckName: String) : DetailEvent()
+
+    /**
+     * AI summary call failed but the rest of the export succeeded. We
+     * surface the message so the user can see WHY the summary slot is
+     * empty (rate limit, bad key, network error) instead of silently
+     * landing a partial card.
+     */
+    data class AiSummaryFailed(val message: String) : DetailEvent()
 }
 
 @HiltViewModel
@@ -410,6 +418,7 @@ class DetailViewModel @Inject constructor(
                     is AiSummaryResult.Success -> result.text
                     is AiSummaryResult.Failure -> {
                         Log.w(logTag, "AI summary failed: ${result.message}")
+                        _events.emit(DetailEvent.AiSummaryFailed(result.message))
                         ""
                     }
                     AiSummaryResult.Disabled -> ""

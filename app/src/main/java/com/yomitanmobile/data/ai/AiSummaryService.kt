@@ -147,12 +147,16 @@ class AiSummaryService @Inject constructor() {
             }
         }.toString()
 
-        val raw = postJson(urlString, headers = emptyMap(), body = body)
+        val response = postJson(urlString, headers = emptyMap(), body = body)
             ?: return AiSummaryResult.Failure("No response from Gemini")
 
-        return parseFirstString(raw, listOf("candidates", "0", "content", "parts", "0", "text"))
+        rateLimitFailure(response, providerName = "Gemini")?.let { return it }
+
+        return parseFirstString(response.body, listOf("candidates", "0", "content", "parts", "0", "text"))
             ?.let { AiSummaryResult.Success(it.trim()) }
-            ?: AiSummaryResult.Failure(extractErrorMessage(raw) ?: "Empty Gemini response")
+            ?: AiSummaryResult.Failure(
+                friendlyError(response, providerName = "Gemini") ?: "Empty Gemini response"
+            )
     }
 
     // ---------- OpenAI / DeepSeek (compatible) ----------
@@ -182,24 +186,65 @@ class AiSummaryService @Inject constructor() {
             }
         }.toString()
 
-        val raw = postJson(
+        val response = postJson(
             url = endpoint,
             headers = mapOf("Authorization" to "Bearer $apiKey"),
             body = body
         ) ?: return AiSummaryResult.Failure("No response from $endpoint")
 
-        return parseFirstString(raw, listOf("choices", "0", "message", "content"))
+        val providerName = if (endpoint.contains("deepseek")) "DeepSeek" else "OpenAI"
+        rateLimitFailure(response, providerName = providerName)?.let { return it }
+
+        return parseFirstString(response.body, listOf("choices", "0", "message", "content"))
             ?.let { AiSummaryResult.Success(it.trim()) }
-            ?: AiSummaryResult.Failure(extractErrorMessage(raw) ?: "Empty AI response")
+            ?: AiSummaryResult.Failure(
+                friendlyError(response, providerName = providerName) ?: "Empty AI response"
+            )
+    }
+
+    /**
+     * Returns a Failure with a user-friendly message when the response is
+     * a rate-limit (HTTP 429) or quota-exhaustion. Lets callers short-circuit
+     * before attempting to parse a success-shaped body that won't be there.
+     */
+    private fun rateLimitFailure(response: HttpResponse, providerName: String): AiSummaryResult? {
+        val isRateLimited = response.statusCode == 429 ||
+            response.body.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+            response.body.contains("rate limit", ignoreCase = true)
+        if (!isRateLimited) return null
+        val providerHint = extractErrorMessage(response.body)?.let { " ($it)" } ?: ""
+        return AiSummaryResult.Failure(
+            "$providerName rate limit reached$providerHint. Wait a moment or check your quota."
+        )
+    }
+
+    private fun friendlyError(response: HttpResponse, providerName: String): String? {
+        val embedded = extractErrorMessage(response.body)
+        return when {
+            embedded != null -> "$providerName: $embedded"
+            response.statusCode in 400..499 ->
+                "$providerName rejected the request (HTTP ${response.statusCode}). Check the API key."
+            response.statusCode in 500..599 ->
+                "$providerName is unavailable (HTTP ${response.statusCode}). Try again later."
+            else -> null
+        }
     }
 
     // ---------- HTTP helpers ----------
+
+    /**
+     * Status code + raw body. Callers need both: a 429 body still contains
+     * a meaningful `error.message` we want to surface, but the status code
+     * is what tells us "this is a rate limit, don't bother parsing for the
+     * success shape".
+     */
+    internal data class HttpResponse(val statusCode: Int, val body: String)
 
     private fun postJson(
         url: String,
         headers: Map<String, String>,
         body: String
-    ): String? {
+    ): HttpResponse? {
         var connection: HttpURLConnection? = null
         return try {
             connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -215,13 +260,14 @@ class AiSummaryService @Inject constructor() {
             }
             connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
 
-            val stream = if (connection.responseCode in 200..299) {
+            val statusCode = connection.responseCode
+            val stream = if (statusCode in 200..299) {
                 connection.inputStream
             } else {
                 connection.errorStream ?: connection.inputStream
             }
 
-            stream.use { input ->
+            val bodyText = stream.use { input ->
                 val out = ByteArrayOutputStream()
                 val buf = ByteArray(BUFFER_SIZE)
                 var total = 0
@@ -236,6 +282,7 @@ class AiSummaryService @Inject constructor() {
                 }
                 out.toString(StandardCharsets.UTF_8.name())
             }
+            HttpResponse(statusCode, bodyText)
         } catch (_: Exception) {
             null
         } finally {

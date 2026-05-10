@@ -70,14 +70,19 @@ class AnkiCardCreator(
         // SentenceDao). Order: header (expression + reading) → pitch →
         // frequency → meanings → unattached sentences → audio → kanji
         // breakdown.
+        // Frequency moved out of the vertical section flow into a small
+        // corner badge anchored to the top-right of `.back`. This frees up
+        // the row it used to occupy and keeps the metadata visible without
+        // pushing the meaning column further down the screen. The badge is
+        // positioned absolutely (CSS) — see .freq-badge in CARD_CSS.
         const val CARD_BACK_TEMPLATE = """
             <div class="back">
+                {{#Frequency}}<div class="freq-badge">{{Frequency}}</div>{{/Frequency}}
                 <div class="section header-section">
                     <div class="expression">{{Front}}</div>
                     <div class="reading">{{Reading}}</div>
                 </div>
                 {{#PitchAccent}}<hr><div class="section"><div class="pitch">{{PitchAccent}}</div></div>{{/PitchAccent}}
-                {{#Frequency}}<hr><div class="section"><div class="freq">{{Frequency}}</div></div>{{/Frequency}}
                 {{#Summary}}<hr><div class="section summary-section"><div class="summary">{{Summary}}</div></div>{{/Summary}}
                 <hr>
                 <div class="section meaning-section">
@@ -138,6 +143,14 @@ class AnkiCardCreator(
             }
             .freq {
                 font-size: 13px; color: #aaa; margin: 4px 0;
+            }
+            .back { position: relative; }
+            .freq-badge {
+                position: absolute; top: 0; right: 0;
+                font-size: 11px; color: #cfd8dc;
+                background: rgba(255, 255, 255, 0.06);
+                border-radius: 10px; padding: 2px 8px;
+                line-height: 1.4; opacity: 0.9;
             }
             .front-context {
                 font-size: 14px; color: #cfd8dc; margin-top: 8px;
@@ -248,6 +261,15 @@ class AnkiCardCreator(
                 font-size: 13px; color: #aaa; margin: 4px 0;
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
+            .back { position: relative; }
+            .freq-badge {
+                position: absolute; top: 0; right: 0;
+                font-size: 11px; color: #cfd8dc;
+                background: rgba(255, 255, 255, 0.06);
+                border-radius: 10px; padding: 2px 8px;
+                line-height: 1.4; opacity: 0.9;
+                ${if (!prefs.showFrequency) "display: none;" else ""}
+            }
             .front-context {
                 font-size: ${prefs.frontContextSentenceFontSize}px; color: #d7d7d7; margin-top: 8px;
                 text-align: center; line-height: 1.35;
@@ -330,12 +352,11 @@ class AnkiCardCreator(
                 </div>
                 <hr>
                 <div class="back">
+                    <div class="freq-badge">★★★ Top 1K</div>
                     <div class="expression">食べる</div>
                     <div class="reading">たべる</div>
                     <hr>
                     <div class="pitch">$previewPitch</div>
-                    <hr>
-                    <div class="freq">★★★ Top 1K</div>
                     <hr>
                     <div class="meaning">
                       <div class="pos-line">ichidan verb, transitive verb</div>

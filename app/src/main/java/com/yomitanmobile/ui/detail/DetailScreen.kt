@@ -157,6 +157,13 @@ fun DetailScreen(
                     duplicateInfo = event.expression to event.deckName
                     showDuplicateDialog = true
                 }
+                is DetailEvent.AiSummaryFailed ->
+                    snackbarHostState.showSnackbar(
+                        tr(
+                            "Streszczenie AI nie powiodło się: ${event.message}",
+                            "AI summary failed: ${event.message}"
+                        )
+                    )
             }
         }
     }
