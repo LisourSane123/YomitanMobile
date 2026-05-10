@@ -1,7 +1,9 @@
 YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 ======================================================================
 
-Last verified: 2026-05-09 (commit ~77dd9b9 + section divider work).
+Last verified: 2026-05-10 (commit ~a5dbf34 — header word-divider, AI
+summary integration, reorderable sections, model bumped to v8, online
+sentence API removed).
 Audience: an AI coding agent picking up an unfamiliar feature in this
 repo. Keep it concise — read CLAUDE.md for the high-level overview, this
 file for the detail you need before editing.
@@ -13,7 +15,8 @@ file for the detail you need before editing.
 domain/
   - Pure Kotlin. No Android, no Room, no kotlinx.serialization in
     public APIs. Models: WordEntry, MergedWordEntry, ExamplePair,
-    AnkiCard, CardStylePreferences, ImportProgress, ImportResult.
+    AnkiCard, CardStylePreferences, CardSection (back-side
+    section ordering), ImportProgress, ImportResult.
   - DictionaryRepository is the only abstraction boundary. Use
     cases (SearchDictionaryUseCase, GetWordDetailUseCase,
     DictionaryManagementUseCases) sit above it.
@@ -26,8 +29,12 @@ data/
   - data/anki: AnkiCardCreator integrates with AnkiDroid via
     AddContentApi + raw content provider for CSS/template updates.
   - data/download: dictionary catalog and download manager.
-  - data/sentence: optional online Tatoeba lookup (no longer gated by
-    consent — controlled solely by the Card Style preference).
+  - data/ai: AiProvider enum + AiSummaryService (HTTPS-only client
+    for Gemini / DeepSeek / OpenAI-compatible chat completions). See
+    section 11.
+  - data/sentence: gone — removed alongside the online Tatoeba
+    fallback. Sentence column is now: Jitendex examples →
+    SentenceDao seed → empty.
 
 ui/
   - Jetpack Compose + MVVM. Each screen has a paired ViewModel.
@@ -70,9 +77,11 @@ Romaji mode:
 
 Debounce: 100 ms inside SearchViewModel before kicking off a search.
 
-Known cost: invokeWithAlternatives runs per-candidate `first()` calls.
-For long candidate lists this is observably slow on cold runs.
-If you need to optimize, do it here, not deeper in the DAO.
+Performance note: invokeWithAlternatives now runs the candidate searches
+in parallel inside coroutineScope { ... async }, then merges by entry id
+with the original query taking priority (audit issue (c) — RESOLVED).
+The single per-candidate `first()` in the lambda is the only suspending
+call; all candidates run concurrently.
 
 ----------------------------------------------------------------------
 3. DICTIONARY IMPORT (Yomitan ZIP format)
@@ -131,15 +140,16 @@ Performance dials (bulk import):
 
 Entry point: DetailViewModel.exportToAnki → performExport.
 
-Sentence-source priority:
+Sentence-source priority (after the online-Tatoeba removal):
   1. entry.examples (Jitendex, attached per gloss via definitionIndex)
   2. local SentenceDao seed (~22 hardcoded rows, migration v8 → v9)
-  3. Online Tatoeba via OnlineSentenceService (only when
-     stylePrefs.useOnlineSentenceApi is true — no separate consent flag)
+  → empty. Mustache `{{#Sentence}}…{{/Sentence}}` collapses the whole
+  block (including the trailing <hr>) when no source supplies one.
 
-AnkiCardCreator.createAnkiCard builds an AnkiCard with these fields:
+FIELD_NAMES (10 fields, order matters — AnkiCard.toFieldArray
+mirrors it):
   Front, FrontContext, Reading, Meaning, PitchAccent, Frequency,
-  Audio, Sentence, KanjiBreakdown.
+  Audio, Sentence, KanjiBreakdown, Summary.
 
 Meaning field structure (formatMeaningForCard):
   <div class="pos-line">ichidan verb, transitive verb</div>
@@ -157,13 +167,47 @@ Meaning field structure (formatMeaningForCard):
 Sentence field: only renders unattached examples (those with
 definitionIndex < 0). Jitendex-sourced examples never duplicate here.
 
+Header layout (top of the back side, fixed — not part of the
+reorderable section list):
+  expression
+  small frequency line
+  .word-divider <hr>   ← thin in-header rule, 50% width, dim
+  reading
+Followed by an unconditional full-width <hr> (the "layer divider")
+that separates header from the reorderable sections below.
+
+Dynamic back template (AnkiCardCreator.buildBackTemplate):
+  • The reorderable sections (PITCH, SUMMARY, MEANING, SENTENCE,
+    AUDIO, KANJI) come from CardStylePreferences.sectionOrder, which
+    is the user's pick from CardStyleScreen and persisted as a
+    comma-separated CardSection list under CARD_SECTION_ORDER.
+  • Every section ends with its own trailing <hr>; CSS rule
+    `.back > hr:last-of-type { display: none }` hides the dangling
+    last divider regardless of order.
+  • Meaning is the only section that's rendered unconditionally — all
+    others are wrapped in `{{#Field}}…{{/Field}}` so empty data
+    collapses the whole block.
+  • CARD_BACK_TEMPLATE constant is the static fallback (default
+    order) used by tests / previews. Real exports go through
+    buildBackTemplate(stylePrefs.sectionOrder) in addNote.
+
 AnkiDroid model:
-  MODEL_NAME = "Yomitan-Mobile-v7"   — DO NOT BUMP unless FIELD_NAMES
-  changes. CSS + template updates are pushed to existing models via
-  the content provider (updateModelCss / updateModelTemplates), so
-  redesign work applies retroactively to ALL cards using this model.
-  This is intentional but worth flagging — a "freeze design" feature
-  would require bumping the model name.
+  MODEL_NAME = "Yomitan-Mobile-v8"   — bumped from v7 when the Summary
+  field was added. NEVER bump unless FIELD_NAMES changes again.
+  Earlier names (v7, v4, the bare "Yomitan-Mobile") are listed in
+  modelNamePriority so they're still discoverable as legacy fallbacks
+  if the user reverts. CSS and template updates flow to existing v8
+  models via the content provider (updateModelCss /
+  updateModelTemplates), so layout / order changes apply
+  retroactively to all v8 cards.
+
+Template push diagnostics:
+  updateModelTemplates inspects rows-affected from
+  contentResolver.update; rows == 0 logs Log.w("AnkiCardCreator",
+  "0 rows updated…") because some older AnkiDroid builds don't
+  expose the templates URI as a writable row. The export still
+  succeeds; existing cards just keep the previous template until the
+  user re-creates the model in AnkiDroid.
 
 ----------------------------------------------------------------------
 5. CARD STYLE PREFERENCES
@@ -175,23 +219,40 @@ export). CardStylePreferences data class is the in-memory shape.
 
 Toggleable bits that reach the CSS via buildCssFromPreferences:
   • showPitchAccent / showFrequency / showSentence / showFrontContextSentence
-  • showSectionDividers  — controls `hr { display: none }`
+  • showSectionDividers — controls `hr { display: none }`
   • randomFontsEnabled / randomVoicesEnabled (export-time random pick)
 
-The legacy onlineSentenceApiConsentGranted flag was removed; the
-matching dialog and DataStore key are gone too. Existing devices
-keep the orphaned key in their preference file; it's just ignored.
+Section ordering:
+  • sectionOrder: List<CardSection> — reorderable back-side blocks
+    (PITCH, SUMMARY, MEANING, SENTENCE, AUDIO, KANJI). Persisted as a
+    comma-separated string under CARD_SECTION_ORDER and decoded by
+    CardSection.decode. Decode is forgiving: missing sections get
+    appended at the end, unknown tokens are dropped, duplicates
+    collapse — so saves from older app versions keep working when a
+    new section is added.
+  • Header (expression + freq + reading) is NOT part of sectionOrder
+    — it's pinned at the top.
+
+AI summary fields (see section 11):
+  • aiSummaryEnabled, aiProvider (AiProvider enum), aiApiKey,
+    aiPrompt, aiModel.
+
+Legacy / removed prefs (still keys in older devices' DataStore but
+no longer read by code — functionally inert):
+  • onlineSentenceApiConsentGranted, sentence_api_consent_granted
+  • useOnlineSentenceApi, card_use_online_sentence_api
 
 ----------------------------------------------------------------------
 6. WIDGETS
 ----------------------------------------------------------------------
 
-widget/SearchWidgetProvider, widget/QuickSearchWidgetProvider.
-Each widget instantiates its own Room database via
-Room.databaseBuilder(...) inside onUpdate. This is wasteful — the
-Hilt-provided AppDatabase already exists in the app process — but
-removing it requires plumbing a Hilt EntryPoint into the widget
-context. Don't fix unless you're already touching this code.
+widget/SearchWidgetProvider, widget/QuickSearchWidgetProvider,
+widget/WidgetEntryPoint (Hilt @EntryPoint on SingletonComponent).
+SearchWidgetProvider pulls FavoriteWordDao through
+EntryPointAccessors.fromApplication, so widget refreshes share the
+singleton AppDatabase, the prepared-statement cache, and the
+PRAGMA-tuned connection. Coroutines run on a SupervisorJob-scoped
+CoroutineScope kept on the companion (audit issue (d) — RESOLVED).
 
 ----------------------------------------------------------------------
 7. LOCALE HANDLING (EN ↔ PL)
@@ -243,7 +304,10 @@ Compose. Leave it alone unless you are doing a full i18n migration.
     bundle most users will never hit this fallback, but removing it
     would regress first-install UX.
 
-(g) See your own follow-up — handled separately.
+(g) Docs drift between ARCHITECTURE.txt and CLAUDE.md. Owner is
+    handling the drift policy themselves; agents touching the docs
+    should still bump "Last verified" and the relevant section
+    when shipping non-trivial changes.
 
 (h) ACCEPTED. Hardcoded strings in Compose. Migration to string
     resources is incomplete (~25 keys in values/strings.xml; rest
@@ -269,12 +333,25 @@ Compose. Leave it alone unless you are doing a full i18n migration.
                                  + PartsOfSpeechFormatter labels
   New schema column            → DictionaryEntry + new Migration_X_Y +
                                  DictionaryMapper (toDomain/toEntity)
-  New card field               → AnkiCard, FIELD_NAMES, CARD_BACK_TEMPLATE,
-                                 createAnkiCard, AND consider bumping
-                                 MODEL_NAME (this IS a breaking change).
+  New card field               → AnkiCard, FIELD_NAMES, AnkiCardCreator
+                                 .createAnkiCard, the static
+                                 CARD_BACK_TEMPLATE AND blockHtmlFor in
+                                 buildBackTemplate, AND bump MODEL_NAME
+                                 (a new field is a breaking schema change
+                                 — fields are tied to model identity).
   New CSS knob                 → CardStylePreferences boolean +
                                  MainActivity DataStore key +
                                  CardStyleScreen UI + buildCssFromPreferences.
+  New back-side section        → CardSection enum + blockHtmlFor branch +
+                                 the static CARD_BACK_TEMPLATE +
+                                 CardStyleScreen reorder-list label
+                                 (polish/english). DataStore decode adds
+                                 it at the end automatically.
+  New AI provider              → AiProvider enum entry (storageValue,
+                                 displayName, defaultModel) + the
+                                 dispatch branch in
+                                 AiSummaryService.generateSummary +
+                                 ALLOWED_HOSTS for the new endpoint.
   New screen                   → ui/<feature>/{Screen, ViewModel} +
                                  AppNavHost route + Hilt-provided VM.
 
@@ -291,7 +368,67 @@ Test-coverage hot spots to update when changing logic:
   YomitanJitendexFormatTest          — sense-groups + furigana strip
   YomitanJlptMetaTest                — JLPT through freq channel
   LocaleHelperTest                   — EN/PL ranking + fallback
+  AiSummaryServiceTest               — prompt rendering + Gemini /
+                                       OpenAI response shapes +
+                                       error-message extraction
+  CardSectionTest                    — encode/decode round-trip for
+                                       sectionOrder; missing-section
+                                       append, unknown-token tolerance,
+                                       deduplication
 
 If you change DB schema, add a Migration test before merging.
+
+----------------------------------------------------------------------
+11. AI SUMMARY INTEGRATION
+----------------------------------------------------------------------
+
+Optional per-export call to a third-party LLM that fills the back-side
+Summary slot (rendered between PitchAccent and Meaning by default —
+position is reorderable like every other section).
+
+Components:
+  data/ai/AiProvider.kt
+    Enum of supported providers: GEMINI ("gemini-3.1-flash-lite"),
+    DEEPSEEK ("deepseek-chat"), OPENAI ("gpt-4o-mini"). Stable
+    storageValue strings keep DataStore round-trips robust against
+    display-name renames. AI_DEFAULT_PROMPT is a template with
+    {expression}, {reading}, {meaning}, {language} placeholders.
+
+  data/ai/AiSummaryService.kt
+    Single suspend entry point: generateSummary(provider, apiKey,
+    promptTemplate, word, reading, meanings, language, modelOverride).
+    Dispatches to callGemini (POST .../generateContent?key=…, body
+    `{contents:[{parts:[{text:…}]}]}`) or callOpenAiCompatible (POST
+    chat/completions, body `{messages:[{role:"user", content:…}]}`,
+    Authorization: Bearer KEY). Both flow through postJson, which
+    returns an HttpResponse(statusCode, body) — the status code
+    is the part rateLimitFailure / friendlyError use to surface
+    helpful messages.
+    Returns sealed AiSummaryResult: Success(text) / Failure(message) /
+    Disabled. Failures NEVER throw out — Anki export must keep working
+    even when the AI provider is unreachable.
+    Network-allowlist:
+      generativelanguage.googleapis.com, api.deepseek.com, api.openai.com.
+    Response size cap: 256 KB.
+
+  CardStylePreferences AI fields:
+    aiSummaryEnabled / aiProvider / aiApiKey / aiPrompt / aiModel
+    (override; blank → provider.defaultModel). DataStore keys:
+    CARD_AI_SUMMARY_ENABLED, CARD_AI_PROVIDER, CARD_AI_API_KEY,
+    CARD_AI_PROMPT, CARD_AI_MODEL.
+
+  DetailViewModel.performExport
+    Calls aiSummaryService.generateSummary only when
+    aiSummaryEnabled && aiApiKey is non-blank. Failures emit
+    DetailEvent.AiSummaryFailed → DetailScreen renders a snackbar
+    "AI summary failed: <message>". The card export continues with
+    an empty Summary field, which the {{#Summary}} mustache block
+    hides automatically.
+
+  AnkiCardCreator integration:
+    createAnkiCard accepts aiSummaryText: String. The text is
+    HTML-escaped (third-party LLM output) and rendered in
+    .summary-section via `white-space: pre-wrap` so multi-line
+    responses preserve their breaks.
 
 End of file. Update the "Last verified" date when you touch this.
