@@ -77,9 +77,9 @@ class AnkiCardCreator(
             <div class="back">
                 <div class="section header-section">
                     <div class="expression">{{Front}}</div>
-                    {{#Frequency}}<div class="freq">{{Frequency}}</div>{{/Frequency}}
                     <hr class="word-divider">
                     <div class="reading">{{Reading}}</div>
+                    {{#Frequency}}<div class="freq">{{Frequency}}</div>{{/Frequency}}
                 </div>
                 <hr>
                 {{#PitchAccent}}<div class="section"><div class="pitch">{{PitchAccent}}</div></div><hr>{{/PitchAccent}}
@@ -106,14 +106,12 @@ class AnkiCardCreator(
             val sb = StringBuilder()
             sb.append("<div class=\"back\">\n")
             sb.append("    <div class=\"section header-section\">\n")
-            // Order inside the header: expression → small frequency line →
-            // a thin word-divider → reading. The user asked for the
-            // ranking to live directly under the word, separated from the
-            // reading by its own line within the header block.
+            // Header order: expression → thin word-divider → reading →
+            // small frequency line directly under the reading.
             sb.append("        <div class=\"expression\">{{Front}}</div>\n")
-            sb.append("        {{#Frequency}}<div class=\"freq\">{{Frequency}}</div>{{/Frequency}}\n")
             sb.append("        <hr class=\"word-divider\">\n")
             sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
+            sb.append("        {{#Frequency}}<div class=\"freq\">{{Frequency}}</div>{{/Frequency}}\n")
             sb.append("    </div>\n")
             sb.append("    <hr>\n")
             for (section in sectionOrder) {
@@ -390,6 +388,12 @@ class AnkiCardCreator(
                 pitchPositions = "2",
                 prefs = prefs
             )
+            val sectionsHtml = buildString {
+                for (section in prefs.sectionOrder) {
+                    append(previewBlockHtmlFor(section, previewPitch))
+                    append("\n")
+                }
+            }
             return """
             <!DOCTYPE html>
             <html>
@@ -408,42 +412,67 @@ class AnkiCardCreator(
                 <div class="back">
                     <div class="section header-section">
                         <div class="expression">食べる</div>
-                        <div class="freq">★★★ Top 1K</div>
                         <hr class="word-divider">
                         <div class="reading">たべる</div>
+                        <div class="freq">★★★ Top 1K</div>
                     </div>
                     <hr>
-                    <div class="section"><div class="pitch">$previewPitch</div></div>
-                    <hr>
-                    <div class="section meaning-section"><div class="meaning">
-                      <div class="pos-line">ichidan verb, transitive verb</div>
-                      <ol class="meanings">
-                        <li class="meaning-item">
-                          <span class="gloss">to eat</span>
-                          <div class="meaning-ex">
-                            <div class="meaning-ex-jp">毎日野菜を食べます。</div>
-                            <div class="meaning-ex-en">I eat vegetables every day.</div>
-                          </div>
-                        </li>
-                        <li class="meaning-item">
-                          <span class="gloss">to live on (e.g. a salary), to live off, to subsist on</span>
-                        </li>
-                      </ol>
-                    </div></div>
-                    <hr>
-                    <div class="section kanji-section"><div class="kanji-breakdown">
-                      <div class="kanji-breakdown-title">Kanji</div>
-                      <div class="kanji-item">
-                        <span class="kanji-char">食</span>
-                        <span class="kanji-readings">On: ショク &nbsp; Kun: た.べる, く.う</span>
-                        <div class="kanji-meanings">eat, food</div>
-                      </div>
-                    </div></div>
-                    <hr>
+                    $sectionsHtml
                 </div>
             </body>
             </html>
             """.trimIndent()
+        }
+
+        /**
+         * Sample HTML for a single back-side section, used by the live
+         * preview in CardStyleScreen. Mirrors the structure produced by
+         * [blockHtmlFor] but with concrete sample data instead of mustache
+         * placeholders.
+         */
+        private fun previewBlockHtmlFor(
+            section: com.yomitanmobile.domain.model.CardSection,
+            previewPitch: String
+        ): String = when (section) {
+            com.yomitanmobile.domain.model.CardSection.PITCH ->
+                """<div class="section"><div class="pitch">$previewPitch</div></div><hr>"""
+            com.yomitanmobile.domain.model.CardSection.SUMMARY ->
+                """<div class="section summary-section"><div class="summary">食べる (taberu) — ichidan verb meaning "to eat" or, idiomatically, "to live on" (e.g. a salary). Common JLPT N5 vocabulary.</div></div><hr>"""
+            com.yomitanmobile.domain.model.CardSection.MEANING ->
+                """
+                <div class="section meaning-section"><div class="meaning">
+                  <div class="pos-line">ichidan verb, transitive verb</div>
+                  <ol class="meanings">
+                    <li class="meaning-item">
+                      <span class="gloss">to eat</span>
+                      <div class="meaning-ex">
+                        <div class="meaning-ex-jp">毎日野菜を食べます。</div>
+                        <div class="meaning-ex-en">I eat vegetables every day.</div>
+                      </div>
+                    </li>
+                    <li class="meaning-item">
+                      <span class="gloss">to live on (e.g. a salary), to live off, to subsist on</span>
+                    </li>
+                  </ol>
+                </div></div>
+                <hr>
+                """.trimIndent()
+            com.yomitanmobile.domain.model.CardSection.SENTENCE ->
+                """<div class="section"><div class="sentence"><div class="sentence-jp">朝ごはんに納豆を食べる。</div><div class="sentence-translation">I eat natto for breakfast.</div></div></div><hr>"""
+            com.yomitanmobile.domain.model.CardSection.AUDIO ->
+                """<div class="section audio-section"><div class="audio">🔊 [audio]</div></div><hr>"""
+            com.yomitanmobile.domain.model.CardSection.KANJI ->
+                """
+                <div class="section kanji-section"><div class="kanji-breakdown">
+                  <div class="kanji-breakdown-title">Kanji</div>
+                  <div class="kanji-item">
+                    <span class="kanji-char">食</span>
+                    <span class="kanji-readings">On: ショク &nbsp; Kun: た.べる, く.う</span>
+                    <div class="kanji-meanings">eat, food</div>
+                  </div>
+                </div></div>
+                <hr>
+                """.trimIndent()
         }
 
         private fun buildPitchAccentHtml(

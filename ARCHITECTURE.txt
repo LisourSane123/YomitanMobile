@@ -3,7 +3,8 @@ YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 
 Last verified: 2026-05-10 (commit ~a5dbf34 — header word-divider, AI
 summary integration, reorderable sections, model bumped to v8, online
-sentence API removed).
+sentence API removed; freq line moved under reading + preview now
+honors sectionOrder).
 Audience: an AI coding agent picking up an unfamiliar feature in this
 repo. Keep it concise — read CLAUDE.md for the high-level overview, this
 file for the detail you need before editing.
@@ -170,9 +171,9 @@ definitionIndex < 0). Jitendex-sourced examples never duplicate here.
 Header layout (top of the back side, fixed — not part of the
 reorderable section list):
   expression
-  small frequency line
   .word-divider <hr>   ← thin in-header rule, 50% width, dim
   reading
+  small frequency line ← under the reading, smaller letters
 Followed by an unconditional full-width <hr> (the "layer divider")
 that separates header from the reorderable sections below.
 

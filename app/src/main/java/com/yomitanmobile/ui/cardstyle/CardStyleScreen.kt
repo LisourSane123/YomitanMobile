@@ -253,7 +253,8 @@ fun CardStyleScreen(
         frontContextSentenceFontSize, backSentenceFontSize,
         selectedFont, backgroundColor, expressionColor, readingColor,
         meaningColor, accentColor, showPitchAccent, showFrequency, showSentence,
-        showFrontContextSentence, pitchAccentStyle, showSectionDividers
+        showFrontContextSentence, pitchAccentStyle, showSectionDividers,
+        sectionOrder
     ) {
         AnkiCardCreator.buildPreviewHtml(currentPreferences())
     }
