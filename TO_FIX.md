@@ -10,7 +10,7 @@ Legend:
 
 **Status 2026-05-13 late:** all P0 + all P1 (except #12) + all P2 (except #16) shipped. Release build + tests green. Remaining open items:
 - **P1-12**: integration tests for `DictionaryRepositoryImpl`, `BackupManager`, `DetailViewModel` (larger piece of work).
-- **P2-16**: dependency bumps — deliberately deferred to post-launch (don't introduce unrelated risk the week before shipping).
+- **P2-16**: dependency bumps — partial. K1.9-compatible bumps applied (Hilt 2.51.1, Lifecycle 2.8.7, kotlinx-coroutines 1.8.1, etc.). Compose BOM / Room 2.7+ / Hilt 2.52+ / Kotlin 2.x deferred to a dedicated post-launch sprint.
 - **P0 release-engineer prereq**: create `app/keystore.properties` from the template before signing the production APK.
 
 P2 highlights:
@@ -79,7 +79,25 @@ P2 highlights:
 
 - [x] **15. `android:allowBackup="false"` deprecated on Android 12+.** `AndroidManifest.xml:15` — switch to `android:dataExtractionRules` pointing to an explicit deny-all rules XML.
 
-- [ ] **16. Outdated dependencies.** 22 deps behind (Compose BOM 2023.10 → 2026.05, Hilt 2.50 → 2.59, Room 2.6.1 → 2.8.4, etc.). Some have CVE/perf fixes. Plan post-launch.
+- [~] **16. Outdated dependencies.** Partial: bumped everything compatible with Kotlin 1.9.22:
+  - `kotlinx-serialization-json` 1.6.2 → 1.6.3
+  - `kotlinx-coroutines-android` 1.7.3 → 1.8.1
+  - `core-ktx` 1.12.0 → 1.13.1
+  - `activity-compose` 1.8.2 → 1.9.3
+  - `lifecycle-*` 2.7.0 → 2.8.7
+  - `navigation-compose` 2.7.6 → 2.7.7
+  - `datastore-preferences` 1.0.0 → 1.1.1
+  - `hilt-android` + `hilt-android-compiler` 2.50 → 2.51.1 (plugin version also bumped in root build.gradle.kts)
+  - `hilt-navigation-compose` 1.1.0 → 1.2.0
+  - `androidx.test:runner` 1.5.2 → 1.6.1; `androidx.test.ext:junit` 1.1.5 → 1.2.1
+
+  **Deferred (require Kotlin 2.x migration):**
+  - Compose BOM 2024+ (current 2023.10.01) — needs `org.jetbrains.kotlin.plugin.compose` instead of `composeOptions.kotlinCompilerExtensionVersion`
+  - Room 2.7+ (current 2.6.1) — built against K2 baseline
+  - Hilt 2.52+ (current 2.51.1) — built against K2 baseline
+  - Kotlin 1.9.22 → 2.x itself
+
+  The Kotlin 2.x migration touches every KSP-generated file in the project and reshapes the Compose toolchain. That's a separate work item, not a pre-launch tidy. Schedule for the first post-launch sprint with its own QA pass.
 
 - [x] **17. Locale switching without app-bundle config.** `MainActivity.kt:108` does dynamic locale switching but bundle isn't configured non-split. Non-default locales may be missing at runtime in AAB build.
   - Add `bundle { language { enableSplit = false } }`.
