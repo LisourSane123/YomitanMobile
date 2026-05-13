@@ -99,6 +99,20 @@ android {
             "DirectSystemCurrentTimeMillisUsage"
         )
     }
+
+    bundle {
+        language {
+            // MainActivity rewrites Configuration.locale at runtime so the
+            // user can switch UI language without reinstalling. The default
+            // AAB behaviour splits language resources by system locale and
+            // streams them on demand — but our in-app switcher reaches for
+            // a locale that may not have been downloaded yet, silently
+            // falling back to the system language. Bundling every locale
+            // into the base APK keeps the switcher honest at the cost of a
+            // few hundred KB.
+            enableSplit = false
+        }
+    }
 }
 
 dependencies {

@@ -28,4 +28,9 @@
     <string name="entries_count">wpisów</string>
     <string name="widget_description">Szybkie wyszukiwanie słów japońskich</string>
     <string name="widget_quick_description">Szybkie uruchomienie wyszukiwania</string>
+
+    <!-- Widget UI text -->
+    <string name="widget_search_icon_cd">Szukaj</string>
+    <string name="widget_search_hint">Wpisz słowo po japońsku…</string>
+    <string name="widget_word_of_day">✨ Słowo dnia</string>
 </resources>

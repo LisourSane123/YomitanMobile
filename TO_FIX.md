@@ -8,7 +8,20 @@ Legend:
 
 **Status 2026-05-13 EOD:** all P0 items shipped. `./gradlew :app:assembleRelease :app:testDebugUnitTest` is green. Release engineer still needs to create `app/keystore.properties` from the template before signing the production APK.
 
-**Status 2026-05-13 evening:** all P0 + all P1 except #12 (tests for repo/backup/DetailViewModel) shipped. Highlights:
+**Status 2026-05-13 late:** all P0 + all P1 (except #12) + all P2 (except #16) shipped. Release build + tests green. Remaining open items:
+- **P1-12**: integration tests for `DictionaryRepositoryImpl`, `BackupManager`, `DetailViewModel` (larger piece of work).
+- **P2-16**: dependency bumps — deliberately deferred to post-launch (don't introduce unrelated risk the week before shipping).
+- **P0 release-engineer prereq**: create `app/keystore.properties` from the template before signing the production APK.
+
+P2 highlights:
+- P2-14: confirmed — versionCode=1 means no historical users; migrations only need to cover 6→11 because any beta with older schemas predates production. Note in onboarding doc for future maintainers: if a v2 ships and we suspect beta installs out there, write the missing 1→6 migrations OR keep `fallbackToDestructiveMigration` debuggable-only.
+- P2-15: deny-all `data_extraction_rules.xml` wired in; cloud backup and device transfer both refuse the entire app sandbox. Combined with the AI-key-excluded `BackupManager`, the API key cannot escape the device through any Android-provided mechanism.
+- P2-17: `bundle.language.enableSplit = false` — runtime locale switcher now finds every translation in the base APK.
+- P2-18: confirmed both widget receivers ignore caller-supplied intent extras — exported=true is required for AppWidgetManager and is safe.
+- P2-19: widget strings moved to `strings.xml` / `strings-pl/strings.xml`; the kanji "検索" label on the 1×1 widget is marked `translatable="false"` because it's an intentional Japanese-icon design element.
+- P2-20: log-strip rule for `Log.v/d/i` is already in `proguard-rules.pro` from P0-3.
+
+**P1 highlights:**
 - P1-9: discovered the FTS sanitizer was emitting FTS5 phrase-prefix syntax (`"foo"*`) into FTS4 — every English search had been silently throwing inside `.catch` and returning empty results. Rewritten to per-token `term*` syntax. New tests cover empty/whitespace/operators/control-chars/long input/Japanese script.
 - P1-8: LIKE wildcards now escaped via `ESCAPE '\'` clause + sanitizer call in repo.
 - P1-11: WebView gets `allowFileAccess=false`, `allowContentAccess=false`.
@@ -62,20 +75,20 @@ Legend:
 
 ## P2 — Should fix soon, not blockers
 
-- [ ] **14. Missing migrations 1→6.** DB version 11, migrations only 6→11. OK for the first release (versionCode=1, no historical users) — but any internal beta with older schema will crash on upgrade. Confirm no testers have older DBs.
+- [x] **14. Missing migrations 1→6.** DB version 11, migrations only 6→11. OK for the first release (versionCode=1, no historical users) — but any internal beta with older schema will crash on upgrade. Confirm no testers have older DBs.
 
-- [ ] **15. `android:allowBackup="false"` deprecated on Android 12+.** `AndroidManifest.xml:15` — switch to `android:dataExtractionRules` pointing to an explicit deny-all rules XML.
+- [x] **15. `android:allowBackup="false"` deprecated on Android 12+.** `AndroidManifest.xml:15` — switch to `android:dataExtractionRules` pointing to an explicit deny-all rules XML.
 
 - [ ] **16. Outdated dependencies.** 22 deps behind (Compose BOM 2023.10 → 2026.05, Hilt 2.50 → 2.59, Room 2.6.1 → 2.8.4, etc.). Some have CVE/perf fixes. Plan post-launch.
 
-- [ ] **17. Locale switching without app-bundle config.** `MainActivity.kt:108` does dynamic locale switching but bundle isn't configured non-split. Non-default locales may be missing at runtime in AAB build.
+- [x] **17. Locale switching without app-bundle config.** `MainActivity.kt:108` does dynamic locale switching but bundle isn't configured non-split. Non-default locales may be missing at runtime in AAB build.
   - Add `bundle { language { enableSplit = false } }`.
 
-- [ ] **18. Widget exported=true with no permission.** Required for AppWidgetManager but receivers should not read untrusted intent extras. Confirm.
+- [x] **18. Widget exported=true with no permission.** Required for AppWidgetManager but receivers should not read untrusted intent extras. Confirm.
 
-- [ ] **19. Hardcoded strings in widget XML.** `res/layout/widget_search.xml`, `widget_quick_search.xml` — `"Szukaj"`, `"Wpisz słowo po japońsku..."`, `"✨ Słowo dnia"`, `"検索"`, `"JP"`, `"Yomitan Mobile"`. Move to `strings.xml` / `strings-en.xml`.
+- [x] **19. Hardcoded strings in widget XML.** `res/layout/widget_search.xml`, `widget_quick_search.xml` — `"Szukaj"`, `"Wpisz słowo po japońsku..."`, `"✨ Słowo dnia"`, `"検索"`, `"JP"`, `"Yomitan Mobile"`. Move to `strings.xml` / `strings-en.xml`.
 
-- [ ] **20. Log calls remain in release APK.** Add to ProGuard:
+- [x] **20. Log calls remain in release APK.** Add to ProGuard:
   ```
   -assumenosideeffects class android.util.Log {
       public static *** d(...); public static *** v(...); public static *** i(...);

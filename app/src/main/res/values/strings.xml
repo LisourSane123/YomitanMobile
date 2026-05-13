@@ -28,4 +28,13 @@
     <string name="entries_count">entries</string>
     <string name="widget_description">Quick Japanese word search</string>
     <string name="widget_quick_description">Quick search launcher</string>
+
+    <!-- Widget UI text -->
+    <string name="widget_search_icon_cd">Search</string>
+    <string name="widget_search_hint">Type a word in Japanese…</string>
+    <string name="widget_word_of_day">✨ Word of the day</string>
+    <!-- Quick-search 1×1 widget. The Japanese label is intentional regardless
+         of UI language — the widget is a "JP shortcut" icon. -->
+    <string name="widget_quick_jp_label" translatable="false">検索</string>
+    <string name="widget_quick_jp_subtitle" translatable="false">JP</string>
 </resources>
