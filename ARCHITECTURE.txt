@@ -1,12 +1,13 @@
 YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 ======================================================================
 
-Last verified: 2026-05-10 (commit ~a5dbf34 — header word-divider, AI
+Last verified: 2026-05-12 (commit ~a5dbf34 — header word-divider, AI
 summary integration, reorderable sections, model bumped to v8, online
 sentence API removed; preview honors sectionOrder; freq line dropped
-from header + word-divider made bolder; reorder propagation hardened
-against stale AnkiDroid template caches via skipPrimaryName variant
-fallback; AI summary now opt-in per-export via dedicated UI button).
+from header; word-divider now full-width 1px white (regular weight);
+reorder propagation hardened against stale AnkiDroid template caches
+via skipPrimaryName variant fallback; AI summary now opt-in per-export
+via dedicated UI button).
 Audience: an AI coding agent picking up an unfamiliar feature in this
 repo. Keep it concise — read CLAUDE.md for the high-level overview, this
 file for the detail you need before editing.
@@ -173,10 +174,8 @@ definitionIndex < 0). Jitendex-sourced examples never duplicate here.
 Header layout (top of the back side, fixed — not part of the
 reorderable section list):
   expression
-  .word-divider <hr>   ← BOLD in-header rule, 60% width, 3px,
-                          deliberately heavier than the section
-                          dividers so the word↔reading split reads
-                          as a clear header beat
+  .word-divider <hr>   ← full-width 1px white rule between expression
+                          and reading
   reading
 The Frequency field is still part of FIELD_NAMES (model schema is
 unchanged at v8) but the header no longer renders it — users asked

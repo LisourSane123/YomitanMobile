@@ -189,15 +189,9 @@ class AnkiCardCreator(
                 margin: 4px 0 0 0; opacity: 0.85;
                 letter-spacing: 0.02em;
             }
-            /*
-             * Bold in-header divider between expression and reading.
-             * Drawn deliberately heavier than the regular section
-             * dividers so the word↔reading split reads as a clear
-             * header beat — users asked for a more prominent line here.
-             */
             .word-divider {
-                border: none; border-top: 3px solid #aaa;
-                margin: 12px auto; width: 60%; opacity: 0.9;
+                border: none; border-top: 1px solid #fff;
+                margin: 12px 0; width: 100%;
             }
             .front-context {
                 font-size: 14px; color: #cfd8dc; margin-top: 8px;
@@ -312,8 +306,8 @@ class AnkiCardCreator(
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
             .word-divider {
-                border: none; border-top: 3px solid #aaa;
-                margin: 12px auto; width: 60%; opacity: 0.9;
+                border: none; border-top: 1px solid #fff;
+                margin: 12px 0; width: 100%;
             }
             .front-context {
                 font-size: ${prefs.frontContextSentenceFontSize}px; color: #d7d7d7; margin-top: 8px;
