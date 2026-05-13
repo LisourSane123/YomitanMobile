@@ -13,6 +13,10 @@ Legend:
 - **P2-16**: dependency bumps — partial. K1.9-compatible bumps applied (Hilt 2.51.1, Lifecycle 2.8.7, kotlinx-coroutines 1.8.1, etc.). Compose BOM / Room 2.7+ / Hilt 2.52+ / Kotlin 2.x deferred to a dedicated post-launch sprint.
 - **P0 release-engineer prereq**: create `app/keystore.properties` from the template before signing the production APK.
 
+## Feature work landed alongside the audit
+
+- **AI failure → user choice (2026-05-13).** Previously, when the AI summary call failed during Anki export (rate limit, bad key, network), the card was silently created with an empty summary slot and a snackbar noted the failure. The user had no control over whether to accept that. Now the export coroutine parks on a `CompletableDeferred` and the user gets an `AlertDialog` with two actions: "Create without AI" finishes the card, "Cancel export" aborts before AnkiDroid is touched. Dialog dismiss (back/outside-tap) is treated as "Cancel". File: `ui/detail/DetailViewModel.kt` + `ui/detail/DetailScreen.kt`.
+
 P2 highlights:
 - P2-14: confirmed — versionCode=1 means no historical users; migrations only need to cover 6→11 because any beta with older schemas predates production. Note in onboarding doc for future maintainers: if a v2 ships and we suspect beta installs out there, write the missing 1→6 migrations OR keep `fallbackToDestructiveMigration` debuggable-only.
 - P2-15: deny-all `data_extraction_rules.xml` wired in; cloud backup and device transfer both refuse the entire app sandbox. Combined with the AI-key-excluded `BackupManager`, the API key cannot escape the device through any Android-provided mechanism.

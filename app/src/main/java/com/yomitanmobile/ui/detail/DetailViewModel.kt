@@ -28,6 +28,7 @@ import com.yomitanmobile.util.LocaleHelper
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -52,13 +53,20 @@ sealed class DetailEvent {
     data class AlreadyExported(val expression: String, val deckName: String) : DetailEvent()
 
     /**
-     * AI summary call failed but the rest of the export succeeded. We
-     * surface the message so the user can see WHY the summary slot is
-     * empty (rate limit, bad key, network error) instead of silently
-     * landing a partial card.
+     * AI summary call failed. The export coroutine is parked on a
+     * CompletableDeferred until the UI calls [DetailViewModel.resolveAiFailure]
+     * with the user's choice — either finish the card with an empty summary
+     * slot, or abort the export entirely. [message] is the provider's
+     * error string (rate limit, bad key, network…) for display in the dialog.
      */
-    data class AiSummaryFailed(val message: String) : DetailEvent()
+    data class AiSummaryFailedNeedsChoice(val message: String) : DetailEvent()
+
+    /** Emitted after the user picks "abort" on the AI-failure dialog. */
+    object AnkiExportCancelled : DetailEvent()
 }
+
+/** Options the user can pick when AI summary generation fails mid-export. */
+enum class AiFailureChoice { CONTINUE_WITHOUT_AI, CANCEL_EXPORT }
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
@@ -95,6 +103,26 @@ class DetailViewModel @Inject constructor(
 
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
+
+    /**
+     * Set when [performExport] is parked waiting for the user's decision
+     * about a failed AI summary call. The UI calls [resolveAiFailure] to
+     * complete it; the export coroutine then resumes with the chosen
+     * branch. At most one is outstanding because [_isExporting] gates new
+     * exports while a prior one is in flight.
+     */
+    private var pendingAiFailureDecision: CompletableDeferred<AiFailureChoice>? = null
+
+    /**
+     * Called by the UI when the AI-failure dialog is dismissed. Completes
+     * the parked deferred (if any) so the export coroutine wakes up and
+     * either finishes the card with an empty summary slot or aborts.
+     * Safe to call even when no export is in flight — it's a no-op then.
+     */
+    fun resolveAiFailure(choice: AiFailureChoice) {
+        pendingAiFailureDecision?.complete(choice)
+        pendingAiFailureDecision = null
+    }
 
     init {
         loadEntry()
@@ -418,8 +446,24 @@ class DetailViewModel @Inject constructor(
                     is AiSummaryResult.Success -> result.text
                     is AiSummaryResult.Failure -> {
                         Log.w(logTag, "AI summary failed: ${result.message}")
-                        _events.emit(DetailEvent.AiSummaryFailed(result.message))
-                        ""
+                        // Park the export on a deferred; the UI shows a
+                        // dialog and calls resolveAiFailure() with the
+                        // user's choice. If they pick CANCEL_EXPORT we
+                        // bail out before touching AnkiDroid so no card
+                        // is created. If they pick CONTINUE_WITHOUT_AI
+                        // the card lands with an empty summary slot —
+                        // matching the original silent-failure behaviour
+                        // but now opt-in.
+                        val deferred = CompletableDeferred<AiFailureChoice>()
+                        pendingAiFailureDecision = deferred
+                        _events.emit(DetailEvent.AiSummaryFailedNeedsChoice(result.message))
+                        when (deferred.await()) {
+                            AiFailureChoice.CONTINUE_WITHOUT_AI -> ""
+                            AiFailureChoice.CANCEL_EXPORT -> {
+                                _events.emit(DetailEvent.AnkiExportCancelled)
+                                return
+                            }
+                        }
                     }
                     AiSummaryResult.Disabled -> ""
                 }

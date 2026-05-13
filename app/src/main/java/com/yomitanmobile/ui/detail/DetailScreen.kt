@@ -96,6 +96,10 @@ fun DetailScreen(
     // export button. Carried across deck-pick / duplicate / permission
     // round-trips so dialog confirmations don't lose the choice.
     var pendingIncludeAi by remember { mutableStateOf(false) }
+    // Non-null while the export coroutine is parked waiting for the user
+    // to decide what to do after a failed AI summary call. The string is
+    // the provider's error message shown verbatim in the dialog.
+    var aiFailureMessage by remember { mutableStateOf<String?>(null) }
 
     val ankiPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -165,15 +169,53 @@ fun DetailScreen(
                     duplicateInfo = event.expression to event.deckName
                     showDuplicateDialog = true
                 }
-                is DetailEvent.AiSummaryFailed ->
+                is DetailEvent.AiSummaryFailedNeedsChoice ->
+                    aiFailureMessage = event.message
+                is DetailEvent.AnkiExportCancelled ->
                     snackbarHostState.showSnackbar(
-                        tr(
-                            "Streszczenie AI nie powiodło się: ${event.message}",
-                            "AI summary failed: ${event.message}"
-                        )
+                        tr("Eksport anulowany.", "Export cancelled.")
                     )
             }
         }
+    }
+
+    aiFailureMessage?.let { message ->
+        // Mandatory choice — neither dismissing the dialog nor clicking
+        // outside the scrim closes it without a decision. We treat
+        // "outside click" as "cancel" because aborting is the safer
+        // default when the user hasn't made an explicit call. Either
+        // branch resumes the parked export coroutine via the VM.
+        AlertDialog(
+            onDismissRequest = {
+                aiFailureMessage = null
+                viewModel.resolveAiFailure(AiFailureChoice.CANCEL_EXPORT)
+            },
+            title = { Text(tr("Streszczenie AI nie powiodło się", "AI summary failed")) },
+            text = {
+                Text(
+                    tr(
+                        "Powód: $message\n\nMożesz utworzyć fiszkę bez streszczenia lub przerwać eksport.",
+                        "Reason: $message\n\nYou can still create the card without the summary, or abort the export."
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    aiFailureMessage = null
+                    viewModel.resolveAiFailure(AiFailureChoice.CONTINUE_WITHOUT_AI)
+                }) {
+                    Text(tr("Utwórz bez AI", "Create without AI"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    aiFailureMessage = null
+                    viewModel.resolveAiFailure(AiFailureChoice.CANCEL_EXPORT)
+                }) {
+                    Text(tr("Anuluj eksport", "Cancel export"))
+                }
+            }
+        )
     }
 
     Scaffold(
