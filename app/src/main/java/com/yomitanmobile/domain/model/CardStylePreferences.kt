@@ -45,6 +45,11 @@ data class CardStylePreferences(
     // for a flatter look. Defaults to true to match the section-separated
     // layout that ships with the app.
     val showSectionDividers: Boolean = true,
+    // Controls the bold <hr class="word-divider"> that sits inside the header
+    // between the expression and the reading. Independent of
+    // [showSectionDividers] so the user can flatten the back-side sections
+    // while keeping the word/reading split visible.
+    val showWordDivider: Boolean = true,
     // Optional AI summary integration. When [aiSummaryEnabled] is true and
     // [aiApiKey] is non-blank, DetailViewModel calls AiSummaryService at
     // export time and renders the result in the back-side Summary slot

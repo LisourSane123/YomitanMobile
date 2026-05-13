@@ -101,6 +101,13 @@ fun SettingsScreen(
     var showDeckEditDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
+    // After a successful restore the in-memory Hilt-singleton database
+    // handle is closed and every DAO reference is stale. Continuing to use
+    // the app in that state throws on the next query, so we lock the UI
+    // behind a mandatory dialog whose only action is to kill the process.
+    // The user relaunches and Hilt rebuilds the graph against the
+    // newly-restored DB file.
+    var showRestartRequiredDialog by remember { mutableStateOf(false) }
     var selectedBackupForRestore by remember { mutableStateOf<File?>(null) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -156,8 +163,8 @@ fun SettingsScreen(
                 is SettingsEvent.BackupError ->
                     Toast.makeText(context, tr("Błąd: ${event.message}", "Error: ${event.message}"), Toast.LENGTH_LONG).show()
                 is SettingsEvent.RestoreSuccess -> {
-                    Toast.makeText(context, tr("Przywrócono z kopii. Proszę zrestartować aplikację.", "Restored. Please restart the app."), Toast.LENGTH_LONG).show()
                     showRestoreDialog = false
+                    showRestartRequiredDialog = true
                 }
                 is SettingsEvent.RestoreError ->
                     Toast.makeText(context, tr("Błąd przywracania: ${event.message}", "Restore error: ${event.message}"), Toast.LENGTH_LONG).show()
@@ -203,6 +210,36 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showDeckEditDialog = false }) {
                     Text(tr("Anuluj", "Cancel"))
+                }
+            }
+        )
+    }
+
+    if (showRestartRequiredDialog) {
+        // Non-dismissable: the database singleton is closed and any DAO
+        // call from here on throws IllegalStateException. The only path
+        // forward is killing the process so Hilt rebuilds the graph.
+        AlertDialog(
+            onDismissRequest = { /* no-op: must restart */ },
+            title = { Text(tr("Wymagany restart", "Restart required")) },
+            text = {
+                Text(
+                    tr(
+                        "Kopia została przywrócona. Aplikacja musi zostać uruchomiona ponownie, aby załadować przywrócone dane.",
+                        "Backup restored. The app must restart to load the restored data."
+                    ),
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    // finishAffinity drops the back stack; exitProcess
+                    // tears down the JVM so the next launch starts a clean
+                    // Hilt graph rather than reusing the closed DB handle.
+                    (context as? Activity)?.finishAffinity()
+                    kotlin.system.exitProcess(0)
+                }) {
+                    Text(tr("Uruchom ponownie", "Restart now"))
                 }
             }
         )

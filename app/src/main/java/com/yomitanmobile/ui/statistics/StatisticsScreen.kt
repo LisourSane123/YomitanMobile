@@ -734,9 +734,12 @@ private fun StatCard(
 }
 
 private fun formatNumber(n: Int): String {
+    // Locale.US so the abbreviated count renders as "1.2K" in every region.
+    // Without it, `%.1f` produces "1,2K" in pl-PL and other comma-decimal
+    // locales — visually wrong inside a UI label that's mostly English.
     return when {
-        n >= 1_000_000 -> String.format("%.1fM", n / 1_000_000.0)
-        n >= 1_000 -> String.format("%.1fK", n / 1_000.0)
+        n >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", n / 1_000_000.0)
+        n >= 1_000 -> String.format(java.util.Locale.US, "%.1fK", n / 1_000.0)
         else -> n.toString()
     }
 }

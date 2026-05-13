@@ -1,21 +1,15 @@
 package com.yomitanmobile.data.backup
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.util.Log
-import androidx.datastore.preferences.preferencesDataStore
 import com.yomitanmobile.data.local.database.AppDatabase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,7 +22,15 @@ class BackupManager @Inject constructor(
     private companion object {
         const val BACKUP_DIR_NAME = "yomitan_backups"
         const val DATABASE_BACKUP_NAME = "database.db"
-        const val PREFS_BACKUP_NAME = "preferences.json"
+        // DataStore preferences are intentionally NOT included in the
+        // backup — the protobuf blob mixes the user-supplied AI API key
+        // with everything else, and getExternalFilesDir() is reachable via
+        // USB MTP and most third-party file managers. Backing up the .pb
+        // would leak the API key in plaintext. The user's actual data
+        // (dictionaries, favorites, exports, search history) all lives in
+        // the database file, which IS backed up. Card style / deck name /
+        // theme are rebuilt on next launch with their defaults — an
+        // acceptable trade for guaranteed secret hygiene.
     }
 
     private val logTag = "BackupManager"
@@ -40,7 +42,11 @@ class BackupManager @Inject constructor(
     suspend fun createBackup(): Result<File> = withContext(Dispatchers.IO) {
         try {
             val backupDir = getOrCreateBackupDir()
-            val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
+            // AnkiDroid's lint plugin bans both `new Date()` and
+            // `Calendar.getInstance()` to keep time controllable in tests.
+            // The current epoch millis is the simplest non-banned source.
+            val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
+                .format(System.currentTimeMillis())
             val backupFolder = File(backupDir, "backup_$timestamp")
             if (!backupFolder.mkdirs()) {
                 return@withContext Result.failure(Exception("Failed to create backup folder"))
@@ -57,8 +63,8 @@ class BackupManager @Inject constructor(
                 }
             }
 
-            // Backup DataStore preferences
-            backupDataStore(backupFolder)
+            // Preferences blob deliberately not copied (see companion-object
+            // comment). Only the database is preserved.
 
             Log.i(logTag, "Backup created at: ${backupFolder.absolutePath}")
             Result.success(backupFolder)
@@ -94,8 +100,12 @@ class BackupManager @Inject constructor(
                 }
             }
 
-            // Restore DataStore preferences
-            restoreDataStore(backupFolder)
+            // Preferences blob is not part of the backup (see companion
+            // object) so there is nothing to restore here. The user's
+            // settings stay at whatever the running DataStore currently
+            // holds; for an old-format backup that still has a
+            // `datastore_prefs.pb` we simply ignore it rather than risk
+            // re-introducing a leaked API key.
 
             Log.i(logTag, "Restore completed from: ${backupFolder.absolutePath}")
             Result.success(Unit)
@@ -136,40 +146,6 @@ class BackupManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(logTag, "Delete backup failed", e)
             Result.failure(e)
-        }
-    }
-
-    private suspend fun backupDataStore(backupFolder: File) {
-        try {
-            val dataStoreFile = File(context.filesDir, "datastore/yomitan_prefs.preferences_pb")
-            if (dataStoreFile.exists()) {
-                val prefsBackupFile = File(backupFolder, "datastore_prefs.pb")
-                FileInputStream(dataStoreFile).use { input ->
-                    FileOutputStream(prefsBackupFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(logTag, "DataStore backup failed", e)
-        }
-    }
-
-    private suspend fun restoreDataStore(backupFolder: File) {
-        try {
-            val prefsBackupFile = File(backupFolder, "datastore_prefs.pb")
-            if (prefsBackupFile.exists()) {
-                val dataStoreDir = File(context.filesDir, "datastore")
-                dataStoreDir.mkdirs()
-                val dataStoreFile = File(dataStoreDir, "yomitan_prefs.preferences_pb")
-                FileInputStream(prefsBackupFile).use { input ->
-                    FileOutputStream(dataStoreFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(logTag, "DataStore restore failed", e)
         }
     }
 

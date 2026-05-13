@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
         val TTS_RANDOM_VOICES_ENABLED = booleanPreferencesKey("tts_random_voices_enabled")
         val TTS_RANDOM_VOICES = stringSetPreferencesKey("tts_random_voices")
         val CARD_SHOW_SECTION_DIVIDERS = booleanPreferencesKey("card_show_section_dividers")
+        val CARD_SHOW_WORD_DIVIDER = booleanPreferencesKey("card_show_word_divider")
 
         // AI summary integration. Gated behind CARD_AI_SUMMARY_ENABLED so the
         // network call only happens when the user explicitly opts in. The

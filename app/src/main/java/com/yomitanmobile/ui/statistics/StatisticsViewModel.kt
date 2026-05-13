@@ -162,7 +162,7 @@ class StatisticsViewModel @Inject constructor(
 
         internal fun hourRangeLabel(hour: Int): String {
             val normalized = hour.coerceIn(0, 23)
-            return String.format("%02d:00-%02d:59", normalized, normalized)
+            return String.format(java.util.Locale.US, "%02d:00-%02d:59", normalized, normalized)
         }
 
         internal fun toCategoryActivity(
@@ -284,7 +284,7 @@ class StatisticsViewModel @Inject constructor(
             val dayEnd = dayDate.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
 
             val count = exportDates.count { it in dayStart until dayEnd }
-            val label = "${String.format("%02d", dayDate.dayOfMonth)}.${String.format("%02d", dayDate.monthValue)}"
+            val label = "${String.format(java.util.Locale.US, "%02d", dayDate.dayOfMonth)}.${String.format(java.util.Locale.US, "%02d", dayDate.monthValue)}"
             result.add(DailyCount(dayLabel = label, count = count, dayTimestamp = dayStart))
         }
         return result

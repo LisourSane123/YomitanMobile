@@ -1,9 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+// Release signing is loaded from app/keystore.properties (gitignored). The
+// file must define: storeFile, storePassword, keyAlias, keyPassword. When
+// the file is absent (dev machines, CI build of the debug variant) the
+// release block falls back to NO signing config — assembleRelease will
+// then fail loudly rather than silently producing an unsigned APK.
+val keystorePropertiesFile = rootProject.file("app/keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -13,7 +27,7 @@ android {
     defaultConfig {
         applicationId = "com.yomitanmobile"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
@@ -24,6 +38,18 @@ android {
 
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFilePath = keystoreProperties.getProperty("storeFile")
+            if (storeFilePath != null) {
+                storeFile = file(storeFilePath)
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -31,6 +57,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Only attach the signing config when keystore.properties exists.
+            // Otherwise leave signingConfig=null so an unconfigured machine
+            // produces an obviously-unsigned APK that won't install, rather
+            // than silently signing with the debug key.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -51,6 +84,20 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+
+    lint {
+        // The AnkiDroid API artifact ships a lint AAR that bans direct time
+        // sources (Date(), Calendar.getInstance(), System.currentTimeMillis())
+        // to enforce their internal Time-abstraction. We don't use that
+        // abstraction — disable the rules so they don't gate our release
+        // build for code paths that have nothing to do with the AnkiDroid
+        // module's testability concerns.
+        disable += setOf(
+            "DirectDateInstantiation",
+            "DirectCalendarInstanceUsage",
+            "DirectSystemCurrentTimeMillisUsage"
+        )
     }
 }
 

@@ -117,6 +117,7 @@ fun CardStyleScreen(
     var randomVoicesEnabled by remember { mutableStateOf(false) }
     var randomVoices by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showSectionDividers by remember { mutableStateOf(true) }
+    var showWordDivider by remember { mutableStateOf(true) }
     var aiSummaryEnabled by remember { mutableStateOf(false) }
     var aiProvider by remember { mutableStateOf(AiProvider.GEMINI) }
     var aiApiKey by remember { mutableStateOf("") }
@@ -170,6 +171,7 @@ fun CardStyleScreen(
         randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false
         randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
         showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true
+        showWordDivider = prefs[MainActivity.CARD_SHOW_WORD_DIVIDER] ?: true
         aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false
         aiProvider = AiProvider.fromStorage(prefs[MainActivity.CARD_AI_PROVIDER])
         aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: ""
@@ -201,6 +203,7 @@ fun CardStyleScreen(
         randomVoicesEnabled = randomVoicesEnabled,
         randomVoices = randomVoices,
         showSectionDividers = showSectionDividers,
+        showWordDivider = showWordDivider,
         aiSummaryEnabled = aiSummaryEnabled,
         aiProvider = aiProvider,
         aiApiKey = aiApiKey,
@@ -234,6 +237,7 @@ fun CardStyleScreen(
                 prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] = randomVoicesEnabled
                 prefs[MainActivity.TTS_RANDOM_VOICES] = randomVoices
                 prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] = showSectionDividers
+                prefs[MainActivity.CARD_SHOW_WORD_DIVIDER] = showWordDivider
                 prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] = aiSummaryEnabled
                 prefs[MainActivity.CARD_AI_PROVIDER] = aiProvider.storageValue
                 prefs[MainActivity.CARD_AI_API_KEY] = aiApiKey
@@ -254,7 +258,7 @@ fun CardStyleScreen(
         selectedFont, backgroundColor, expressionColor, readingColor,
         meaningColor, accentColor, showPitchAccent, showFrequency, showSentence,
         showFrontContextSentence, pitchAccentStyle, showSectionDividers,
-        sectionOrder
+        showWordDivider, sectionOrder
     ) {
         AnkiCardCreator.buildPreviewHtml(currentPreferences())
     }
@@ -344,7 +348,17 @@ fun CardStyleScreen(
                     AndroidView(
                         factory = { ctx ->
                             WebView(ctx).apply {
+                                // The preview renders user-supplied card
+                                // style strings (font names, colors). JS is
+                                // not needed and disabling the file/content
+                                // schemes closes off the usual local-file
+                                // exfiltration vectors that show up in
+                                // WebView CVE advisories. We also load with
+                                // a null baseUrl so the content has no
+                                // origin to chain off of.
                                 settings.javaScriptEnabled = false
+                                settings.allowFileAccess = false
+                                settings.allowContentAccess = false
                                 settings.loadWithOverviewMode = true
                                 settings.useWideViewPort = true
                                 isVerticalScrollBarEnabled = true
@@ -623,6 +637,21 @@ fun CardStyleScreen(
                     Switch(
                         checked = showSectionDividers,
                         onCheckedChange = { showSectionDividers = it }
+                    )
+                }
+            }
+
+            item {
+                SettingRow(
+                    title = tr("Linia między słowem a resztą", "Word divider line"),
+                    subtitle = tr(
+                        "Pokaż grubą linię między słowem a czytaniem w nagłówku fiszki",
+                        "Show the bold line between the word and the reading in the card header"
+                    )
+                ) {
+                    Switch(
+                        checked = showWordDivider,
+                        onCheckedChange = { showWordDivider = it }
                     )
                 }
             }

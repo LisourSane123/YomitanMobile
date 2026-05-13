@@ -308,6 +308,7 @@ class AnkiCardCreator(
             .word-divider {
                 border: none; border-top: 1px solid #fff;
                 margin: 12px 0; width: 100%;
+                display: ${if (!prefs.showWordDivider) "none" else "block"};
             }
             .front-context {
                 font-size: ${prefs.frontContextSentenceFontSize}px; color: #d7d7d7; margin-top: 8px;

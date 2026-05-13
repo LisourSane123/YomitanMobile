@@ -33,28 +33,15 @@ class DictionaryRepositoryImpl @Inject constructor(
     private val database: AppDatabase
 ) : DictionaryRepository {
 
-    /**
-     * SQLite tuning that's only safe during the import itself: synchronous=OFF
-     * skips fsync per transaction, journal_mode=MEMORY keeps the rollback
-     * journal in RAM. PRAGMA isn't expressible through Room @Query (it
-     * returns no rows), so we go through the support helper directly. Each
-     * helper restores the durable defaults afterwards in a finally.
-     */
-    private fun beginBulkImport() {
-        runCatching {
-            val db = database.openHelper.writableDatabase
-            db.execSQL("PRAGMA synchronous = OFF")
-            db.execSQL("PRAGMA journal_mode = MEMORY")
-        }
-    }
-
-    private fun endBulkImport() {
-        runCatching {
-            val db = database.openHelper.writableDatabase
-            db.execSQL("PRAGMA synchronous = NORMAL")
-            db.execSQL("PRAGMA journal_mode = WAL")
-        }
-    }
+    // NOTE: previously we toggled `PRAGMA synchronous = OFF` and
+    // `journal_mode = MEMORY` for the duration of the import to speed up
+    // bulk inserts. That trade was unsafe: if the process was killed in the
+    // middle of a multi-GB import (OOM, ANR, user force-stop) the database
+    // could be left in an unrecoverable state, taking the user's favorites,
+    // search history, and Anki export log down with it. Room's default
+    // WAL+NORMAL is already fast enough — the per-batch transaction
+    // grouping (10k entries) is where the real win comes from. Do not
+    // re-introduce these PRAGMAs without addressing the corruption risk.
 
     override suspend fun getKanjis(kanjiList: List<String>): List<KanjiEntry> {
         return kanjiDao.getKanjis(kanjiList)
@@ -73,7 +60,13 @@ class DictionaryRepositoryImpl @Inject constructor(
 
     override fun searchCombined(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
-        return dictionaryDao.searchCombined(query.trim())
+        val trimmed = query.trim()
+        // Exact equality uses the raw trimmed input; the LIKE-side gets a
+        // copy with SQL wildcards (% _ \) escaped, paired with `ESCAPE '\'`
+        // in the DAO query. Without this, a user typing `%` matched every
+        // entry and `_` matched any single character.
+        val likeQuery = InputSanitizer.sanitizeLikeQuery(trimmed)
+        return dictionaryDao.searchCombined(trimmed, likeQuery)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { _ ->
                 emit(emptyList())
@@ -111,13 +104,6 @@ class DictionaryRepositoryImpl @Inject constructor(
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit
     ): ImportResult = withContext(Dispatchers.IO) {
-        // Drop synchronous=OFF + journal=MEMORY for the duration of the
-        // import. Cuts fsync per transaction and avoids WAL bookkeeping
-        // during what is effectively a one-shot bulk load. Restored to safer
-        // settings in the finally block — cards added afterwards still
-        // hit a durable journal_mode=WAL.
-        beginBulkImport()
-
         try {
             var totalInserted = 0
             var totalKanjiInserted = 0
@@ -213,11 +199,6 @@ class DictionaryRepositoryImpl @Inject constructor(
                 entriesImported = 0,
                 errorMessage = e.message ?: "Unknown error during import"
             )
-        } finally {
-            // Always restore durable settings before the user starts adding
-            // search history / favorites / Anki exports — those rows must not
-            // be at risk of disappearing on a power cycle.
-            endBulkImport()
         }
     }
 

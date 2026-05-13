@@ -36,16 +36,25 @@ interface DictionaryDao {
     @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
     suspend fun getByReading(reading: String): List<DictionaryEntry>
 
+    /**
+     * Two-parameter signature so the equality match (`= :exactQuery`) uses
+     * the user's literal input while the prefix match (`LIKE :likeQuery ||
+     * '%'`) receives a version with SQL LIKE wildcards (`%`, `_`, `\`)
+     * pre-escaped via [com.yomitanmobile.util.InputSanitizer.sanitizeLikeQuery].
+     * Without the escape, a user typing `%` matched everything; `_` matched
+     * any single char. The ESCAPE '\' clause tells SQLite to honour the
+     * backslash-escapes the sanitizer emits.
+     */
     @Query("""
         SELECT * FROM dictionary_entries
-        WHERE expression = :query 
-           OR reading = :query
-           OR expression LIKE :query || '%'
-           OR reading LIKE :query || '%'
-        ORDER BY 
-            CASE 
-                WHEN expression = :query THEN 0
-                WHEN reading = :query THEN 1
+        WHERE expression = :exactQuery
+           OR reading = :exactQuery
+           OR expression LIKE :likeQuery || '%' ESCAPE '\'
+           OR reading LIKE :likeQuery || '%' ESCAPE '\'
+        ORDER BY
+            CASE
+                WHEN expression = :exactQuery THEN 0
+                WHEN reading = :exactQuery THEN 1
                 ELSE 2
             END,
             CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
@@ -53,7 +62,7 @@ interface DictionaryDao {
             LENGTH(expression) ASC
         LIMIT :limit
     """)
-    fun searchCombined(query: String, limit: Int = 50): Flow<List<DictionaryEntry>>
+    fun searchCombined(exactQuery: String, likeQuery: String, limit: Int = 50): Flow<List<DictionaryEntry>>
 
     @Query("SELECT * FROM dictionary_entries WHERE id = :id")
     suspend fun getById(id: Long): DictionaryEntry?
