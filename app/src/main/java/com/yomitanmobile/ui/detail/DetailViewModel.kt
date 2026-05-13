@@ -28,7 +28,6 @@ import com.yomitanmobile.util.LocaleHelper
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -105,23 +104,18 @@ class DetailViewModel @Inject constructor(
     val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
 
     /**
-     * Set when [performExport] is parked waiting for the user's decision
-     * about a failed AI summary call. The UI calls [resolveAiFailure] to
-     * complete it; the export coroutine then resumes with the chosen
-     * branch. At most one is outstanding because [_isExporting] gates new
-     * exports while a prior one is in flight.
+     * Coroutine handoff for the AI-failure dialog. Set internal so the
+     * extracted gate can be exercised in tests via [resolveAiFailure].
+     * [_isExporting] ensures only one decision can be in flight at a time.
      */
-    private var pendingAiFailureDecision: CompletableDeferred<AiFailureChoice>? = null
+    private val aiFailureGate = AiFailureGate()
 
     /**
-     * Called by the UI when the AI-failure dialog is dismissed. Completes
-     * the parked deferred (if any) so the export coroutine wakes up and
-     * either finishes the card with an empty summary slot or aborts.
-     * Safe to call even when no export is in flight — it's a no-op then.
+     * Called by the UI when the AI-failure dialog is dismissed. Safe to
+     * call when no export is parked — the gate treats that as a no-op.
      */
     fun resolveAiFailure(choice: AiFailureChoice) {
-        pendingAiFailureDecision?.complete(choice)
-        pendingAiFailureDecision = null
+        aiFailureGate.resolve(choice)
     }
 
     init {
@@ -446,18 +440,14 @@ class DetailViewModel @Inject constructor(
                     is AiSummaryResult.Success -> result.text
                     is AiSummaryResult.Failure -> {
                         Log.w(logTag, "AI summary failed: ${result.message}")
-                        // Park the export on a deferred; the UI shows a
+                        // Park the export on the gate; the UI shows a
                         // dialog and calls resolveAiFailure() with the
-                        // user's choice. If they pick CANCEL_EXPORT we
-                        // bail out before touching AnkiDroid so no card
-                        // is created. If they pick CONTINUE_WITHOUT_AI
-                        // the card lands with an empty summary slot —
-                        // matching the original silent-failure behaviour
-                        // but now opt-in.
-                        val deferred = CompletableDeferred<AiFailureChoice>()
-                        pendingAiFailureDecision = deferred
+                        // user's choice. CANCEL_EXPORT bails out before
+                        // touching AnkiDroid so no card is created;
+                        // CONTINUE_WITHOUT_AI lands the card with an
+                        // empty summary slot.
                         _events.emit(DetailEvent.AiSummaryFailedNeedsChoice(result.message))
-                        when (deferred.await()) {
+                        when (aiFailureGate.awaitDecision()) {
                             AiFailureChoice.CONTINUE_WITHOUT_AI -> ""
                             AiFailureChoice.CANCEL_EXPORT -> {
                                 _events.emit(DetailEvent.AnkiExportCancelled)

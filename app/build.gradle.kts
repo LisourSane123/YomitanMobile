@@ -168,6 +168,10 @@ dependencies {
 
     // Unit tests
     testImplementation("junit:junit:4.13.2")
+    // Drives runTest{} and TestDispatcher for coroutine/Deferred logic.
+    // Pinned to the same 1.8.1 line as the coroutines-android dep so the
+    // test runtime sees the same Job/Dispatcher internals as production.
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 
     // Instrumentation tests
     androidTestImplementation("androidx.test:runner:1.6.1")

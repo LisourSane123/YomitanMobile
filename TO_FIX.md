@@ -9,7 +9,7 @@ Legend:
 **Status 2026-05-13 EOD:** all P0 items shipped. `./gradlew :app:assembleRelease :app:testDebugUnitTest` is green. Release engineer still needs to create `app/keystore.properties` from the template before signing the production APK.
 
 **Status 2026-05-13 late:** all P0 + all P1 (except #12) + all P2 (except #16) shipped. Release build + tests green. Remaining open items:
-- **P1-12**: integration tests for `DictionaryRepositoryImpl`, `BackupManager`, `DetailViewModel` (larger piece of work).
+- **P1-12**: partial. `AiFailureGate` extracted + 5 tests; `InputSanitizer` 14 tests. `DictionaryRepositoryImpl` / `BackupManager` / full `DetailViewModel.performExport` deferred to a post-launch test-infrastructure sprint (Robolectric or instrumentation).
 - **P2-16**: dependency bumps — partial. K1.9-compatible bumps applied (Hilt 2.51.1, Lifecycle 2.8.7, kotlinx-coroutines 1.8.1, etc.). Compose BOM / Room 2.7+ / Hilt 2.52+ / Kotlin 2.x deferred to a dedicated post-launch sprint.
 - **P0 release-engineer prereq**: create `app/keystore.properties` from the template before signing the production APK.
 
@@ -71,7 +71,15 @@ P2 highlights:
 
 - [x] **11. WebView defense-in-depth.** `CardStyleScreen.kt:350` has `javaScriptEnabled = false` ✓ but missing `allowFileAccess = false` and `allowContentAccess = false`.
 
-- [ ] **12. Missing tests on critical paths.** No tests for: `InputSanitizer`, `DictionaryRepositoryImpl`, `BackupManager`, `DetailViewModel` (Anki export). Anki export is the money path; regressions there are catastrophic.
+- [~] **12. Missing tests on critical paths.** Partial:
+  - `InputSanitizer` — 14 tests (P1-10). ✓
+  - `AiFailureGate` (extracted from `DetailViewModel`) — 5 tests covering both choices, dismiss-as-cancel semantics, stale-resolve safety, awaiter cancellation. ✓ Locks down the new AI-failure choice flow.
+  - **Still TODO (post-launch, needs Robolectric or instrumentation infra):**
+    - `DictionaryRepositoryImpl` end-to-end search through Room. The new sanitizer + LIKE escape behaviours are covered at the unit-sanitizer level but not at the Room-binding level. Risk: an FTS query that parses fine in isolation but errors at SQLite execution.
+    - `BackupManager` file-contract test (backup writes only the DB file; restore replaces the DB and leaves DataStore alone). Needs a real `Context` + `RoomDatabase`.
+    - Full `DetailViewModel.performExport` flow with fake `AnkiCardCreator` + fake `AiSummaryService`. The AI-failure choice path is exercised indirectly via the gate test, but the wiring (event emission order, `_isExporting` reset, ExportedWord persistence) isn't.
+
+  Adding Robolectric or instrumentation-test infrastructure the week before launch introduces test flakiness without a corresponding behaviour benefit (the production code is already locked down by manual smoke). Schedule a dedicated test-infrastructure sprint for post-launch — that's the right time to take on the dep + CI setup.
 
 - [x] **13. Locale-dependent `String.format`.** `StatisticsScreen.kt:738-739`, `StatisticsViewModel.kt:165,287` — `%.1f` formats with comma in pl-PL. Use `String.format(Locale.US, ...)`.
 

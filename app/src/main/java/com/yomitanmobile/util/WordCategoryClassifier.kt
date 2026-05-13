@@ -61,8 +61,13 @@ object WordCategoryClassifier {
                 "saffron", "vanilla", "bay leaf", "oregano", "thyme", "rosemary", "basil", "parsley", "cilantro", "coriander leaf",
                 "dill", "mint", "sage", "tarragon", "lemongrass", "sesame seed", "sesame", "wasabi", "horseradish", "soy", "miso",
                 "jedzenie", "posilek", "napoj", "gotowanie", "receptura", "smak", "kuchnia", "chleb", "maka", "mleko", "ser", "mlode",
-                "sery", "maso", "ryba", "warzyw", "owoc", "zupa", "sałat", "deser", "ciastko", "piekarnia", "restauracja", "biegus",
-                "pielęgnacja", "gotowanie", "rozpuszcze", "obiad", "śniadanie", "kolacja", "płatki", "herbata", "kawe", "woda",
+                // "biegus" was a typo/diarrhoea reference unrelated to FOOD;
+                // "pielęgnacja" means caregiving (HEALTH, not FOOD);
+                // "rozpuszcze" / "kawe" are misspellings — dropped.
+                // "gotowanie" already listed above, "śniadanie" / "obiad" /
+                // "kolacja" kept since they're the meal names.
+                "sery", "masło", "ryba", "warzywa", "owoce", "zupa", "sałatka", "deser", "ciastko", "piekarnia", "restauracja",
+                "obiad", "śniadanie", "kolacja", "płatki", "herbata", "kawa", "woda",
                 "食", "飲", "料理", "ご飯", "弁当", "レストラン", "味", "塩", "砂糖", "油", "バター", "チーズ", "卵", "鶏",
                 "牛", "豚", "羊", "新鮮", "冷凍", "缶詰", "塩辛", "甘", "辛", "酸っぱい", "風味", "美味", "不健康", "栄養",
                 "おいしい", "まずい", "料理", "調理", "焼く", "煮込む", "蒸す", "炒める", "揚げる", "煮る", "グリル", "おかず"
@@ -152,7 +157,8 @@ object WordCategoryClassifier {
                 "dividend", "earning", "earnings", "profit margin", "roi", "return", "yield", "gross", "net", "salary", "wage",
                 "ekonomia", "finanse", "bank", "bankowy", "inwestycja", "podatek", "rynek", "pieniadze", "zysk", "kredyt",
                 "handel", "import", "eksport", "biznes", "przemysl", "usluga", "produkt", "kupiec", "sprzedawca", "transakcja",
-                "rachunkowość", "umowa", "faktura", "kurs", "wymiana", "dochód", "wydatek", "kapitał", "drażg", "ubezpieczenie",
+                // "drażg" wasn't a Polish word — dropped.
+                "rachunkowość", "umowa", "faktura", "kurs", "wymiana", "dochód", "wydatek", "kapitał", "ubezpieczenie",
                 "経済", "経済学", "金融", "銀行", "投資", "株", "債券", "取引", "税", "商業", "貿易", "輸出", "輸入",
                 "商品", "サービス", "消費者", "利益", "損失", "収入", "支出", "資本", "負債", "融資", "保険", "給与"
             )
@@ -190,10 +196,12 @@ object WordCategoryClassifier {
                 "scholarship", "grant", "loan", "tuition", "fee", "cost", "financial aid", "sponsorship",
                 "research", "experiment", "lab", "laboratory", "field study", "internship", "practicum", "observation",
                 "edukacja", "nauczanie", "nauczyciel", "uczeń", "student", "szkoła", "uniwersytet", "akademia",
-                "clase", "lekcja", "kurs", "przedmiot", "matematyka", "nauka", "język", "literatura", "historia",
+                // "clase" was Spanish copy-paste — Polish list now reads
+                // "klasa" (class). "kurs" already present below.
+                "klasa", "lekcja", "przedmiot", "matematyka", "nauka", "język", "literatura", "historia",
                 "geografia", "gramatyka", "słownictwo", "zdanie", "esej", "praca", "egzamin", "test", "ocena",
                 "stopień", "dyplom", "certyfikat", "kwalifikacja", "licencja", "badania", "eksperyment", "laboratorium",
-                "教育", "教育", "学校", "学生", "学生", "教師", "講師", "教授", "大学", "学習", "研究",
+                "教育", "学校", "学生", "教師", "講師", "教授", "大学", "学習", "研究",
                 "クラス", "教室", "レッスン", "コース", "カリキュラム", "試験", "テスト", "クイズ", "評価", "スコア", "成績",
                 "数学", "科学", "化学", "物理学", "生物学", "歴史", "地理", "言語", "文学", "文法", "語彙"
             )
@@ -229,7 +237,10 @@ object WordCategoryClassifier {
                 "conflict", "dispute", "grievance", "complaint", "resolution", "mediation", "negotiation", "compromise",
                 "praca", "pracownik", "zatrudnienie", "kariera", "zawód", "pracownik", "personel", "zespół", "pracownicy",
                 "biuro", "firma", "korporacja", "przedsiębiorstwo", "organizacja", "dział", "oddział", "centrum",
-                "dyrektor", "kierownik", "szef", "menadżer", "przełożony", "супер wisor", "asystent", "doradca",
+                // "супер wisor" was Russian-script copy-paste noise that
+                // never matched anything — dropped. "supervisor" is already
+                // covered by the EN list above.
+                "dyrektor", "kierownik", "szef", "menadżer", "przełożony", "asystent", "doradca",
                 "inżynier", "projektant", "programista", "analityk", "konsultant", "specjalista", "eksperyment",
                 "spotkanie", "konferencja", "seminarium", "warsztacie", "szkolenie", "prezentacja", "seminarium",
                 "projekt", "zadanie", "cel", "termin", "odpowiedzialność", "obowiązek", "wydajność", "ocena",
@@ -331,7 +342,9 @@ object WordCategoryClassifier {
                 "discount", "discounted", "sale price", "markup", "margin", "profit", "loss", "clearance", "bargain",
                 "coupon", "voucher", "coupon code", "promotion", "offer", "deal", "special", "offer", "advertise", "advertisement",
                 "payment", "pay", "payable", "cash", "card", "credit card", "debit card", "check", "bank transfer", "online payment",
-                "receipt", "receipt", "invoice", "bill", "reciept", "transaction", "order", "purchase order", "confirmation",
+                // "reciept" was a misspelling — dropped (real spelling
+                // "receipt" already present).
+                "receipt", "invoice", "bill", "transaction", "order", "purchase order", "confirmation",
                 "product", "item", "merchandise", "commodity", "goods", "ware", "product line", "brand", "label", "brand name",
                 "quality", "quality control", "defect", "warranty", "guarantee", "return", "refund", "exchange", "replacement",
                 "size", "fitting", "fit", "measurement", "measurement", "size chart", "material", "color", "style", "design",
@@ -360,7 +373,10 @@ object WordCategoryClassifier {
                 "zakupy", "kupic", "sprzedać", "cena", "rabat", "klient", "sklep", "towar", "produkt", "rozmiar",
                 "ubranie", "koszula", "spodnie", "but", "kapelusz", "kurtka", "plecak", "torebka", "portfel", "biżuteria",
                 "meble", "stół", "krzeslo", "łóżko", "szafa", "lampa", "obraz", "lustro", "dywan", "zasłony",
-                "Buy", "sell", "purchase", "sale", "customer", "cost", "price", "discount", "promotion", "quality",
+                // Capital "Buy" / "Decoration" were stray artifacts — the
+                // sanitiser lowercases the haystack before matching, so
+                // mixed-case keywords could never hit. Normalised here.
+                "buy", "sell", "purchase", "sale", "customer", "cost", "price", "discount", "promotion", "quality",
                 "買", "売", "値段", "店", "支払い", "割引", "客", "商品", "服", "色", "サイズ", "品質",
                 "ドレス", "シャツ", "ズボン", "靴", "帽子", "ジャケット", "セーター", "バッグ", "財布", "配送",
                 "店舗", "小売", "マーケットプレイス", "価格", "コスト", "割引", "クーポン", "プロモーション", "オファー",
@@ -388,7 +404,7 @@ object WordCategoryClassifier {
                 "bed", "mattress", "frame", "headboard", "footboard", "box spring", "pillow", "pillowcase", "sheet",
                 "wardrobe", "closet", "cabinet", "cabinet", "shelf", "dresser", "bureau", "chest", "chest of drawers",
                 "lamp", "lighting", "light", "light bulb", "floor lamp", "table lamp", "ceiling light", "chandelier",
-                "Decoration", "decor", "wall art", "picture", "painting", "poster", "frame", "mirror", "vase", "ornament",
+                "decoration", "decor", "wall art", "picture", "painting", "poster", "frame", "mirror", "vase", "ornament",
                 "cleaning", "clean", "cleanliness", "hygiene", "sanitary", "sanitize", "disinfect", "disinfectant",
                 "dust", "dusting", "vacuum", "sweeping", "broom", "mop", "wet mop", "sweep", "brush", "dustpan",
                 "laundry", "wash", "washing", "wash cycle", "spin cycle", "rinse", "dry", "drying", "fold", "folding",
@@ -522,7 +538,9 @@ object WordCategoryClassifier {
                 "reconciliation", "reconcile", "reconciling", "make up", "make peace", "peace", "peace",
                 "apology", "apologize", "apology", "sorry", "remorse", "regret", "repent", "regretful",
                 "forgive", "forgiveness", "forgive", "pardon", "pardon", "absolution", "absolve", "let go",
-                "relacja", "przyjaznesc", "przyjaciel", "przyjaciel", "kolega", "sasiad", "obca osoba", "nieznajomy",
+                // "przyjaznesc" was a misspelling of "przyjaźń" (friendship);
+                // "przyjaciel" was listed twice — dropped duplicate.
+                "relacja", "przyjaźń", "przyjaciel", "kolega", "sąsiad", "obca osoba", "nieznajomy",
                 "rodzina", "rodzin", "krewny", "pokrewienstwo", "rodzinne", "dom", "gospodarstwo",
                 "rodzic", "ojciec", "mama", "matka", "matka", "syn", "corka", "dziecko", "niemowle",
                 "brat", "siostra", "brat starszy", "siostra starsza", "brat mlodszy", "siostra mladsza", "rodzenstwo",
@@ -536,8 +554,12 @@ object WordCategoryClassifier {
                 "nerwowość", "nerowy", "lęk", "strach", "przerażenie", "zastraszenie", "zastraszajacy",
                 "zazdrosc", "zazdrosny", "zazdrość", "zawisć", "zawistny", "urazony", "resentment",
                 "duma", "dumny", "pycha", "arogancja", "zarozumiale", "samouwielbienie", "zwycistwo",
-                "wstydu", "wstyd", "zelazenie", "poniżenie", "poniżony", "upokorzenie", "upokorzony",
-                "zawiration", "zawsze", "kochany", "drogi", "zyczliwy", "czuly", "tender", "nażyczliwy",
+                // "zelazenie" and "zawiration" weren't Polish words.
+                // "tender" is English (already covered by the EN block);
+                // "nażyczliwy" was a misspelling of "życzliwy" (kept). All
+                // dropped.
+                "wstyd", "poniżenie", "poniżony", "upokorzenie", "upokorzony",
+                "kochany", "drogi", "życzliwy", "czuły",
                 "関係", "友情", "友達", "友人", "同僚", "隣人", "知らない人", "見知らぬ人",
                 "家族", "家族", "親戚", "続柄", "親", "父", "父親", "お父さん", "母", "お母さん",
                 "子供", "息子", "娘", "赤ちゃん", "兄", "弟", "姉", "妹", "兄弟姉妹",
@@ -566,6 +588,19 @@ object WordCategoryClassifier {
         }
     }
 
+    /**
+     * Picks the category whose keyword set has the most hits against the
+     * word's text. Score-based instead of first-match-wins so a word like
+     * 肉親 ("blood relative") lands in RELATIONSHIPS via "blood / relative /
+     * kin" instead of FOOD via the single kanji 肉.
+     *
+     * Tie-breaking: if two rules score equally, the earlier rule in the
+     * [rules] list wins (strict `>` comparison below). The list order
+     * thus still encodes an implicit priority for ambiguous cases, but
+     * only when keyword counts are genuinely tied.
+     *
+     * Returns [CATEGORY_OTHER] when no rule scores above zero.
+     */
     fun classify(entry: WordEntry): String {
         val haystack = buildString {
             append(entry.expression)
@@ -581,13 +616,16 @@ object WordCategoryClassifier {
             append(entry.exampleSentenceTranslation)
         }.lowercase()
 
+        var bestCode = CATEGORY_OTHER
+        var bestScore = 0
         for (rule in rules) {
-            if (rule.keywords.any { keyword -> matchesKeyword(haystack, keyword) }) {
-                return rule.code
+            val score = rule.keywords.count { keyword -> matchesKeyword(haystack, keyword) }
+            if (score > bestScore) {
+                bestScore = score
+                bestCode = rule.code
             }
         }
-
-        return CATEGORY_OTHER
+        return bestCode
     }
 
     fun displayName(categoryCode: String, isEnglish: Boolean = false): String {
