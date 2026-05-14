@@ -11,6 +11,7 @@ import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.dao.KanjiDao
+import com.yomitanmobile.data.local.dao.LookupCountDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.DictionaryEntry
@@ -19,6 +20,7 @@ import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
 import com.yomitanmobile.data.local.entity.KanjiEntry
+import com.yomitanmobile.data.local.entity.LookupCount
 import com.yomitanmobile.data.local.entity.SearchHistory
 import com.yomitanmobile.data.local.entity.Sentence
 
@@ -31,9 +33,10 @@ import com.yomitanmobile.data.local.entity.Sentence
         FavoriteWord::class,
         SearchHistory::class,
         KanjiEntry::class,
-        Sentence::class
+        Sentence::class,
+        LookupCount::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -45,6 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun searchHistoryDao(): SearchHistoryDao
     abstract fun kanjiDao(): KanjiDao
     abstract fun sentenceDao(): SentenceDao
+    abstract fun lookupCountDao(): LookupCountDao
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
@@ -57,6 +61,27 @@ abstract class AppDatabase : RoomDatabase() {
                 // No backfill — only Jitendex (and similar enriched dicts) carry
                 // examples. Users on plain JMDict simply have empty lists until
                 // they re-import.
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Per-word lookup counter (feature: "if I keep coming
+                // back to a rare word, prompt me to learn it"). Composite
+                // PK on (expression, reading) — the entity declares the
+                // same in @Entity(primaryKeys=…).
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS lookup_counts (
+                        expression TEXT NOT NULL,
+                        reading TEXT NOT NULL,
+                        lookup_count INTEGER NOT NULL DEFAULT 1,
+                        first_lookup INTEGER NOT NULL,
+                        last_lookup INTEGER NOT NULL,
+                        PRIMARY KEY (expression, reading)
+                    )
+                    """.trimIndent()
+                )
             }
         }
 

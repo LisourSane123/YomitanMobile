@@ -12,6 +12,7 @@ import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
+import com.yomitanmobile.data.local.dao.LookupCountDao
 import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
@@ -87,6 +88,7 @@ class DetailViewModel @Inject constructor(
     private val aiSummaryService: AiSummaryService,
     private val exportedWordDao: ExportedWordDao,
     private val favoriteWordDao: FavoriteWordDao,
+    private val lookupCountDao: LookupCountDao,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -123,6 +125,16 @@ class DetailViewModel @Inject constructor(
      */
     private val _displayedCategory = MutableStateFlow(WordCategoryClassifier.CATEGORY_OTHER)
     val displayedCategory: StateFlow<String> = _displayedCategory.asStateFlow()
+
+    /**
+     * Running count of how many times the user has opened this word's
+     * detail page (tracked per `(expression, reading)` in the
+     * `lookup_counts` table). Updated every time [loadEntry] resolves.
+     * The UI surfaces it as "Looked up N×" and, past a threshold,
+     * suggests favoriting / exporting.
+     */
+    private val _lookupCount = MutableStateFlow(0)
+    val lookupCount: StateFlow<Int> = _lookupCount.asStateFlow()
 
     /**
      * Coroutine handoff for the AI-failure dialog. Set internal so the
@@ -173,6 +185,35 @@ class DetailViewModel @Inject constructor(
             _isLoading.value = false
             checkFavoriteStatus()
             refreshDisplayedCategory()
+            recordLookup()
+        }
+    }
+
+    /**
+     * Increments the per-word lookup counter and republishes the new
+     * value to [_lookupCount]. Best-effort — if the DB call throws (e.g.
+     * the user is on a pre-migration DB during an upgrade), we leave the
+     * UI showing 0 rather than blocking detail rendering.
+     */
+    private fun recordLookup() {
+        val merged = _entry.value ?: return
+        val expression = merged.primaryExpression
+        if (expression.isBlank()) return
+        val reading = merged.reading.ifBlank { expression }
+
+        viewModelScope.launch {
+            runCatching {
+                lookupCountDao.incrementOrInsert(
+                    expression = expression,
+                    reading = reading,
+                    now = Instant.now().toEpochMilli()
+                )
+                lookupCountDao.getCount(expression, reading) ?: 0
+            }.onSuccess { count ->
+                _lookupCount.value = count
+            }.onFailure { exception ->
+                Log.w(logTag, "Lookup-count update failed", exception)
+            }
         }
     }
 

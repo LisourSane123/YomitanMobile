@@ -10,8 +10,42 @@ Legend:
 
 **Status 2026-05-13 late:** all P0 + all P1 (except #12) + all P2 (except #16) shipped. Release build + tests green. Remaining open items:
 - **P1-12**: partial. `AiFailureGate` extracted + 5 tests; `InputSanitizer` 14 tests. `DictionaryRepositoryImpl` / `BackupManager` / full `DetailViewModel.performExport` deferred to a post-launch test-infrastructure sprint (Robolectric or instrumentation).
-- **P2-16**: dependency bumps — partial. K1.9-compatible bumps applied (Hilt 2.51.1, Lifecycle 2.8.7, kotlinx-coroutines 1.8.1, etc.). Compose BOM / Room 2.7+ / Hilt 2.52+ / Kotlin 2.x deferred to a dedicated post-launch sprint.
+- **P2-16**: dependency bumps — **REVERTED 2026-05-14** after Android 16 regression (see "P2-16 dep-bump regression" section below).
 - **P0 release-engineer prereq**: create `app/keystore.properties` from the template before signing the production APK.
+
+## P2-16 dep-bump regression (2026-05-14)
+
+**Symptom.** On Android 16 (kernel 6.1.138-android14-11), tapping any "Download" button in `DictionaryDownloadScreen` made the app close silently — no crash dialog, no toast, no logcat output reaching our installed `Thread.setDefaultUncaughtExceptionHandler`. The process was being terminated outside the JVM exception flow (likely native SIGSEGV in a downstream lib, OOM-killer, or a system policy kill — without adb we couldn't pin down which).
+
+**Trigger.** The P2-16 dependency bumps. Specifically the combination of `kotlinx-coroutines-android` 1.7.3 → 1.8.1 and `lifecycle-*` 2.7.0 → 2.8.7 interacting with Android 16. Either library individually may be fine — we did not bisect — but the combined upgrade broke the download path on this OS version. No issue surfaced on the audit's debug-build sanity checks because those ran on an emulator targeting an earlier API.
+
+**Fix.** Reverted every P2-16 dep bump in `app/build.gradle.kts` to the pre-audit versions that shipped with the working build. Also reverted the Hilt Gradle plugin version in the root `build.gradle.kts` (it has to match the runtime artifact). Restored versions:
+
+| Library | Was | Reverted to |
+|---|---|---|
+| `androidx.core:core-ktx` | 1.13.1 | 1.12.0 |
+| `androidx.lifecycle:lifecycle-*` | 2.8.7 | 2.7.0 |
+| `androidx.activity:activity-compose` | 1.9.3 | 1.8.2 |
+| `androidx.navigation:navigation-compose` | 2.7.7 | 2.7.6 |
+| `com.google.dagger:hilt-android` + compiler | 2.51.1 | 2.50 |
+| `androidx.hilt:hilt-navigation-compose` | 1.2.0 | 1.1.0 |
+| `androidx.datastore:datastore-preferences` | 1.1.1 | 1.0.0 |
+| `org.jetbrains.kotlinx:kotlinx-serialization-json` | 1.6.3 | 1.6.2 |
+| `org.jetbrains.kotlinx:kotlinx-coroutines-android` (+ -test) | 1.8.1 | 1.7.3 |
+| `androidx.test:runner` | 1.6.1 | 1.5.2 |
+| `androidx.test.ext:junit` | 1.2.1 | 1.1.5 |
+| `com.google.dagger.hilt.android` (Gradle plugin) | 2.51.1 | 2.50 |
+
+**Forward path.** Do NOT re-attempt these bumps individually. The path is the Kotlin 2.x migration sprint that's already documented in this file — that's the right time to bump the whole toolchain in lockstep (Kotlin → KSP → Compose compiler plugin → Compose BOM → Room → Hilt → kotlinx-coroutines / -serialization / lifecycle). Until then, leave the dep set frozen on the versions that match the original working build.
+
+**Diagnostic infrastructure added during this incident.** Two pieces that should stay in for production:
+
+1. `YomitanMobileApp.installLastResortHandler()` — wraps `Thread.setDefaultUncaughtExceptionHandler` so any uncaught exception (a) is logged at ERROR level, (b) attempts a best-effort toast, (c) is persisted to `filesDir/last_crash.txt` with timestamp + thread name + full stack trace, and (d) is delegated to the previous handler so the process still dies normally. The file-based persistence is the part that's load-bearing — toasts and logcat are both lossy when adb isn't available.
+2. `MainActivity.readAndClearLastCrash()` + `CrashReportDialog` — at app launch, reads and atomically clears `filesDir/last_crash.txt`. If non-empty, the trace is surfaced as a modal `AlertDialog` in monospace font, scrollable, with copy-pastable text. The user can long-press to select the trace and share it without needing adb.
+
+These run regardless of build type. Cost is negligible (one disk read at launch). Leave them in — next time we hit a silent-close in the wild we'll have the stack trace at our fingertips.
+
+**Limitation.** Native crashes (SIGSEGV, OOM-killer, system policy kills) bypass the JVM entirely and won't write the crash file. For those, the only diagnostic path is logcat over adb. We considered NDK signal handling but that's a large piece of infrastructure for a rare diagnostic — not worth the complexity right now.
 
 ## Category-classifier rework (B/G/E/F/I — shipped 2026-05-14)
 

@@ -125,11 +125,16 @@ android {
 //     Kotlin 1.9.22 + KSP 1.9.22-1.0.17.
 dependencies {
     // Core
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.activity:activity-compose:1.9.3")
+    // P2-16 dep bumps reverted 2026-05-14 — a downstream regression
+    // surfaced on Android 16 during dictionary download. Suspect path is
+    // lifecycle 2.8.x + kotlinx-coroutines 1.8.x interaction with the
+    // newer OS. Reverted to the versions that shipped with the working
+    // build. Kotlin 2.x migration is the proper unlock for re-bumping.
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.activity:activity-compose:1.8.2")
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2023.10.01"))
@@ -142,12 +147,12 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // Navigation Compose
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.navigation:navigation-compose:2.7.6")
 
     // Hilt
-    implementation("com.google.dagger:hilt-android:2.51.1")
-    ksp("com.google.dagger:hilt-android-compiler:2.51.1")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation("com.google.dagger:hilt-android:2.50")
+    ksp("com.google.dagger:hilt-android-compiler:2.50")
+    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
 
     // Room
     implementation("androidx.room:room-runtime:2.6.1")
@@ -155,25 +160,24 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     // Kotlin Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // AnkiDroid API
     implementation("com.github.ankidroid:Anki-Android:api-v1.1.0")
 
     // DataStore Preferences
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
 
     // Unit tests
     testImplementation("junit:junit:4.13.2")
-    // Drives runTest{} and TestDispatcher for coroutine/Deferred logic.
-    // Pinned to the same 1.8.1 line as the coroutines-android dep so the
-    // test runtime sees the same Job/Dispatcher internals as production.
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    // Pinned to the same 1.7.3 line as coroutines-android so test runtime
+    // matches production.
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 
     // Instrumentation tests
-    androidTestImplementation("androidx.test:runner:1.6.1")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
 }

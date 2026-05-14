@@ -99,6 +99,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _isImporting.value = true
             _importProgress.value = null
+            // Catch Throwable (not just Exception). The parser can OOM on
+            // pathological inputs (Errors don't extend Exception), and
+            // letting that escape would crash the app instead of giving
+            // the user a useful error toast.
             try {
                 val result = importDictionaryUseCase.invoke(
                     inputStream = inputStream,
@@ -109,8 +113,12 @@ class SettingsViewModel @Inject constructor(
                 } else {
                     _events.emit(SettingsEvent.ImportError(result.errorMessage ?: "Import failed"))
                 }
-            } catch (e: Exception) {
-                _events.emit(SettingsEvent.ImportError(e.message ?: "Unknown error"))
+            } catch (t: Throwable) {
+                _events.emit(
+                    SettingsEvent.ImportError(
+                        "${t.javaClass.simpleName}: ${t.message ?: "no message"}"
+                    )
+                )
             } finally {
                 _isImporting.value = false
                 _importProgress.value = null

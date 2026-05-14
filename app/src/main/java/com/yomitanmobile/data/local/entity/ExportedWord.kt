@@ -37,7 +37,14 @@ data class ExportedWord(
     @ColumnInfo(name = "export_hour")
     val exportHour: Int = localHourFromTimestamp(exportDate),
 
-    @ColumnInfo(name = "export_category")
+    // defaultValue annotations match the SQL DEFAULT clauses emitted by
+    // the corresponding ALTER TABLE migrations. Without them, Room's
+    // post-migration schema validator sees `DEFAULT 'OTHER'` in the
+    // actual DB but `DEFAULT NULL` in the entity and throws
+    // IllegalStateException. On debug, fallbackToDestructiveMigration
+    // would wipe and recreate; on release the app would crash on first
+    // open after upgrade.
+    @ColumnInfo(name = "export_category", defaultValue = "'OTHER'")
     val exportCategory: String = WordCategoryClassifier.CATEGORY_OTHER,
 
     /**
@@ -47,7 +54,7 @@ data class ExportedWord(
      * an upgraded row that hasn't been reclassified yet — the stats
      * rollup falls back to [exportCategory] in that case.
      */
-    @ColumnInfo(name = "export_categories")
+    @ColumnInfo(name = "export_categories", defaultValue = "''")
     val exportCategories: String = "",
 
     /**
@@ -56,7 +63,7 @@ data class ExportedWord(
      * filter view shows this value and the reclassify pass leaves it
      * alone.
      */
-    @ColumnInfo(name = "manual_category")
+    @ColumnInfo(name = "manual_category", defaultValue = "''")
     val manualCategory: String = ""
 )
 

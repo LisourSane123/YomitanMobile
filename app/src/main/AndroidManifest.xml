@@ -35,6 +35,20 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!--
+                Text-selection hook: any app that exposes the system
+                selection toolbar (Chrome, manga readers, Twitter,
+                practically every text-displaying app on Android) will
+                surface "Yomitan Mobile" as an action when the user
+                highlights a word. The activity receives EXTRA_PROCESS_TEXT
+                and routes through extractSearchQueryFromIntent like the
+                share-sheet path does.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <provider

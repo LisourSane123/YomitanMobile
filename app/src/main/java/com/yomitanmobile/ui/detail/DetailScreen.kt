@@ -85,6 +85,7 @@ fun DetailScreen(
     val ttsReady by viewModel.ttsReady.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
     val displayedCategory by viewModel.displayedCategory.collectAsState()
+    val lookupCount by viewModel.lookupCount.collectAsState()
     var showCategoryPicker by remember { mutableStateOf(false) }
     val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
@@ -395,6 +396,9 @@ fun DetailScreen(
                     isEnglish = isEnglish,
                     displayedCategory = displayedCategory,
                     onOpenCategoryPicker = { showCategoryPicker = true },
+                    lookupCount = lookupCount,
+                    isFavorite = isFavorite,
+                    onToggleFavorite = { viewModel.toggleFavorite() },
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -412,6 +416,9 @@ private fun WordDetailContent(
     isEnglish: Boolean,
     displayedCategory: String,
     onOpenCategoryPicker: () -> Unit,
+    lookupCount: Int,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
@@ -496,6 +503,57 @@ private fun WordDetailContent(
                             .clickable { onOpenCategoryPicker() }
                             .padding(horizontal = 10.dp, vertical = 3.dp)
                     )
+                    // Lookup count badge. Only shown after the first
+                    // recorded visit (count >= 1) so a brand-new lookup
+                    // doesn't draw the chip on a stranger.
+                    if (lookupCount >= 1) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = tr("Sprawdzone ${lookupCount}×", "Looked up ${lookupCount}×"),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+                // Repeated-lookup prompt. The threshold (3) is empirical
+                // — fewer than that and the user is probably just
+                // browsing; more and the "I keep coming back to this
+                // word" signal is real. We only nudge if the word isn't
+                // already favorited, to avoid annoying users who already
+                // committed to learning it.
+                if (lookupCount >= 3 && !isFavorite) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = tr(
+                                "Sprawdzasz to słowo regularnie — może warto je dodać do ulubionych?",
+                                "You keep coming back to this word — maybe favorite it?"
+                            ),
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(onClick = onToggleFavorite) {
+                            Text(tr("Dodaj", "Favorite"))
+                        }
+                    }
                 }
                 Spacer(Modifier.height(16.dp))
                 OutlinedButton(

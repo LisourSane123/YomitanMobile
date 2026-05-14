@@ -73,14 +73,29 @@ class DictionaryDownloadViewModel @Inject constructor(
 
     fun downloadDictionary(info: DictionaryDownloadInfo) {
         viewModelScope.launch {
-            val result = downloadManager.downloadAndImport(info)
-            when (result) {
-                is DownloadResult.Success -> {
-                    _events.emit(DownloadEvent.Success(result.dictionaryName, result.entriesImported))
+            // Catch Throwable (not just Exception) — kotlinx.coroutines
+            // turns OutOfMemoryError into a propagating throw, and the
+            // dictionary import path allocates several MB at a time. We
+            // surface those as DownloadEvent.Error rather than letting
+            // them reach the uncaught-exception handler, which would
+            // crash the app on the user with no diagnostic.
+            try {
+                val result = downloadManager.downloadAndImport(info)
+                when (result) {
+                    is DownloadResult.Success -> {
+                        _events.emit(DownloadEvent.Success(result.dictionaryName, result.entriesImported))
+                    }
+                    is DownloadResult.Error -> {
+                        _events.emit(DownloadEvent.Error(result.dictionaryName, result.message))
+                    }
                 }
-                is DownloadResult.Error -> {
-                    _events.emit(DownloadEvent.Error(result.dictionaryName, result.message))
-                }
+            } catch (t: Throwable) {
+                _events.emit(
+                    DownloadEvent.Error(
+                        info.name,
+                        "${t.javaClass.simpleName}: ${t.message ?: "no message"}"
+                    )
+                )
             }
         }
     }
@@ -93,14 +108,23 @@ class DictionaryDownloadViewModel @Inject constructor(
         viewModelScope.launch {
             for (dict in AvailableDictionaries.recommended) {
                 if (!isDictionaryInstalled(dict)) {
-                    val result = downloadManager.downloadAndImport(dict)
-                    when (result) {
-                        is DownloadResult.Success -> {
-                            _events.emit(DownloadEvent.Success(result.dictionaryName, result.entriesImported))
+                    try {
+                        val result = downloadManager.downloadAndImport(dict)
+                        when (result) {
+                            is DownloadResult.Success -> {
+                                _events.emit(DownloadEvent.Success(result.dictionaryName, result.entriesImported))
+                            }
+                            is DownloadResult.Error -> {
+                                _events.emit(DownloadEvent.Error(result.dictionaryName, result.message))
+                            }
                         }
-                        is DownloadResult.Error -> {
-                            _events.emit(DownloadEvent.Error(result.dictionaryName, result.message))
-                        }
+                    } catch (t: Throwable) {
+                        _events.emit(
+                            DownloadEvent.Error(
+                                dict.name,
+                                "${t.javaClass.simpleName}: ${t.message ?: "no message"}"
+                            )
+                        )
                     }
                 }
             }
