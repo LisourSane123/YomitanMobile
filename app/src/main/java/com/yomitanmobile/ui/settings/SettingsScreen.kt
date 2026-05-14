@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Style
@@ -168,6 +169,19 @@ fun SettingsScreen(
                 }
                 is SettingsEvent.RestoreError ->
                     Toast.makeText(context, tr("Błąd przywracania: ${event.message}", "Restore error: ${event.message}"), Toast.LENGTH_LONG).show()
+                is SettingsEvent.ReclassifyDone -> {
+                    val msg = tr(
+                        "Przeliczono ${event.updated}, zachowano ręcznych ${event.skippedManual}, pominięto ${event.skippedMissing}",
+                        "Updated ${event.updated}, kept ${event.skippedManual} manual, skipped ${event.skippedMissing}"
+                    )
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
+                is SettingsEvent.ReclassifyError ->
+                    Toast.makeText(
+                        context,
+                        tr("Błąd: ${event.message}", "Error: ${event.message}"),
+                        Toast.LENGTH_LONG
+                    ).show()
             }
         }
     }
@@ -644,6 +658,29 @@ fun SettingsScreen(
                     title = tr("Statystyki", "Statistics"),
                     subtitle = tr("Przegląd aktywności, streak, wykres fiszek", "Activity overview, streak, card chart"),
                     onClick = onNavigateToStatistics
+                )
+            }
+
+            // Reclassify pass. Walks every ExportedWord row and re-runs
+            // WordCategoryClassifier with the current rules. Manual user
+            // overrides are preserved; rows whose source dictionary is
+            // gone are silently skipped. Run lock = isReclassifying.
+            item {
+                val isReclassifying by viewModel.isReclassifying.collectAsState()
+                SettingsClickableItem(
+                    icon = Icons.Default.List,
+                    title = tr("Przelicz kategorie", "Recompute categories"),
+                    subtitle = if (isReclassifying) {
+                        tr("Przeliczanie…", "Recomputing…")
+                    } else {
+                        tr(
+                            "Przepisz kategorie wyeksportowanych słów po zmianie reguł",
+                            "Rewrite categories of exported words after rule changes"
+                        )
+                    },
+                    onClick = {
+                        if (!isReclassifying) viewModel.reclassifyCategories()
+                    }
                 )
             }
 

@@ -92,16 +92,17 @@ class SearchViewModel @Inject constructor(
     private val _importedWordsCount = MutableStateFlow(0)
     val importedWordsCount: StateFlow<Int> = _importedWordsCount.asStateFlow()
 
+    // Multi-label rollup (fix E): same shape as the SettingsViewModel
+    // version. Each ExportedWord can boost the count of multiple chips
+    // if it sits on a category boundary.
     val categoryStats: StateFlow<List<SearchCategoryStat>> = exportedWordDao
-        .getCategoryActivityAll()
+        .getCategoryRowsAll()
         .map { rows ->
-            rows
-                .map { row ->
-                    SearchCategoryStat(
-                        code = row.category.trim().ifBlank { WordCategoryClassifier.CATEGORY_OTHER },
-                        count = row.count
-                    )
-                }
+            val tally = WordCategoryClassifier.tallyCategories(
+                rows.map { Triple(it.manualCategory, it.exportCategories, it.exportCategory) }
+            )
+            tally
+                .map { (code, count) -> SearchCategoryStat(code = code, count = count) }
                 .sortedByDescending { it.count }
         }
         .catch { emit(emptyList()) }

@@ -13,6 +13,21 @@ Legend:
 - **P2-16**: dependency bumps — partial. K1.9-compatible bumps applied (Hilt 2.51.1, Lifecycle 2.8.7, kotlinx-coroutines 1.8.1, etc.). Compose BOM / Room 2.7+ / Hilt 2.52+ / Kotlin 2.x deferred to a dedicated post-launch sprint.
 - **P0 release-engineer prereq**: create `app/keystore.properties` from the template before signing the production APK.
 
+## Category-classifier rework (B/G/E/F/I — shipped 2026-05-14)
+
+User-driven follow-up to the A/C/D audit pass. Now landed on `alternate_way`:
+
+- **B — drop POS tags + reading from haystack.** `WordCategoryClassifier.classify` now scans only `expression + definitions + example sentences`. POS tags ("v1, vt, n") and the kana reading were adding substring noise without semantic signal.
+- **G — weighted + negative keywords.** `CategoryRule` gained `strongKeywords: Map<String, Int>` and `negatives: Set<String>`. Score = base hits + Σ weights − NEGATIVE_WEIGHT (=2) × negative hits. Surgical additions: ECONOMY/HEALTH/EDUCATION/RELATIONSHIPS got 5 high-weight terms each; FOOD got a negative set including `親`, `relative`, `blood relative`, `kin` so 肉親 no longer mis-fires as FOOD.
+- **E — multi-label storage.** Room v11 → v12 migration adds `export_categories TEXT` (CSV) and `manual_category TEXT` to `exported_words`. `WordCategoryClassifier.classifyAll` returns all rules whose score ≥ max(2, ceil(top/2)). `tallyCategories` + `resolveCategories` encapsulate the manual-override → CSV → legacy precedence chain. Stats rollups in `StatisticsViewModel`, `SettingsViewModel`, `SearchViewModel` all flow through the helper now — a word in two categories contributes to both counts.
+- **F — reclassify pass.** New `ReclassifyCategoriesUseCase` + a "Recompute categories" row in Settings. Walks every `exported_words` row, re-fetches the source `WordEntry` by reading, re-runs `classifyAll`, writes back. Manual overrides preserved. Rows whose source dictionary was deleted are counted in `skippedMissing`. Result surfaces as a toast with per-bucket counts.
+- **I — manual user override.** Tappable category chip next to the JLPT chip on `DetailScreen`. Picker dialog lists every category plus an "Auto (classifier)" option that clears the override. `DetailViewModel.setManualCategory` writes to every `ExportedWord` row matching `(expression, reading)` in one `UPDATE`; if no rows exist yet, the displayed chip still updates and a snackbar explains "will apply on first export".
+
+**Deferred to post-launch (documented for future maintainers):**
+
+- **H — embedding-based classification.** Replace the keyword rules with a per-word embedding lookup against pre-computed category centroids. Needs a provider decision (Gemini `embedContent` vs OpenAI `text-embedding-3-small`) and changes the cost model — every export becomes a network call. Architectural conversation, not a config change. The existing keyword + score path remains the fallback when the network is unavailable, so this can layer on top of (G) rather than replace it.
+- **J — classify every dictionary entry at import.** Would add `category` to `dictionary_entries`, run `classifyAll` against all ~200k rows during import, rebuild FTS. Unlocks category filtering in the search UI (a real study feature). Cost: a multi-minute migration on every user's device on first launch after the upgrade. **Not appropriate the week before launch.** Schedule for the post-launch dependency-upgrade sprint that already needs to walk the DB anyway (Kotlin 2.x / Room 2.7+ / Compose BOM bump).
+
 ## Feature work landed alongside the audit
 
 - **AI failure → user choice (2026-05-13).** Previously, when the AI summary call failed during Anki export (rate limit, bad key, network), the card was silently created with an empty summary slot and a snackbar noted the failure. The user had no control over whether to accept that. Now the export coroutine parks on a `CompletableDeferred` and the user gets an `AlertDialog` with two actions: "Create without AI" finishes the card, "Cancel export" aborts before AnkiDroid is touched. Dialog dismiss (back/outside-tap) is treated as "Cancel". File: `ui/detail/DetailViewModel.kt` + `ui/detail/DetailScreen.kt`.

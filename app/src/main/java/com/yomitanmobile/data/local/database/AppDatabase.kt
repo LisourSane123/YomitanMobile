@@ -33,7 +33,7 @@ import com.yomitanmobile.data.local.entity.Sentence
         KanjiEntry::class,
         Sentence::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -57,6 +57,33 @@ abstract class AppDatabase : RoomDatabase() {
                 // No backfill — only Jitendex (and similar enriched dicts) carry
                 // examples. Users on plain JMDict simply have empty lists until
                 // they re-import.
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Multi-label storage: a single ExportedWord can now belong
+                // to multiple categories (CSV of WordCategoryClassifier
+                // codes). Existing rows are backfilled from the legacy
+                // single-value `export_category` so the stats rollup
+                // keeps showing the same data until a reclassify pass
+                // upgrades them with multi-label results.
+                db.execSQL(
+                    "ALTER TABLE exported_words ADD COLUMN export_categories TEXT NOT NULL DEFAULT ''"
+                )
+                db.execSQL(
+                    """
+                    UPDATE exported_words
+                    SET export_categories = COALESCE(NULLIF(TRIM(export_category), ''), 'OTHER')
+                    WHERE export_categories = ''
+                    """.trimIndent()
+                )
+                // User-set override for fix (I). Empty string means "no
+                // override; respect classifier output". Survives any
+                // future reclassify pass.
+                db.execSQL(
+                    "ALTER TABLE exported_words ADD COLUMN manual_category TEXT NOT NULL DEFAULT ''"
+                )
             }
         }
 

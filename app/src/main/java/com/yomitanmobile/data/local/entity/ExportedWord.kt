@@ -38,7 +38,26 @@ data class ExportedWord(
     val exportHour: Int = localHourFromTimestamp(exportDate),
 
     @ColumnInfo(name = "export_category")
-    val exportCategory: String = WordCategoryClassifier.CATEGORY_OTHER
+    val exportCategory: String = WordCategoryClassifier.CATEGORY_OTHER,
+
+    /**
+     * Comma-separated list of all categories whose score cleared the
+     * classifier's threshold for this word (see [WordCategoryClassifier.classifyAll]).
+     * The legacy `exportCategory` is the first entry. Empty string means
+     * an upgraded row that hasn't been reclassified yet — the stats
+     * rollup falls back to [exportCategory] in that case.
+     */
+    @ColumnInfo(name = "export_categories")
+    val exportCategories: String = "",
+
+    /**
+     * User override set via the long-press menu in DetailScreen. Empty
+     * means "no override; respect classifier". When set, every stats /
+     * filter view shows this value and the reclassify pass leaves it
+     * alone.
+     */
+    @ColumnInfo(name = "manual_category")
+    val manualCategory: String = ""
 )
 
 private fun localHourFromTimestamp(timestamp: Long): Int {

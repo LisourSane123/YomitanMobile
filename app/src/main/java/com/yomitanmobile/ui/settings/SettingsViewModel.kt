@@ -33,6 +33,17 @@ sealed class SettingsEvent {
     data class RestoreError(val message: String) : SettingsEvent()
     data class ImportSuccess(val result: ImportResult) : SettingsEvent()
     data class ImportError(val message: String) : SettingsEvent()
+    /**
+     * Result of "Recompute categories" — surfaced as a snackbar with
+     * per-bucket counts (updated / preserved-by-manual-override / skipped
+     * because source dictionary is gone).
+     */
+    data class ReclassifyDone(
+        val updated: Int,
+        val skippedManual: Int,
+        val skippedMissing: Int
+    ) : SettingsEvent()
+    data class ReclassifyError(val message: String) : SettingsEvent()
 }
 
 data class MinedCategoryStat(
@@ -46,6 +57,7 @@ class SettingsViewModel @Inject constructor(
     private val importDictionaryUseCase: ImportDictionaryUseCase,
     private val deleteDictionaryUseCase: DeleteDictionaryUseCase,
     private val backupManager: BackupManager,
+    private val reclassifyCategoriesUseCase: com.yomitanmobile.domain.usecase.ReclassifyCategoriesUseCase,
     getDictionariesUseCase: GetDictionariesUseCase,
     exportedWordDao: ExportedWordDao
 ) : ViewModel() {
@@ -53,10 +65,15 @@ class SettingsViewModel @Inject constructor(
     val dictionaries: StateFlow<List<DictionaryInfo>> = getDictionariesUseCase.invoke()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val minedCategoryStats: StateFlow<List<MinedCategoryStat>> = exportedWordDao.getCategoryActivityAll()
+    // Multi-label rollup (fix E): one ExportedWord row can count toward
+    // several categories. The classifier helper handles the manual-override
+    // → CSV → legacy fallback chain so this view doesn't need to know the
+    // schema details.
+    val minedCategoryStats: StateFlow<List<MinedCategoryStat>> = exportedWordDao.getCategoryRowsAll()
         .map { rows ->
-            val countsByCode = rows
-                .associate { row -> row.category.trim().ifBlank { WordCategoryClassifier.CATEGORY_OTHER } to row.count }
+            val countsByCode = WordCategoryClassifier.tallyCategories(
+                rows.map { Triple(it.manualCategory, it.exportCategories, it.exportCategory) }
+            )
 
             WordCategoryClassifier.mostImportantCategories().map { (code, label) ->
                 MinedCategoryStat(
@@ -109,6 +126,37 @@ class SettingsViewModel @Inject constructor(
 
     private val _isRestoring = MutableStateFlow(false)
     val isRestoring: StateFlow<Boolean> = _isRestoring.asStateFlow()
+
+    private val _isReclassifying = MutableStateFlow(false)
+    val isReclassifying: StateFlow<Boolean> = _isReclassifying.asStateFlow()
+
+    /**
+     * Re-runs WordCategoryClassifier on every exported word, rewriting
+     * the multi-label `export_categories` column. Manual overrides
+     * survive untouched. Surface result via SettingsEvent so the UI
+     * can show a snackbar with the counts.
+     */
+    fun reclassifyCategories() {
+        viewModelScope.launch {
+            _isReclassifying.value = true
+            try {
+                val result = reclassifyCategoriesUseCase()
+                _events.emit(
+                    SettingsEvent.ReclassifyDone(
+                        updated = result.updated,
+                        skippedManual = result.skippedManual,
+                        skippedMissing = result.skippedMissing
+                    )
+                )
+            } catch (e: Exception) {
+                _events.emit(
+                    SettingsEvent.ReclassifyError(e.message ?: "Unknown error")
+                )
+            } finally {
+                _isReclassifying.value = false
+            }
+        }
+    }
 
     init {
         refreshBackupList()

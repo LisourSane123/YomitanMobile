@@ -5,9 +5,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.MainActivity
-import com.yomitanmobile.data.local.dao.CategoryActivityCount
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
+import com.yomitanmobile.data.local.dao.ExportedCategoryRow
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.HourlyActivityCount
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
@@ -165,17 +165,26 @@ class StatisticsViewModel @Inject constructor(
             return String.format(java.util.Locale.US, "%02d:00-%02d:59", normalized, normalized)
         }
 
+        /**
+         * Multi-label rollup: each ExportedCategoryRow can contribute to
+         * several categories (via [WordCategoryClassifier.classifyAll]).
+         * The classifier's [resolveCategories] handles the manual-override
+         * → CSV → legacy-single fallback chain; [tallyCategories] is the
+         * sum.
+         */
         internal fun toCategoryActivity(
-            items: List<CategoryActivityCount>,
+            rows: List<ExportedCategoryRow>,
             isEnglish: Boolean = false
         ): List<CategoryActivity> {
-            return items
-                .map {
-                    val code = it.category.trim().ifBlank { WordCategoryClassifier.CATEGORY_OTHER }
+            val tally = WordCategoryClassifier.tallyCategories(
+                rows.map { Triple(it.manualCategory, it.exportCategories, it.exportCategory) }
+            )
+            return tally
+                .map { (code, count) ->
                     CategoryActivity(
                         categoryCode = code,
                         categoryLabel = categoryLabel(code, isEnglish),
-                        count = it.count
+                        count = count
                     )
                 }
                 .sortedWith(compareByDescending<CategoryActivity> { it.count }.thenBy { it.categoryLabel })
@@ -229,13 +238,13 @@ class StatisticsViewModel @Inject constructor(
                 }
                 val mostActiveHour = findMostActiveHour(hourlyActivity)
                 val categoryActivity = runCatching {
-                    toCategoryActivity(exportedWordDao.getCategoryActivitySince(oneWeekAgo))
+                    toCategoryActivity(exportedWordDao.getCategoryRowsSince(oneWeekAgo))
                 }.getOrElse {
                     Log.e(logTag, "Failed to load category activity", it)
                     emptyList()
                 }
                 val categoryActivityAllTime = runCatching {
-                    toCategoryActivity(exportedWordDao.getCategoryActivityAll().first())
+                    toCategoryActivity(exportedWordDao.getCategoryRowsAll().first())
                 }.getOrElse {
                     Log.e(logTag, "Failed to load all-time category activity", it)
                     emptyList()

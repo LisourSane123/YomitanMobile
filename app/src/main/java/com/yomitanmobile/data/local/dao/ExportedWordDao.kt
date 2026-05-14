@@ -22,6 +22,22 @@ data class CategoryActivityCount(
     val count: Int
 )
 
+/**
+ * Per-row category-label tuple used by the multi-label rollup. We pull
+ * the raw strings out of SQLite and aggregate in Kotlin — SQL splitting
+ * of a comma-separated list with a recursive CTE was tried, but the
+ * Room-generated code was unreadable and FTS-tokenizer-dependent. The
+ * Kotlin path is also a single linear pass that's trivial to debug.
+ */
+data class ExportedCategoryRow(
+    @ColumnInfo(name = "export_category")
+    val exportCategory: String,
+    @ColumnInfo(name = "export_categories")
+    val exportCategories: String,
+    @ColumnInfo(name = "manual_category")
+    val manualCategory: String
+)
+
 @Dao
 interface ExportedWordDao {
 
@@ -82,10 +98,97 @@ interface ExportedWordDao {
     fun getCategoryActivityAll(): Flow<List<CategoryActivityCount>>
 
     /**
+     * Raw per-row labels for the multi-label rollup. Callers expand
+     * `manualCategory` (if set) OR `exportCategories` (CSV) OR
+     * `exportCategory` (legacy single value) in Kotlin and tally hits.
+     * See [com.yomitanmobile.util.WordCategoryClassifier.classifyAll]
+     * for how `exportCategories` is populated.
+     */
+    @Query(
+        """
+        SELECT export_category, export_categories, manual_category
+        FROM exported_words
+        WHERE export_date >= :fromTimestamp
+        """
+    )
+    suspend fun getCategoryRowsSince(fromTimestamp: Long): List<ExportedCategoryRow>
+
+    @Query(
+        """
+        SELECT export_category, export_categories, manual_category
+        FROM exported_words
+        """
+    )
+    fun getCategoryRowsAll(): Flow<List<ExportedCategoryRow>>
+
+    /**
      * Get earliest export date (for chart range).
      */
     @Query("SELECT MIN(export_date) FROM exported_words")
     suspend fun getEarliestExportDate(): Long?
+
+    /** Snapshot of every row — used by the reclassify pass. */
+    @Query("SELECT * FROM exported_words")
+    suspend fun getAllExports(): List<ExportedWord>
+
+    /**
+     * Updates only the classifier-owned columns. The manual override
+     * (`manual_category`) and unrelated columns are preserved — this is
+     * what makes the reclassify pass safe to run repeatedly.
+     */
+    @Query(
+        """
+        UPDATE exported_words
+        SET export_category = :exportCategory,
+            export_categories = :exportCategories
+        WHERE id = :id
+        """
+    )
+    suspend fun updateExportCategories(
+        id: Long,
+        exportCategory: String,
+        exportCategories: String
+    )
+
+    /** Sets the user override; cleared by passing an empty string. */
+    @Query("UPDATE exported_words SET manual_category = :manualCategory WHERE id = :id")
+    suspend fun updateManualCategory(id: Long, manualCategory: String)
+
+    /**
+     * Sets the user override on every exported row matching the
+     * (expression, reading) pair. A single word may be exported to
+     * several decks; the user-facing chip should affect them as a
+     * unit. Returns the number of rows updated so the UI can show
+     * "no exports to update yet" when this word hasn't been mined.
+     */
+    @Query(
+        """
+        UPDATE exported_words
+        SET manual_category = :manualCategory
+        WHERE expression = :expression AND reading = :reading
+        """
+    )
+    suspend fun updateManualCategoryForWord(
+        expression: String,
+        reading: String,
+        manualCategory: String
+    ): Int
+
+    /**
+     * Reads back the manual override (if any) for a word. The first
+     * non-blank value wins — if the user set the same word on multiple
+     * decks the values should be consistent because
+     * [updateManualCategoryForWord] updates all rows in one statement.
+     */
+    @Query(
+        """
+        SELECT manual_category FROM exported_words
+        WHERE expression = :expression AND reading = :reading
+          AND manual_category != ''
+        LIMIT 1
+        """
+    )
+    suspend fun getManualCategoryForWord(expression: String, reading: String): String?
 
     /**
      * Get all export dates for chart computation.

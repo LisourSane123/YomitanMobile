@@ -21,11 +21,35 @@ object WordCategoryClassifier {
     const val CATEGORY_ANIMALS = "ANIMALS"
     const val CATEGORY_OTHER = "OTHER"
 
+    /**
+     * Penalty applied per matched negative keyword. Set higher than 1 so a
+     * single negative actively disqualifies a category rather than merely
+     * cancelling one positive — e.g. for 肉親 ("blood relative") the kanji
+     * 肉 makes FOOD score +1, and 親 in FOOD's negatives subtracts
+     * [NEGATIVE_WEIGHT], pushing FOOD's score firmly below RELATIONSHIPS.
+     */
+    private const val NEGATIVE_WEIGHT = 2
+
     private data class CategoryRule(
         val code: String,
         val labelPl: String,
         val labelEn: String,
-        val keywords: Set<String>
+        /** Default-weight (1 point) keywords. Largest list per rule. */
+        val keywords: Set<String>,
+        /**
+         * Strongly-indicative keywords worth more than the default. The
+         * map's Int is the FULL weight (not an additive boost over 1) so
+         * a single match on "investment" with weight 3 scores 3 points.
+         * Defaults to empty; only rules with unambiguous signals populate
+         * this to keep the file readable.
+         */
+        val strongKeywords: Map<String, Int> = emptyMap(),
+        /**
+         * Words that, when present, indicate this category is the WRONG
+         * answer. Each match subtracts [NEGATIVE_WEIGHT] from the score.
+         * Used surgically for documented cross-category collisions.
+         */
+        val negatives: Set<String> = emptySet()
     )
 
     private val rules = listOf(
@@ -71,6 +95,12 @@ object WordCategoryClassifier {
                 "食", "飲", "料理", "ご飯", "弁当", "レストラン", "味", "塩", "砂糖", "油", "バター", "チーズ", "卵", "鶏",
                 "牛", "豚", "羊", "新鮮", "冷凍", "缶詰", "塩辛", "甘", "辛", "酸っぱい", "風味", "美味", "不健康", "栄養",
                 "おいしい", "まずい", "料理", "調理", "焼く", "煮込む", "蒸す", "炒める", "揚げる", "煮る", "グリル", "おかず"
+            ),
+            negatives = setOf(
+                // 肉親 ("flesh-kin" = blood relative) pulls FOOD score up
+                // via 肉. These negatives push it back down when
+                // relationship-coded text is present.
+                "親", "relative", "blood relative", "kin", "in-law"
             )
         ),
         CategoryRule(
@@ -161,6 +191,16 @@ object WordCategoryClassifier {
                 "rachunkowość", "umowa", "faktura", "kurs", "wymiana", "dochód", "wydatek", "kapitał", "ubezpieczenie",
                 "経済", "経済学", "金融", "銀行", "投資", "株", "債券", "取引", "税", "商業", "貿易", "輸出", "輸入",
                 "商品", "サービス", "消費者", "利益", "損失", "収入", "支出", "資本", "負債", "融資", "保険", "給与"
+            ),
+            strongKeywords = mapOf(
+                // Phrases / terms with no plausible non-economy reading.
+                // Each match dominates default-weight overlaps with
+                // SHOPPING ("market") and HEALTH ("insurance").
+                "investment" to 3,
+                "inflation" to 3,
+                "stock market" to 3,
+                "interest rate" to 3,
+                "fiscal" to 3
             )
         ),
         CategoryRule(
@@ -204,6 +244,16 @@ object WordCategoryClassifier {
                 "教育", "学校", "学生", "教師", "講師", "教授", "大学", "学習", "研究",
                 "クラス", "教室", "レッスン", "コース", "カリキュラム", "試験", "テスト", "クイズ", "評価", "スコア", "成績",
                 "数学", "科学", "化学", "物理学", "生物学", "歴史", "地理", "言語", "文学", "文法", "語彙"
+            ),
+            strongKeywords = mapOf(
+                // Unambiguous EDUCATION signals. "professor" / "homework"
+                // / "curriculum" / "diploma" / "university" never appear
+                // in food/work/health contexts in JMDict glosses.
+                "university" to 3,
+                "professor" to 3,
+                "homework" to 3,
+                "curriculum" to 3,
+                "diploma" to 3
             )
         ),
         CategoryRule(
@@ -291,6 +341,15 @@ object WordCategoryClassifier {
                 "痛み", "怪我", "切り傷", "青紫色", "骨折", "火傷", "捻挫", "感染", "ウイルス", "細菌",
                 "熱", "咳", "風邪", "インフルエンザ", "アレルギー", "心臓", "血圧", "糖尿病", "がん", "腫瘍",
                 "運動", "フィットネス", "トレーニング", "ランニング", "スイミング", "ヨガ", "ダイエット", "栄養", "睡眠"
+            ),
+            strongKeywords = mapOf(
+                // Clinical/clinical-adjacent vocabulary. Dominates the
+                // weak HEALTH/ECONOMY overlap on "insurance".
+                "hospital" to 3,
+                "diagnosis" to 3,
+                "surgery" to 3,
+                "prescription" to 3,
+                "physician" to 3
             )
         ),
         CategoryRule(
@@ -566,6 +625,15 @@ object WordCategoryClassifier {
                 "祖父", "祖母", "おじさん", "おばさん", "いとこ", "甥", "姪", "配偶者", "夫", "妻",
                 "恋人", "ボーイフレンド", "ガールフレンド", "愛する人", "愛", "愛情", "深い愛",
                 "感情", "感じる", "気持ち", "感情", "感覚", "情熱", "熱情", "幸福", "悲しみ", "怒り"
+            ),
+            strongKeywords = mapOf(
+                // Multi-word phrases and uniquely-relationship vocabulary
+                // that should outweigh the kanji-only 肉 → FOOD signal.
+                "blood relative" to 4,
+                "in-law" to 3,
+                "spouse" to 3,
+                "fiancé" to 3,
+                "fiancée" to 3
             )
         )
     )
@@ -602,12 +670,13 @@ object WordCategoryClassifier {
      * Returns [CATEGORY_OTHER] when no rule scores above zero.
      */
     fun classify(entry: WordEntry): String {
+        // Haystack intentionally omits `reading` (pure kana — adds
+        // substring-match noise without semantic signal) and
+        // `partsOfSpeech` (machine tags like "v1, vt, n" that can
+        // accidentally collide with rule keywords). Only fields that
+        // carry actual meaning contribute.
         val haystack = buildString {
             append(entry.expression)
-            append(' ')
-            append(entry.reading)
-            append(' ')
-            append(entry.partsOfSpeech)
             append(' ')
             append(entry.definitionText())
             append(' ')
@@ -619,13 +688,121 @@ object WordCategoryClassifier {
         var bestCode = CATEGORY_OTHER
         var bestScore = 0
         for (rule in rules) {
-            val score = rule.keywords.count { keyword -> matchesKeyword(haystack, keyword) }
+            val score = scoreRule(rule, haystack)
             if (score > bestScore) {
                 bestScore = score
                 bestCode = rule.code
             }
         }
         return bestCode
+    }
+
+    /**
+     * Returns every category whose score is meaningful for this word,
+     * highest-scoring first. Used by the multi-label storage path:
+     * one [ExportedWord] row can count toward multiple categories in
+     * the stats rollup, so a word like 先生 ("teacher; doctor") shows
+     * up under both EDUCATION and HEALTH instead of being forced into
+     * a single bucket by [classify].
+     *
+     * Threshold: include any rule whose score ≥ 2 and ≥ half of the
+     * top scorer (rounded up). This filters out single-keyword
+     * coincidences while keeping rules that clearly co-fired.
+     *
+     * If no rule scores above zero the result is `[CATEGORY_OTHER]` —
+     * matches [classify]'s single-value fallback so multi-label and
+     * single-label stay consistent for empty/unmatched words.
+     */
+    fun classifyAll(entry: WordEntry): List<String> {
+        val haystack = buildString {
+            append(entry.expression)
+            append(' ')
+            append(entry.definitionText())
+            append(' ')
+            append(entry.exampleSentence)
+            append(' ')
+            append(entry.exampleSentenceTranslation)
+        }.lowercase()
+
+        val scored = rules
+            .map { rule -> rule.code to scoreRule(rule, haystack) }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+
+        if (scored.isEmpty()) return listOf(CATEGORY_OTHER)
+
+        val topScore = scored.first().second
+        val cutoff = maxOf(2, (topScore + 1) / 2)
+        val keepers = scored.filter { it.second >= cutoff }
+        return if (keepers.isEmpty()) listOf(scored.first().first) else keepers.map { it.first }
+    }
+
+    /**
+     * Resolves the effective category labels for a single exported-word
+     * row. Encapsulates the precedence order:
+     *
+     *   1. `manualCategory` (user override) — if set, that's the answer.
+     *   2. `exportCategories` (CSV from classifyAll) — if set, the full
+     *      list.
+     *   3. `exportCategory` (legacy single value) — if set, single-item
+     *      list.
+     *   4. [CATEGORY_OTHER] — if all three are blank.
+     *
+     * Stats consumers feed the output into [tallyCategories].
+     */
+    fun resolveCategories(
+        manualCategory: String,
+        exportCategories: String,
+        exportCategory: String
+    ): List<String> {
+        val manual = manualCategory.trim()
+        if (manual.isNotEmpty()) return listOf(manual)
+        val csv = exportCategories.trim()
+        if (csv.isNotEmpty()) {
+            val parsed = csv.split(',')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+            if (parsed.isNotEmpty()) return parsed
+        }
+        val legacy = exportCategory.trim()
+        if (legacy.isNotEmpty()) return listOf(legacy)
+        return listOf(CATEGORY_OTHER)
+    }
+
+    /**
+     * Rolls up a batch of exported-word rows into a `category code → count`
+     * map. Each row contributes once to every category in
+     * [resolveCategories]. Used by the stats screen, the category-filter
+     * chip row in search, and the "mined categories" panel in settings.
+     */
+    fun tallyCategories(
+        rows: Iterable<Triple<String, String, String>>
+    ): Map<String, Int> {
+        val tally = mutableMapOf<String, Int>()
+        for ((manual, csv, legacy) in rows) {
+            for (code in resolveCategories(manual, csv, legacy)) {
+                tally.merge(code, 1) { old, _ -> old + 1 }
+            }
+        }
+        return tally
+    }
+
+    /**
+     * Score breakdown for a single rule.
+     *   score = (#matched default keywords)
+     *         + (sum of weights for matched strongKeywords)
+     *         - NEGATIVE_WEIGHT × (#matched negatives)
+     *
+     * Returns the (possibly negative) score; the classifier itself treats
+     * anything ≤ 0 as "this rule loses to OTHER".
+     */
+    private fun scoreRule(rule: CategoryRule, haystack: String): Int {
+        val base = rule.keywords.count { matchesKeyword(haystack, it) }
+        val strong = rule.strongKeywords.entries.sumOf { (kw, weight) ->
+            if (matchesKeyword(haystack, kw)) weight else 0
+        }
+        val penalty = rule.negatives.count { matchesKeyword(haystack, it) } * NEGATIVE_WEIGHT
+        return base + strong - penalty
     }
 
     fun displayName(categoryCode: String, isEnglish: Boolean = false): String {

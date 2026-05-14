@@ -1,6 +1,6 @@
 package com.yomitanmobile.ui.statistics
 
-import com.yomitanmobile.data.local.dao.CategoryActivityCount
+import com.yomitanmobile.data.local.dao.ExportedCategoryRow
 import com.yomitanmobile.data.local.dao.HourlyActivityCount
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.util.WordCategoryClassifier
@@ -113,13 +113,24 @@ class StatisticsViewModelWeeklyWordsTest {
 
     @Test
     fun toCategoryActivity_sortsByCountDescending() {
-        val activity = StatisticsViewModel.toCategoryActivity(
-            listOf(
-                CategoryActivityCount(category = WordCategoryClassifier.CATEGORY_TRAVEL, count = 3),
-                CategoryActivityCount(category = WordCategoryClassifier.CATEGORY_FOOD, count = 8),
-                CategoryActivityCount(category = WordCategoryClassifier.CATEGORY_ECONOMY, count = 3)
-            )
-        )
+        // toCategoryActivity now consumes raw per-row labels (multi-label
+        // storage, fix E). Each ExportedCategoryRow contributes once per
+        // category resolved by WordCategoryClassifier.resolveCategories.
+        // We build 3 TRAVEL + 8 FOOD + 3 ECONOMY legacy-shape rows to
+        // reproduce the same totals the old single-count test asserted.
+        val rows = buildList {
+            repeat(3) {
+                add(ExportedCategoryRow(WordCategoryClassifier.CATEGORY_TRAVEL, "", ""))
+            }
+            repeat(8) {
+                add(ExportedCategoryRow(WordCategoryClassifier.CATEGORY_FOOD, "", ""))
+            }
+            repeat(3) {
+                add(ExportedCategoryRow(WordCategoryClassifier.CATEGORY_ECONOMY, "", ""))
+            }
+        }
+
+        val activity = StatisticsViewModel.toCategoryActivity(rows)
 
         assertEquals(WordCategoryClassifier.CATEGORY_FOOD, activity[0].categoryCode)
         assertEquals(8, activity[0].count)

@@ -178,6 +178,65 @@ class WordCategoryClassifierTest {
         )
     }
 
+    // ----- Weighted keywords (strongKeywords) and negatives (fix G) --------
+
+    @Test
+    fun classify_singleStrongKeyword_outscoresMultipleWeakKeywords() {
+        // ECONOMY's "investment" is weighted 3; a definition with just
+        // that one term must outscore a definition with three weak
+        // SHOPPING keywords like "price, sale, customer".
+        val entry = WordEntry(
+            expression = "テスト",
+            reading = "てすと",
+            definitions = listOf("an investment opportunity for the right customer")
+        )
+
+        // "investment" → ECONOMY 3 + "customer" (in ECONOMY) → +1 = 4
+        // "customer", "sale" (no — not present), "price" (no) → SHOPPING ~1
+        assertEquals(
+            WordCategoryClassifier.CATEGORY_ECONOMY,
+            WordCategoryClassifier.classify(entry)
+        )
+    }
+
+    @Test
+    fun classify_negativeKeyword_demotesFoodForBloodRelative() {
+        // 肉親 with explicit relationship-coded definition. The 親 in
+        // expression triggers FOOD's negative penalty (-2 per match),
+        // and the english "blood relative" / "kin" gives RELATIONSHIPS
+        // a strong boost. Net effect: RELATIONSHIPS wins by a large
+        // margin even with the 肉 → FOOD signal.
+        val entry = WordEntry(
+            expression = "肉親",
+            reading = "にくしん",
+            definitions = listOf("blood relative; close kin")
+        )
+
+        assertEquals(
+            WordCategoryClassifier.CATEGORY_RELATIONSHIPS,
+            WordCategoryClassifier.classify(entry)
+        )
+    }
+
+    @Test
+    fun classify_strongKeywordDominatesAccumulatedWeakSignals() {
+        // A single "hospital" (HEALTH strong=3) outscores a definition
+        // packed with one-point ECONOMY hits. Demonstrates the weighted
+        // path actually changes the answer.
+        val entry = WordEntry(
+            expression = "テスト",
+            reading = "てすと",
+            definitions = listOf("hospital ward with prescription routines")
+        )
+
+        // HEALTH score: hospital(3) + prescription(3) + ward(1?) ≥ 6
+        // ECONOMY score: 0
+        assertEquals(
+            WordCategoryClassifier.CATEGORY_HEALTH,
+            WordCategoryClassifier.classify(entry)
+        )
+    }
+
     @Test
     fun classify_posTagsAndReadingDoNotForceMatches() {
         // POS tags ("v1", "vt", "n") and the kana reading are part of the
