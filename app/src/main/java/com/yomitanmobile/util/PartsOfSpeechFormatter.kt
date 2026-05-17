@@ -125,6 +125,66 @@ object PartsOfSpeechFormatter {
     private val SPLIT_REGEX = Regex("""[,;\s]+""")
 
     /**
+     * Human-readable label for a single JMDict tag code, or null when the
+     * code isn't in the known POS / usage / domain map. Used by the Jitendex
+     * parser to resolve usage hints when the structured-content `title`
+     * attribute is missing.
+     */
+    fun labelForCode(code: String): String? = POS_LABELS[code]
+
+    // Compact labels for the in-gloss usage-hint pill. Jitendex `title`s like
+    // "word usually written using kana alone" would eat half the card; these
+    // short forms keep the meaning legible without dominating the line.
+    private val SHORT_USAGE_LABELS = mapOf(
+        "uk" to "usually kana",
+        "uK" to "usually kanji",
+        "obs" to "obsolete",
+        "arch" to "archaic",
+        "rare" to "rare",
+        "sl" to "slang",
+        "col" to "colloq.",
+        "fam" to "familiar",
+        "hon" to "honorific",
+        "hum" to "humble",
+        "pol" to "polite",
+        "vulg" to "vulgar",
+        "derog" to "derog.",
+        "joc" to "joc.",
+        "abbr" to "abbr.",
+        "yoji" to "yoji.",
+        "id" to "idiom",
+        "proverb" to "proverb",
+        "quote" to "quote",
+        "on-mim" to "onomat.",
+        "form" to "formal",
+        "male" to "male",
+        "fem" to "fem.",
+        "chn" to "children",
+        "X" to "X-rated",
+        "comp" to "comp.",
+        "math" to "math",
+        "med" to "med.",
+        "law" to "law",
+        "Buddh" to "Buddh.",
+        "Shinto" to "Shinto",
+        "physics" to "phys.",
+        "chem" to "chem.",
+        "biol" to "biol.",
+        "bus" to "bus.",
+        "econ" to "econ.",
+        "food" to "food",
+        "sports" to "sports",
+        "music" to "music"
+    )
+
+    /**
+     * Compact label for a usage / domain tag code (e.g. "uk" → "usually kana"),
+     * or null when the code isn't known. Prefer this over the full Jitendex
+     * `title` attribute when surfacing tags inline with a gloss.
+     */
+    fun shortUsageLabelForCode(code: String): String? = SHORT_USAGE_LABELS[code]
+
+    /**
      * Tokenize a raw JMDict tag string and return a comma-separated readable label list.
      * Empty result means there is nothing useful to display.
      */

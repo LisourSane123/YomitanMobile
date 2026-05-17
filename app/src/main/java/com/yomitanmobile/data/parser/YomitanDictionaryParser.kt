@@ -5,6 +5,7 @@ import com.yomitanmobile.data.local.dao.JlptUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.util.JlptLevelUtil
+import com.yomitanmobile.util.PartsOfSpeechFormatter
 import com.yomitanmobile.domain.model.ExamplePair
 import com.yomitanmobile.domain.model.ImportProgress
 import kotlinx.coroutines.Dispatchers
@@ -619,6 +620,17 @@ class YomitanDictionaryParser @Inject constructor() {
     private fun extractSenseGloss(sense: JsonObject): String {
         val items = elementAsList(sense["content"])
         val glosses = mutableListOf<String>()
+        // Jitendex stores per-sense usage hints ("usually written in kana",
+        // "archaic", "honorific", domain tags like "music", …) as <span
+        // data-content="tag"> nodes with a human-readable `title` attribute.
+        // They can live inside the glossary <li> alongside the gloss, or in a
+        // sibling <ul data-content="miscellany"> wrapper. extractTextFromContent
+        // drops `tag` nodes, so without this harvest the hint is lost — e.g.
+        // 但し would show "but, however" with no clue that it's typically
+        // written 但し. We collect tag labels once per sense and prepend them
+        // in parens so each gloss reads "(usually written in kana) but, however".
+        val tagLabels = LinkedHashSet<String>()
+        collectUsageTags(sense, tagLabels)
         for (item in items) {
             val obj = item as? JsonObject ?: continue
             val dc = nodeDataContent(obj)
@@ -632,7 +644,45 @@ class YomitanDictionaryParser @Inject constructor() {
                 if (text.isNotBlank()) glosses.add(text)
             }
         }
-        return glosses.joinToString("; ")
+        val glossText = glosses.joinToString("; ")
+        return when {
+            tagLabels.isEmpty() -> glossText
+            glossText.isBlank() -> "(${tagLabels.joinToString(", ")})"
+            else -> "(${tagLabels.joinToString(", ")}) $glossText"
+        }
+    }
+
+    private fun collectUsageTags(element: JsonElement, out: MutableSet<String>) {
+        when (element) {
+            is JsonObject -> {
+                val dc = nodeDataContent(element)
+                // POS codes are surfaced separately on the POS chip; skip them
+                // so we don't duplicate "transitive verb" inside every gloss.
+                if (dc == "part-of-speech-info") return
+                // Don't dive into example sentences — the inner highlight spans
+                // would otherwise be mistaken for tags.
+                if (dc == "example-sentence" ||
+                    dc == "example" ||
+                    dc == "example-sentences" ||
+                    dc == "example-sentence-list") return
+                if (dc == "tag") {
+                    val title = element["title"]?.jsonPrimitive?.contentOrNull?.trim()
+                    val code = (element["data"] as? JsonObject)
+                        ?.get("code")?.jsonPrimitive?.contentOrNull?.trim()
+                    // Prefer the compact form ("usually kana") over Jitendex's
+                    // verbose `title` ("word usually written using kana alone")
+                    // so the hint doesn't eat the whole gloss line on a card.
+                    val label = code?.let { PartsOfSpeechFormatter.shortUsageLabelForCode(it) }
+                        ?: title?.takeIf { it.isNotBlank() }
+                        ?: code
+                    if (!label.isNullOrBlank()) out.add(label)
+                    return
+                }
+                element["content"]?.let { collectUsageTags(it, out) }
+            }
+            is JsonArray -> element.forEach { collectUsageTags(it, out) }
+            else -> Unit
+        }
     }
 
     private fun collectSenseExamples(

@@ -66,11 +66,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.foundation.clickable
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.util.JlptLevelUtil
 import com.yomitanmobile.util.PartsOfSpeechFormatter
-import com.yomitanmobile.util.WordCategoryClassifier
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,9 +82,7 @@ fun DetailScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val ttsReady by viewModel.ttsReady.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
-    val displayedCategory by viewModel.displayedCategory.collectAsState()
     val lookupCount by viewModel.lookupCount.collectAsState()
-    var showCategoryPicker by remember { mutableStateOf(false) }
     val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
@@ -180,65 +176,8 @@ fun DetailScreen(
                     snackbarHostState.showSnackbar(
                         tr("Eksport anulowany.", "Export cancelled.")
                     )
-                is DetailEvent.ManualCategorySaved -> {
-                    val message = when {
-                        event.updatedRows > 0 -> tr(
-                            "Zaktualizowano ${event.updatedRows} eksport(ów).",
-                            "Updated ${event.updatedRows} export(s)."
-                        )
-                        else -> tr(
-                            "Wybór zapisany — zostanie zastosowany przy pierwszym eksporcie.",
-                            "Saved — will apply on first export."
-                        )
-                    }
-                    snackbarHostState.showSnackbar(message)
-                }
             }
         }
-    }
-
-    if (showCategoryPicker) {
-        // Picker for the manual category override (fix I). Lists every
-        // category from WordCategoryClassifier.mostImportantCategories()
-        // — same order users see in stats — plus an "Auto" option that
-        // clears the override and lets the classifier decide again.
-        AlertDialog(
-            onDismissRequest = { showCategoryPicker = false },
-            title = { Text(tr("Wybierz kategorię", "Pick a category")) },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    val options = listOf(
-                        "" to tr("Auto (klasyfikator)", "Auto (classifier)")
-                    ) + WordCategoryClassifier.mostImportantCategories(isEnglish)
-                    options.forEach { (code, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.setManualCategory(code)
-                                    showCategoryPicker = false
-                                }
-                                .padding(vertical = 10.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val isSelected = code == displayedCategory
-                                || (code.isBlank() && displayedCategory == WordCategoryClassifier.CATEGORY_OTHER)
-                            Text(
-                                text = if (isSelected) "● $label" else "○ $label",
-                                fontSize = 15.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showCategoryPicker = false }) {
-                    Text(tr("Zamknij", "Close"))
-                }
-            }
-        )
     }
 
     aiFailureMessage?.let { message ->
@@ -394,8 +333,6 @@ fun DetailScreen(
                     onPlayAudio = viewModel::playAudio,
                     onStopAudio = viewModel::stopAudio,
                     isEnglish = isEnglish,
-                    displayedCategory = displayedCategory,
-                    onOpenCategoryPicker = { showCategoryPicker = true },
                     lookupCount = lookupCount,
                     isFavorite = isFavorite,
                     onToggleFavorite = { viewModel.toggleFavorite() },
@@ -414,8 +351,6 @@ private fun WordDetailContent(
     onPlayAudio: () -> Unit,
     onStopAudio: () -> Unit,
     isEnglish: Boolean,
-    displayedCategory: String,
-    onOpenCategoryPicker: () -> Unit,
     lookupCount: Int,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
@@ -468,6 +403,12 @@ private fun WordDetailContent(
                     Text(freqLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Medium)
                 }
                 val jlptLevel = JlptLevelUtil.fromDbValue(entry.jlptLevel)
+                // The classifier-derived category chip was removed at
+                // the user's request — the JLPT and lookup-count badges
+                // stay because they directly help the learner judge a
+                // word at a glance. Category is still tracked in the DB
+                // for stats; the manual_category column is now write-only
+                // from the UI side.
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (jlptLevel != null) {
@@ -483,33 +424,21 @@ private fun WordDetailContent(
                                 )
                                 .padding(horizontal = 10.dp, vertical = 3.dp)
                         )
-                        Spacer(Modifier.width(8.dp))
                     }
-                    // Category chip — tap to open the picker dialog. Shows
-                    // the live classifier result (or any persisted manual
-                    // override) for the current word. Picking a new value
-                    // writes the override to every existing ExportedWord
-                    // row matching this expression/reading.
-                    Text(
-                        text = WordCategoryClassifier.displayName(displayedCategory, isEnglish),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier
-                            .background(
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                shape = RoundedCornerShape(6.dp)
-                            )
-                            .clickable { onOpenCategoryPicker() }
-                            .padding(horizontal = 10.dp, vertical = 3.dp)
-                    )
-                    // Lookup count badge. Only shown after the first
-                    // recorded visit (count >= 1) so a brand-new lookup
-                    // doesn't draw the chip on a stranger.
-                    if (lookupCount >= 1) {
-                        Spacer(Modifier.width(8.dp))
+                    // Lookup count badge. The displayed value is
+                    // `lookupCount - 1` so a first-ever lookup shows
+                    // nothing, the second shows "1×", third shows "2×",
+                    // and so on — i.e. the chip means "you've seen this
+                    // before, this many times." Hidden until the user
+                    // returns at least once.
+                    if (lookupCount >= 2) {
+                        val previousLookups = lookupCount - 1
+                        if (jlptLevel != null) Spacer(Modifier.width(8.dp))
                         Text(
-                            text = tr("Sprawdzone ${lookupCount}×", "Looked up ${lookupCount}×"),
+                            text = tr(
+                                "Sprawdzone ${previousLookups}×",
+                                "Looked up ${previousLookups}×"
+                            ),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,

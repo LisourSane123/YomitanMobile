@@ -197,6 +197,106 @@ class YomitanJitendexFormatTest {
         assertEquals("I ask for directions.", examples[1].en)
     }
 
+    @Test
+    fun usageTagsArePrependedInParentheses() = runBlocking {
+        // 但し with the "uk" (usually written in kana) tag inlined in the
+        // glossary <li>, matching how Jitendex emits it.
+        val termJson = """
+            [[
+              "但し",
+              "ただし",
+              "★",
+              "conj",
+              50,
+              [{
+                "type": "structured-content",
+                "content": [{
+                  "tag": "ul",
+                  "data": {"content": "sense-groups"},
+                  "content": {
+                    "tag": "li",
+                    "data": {"content": "sense-group"},
+                    "content": [
+                      {"tag":"span","data":{"class":"tag","code":"conj","content":"part-of-speech-info"},"content":"conjunction"},
+                      {"tag":"ol","content":[
+                        {"tag":"li","data":{"content":"sense"},"content":[
+                          {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":[
+                            {"tag":"span","title":"word usually written using kana alone","data":{"content":"tag","code":"uk"},"content":"uk"},
+                            "but, however, on the other hand"
+                          ]}}
+                        ]}
+                      ]}
+                    ]
+                  }
+                }]
+              }],
+              2086960,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+
+        assertEquals(1, defs.size)
+        assertEquals(
+            "(usually kana) but, however, on the other hand",
+            defs[0]
+        )
+    }
+
+    @Test
+    fun usageTagsFromMiscellanyWrapperAreCollected() = runBlocking {
+        // Variant layout where the tag lives in a sibling <ul data-content="miscellany">
+        // rather than inline in the gloss li. The same tag must still surface.
+        val termJson = """
+            [[
+              "生ずる",
+              "しょうずる",
+              "★",
+              "vz vi",
+              80,
+              [{
+                "type": "structured-content",
+                "content": [{
+                  "tag": "ul",
+                  "data": {"content": "sense-groups"},
+                  "content": {
+                    "tag": "li",
+                    "data": {"content": "sense-group"},
+                    "content": [
+                      {"tag":"span","data":{"class":"tag","code":"vz","content":"part-of-speech-info"},"content":"zuru"},
+                      {"tag":"ol","content":[
+                        {"tag":"li","data":{"content":"sense"},"content":[
+                          {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"to come into existence"}},
+                          {"tag":"div","data":{"content":"extra-info"},"content":{
+                            "tag":"ul","data":{"content":"miscellany"},"content":[
+                              {"tag":"li","content":[{"tag":"span","title":"formal","data":{"content":"tag","code":"form"},"content":"form"}]}
+                            ]
+                          }}
+                        ]}
+                      ]}
+                    ]
+                  }
+                }]
+              }],
+              1378200,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+        assertEquals(1, defs.size)
+        assertEquals("(formal) to come into existence", defs[0])
+    }
+
     private suspend fun parseSingleEntry(termJson: String): DictionaryEntry {
         val zipBytes = createZip(
             mapOf(

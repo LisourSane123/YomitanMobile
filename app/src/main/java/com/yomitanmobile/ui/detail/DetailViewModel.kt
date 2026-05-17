@@ -63,15 +63,6 @@ sealed class DetailEvent {
 
     /** Emitted after the user picks "abort" on the AI-failure dialog. */
     object AnkiExportCancelled : DetailEvent()
-
-    /**
-     * Surfaced after [DetailViewModel.setManualCategory]. [updatedRows]
-     * is the number of [com.yomitanmobile.data.local.entity.ExportedWord]
-     * rows whose `manual_category` was just rewritten — zero means
-     * "the word has no exports yet; we'll persist your pick at first
-     * export time".
-     */
-    data class ManualCategorySaved(val categoryCode: String, val updatedRows: Int) : DetailEvent()
 }
 
 /** Options the user can pick when AI summary generation fails mid-export. */
@@ -113,18 +104,6 @@ class DetailViewModel @Inject constructor(
 
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
-
-    /**
-     * Effective category for the currently displayed word. Resolution:
-     *   1. If any exported row for this word has a manual override, use
-     *      it.
-     *   2. Otherwise run [WordCategoryClassifier.classify] live on the
-     *      detail entry.
-     * Refreshes when the entry loads and when the user picks a new
-     * category from the chip dialog (fix I).
-     */
-    private val _displayedCategory = MutableStateFlow(WordCategoryClassifier.CATEGORY_OTHER)
-    val displayedCategory: StateFlow<String> = _displayedCategory.asStateFlow()
 
     /**
      * Running count of how many times the user has opened this word's
@@ -184,7 +163,6 @@ class DetailViewModel @Inject constructor(
             }
             _isLoading.value = false
             checkFavoriteStatus()
-            refreshDisplayedCategory()
             recordLookup()
         }
     }
@@ -214,58 +192,6 @@ class DetailViewModel @Inject constructor(
             }.onFailure { exception ->
                 Log.w(logTag, "Lookup-count update failed", exception)
             }
-        }
-    }
-
-    /**
-     * Pulls the effective category — manual override if any export has
-     * one, otherwise the classifier's live answer for the current
-     * MergedWordEntry. Called after entry load and after the user
-     * commits a new override.
-     */
-    private fun refreshDisplayedCategory() {
-        val merged = _entry.value ?: return
-        viewModelScope.launch {
-            val expression = merged.primaryExpression
-            val reading = merged.reading.ifBlank { expression }
-            val override = runCatching {
-                exportedWordDao.getManualCategoryForWord(expression, reading)
-            }.getOrNull()?.takeIf { it.isNotBlank() }
-
-            _displayedCategory.value = override ?: run {
-                val classifierInput = WordEntry(
-                    expression = expression,
-                    reading = reading,
-                    definitions = merged.definitions,
-                    partsOfSpeech = "",
-                    exampleSentence = merged.exampleSentence,
-                    exampleSentenceTranslation = merged.exampleSentenceTranslation
-                )
-                runCatching { WordCategoryClassifier.classify(classifierInput) }
-                    .getOrDefault(WordCategoryClassifier.CATEGORY_OTHER)
-            }
-        }
-    }
-
-    /**
-     * Persists a manual category override for every existing exported
-     * row matching this word. If no exports exist yet the call is a
-     * no-op as far as storage is concerned but the chip still updates
-     * locally so the user sees their pick reflected.
-     *
-     * Returns through events: [DetailEvent.ManualCategorySaved] with
-     * the affected-row count.
-     */
-    fun setManualCategory(categoryCode: String) {
-        val merged = _entry.value ?: return
-        viewModelScope.launch {
-            val expression = merged.primaryExpression
-            val reading = merged.reading.ifBlank { expression }
-            val affected = runCatching {
-                exportedWordDao.updateManualCategoryForWord(expression, reading, categoryCode)
-            }.getOrDefault(0)
-            _displayedCategory.value = categoryCode
-            _events.emit(DetailEvent.ManualCategorySaved(categoryCode, affected))
         }
     }
 
