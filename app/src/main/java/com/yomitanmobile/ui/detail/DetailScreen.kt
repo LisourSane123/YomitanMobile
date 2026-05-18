@@ -450,6 +450,21 @@ private fun WordDetailContent(
                                 .padding(horizontal = 10.dp, vertical = 3.dp)
                         )
                     }
+                    if (entry.usageTags.isNotEmpty()) {
+                        if (jlptLevel != null || lookupCount >= 2) Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = entry.usageTags.joinToString(" · "),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 3.dp)
+                        )
+                    }
                 }
                 // Repeated-lookup prompt. The threshold (3) is empirical
                 // — fewer than that and the user is probably just

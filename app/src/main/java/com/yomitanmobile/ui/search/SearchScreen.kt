@@ -512,6 +512,21 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
+            if (entry.usageTags.isNotEmpty()) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = entry.usageTags.joinToString(" · "),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .background(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
         }
     }
 }

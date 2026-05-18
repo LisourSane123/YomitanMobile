@@ -16,7 +16,11 @@ data class WordEntry(
     val jlptLevel: Int = 0,
     // Examples from the dictionary (Jitendex) — first one mirrors the legacy
     // exampleSentence / exampleSentenceTranslation fields.
-    val examples: List<ExamplePair> = emptyList()
+    val examples: List<ExamplePair> = emptyList(),
+    // Sense-level usage hints peeled out of the gloss text by the mapper
+    // (e.g. "usually kana", "formal", "archaic"). The UI renders these as
+    // a chip rather than letting them clutter the definition line.
+    val usageTags: List<String> = emptyList()
 ) {
     fun definitionText(): String = definitions.joinToString("; ")
 

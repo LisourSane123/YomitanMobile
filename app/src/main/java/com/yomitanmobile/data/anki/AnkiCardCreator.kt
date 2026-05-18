@@ -165,6 +165,12 @@ class AnkiCardCreator(
                 margin: 0 0 10px 0; text-align: left;
                 letter-spacing: 0.02em;
             }
+            .usage-tags {
+                display: inline-block; font-size: 11px; font-weight: bold;
+                color: #1a1a1a; background-color: #ffcc80;
+                padding: 2px 6px; border-radius: 4px;
+                margin: 0 0 8px 0; letter-spacing: 0.02em;
+            }
             .meanings { margin: 0; padding: 0 0 0 1.6em; }
             .meaning-item { margin-bottom: 10px; line-height: 1.45; }
             .meaning-item:last-child { margin-bottom: 0; }
@@ -278,6 +284,12 @@ class AnkiCardCreator(
             .pos-line {
                 font-size: 13px; font-style: italic; color: ${prefs.accentColor};
                 margin: 0 0 10px 0; text-align: left; letter-spacing: 0.02em;
+            }
+            .usage-tags {
+                display: inline-block; font-size: 11px; font-weight: bold;
+                color: #1a1a1a; background-color: #ffcc80;
+                padding: 2px 6px; border-radius: 4px;
+                margin: 0 0 8px 0; letter-spacing: 0.02em;
             }
             .meanings { margin: 0; padding: 0 0 0 1.6em; }
             .meaning-item { margin-bottom: 10px; line-height: 1.45; }
@@ -968,7 +980,7 @@ class AnkiCardCreator(
             front = frontContent,
             frontContext = frontContext,
             reading = InputSanitizer.escapeHtml(entry.reading),
-            meaning = formatMeaningForCard(entry.definitions, attachedExamples, posLabel),
+            meaning = formatMeaningForCard(entry.definitions, attachedExamples, posLabel, entry.usageTags),
             pitchAccent = pitchHtml,
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
@@ -1003,7 +1015,8 @@ class AnkiCardCreator(
     private fun formatMeaningForCard(
         definitions: List<String>,
         attachedExamples: List<com.yomitanmobile.domain.model.ExamplePair>,
-        posLabel: String
+        posLabel: String,
+        usageTags: List<String> = emptyList()
     ): String {
         val meaningLines = definitions.asSequence()
             .mapIndexed { idx, def -> idx to def.trim().replace(";", ", ") }
@@ -1018,6 +1031,11 @@ class AnkiCardCreator(
             if (posLabel.isNotBlank()) {
                 append("<div class=\"pos-line\">")
                 append(InputSanitizer.escapeHtml(posLabel))
+                append("</div>")
+            }
+            if (usageTags.isNotEmpty()) {
+                append("<div class=\"usage-tags\">")
+                append(InputSanitizer.escapeHtml(usageTags.joinToString(" · ")))
                 append("</div>")
             }
             append("<ol class=\"meanings\">")

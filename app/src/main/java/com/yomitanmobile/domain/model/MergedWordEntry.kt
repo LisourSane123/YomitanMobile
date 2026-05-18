@@ -21,7 +21,10 @@ data class MergedWordEntry(
     // 0 = no JLPT; 1-5 = N1-N5. Populated from jlpt_level DB column.
     val jlptLevel: Int = 0,
     // Full list of (jp, en) example pairs from the dictionary.
-    val examples: List<ExamplePair> = emptyList()
+    val examples: List<ExamplePair> = emptyList(),
+    // Usage hints (e.g. "usually kana", "formal") collected from the grouped
+    // entries' WordEntry.usageTags. Rendered as a chip near the JLPT badge.
+    val usageTags: List<String> = emptyList()
 ) {
     fun displayText(): String = primaryExpression.ifBlank { reading }
 
@@ -59,7 +62,8 @@ data class MergedWordEntry(
         exampleSentenceTranslation = exampleSentenceTranslation,
         audioFile = audioFile,
         jlptLevel = jlptLevel,
-        examples = examples
+        examples = examples,
+        usageTags = usageTags
     )
 
     companion object {
@@ -165,6 +169,12 @@ data class MergedWordEntry(
                     .firstOrNull { it.isNotEmpty() }
                     ?: emptyList()
 
+                // Union of usage tags across the group, preserving first-seen
+                // order so the chip reads consistently across imports.
+                val mergedUsageTags = LinkedHashSet<String>().apply {
+                    group.forEach { addAll(it.usageTags) }
+                }.toList()
+
                 MergedWordEntry(
                     primaryId = primary.id,
                     primaryExpression = primaryExpression,
@@ -180,7 +190,8 @@ data class MergedWordEntry(
                     exampleSentenceTranslation = example?.exampleSentenceTranslation ?: "",
                     audioFile = audioFile,
                     jlptLevel = jlptLevel,
-                    examples = examples
+                    examples = examples,
+                    usageTags = mergedUsageTags
                 )
             }
                 // Preserve order from SQL query (already sorted by relevance + frequency)
