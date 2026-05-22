@@ -44,7 +44,7 @@ object UsageTagExtractor {
         "yoji.", "yojijukugo",
         "idiom", "idiomatic",
         "proverb", "quote", "quotation",
-        "onomat.", "onomatopoeia",
+        "onomat.", "onomatopoeia", "mimetic", "on-mim",
         "formal", "male", "fem.", "female",
         "children", "X-rated",
         "comp.", "computing", "math", "med.", "medical", "law",
@@ -224,6 +224,7 @@ object UsageTagExtractor {
         "idiomatic" -> "idiom"
         "quotation" -> "quote"
         "onomatopoeia" -> "onomat."
+        "on-mim" -> "mimetic"
         "female" -> "fem."
         "computing" -> "comp."
         "medical" -> "med."

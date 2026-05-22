@@ -463,6 +463,25 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
+                // Usage notes ("usually kana", "formal", "mimetic", …). On the
+                // search card we render them on their own line so they stand
+                // out alongside the headword rather than getting squeezed in
+                // next to the JLPT badge on the right.
+                if (entry.usageTags.isNotEmpty()) {
+                    Text(
+                        text = entry.usageTags.joinToString(" · "),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 // Show numbered definitions
                 entry.definitions.take(3).forEachIndexed { index, definition ->
@@ -507,21 +526,6 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                     modifier = Modifier
                         .background(
                             color = androidx.compose.ui.graphics.Color(jlptLevel.color),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-            if (entry.usageTags.isNotEmpty()) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = entry.usageTags.joinToString(" · "),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier
-                        .background(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
                             shape = RoundedCornerShape(4.dp)
                         )
                         .padding(horizontal = 6.dp, vertical = 2.dp)

@@ -63,6 +63,54 @@ class YomitanDictionaryParser @Inject constructor() {
         // that still rejects malicious zip-bombs without rejecting any
         // dictionary the app actually ships in its download list.
         const val MAX_TOTAL_UNCOMPRESSED_BYTES = 1L * 1024L * 1024L * 1024L
+
+        // HTML-ish tags that break a flow of inline text. When walking a
+        // structured-content array, adjacent block children must be
+        // separated with "; " so alternative headword forms and sibling
+        // senses don't visually fuse onto the gloss text.
+        val BLOCK_TAGS = setOf(
+            "div", "p", "section", "article",
+            "li", "ul", "ol", "dl", "dt", "dd",
+            "h1", "h2", "h3", "h4", "h5", "h6",
+            "table", "tr", "td", "th",
+            "header", "footer", "aside", "main", "nav"
+        )
+
+        // Data-content markers that label non-gloss subsections of a Yomitan
+        // structured-content tree. The Jitendex sense-aware path already
+        // handles "part-of-speech-info" etc., but plain JMdict and many
+        // community dictionaries (NHK accent, JMnedict, frequency lists, …)
+        // embed headword / form / reading / pitch widgets alongside the
+        // gloss. Without filtering, those text fragments get concatenated
+        // onto the meaning column.
+        val NON_GLOSS_DATA_CONTENT = setOf(
+            "part-of-speech-info",
+            "attribution-footnote",
+            "attribution",
+            "forms-label",
+            "tag",
+            "headword",
+            "headword-summary",
+            "headword-list",
+            "headword-info",
+            "headword-section",
+            "kanji-headword",
+            "kana-headword",
+            "form",
+            "forms",
+            "form-list",
+            "form-info",
+            "reading",
+            "readings",
+            "reading-list",
+            "pronunciation",
+            "pitch",
+            "pitch-accent",
+            "pitch-accent-list",
+            "frequency",
+            "frequency-list",
+            "audio"
+        )
     }
 
     private val json = Json {
@@ -898,12 +946,12 @@ class YomitanDictionaryParser @Inject constructor() {
         return when (element) {
             is JsonPrimitive -> listOf(element.content)
             is JsonArray -> {
-                element.mapNotNull { item ->
+                element.flatMap { item ->
                     try {
                         when (item) {
-                            is JsonPrimitive -> item.content
-                            is JsonObject -> parseStructuredContent(item)
-                            is JsonArray -> {
+                            is JsonPrimitive -> listOf(item.content)
+                            is JsonObject -> parseStructuredContentAsList(item)
+                            is JsonArray -> listOf(
                                 item.mapNotNull { subItem ->
                                     when (subItem) {
                                         is JsonPrimitive -> subItem.content
@@ -911,16 +959,63 @@ class YomitanDictionaryParser @Inject constructor() {
                                         else -> null
                                     }
                                 }.joinToString("; ")
-                            }
-                            else -> null
+                            )
+                            else -> emptyList()
                         }
                     } catch (_: Exception) {
-                        null
+                        emptyList()
                     }
                 }.filter { it.isNotBlank() }
             }
-            is JsonObject -> listOfNotNull(parseStructuredContent(element))
+            is JsonObject -> parseStructuredContentAsList(element).filter { it.isNotBlank() }
             else -> emptyList()
+        }
+    }
+
+    /**
+     * Like [parseStructuredContent], but if the node's top-level content
+     * carries an obvious sense list — an `<ol>` or `<ul>` whose `<li>`
+     * children each describe a separate meaning — emit one definition per
+     * `<li>` so the back-side card renders them as `1.`, `2.`, `3.` instead
+     * of a single fused entry. Falls through to the original flat extraction
+     * when no list structure is detected.
+     *
+     * This is the non-Jitendex fallback path. Jitendex's stricter
+     * sense-groups layout is still handled separately by
+     * [tryParseJitendexStructure], which runs before this.
+     */
+    private fun parseStructuredContentAsList(obj: JsonObject): List<String> {
+        val split = trySplitSenseList(obj)
+        if (split != null) return split
+        return listOfNotNull(parseStructuredContent(obj))
+    }
+
+    private fun trySplitSenseList(obj: JsonObject): List<String>? {
+        return try {
+            val type = obj["type"]?.jsonPrimitive?.contentOrNull
+            if (type != "structured-content") return null
+            val topContent = obj["content"] ?: return null
+            val items = elementAsList(topContent)
+            // Look for the first <ol>/<ul> at the top level whose children are
+            // mostly <li> elements. Treat each such <li> as a separate sense.
+            for (item in items) {
+                val node = item as? JsonObject ?: continue
+                val tag = node["tag"]?.jsonPrimitive?.contentOrNull ?: continue
+                if (tag != "ol" && tag != "ul") continue
+                val children = elementAsList(node["content"]).filterIsInstance<JsonObject>()
+                val liChildren = children.filter {
+                    it["tag"]?.jsonPrimitive?.contentOrNull == "li"
+                }
+                if (liChildren.size < 2) continue
+                val perSense = liChildren.mapNotNull { li ->
+                    val text = extractTextFromContent(li["content"] ?: return@mapNotNull null).trim()
+                    text.ifBlank { null }
+                }
+                if (perSense.isNotEmpty()) return perSense
+            }
+            null
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -951,13 +1046,25 @@ class YomitanDictionaryParser @Inject constructor() {
             when (element) {
                 is JsonPrimitive -> element.content
                 is JsonArray -> {
-                    val parts = element.map { extractTextFromContent(it) }.filter { it.isNotBlank() }
-                    // Check if children are list items (li tags) — join with "; "
-                    val hasListItems = element.any { it is JsonObject && it.jsonObject["tag"]?.jsonPrimitive?.content == "li" }
-                    if (hasListItems) {
-                        parts.joinToString("; ")
-                    } else {
-                        parts.joinToString("")
+                    // Render each child once, then join inline children with no
+                    // separator (so ruby + text fragments concatenate naturally
+                    // inside a sentence) and block-level children with "; " (so
+                    // adjacent senses / alternative forms don't visually fuse
+                    // into "wise person, sage賢者けんじゃ").
+                    val pieces = element.mapNotNull { child ->
+                        val text = extractTextFromContent(child)
+                        if (text.isBlank()) null else child to text
+                    }
+                    if (pieces.isEmpty()) return ""
+                    buildString {
+                        for ((i, p) in pieces.withIndex()) {
+                            val (child, text) = p
+                            if (i > 0) {
+                                val prev = pieces[i - 1].first
+                                if (isBlockNode(prev) || isBlockNode(child)) append("; ")
+                            }
+                            append(text)
+                        }
                     }
                 }
                 is JsonObject -> {
@@ -973,16 +1080,14 @@ class YomitanDictionaryParser @Inject constructor() {
                     if (tag == "rt" || tag == "rp") return ""
 
                     val dc = nodeDataContent(element)
-                    // Jitendex marks part-of-speech labels, attribution footnotes,
-                    // and form-list headers with these data-content values. They
-                    // belong to other display sections (POS chip / source link)
-                    // and must not bleed into the gloss text.
-                    if (dc == "part-of-speech-info" ||
-                        dc == "attribution-footnote" ||
-                        dc == "forms-label" ||
-                        dc == "tag" ||
-                        dc == "attribution"
-                    ) return ""
+                    // Jitendex / Yomitan mark part-of-speech labels, attribution
+                    // footnotes, headword forms, and pitch / frequency widgets
+                    // with these data-content values. They belong to other display
+                    // sections (POS chip / header / pitch widget / source link)
+                    // and must not bleed into the gloss text — without filtering,
+                    // alternate kanji and kana readings ("賢者", "けんじゃ") fuse
+                    // onto the end of the meaning column.
+                    if (dc in NON_GLOSS_DATA_CONTENT) return ""
 
                     val content = element["content"]
                     val text = element["text"]
@@ -1001,4 +1106,11 @@ class YomitanDictionaryParser @Inject constructor() {
             ""
         }
     }
+
+    private fun isBlockNode(element: JsonElement): Boolean {
+        if (element !is JsonObject) return false
+        val tag = element["tag"]?.jsonPrimitive?.contentOrNull ?: return false
+        return tag in BLOCK_TAGS
+    }
+
 }

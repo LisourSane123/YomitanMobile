@@ -4,8 +4,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -343,6 +346,7 @@ fun DetailScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WordDetailContent(
     entry: MergedWordEntry,
@@ -450,21 +454,6 @@ private fun WordDetailContent(
                                 .padding(horizontal = 10.dp, vertical = 3.dp)
                         )
                     }
-                    if (entry.usageTags.isNotEmpty()) {
-                        if (jlptLevel != null || lookupCount >= 2) Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = entry.usageTags.joinToString(" · "),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier
-                                .background(
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = RoundedCornerShape(6.dp)
-                                )
-                                .padding(horizontal = 10.dp, vertical = 3.dp)
-                        )
-                    }
                 }
                 // Repeated-lookup prompt. The threshold (3) is empirical
                 // — fewer than that and the user is probably just
@@ -524,6 +513,35 @@ private fun WordDetailContent(
                     reading = entry.reading.ifBlank { entry.primaryExpression },
                     pitchPositions = entry.pitchAccent
                 )
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // Usage notes (e.g. "usually kana", "formal", "mimetic"). Promoted to
+        // their own card directly above the meaning so the reader sees the
+        // register/usage caveat before reading the gloss — easy to miss when
+        // it's just a small chip next to the JLPT badge.
+        if (entry.usageTags.isNotEmpty()) {
+            SectionCard(title = tr("Notatki", "Notes")) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    entry.usageTags.forEach { tag ->
+                        Text(
+                            text = tag,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(12.dp))
         }
