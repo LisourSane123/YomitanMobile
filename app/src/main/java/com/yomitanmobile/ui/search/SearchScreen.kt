@@ -59,8 +59,13 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -214,10 +219,17 @@ fun SearchScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(items = results, key = { it.primaryId }) { entry ->
-                            MergedWordEntryCard(entry = entry, onClick = {
-                                viewModel.onWordClicked(entry)
-                                onWordClick(entry.primaryId)
-                            })
+                            MergedWordEntryCard(
+                                entry = entry,
+                                // Only highlight match terms inside English glosses —
+                                // for JP/romaji modes the user's input doesn't appear
+                                // verbatim in the definition text.
+                                highlightQuery = if (searchMode == SearchMode.ENGLISH) query else "",
+                                onClick = {
+                                    viewModel.onWordClicked(entry)
+                                    onWordClick(entry.primaryId)
+                                }
+                            )
                         }
                     }
                 }
@@ -436,7 +448,11 @@ private fun SearchHistorySection(
 }
 
 @Composable
-private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
+private fun MergedWordEntryCard(
+    entry: MergedWordEntry,
+    highlightQuery: String,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -483,10 +499,20 @@ private fun MergedWordEntryCard(entry: MergedWordEntry, onClick: () -> Unit) {
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                // Show numbered definitions
+                // Show numbered definitions, highlighting the user's English
+                // query inside each gloss so a long list of similar meanings
+                // is easy to scan ("which entry actually matched what I
+                // typed?"). Highlight passes through plain text when the
+                // query is blank or in JP/romaji modes.
+                val highlightTokens = remember(highlightQuery) {
+                    tokenizeForHighlight(highlightQuery)
+                }
                 entry.definitions.take(3).forEachIndexed { index, definition ->
                     Text(
-                        text = "${index + 1}. $definition",
+                        text = highlightTermsInDefinition(
+                            text = "${index + 1}. $definition",
+                            tokens = highlightTokens
+                        ),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -566,6 +592,82 @@ private fun EmptySearchState(searchMode: SearchMode, isEnglish: Boolean) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
         }
+    }
+}
+
+// --- Highlight helpers ------------------------------------------------------
+//
+// Used by MergedWordEntryCard to colourise the user's English query inside
+// each definition. Kept private and local to this file because no other
+// screen needs it yet — promote to util/ if a second caller appears.
+
+/**
+ * Tokenize the user's raw query into substrings we will try to highlight.
+ *
+ * We split on whitespace and drop tokens shorter than 2 characters because
+ * single-letter highlights end up colouring the entire gloss (the letter
+ * "a" appears constantly). Tokens longer than that are lowercased and
+ * deduped for the match loop.
+ */
+private fun tokenizeForHighlight(query: String): List<String> {
+    val trimmed = query.trim()
+    if (trimmed.isEmpty()) return emptyList()
+    return trimmed.split(Regex("\\s+"))
+        .map { it.lowercase() }
+        .filter { it.length >= 2 }
+        .distinct()
+}
+
+/**
+ * Build an AnnotatedString that wraps every occurrence of any [tokens] inside
+ * [text] in a green SpanStyle. Matching is case-insensitive substring (so
+ * "publish" highlights inside "publication"). If [tokens] is empty the input
+ * passes through as a plain AnnotatedString — same render path either way,
+ * which keeps the caller branch-free.
+ */
+private fun highlightTermsInDefinition(text: String, tokens: List<String>): AnnotatedString {
+    if (tokens.isEmpty()) return AnnotatedString(text)
+    val lower = text.lowercase()
+    // Collect (start, end) ranges first, then merge overlapping ones, so a
+    // query like "publish publication" doesn't double-style overlapping spans.
+    val ranges = ArrayList<IntRange>()
+    for (token in tokens) {
+        var idx = 0
+        while (true) {
+            val found = lower.indexOf(token, idx)
+            if (found < 0) break
+            ranges.add(found until (found + token.length))
+            idx = found + token.length
+        }
+    }
+    if (ranges.isEmpty()) return AnnotatedString(text)
+    val merged = ranges
+        .sortedBy { it.first }
+        .fold(mutableListOf<IntRange>()) { acc, r ->
+            val last = acc.lastOrNull()
+            if (last != null && r.first <= last.last + 1) {
+                acc[acc.lastIndex] = last.first..maxOf(last.last, r.last)
+            } else {
+                acc.add(r)
+            }
+            acc
+        }
+    // Lighter green than the original — chosen so the highlight is still
+    // visible against the muted onSurfaceVariant body colour but doesn't
+    // look like a heavy filled chip. No background fill — text-only colour
+    // per the user's preference for a more subtle hit.
+    val highlight = SpanStyle(
+        color = Color(0xFF66BB6A),
+        fontWeight = FontWeight.SemiBold
+    )
+    return buildAnnotatedString {
+        var cursor = 0
+        for (range in merged) {
+            if (range.first > cursor) append(text.substring(cursor, range.first))
+            withStyle(highlight) { append(text.substring(range.first, range.last + 1)) }
+            cursor = range.last + 1
+        }
+        if (cursor < text.length) append(text.substring(cursor))
     }
 }
 

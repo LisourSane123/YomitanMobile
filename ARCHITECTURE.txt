@@ -1,13 +1,15 @@
 YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 ======================================================================
 
-Last verified: 2026-05-12 (commit ~a5dbf34 — header word-divider, AI
-summary integration, reorderable sections, model bumped to v8, online
-sentence API removed; preview honors sectionOrder; freq line dropped
-from header; word-divider now full-width 1px white (regular weight);
-reorder propagation hardened against stale AnkiDroid template caches
-via skipPrimaryName variant fallback; AI summary now opt-in per-export
-via dedicated UI button).
+Last verified: 2026-06-04 (kanji breakdown now also renders on the detail
+screen — same KanjiEntry source as the card's KanjiBreakdown field, via
+DetailViewModel.kanjiInfo → DetailScreen "Kanji" card; front-context
+sentence restricted to hiragana-only words (KanaUtils.isHiraganaOnly gate
+in AnkiCardCreator.createAnkiCard); search audit — dead searchFts/search()
+path removed, deconjugation alternatives now use exact match
+(DictionaryDao.searchExact) instead of prefix-LIKE. Prior: header
+word-divider, AI summary integration, reorderable sections, model bumped
+to v8, online sentence API removed; AI summary opt-in per-export).
 Audience: an AI coding agent picking up an unfamiliar feature in this
 repo. Keep it concise — read CLAUDE.md for the high-level overview, this
 file for the detail you need before editing.
@@ -63,10 +65,14 @@ JP path:
     → JapaneseDeconjugator.candidateForms(query) — rule-based
       generator, cap 24 candidates, depth 3
     → SearchDictionaryUseCase.invokeWithAlternatives(query, candidates)
-    → For each candidate (sequential .first() per candidate):
-         repository.searchCombined(q)
-           → DictionaryDao.searchCombined (LIKE-style + exact match)
-    → Merge by entry id
+    → All queries run in parallel (coroutineScope { async }):
+         • literal query (index 0): repository.searchCombined(q)
+           → DictionaryDao.searchCombined (exact + prefix-LIKE)
+         • each deconjugation alternative: repository.searchExact(q)
+           → DictionaryDao.searchExact (exact expression/reading only —
+             prefix-LIKE would drag in unrelated longer words that merely
+             share the base-form prefix, e.g. 見る → 見るに値する)
+    → Merge by entry id (literal query wins; alternatives capped at 20)
   → SearchViewModel applies MergedWordEntry.mergeEntries
     (groups by (expression, reading), picks primary by kanji + freq)
   → JlptVocabulary fallback runs per merged entry where jlpt_level == 0
@@ -170,6 +176,12 @@ Meaning field structure (formatMeaningForCard):
 
 Sentence field: only renders unattached examples (those with
 definitionIndex < 0). Jitendex-sourced examples never duplicate here.
+
+FrontContext field: the highlighted context sentence on the card front is
+only populated for HIRAGANA-ONLY front words (KanaUtils.isHiraganaOnly gate
+in createAnkiCard). Words written with kanji get no front context — they
+already carry their own recall hint. Still also requires the
+showFrontContextSentence preference to be on.
 
 Header layout (top of the back side, fixed — not part of the
 reorderable section list):
@@ -333,6 +345,27 @@ Compose. Leave it alone unless you are doing a full i18n migration.
     AnkiCardCreator companion-object comments — NEVER bump
     MODEL_NAME unless FIELD_NAMES changes; CSS / template updates
     flow via content provider to existing models.
+
+(k) RESOLVED. DictionaryRepository.search() + DictionaryDao.searchFts()
+    deleted — dead code. They wrapped an FTS MATCH path over the
+    Japanese expression/reading columns, but FTS4's default tokenizer
+    doesn't segment CJK (no spaces), so it was unreliable and the live
+    JP path uses searchCombined (exact + prefix-LIKE) instead.
+    searchByDefinition still uses the FTS table for English glosses,
+    where tokenization works — that path is untouched.
+
+(l) RESOLVED. Deconjugation alternatives in invokeWithAlternatives were
+    searched with the prefix-LIKE searchCombined, so an inflected verb
+    surfaced unrelated longer entries sharing the base-form prefix. They
+    now use exact-match searchExact; the literal query still uses prefix
+    matching so partial typing keeps working.
+
+(m) ON-SCREEN KANJI BREAKDOWN. The detail screen now renders the same
+    per-kanji breakdown the Anki card shows (DetailViewModel.kanjiInfo,
+    fed by repository.getKanjis → KanjiEntry.toKanjiInfo, ordered by
+    position in the expression). DetailScreen draws it as a "Kanji"
+    SectionCard. Empty for kana-only words or when no kanji dictionary
+    is installed.
 
 ----------------------------------------------------------------------
 9. WHEN ADDING A FEATURE — WHERE THINGS GO

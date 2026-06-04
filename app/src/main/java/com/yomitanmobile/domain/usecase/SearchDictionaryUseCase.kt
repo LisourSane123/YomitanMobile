@@ -30,6 +30,13 @@ class SearchDictionaryUseCase @Inject constructor(
      *
      * The original query keeps every result; alternatives keep their first
      * 20 to avoid drowning out the canonical match.
+     *
+     * Search strategy differs by position: the literal query (index 0) goes
+     * through the prefix-LIKE [DictionaryRepository.searchCombined] so the
+     * user's partial typing matches. Deconjugation alternatives are base
+     * forms and go through [DictionaryRepository.searchExact] — a prefix
+     * match there would surface unrelated longer words that merely share
+     * the base-form prefix (e.g. 見る → 見るに値する).
      */
     fun invokeWithAlternatives(query: String, alternatives: List<String>): Flow<List<WordEntry>> {
         val normalized = query.trim()
@@ -44,8 +51,11 @@ class SearchDictionaryUseCase @Inject constructor(
 
         return flow {
             val results = coroutineScope {
-                orderedQueries.map { q ->
-                    async { repository.searchCombined(q).first() }
+                orderedQueries.mapIndexed { idx, q ->
+                    async {
+                        if (idx == 0) repository.searchCombined(q).first()
+                        else repository.searchExact(q).first()
+                    }
                 }.map { it.await() }
             }
 

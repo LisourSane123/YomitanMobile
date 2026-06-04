@@ -22,16 +22,21 @@ data class JlptUpdate(
 @Dao
 interface DictionaryDao {
 
+    /**
+     * Exact-match lookup on expression OR reading (no prefix wildcards).
+     * Used for deconjugation alternatives: a base form like 見る should
+     * surface only itself, not every longer entry that starts with 見る
+     * (which the prefix-LIKE [searchCombined] would drag in).
+     */
     @Query("""
-        SELECT dictionary_entries.* FROM dictionary_entries
-        JOIN dictionary_entries_fts ON dictionary_entries.rowid = dictionary_entries_fts.rowid
-        WHERE dictionary_entries_fts MATCH :query
-        ORDER BY CASE WHEN dictionary_entries.frequency > 0 THEN 0 ELSE 1 END,
-                 dictionary_entries.frequency ASC,
-                 LENGTH(dictionary_entries.expression) ASC
+        SELECT * FROM dictionary_entries
+        WHERE expression = :exactQuery OR reading = :exactQuery
+        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
+                 frequency ASC,
+                 LENGTH(expression) ASC
         LIMIT :limit
     """)
-    fun searchFts(query: String, limit: Int = 50): Flow<List<DictionaryEntry>>
+    fun searchExact(exactQuery: String, limit: Int = 50): Flow<List<DictionaryEntry>>
 
     @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
     suspend fun getByReading(reading: String): List<DictionaryEntry>

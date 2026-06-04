@@ -20,7 +20,12 @@ data class WordEntry(
     // Sense-level usage hints peeled out of the gloss text by the mapper
     // (e.g. "usually kana", "formal", "archaic"). The UI renders these as
     // a chip rather than letting them clutter the definition line.
-    val usageTags: List<String> = emptyList()
+    val usageTags: List<String> = emptyList(),
+    // Cross-references and ad-hoc usage notes peeled out of the gloss text
+    // by NotesExtractor (e.g. "see also 食べる", "cf. 召し上がる",
+    // "Note: usually written in kana"). Displayed in a dedicated card at
+    // the bottom of the detail screen, away from the meaning column.
+    val notes: List<String> = emptyList()
 ) {
     fun definitionText(): String = definitions.joinToString("; ")
 

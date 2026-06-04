@@ -16,8 +16,10 @@ import com.yomitanmobile.data.local.dao.LookupCountDao
 import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
+import com.yomitanmobile.data.mapper.toKanjiInfo
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.CardStylePreferences
+import com.yomitanmobile.domain.model.KanjiInfo
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.PitchAccentStyle
 import com.yomitanmobile.domain.model.WordEntry
@@ -116,6 +118,17 @@ class DetailViewModel @Inject constructor(
     val lookupCount: StateFlow<Int> = _lookupCount.asStateFlow()
 
     /**
+     * Per-kanji breakdown (char + On/Kun readings + meanings) for every
+     * kanji in the current word, in the order they appear in the
+     * expression. Same source and shape as the Anki export's
+     * KanjiBreakdown field — the detail screen renders it in a dedicated
+     * "Kanji" card. Empty for kana-only words or when no kanji dictionary
+     * is installed.
+     */
+    private val _kanjiInfo = MutableStateFlow<List<KanjiInfo>>(emptyList())
+    val kanjiInfo: StateFlow<List<KanjiInfo>> = _kanjiInfo.asStateFlow()
+
+    /**
      * Coroutine handoff for the AI-failure dialog. Set internal so the
      * extracted gate can be exercised in tests via [resolveAiFailure].
      * [_isExporting] ensures only one decision can be in flight at a time.
@@ -164,6 +177,45 @@ class DetailViewModel @Inject constructor(
             _isLoading.value = false
             checkFavoriteStatus()
             recordLookup()
+            loadKanjiBreakdown()
+        }
+    }
+
+    /**
+     * Loads the kanji breakdown for the resolved word. Best-effort: filters
+     * the kanji characters out of the primary expression, fetches their
+     * entries via the same [DictionaryRepository.getKanjis] path the Anki
+     * export uses, and orders them by first appearance in the expression so
+     * the on-screen card matches reading order. Leaves the list empty (no
+     * card shown) for kana-only words or when the kanji lookup fails.
+     */
+    private fun loadKanjiBreakdown() {
+        val merged = _entry.value
+        if (merged == null) {
+            _kanjiInfo.value = emptyList()
+            return
+        }
+        val expression = merged.primaryExpression
+        val kanjiChars = expression
+            .filter { MergedWordEntry.isKanji(it) }
+            .map { it.toString() }
+            .distinct()
+        if (kanjiChars.isEmpty()) {
+            _kanjiInfo.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            runCatching {
+                repository.getKanjis(kanjiChars)
+                    .map { it.toKanjiInfo() }
+                    .sortedBy { info ->
+                        expression.indexOf(info.kanji).takeIf { it >= 0 } ?: Int.MAX_VALUE
+                    }
+            }.onSuccess { _kanjiInfo.value = it }
+                .onFailure { exception ->
+                    _kanjiInfo.value = emptyList()
+                    Log.w(logTag, "Kanji breakdown load failed", exception)
+                }
         }
     }
 

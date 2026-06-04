@@ -297,6 +297,393 @@ class YomitanJitendexFormatTest {
         assertEquals("(formal) to come into existence", defs[0])
     }
 
+    /**
+     * Regression for the user-reported bug: a sense whose extra-info block
+     * carries human-prose note text alongside the example sentence was
+     * silently dropped, because the sense walker only picked up the
+     * glossary <ul> and ignored everything else. After the fix, the note
+     * text is emitted as a marker-prefixed entry in the definitions JSON,
+     * so the mapper-side NotesExtractor can route it to the Notes card.
+     */
+    @Test
+    fun captureNotesFromExtraInfoBlock() = runBlocking {
+        val termJson = """
+            [[
+              "但し",
+              "ただし",
+              "",
+              "conj",
+              0,
+              [{
+                "type": "structured-content",
+                "content": [{
+                  "tag": "ul",
+                  "data": {"content": "sense-groups"},
+                  "content": {
+                    "tag": "li",
+                    "data": {"content": "sense-group"},
+                    "content": [
+                      {"tag":"span","data":{"class":"tag","code":"conj","content":"part-of-speech-info"},"content":"conjunction"},
+                      {"tag":"ol","content":[
+                        {"tag":"li","data":{"content":"sense"},"content":[
+                          {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"but, however"}},
+                          {"tag":"div","data":{"content":"extra-info"},"content":[
+                            {"tag":"div","content":"Usually written using kana alone."},
+                            {"tag":"div","data":{"content":"example-sentence"},"content":[
+                              {"tag":"div","data":{"content":"example-sentence-a"},"content":{"tag":"span","lang":"ja","content":"暑かった。但し、湿気はなかった。"}},
+                              {"tag":"div","data":{"content":"example-sentence-b"},"content":{"tag":"span","lang":"en","content":"It was hot. However, there was no humidity."}}
+                            ]}
+                          ]}
+                        ]}
+                      ]}
+                    ]
+                  }
+                }]
+              }],
+              0,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+
+        // The gloss is preserved. The note text from extra-info is appended
+        // as a separate entry with the NOTE_MARKER prefix.
+        val marker = com.yomitanmobile.util.NotesExtractor.NOTE_MARKER
+        assertTrue("expected a gloss entry, got $defs", defs.any { it == "but, however" })
+        assertTrue(
+            "expected a marker-tagged note for the extra-info text, got $defs",
+            defs.any { it == "${marker}Usually written using kana alone." }
+        )
+
+        // The example sentence is still extracted via the separate examples
+        // path — extra-info filtering must not eat the example.
+        val examples = json.decodeFromString(examplesSerializer, entry.examplesJson)
+        assertEquals(1, examples.size)
+        assertEquals("暑かった。但し、湿気はなかった。", examples[0].jp)
+    }
+
+    /**
+     * Shape A coverage. Real Jitendex usually puts a single
+     * `div[data-content=sense-group]` directly at the top of the
+     * structured-content tree — no `sense-groups` ul wrapper, no `<ol>`
+     * around senses. Before the 2026-05-23 rewrite the walker only matched
+     * Shape B + <ol>, so most real entries fell through to legacy flat-text
+     * extraction. This test pins the canonical Shape A.
+     */
+    @Test
+    fun parsesShapeASingleSenseGroup() = runBlocking {
+        val termJson = """
+            [[
+              "紫丁香花",
+              "むらさきはしどい",
+              "",
+              "n",
+              0,
+              [{
+                "type": "structured-content",
+                "content": [
+                  {"tag":"div","data":{"content":"sense-group"},"content":[
+                    {"tag":"span","title":"noun","data":{"class":"tag","code":"n","content":"part-of-speech-info"},"content":"noun"},
+                    {"tag":"div","data":{"content":"sense"},"content":[
+                      {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"lilac (Syringa vulgaris)"}}
+                    ]}
+                  ]}
+                ]
+              }],
+              0,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+        assertEquals(listOf("lilac (Syringa vulgaris)"), defs)
+        assertTrue("POS should include noun: ${entry.partsOfSpeech}", entry.partsOfSpeech.contains("n"))
+    }
+
+    /**
+     * `sense-note` is Jitendex's dedicated container for usage notes ("from
+     * 毯子", "literally X", etc.). Its `*-label` div carries the chip prefix
+     * and `*-content` carries the body. Both must end up in the notes list,
+     * never in the meaning column.
+     */
+    @Test
+    fun extractsSenseNoteBox() = runBlocking {
+        val termJson = """
+            [[
+              "緞通",
+              "だんつう",
+              "",
+              "n",
+              0,
+              [{
+                "type": "structured-content",
+                "content": [
+                  {"tag":"div","data":{"content":"sense-group"},"content":[
+                    {"tag":"span","data":{"class":"tag","code":"n","content":"part-of-speech-info"},"content":"noun"},
+                    {"tag":"div","data":{"content":"sense"},"content":[
+                      {"tag":"ul","data":{"content":"glossary"},"content":[
+                        {"tag":"li","content":"cotton carpet"},
+                        {"tag":"li","content":"jute rug"}
+                      ]},
+                      {"tag":"div","data":{"content":"extra-info"},"content":[
+                        {"tag":"div","data":{"class":"extra-box","content":"sense-note"},"content":[
+                          {"tag":"div","data":{"class":"extra-label","content":"sense-note-label"},"content":"Note"},
+                          {"tag":"div","data":{"class":"extra-content","content":"sense-note-content"},"content":"from 毯子"}
+                        ]}
+                      ]}
+                    ]}
+                  ]}
+                ]
+              }],
+              0,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+        val marker = com.yomitanmobile.util.NotesExtractor.NOTE_MARKER
+
+        // Multiple <li> items inside a single sense's glossary collapse into
+        // one joined definition string (one sense → one numbered meaning).
+        assertTrue(
+            "expected joined glosses to survive, got $defs",
+            defs.contains("cotton carpet; jute rug")
+        )
+        assertTrue(
+            "expected sense-note routed via NOTE_MARKER, got $defs",
+            defs.any { it == "${marker}Note: from 毯子" }
+        )
+        // The note text must not appear inside any gloss entry.
+        for (d in defs) {
+            if (!d.startsWith(marker)) {
+                assertFalse("gloss '$d' leaked the note body", d.contains("毯子"))
+            }
+        }
+    }
+
+    /**
+     * `xref` boxes hold cross-references: a `reference-label` (e.g. "See
+     * also") and one or more `<a>` link spans pointing to other entries.
+     * The format helper prefers the link text(s); the sibling `xref-glossary`
+     * is the linked entry's own gloss and is used as a fallback only.
+     */
+    @Test
+    fun extractsXrefBox() = runBlocking {
+        val termJson = """
+            [[
+              "紫丁香花",
+              "むらさきはしどい",
+              "",
+              "n",
+              0,
+              [{
+                "type": "structured-content",
+                "content": [
+                  {"tag":"div","data":{"content":"sense-group"},"content":[
+                    {"tag":"span","data":{"class":"tag","code":"n","content":"part-of-speech-info"},"content":"noun"},
+                    {"tag":"div","data":{"content":"sense"},"content":[
+                      {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"lilac (Syringa vulgaris)"}},
+                      {"tag":"div","data":{"content":"extra-info"},"content":{"tag":"div","content":{"tag":"div","data":{"class":"extra-box","content":"xref"},"content":[
+                        {"tag":"div","data":{"content":"xref-content"},"content":[
+                          {"tag":"span","lang":"en","data":{"content":"reference-label"},"content":"See also"},
+                          {"tag":"a","lang":"ja","href":"?query=%E3%83%A9%E3%82%A4%E3%83%A9%E3%83%83%E3%82%AF&wildcards=off","content":"ライラック"}
+                        ]},
+                        {"tag":"div","data":{"content":"xref-glossary"},"content":"lilac (Syringa vulgaris)"}
+                      ]}}}
+                    ]}
+                  ]}
+                ]
+              }],
+              0,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+        val marker = com.yomitanmobile.util.NotesExtractor.NOTE_MARKER
+
+        assertTrue(defs.contains("lilac (Syringa vulgaris)"))
+        assertTrue(
+            "expected xref routed via marker with link text, got $defs",
+            defs.any { it == "${marker}See also: ライラック" }
+        )
+    }
+
+    /**
+     * `lang-source` carries etymology ("English: \"line robbing\"", "wasei").
+     * It uses the same labelled-box layout as `sense-note`, so the same
+     * helper should format it.
+     */
+    @Test
+    fun extractsLangSourceBox() = runBlocking {
+        val termJson = """
+            [[
+              "ラインロビング",
+              "ラインロビング",
+              "",
+              "n",
+              0,
+              [{
+                "type": "structured-content",
+                "content": [
+                  {"tag":"div","data":{"content":"sense-group"},"content":[
+                    {"tag":"span","data":{"class":"tag","code":"n","content":"part-of-speech-info"},"content":"noun"},
+                    {"tag":"div","data":{"content":"sense"},"content":[
+                      {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"adding a product line"}},
+                      {"tag":"div","data":{"content":"extra-info"},"content":{"tag":"div","data":{"class":"extra-box","content":"lang-source"},"content":[
+                        {"tag":"div","data":{"class":"extra-label","content":"lang-source-label"},"content":"Language of Origin"},
+                        {"tag":"div","data":{"class":"extra-content","content":"lang-source-content"},"content":[
+                          "English: \"line robbing\"",
+                          {"tag":"span","data":{"class":"tag","content":"lang-source-wasei"},"content":"wasei"}
+                        ]}
+                      ]}}
+                    ]}
+                  ]}
+                ]
+              }],
+              0,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+        val marker = com.yomitanmobile.util.NotesExtractor.NOTE_MARKER
+
+        assertTrue(defs.contains("adding a product line"))
+        // The label is "Language of Origin" (taken from lang-source-label).
+        // The content starts with `English: "line robbing"`. The trailing
+        // "wasei" span is a tag chip — collectUsageTags filters it out so
+        // the body is just the etymology text.
+        val noteEntry = defs.firstOrNull { it.startsWith(marker) && it.contains("Language of Origin") }
+        assertTrue("expected lang-source note, got $defs", noteEntry != null)
+        assertTrue(
+            "expected etymology body, got '$noteEntry'",
+            noteEntry!!.contains("English") && noteEntry.contains("line robbing")
+        )
+    }
+
+    /**
+     * `info-gloss` is an encyclopedic explanation ("park with miniature
+     * buildings, models, etc."). Same labelled-box shape as `sense-note`.
+     */
+    @Test
+    fun extractsInfoGlossBox() = runBlocking {
+        val termJson = """
+            [[
+              "ミニチュアパーク",
+              "ミニチュアパーク",
+              "",
+              "n",
+              0,
+              [{
+                "type": "structured-content",
+                "content": [
+                  {"tag":"div","data":{"content":"sense-group"},"content":[
+                    {"tag":"span","data":{"class":"tag","code":"n","content":"part-of-speech-info"},"content":"noun"},
+                    {"tag":"div","data":{"content":"sense"},"content":[
+                      {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"miniature park"}},
+                      {"tag":"div","data":{"content":"extra-info"},"content":{"tag":"div","content":{"tag":"div","data":{"class":"extra-box","content":"info-gloss"},"content":[
+                        {"tag":"div","data":{"class":"extra-label","content":"info-gloss-label"},"content":"Explanation"},
+                        {"tag":"div","data":{"class":"extra-content","content":"info-gloss-content"},"content":"park with miniature buildings, models, etc."}
+                      ]}}}
+                    ]}
+                  ]}
+                ]
+              }],
+              0,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+        val marker = com.yomitanmobile.util.NotesExtractor.NOTE_MARKER
+
+        assertEquals(
+            listOf(
+                "miniature park",
+                "${marker}Explanation: park with miniature buildings, models, etc."
+            ),
+            defs
+        )
+    }
+
+    /**
+     * Top-level `forms` and `attribution` siblings of `sense-group` must
+     * not pollute the meaning column. Before the rewrite the parser fell
+     * through to legacy flat-text extraction and concatenated form variants
+     * onto the gloss; now sense-aware extraction is selective.
+     */
+    @Test
+    fun ignoresTopLevelFormsAndAttribution() = runBlocking {
+        val termJson = """
+            [[
+              "ローリスク",
+              "ローリスク",
+              "",
+              "n",
+              0,
+              [{
+                "type": "structured-content",
+                "content": [
+                  {"tag":"div","data":{"content":"sense-group"},"content":[
+                    {"tag":"span","data":{"class":"tag","code":"n","content":"part-of-speech-info"},"content":"noun"},
+                    {"tag":"div","data":{"content":"sense"},"content":[
+                      {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"low-risk"}}
+                    ]}
+                  ]},
+                  {"tag":"div","data":{"content":"forms"},"content":[
+                    {"tag":"span","data":{"class":"tag","content":"forms-label"},"content":"forms"},
+                    {"tag":"ul","content":[
+                      {"tag":"li","content":"ローリスク"},
+                      {"tag":"li","content":"ロー・リスク"}
+                    ]}
+                  ]},
+                  {"tag":"div","data":{"content":"attribution"},"content":{"tag":"a","href":"https://example.org","content":"JMdict"}}
+                ]
+              }],
+              0,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+
+        assertEquals(listOf("low-risk"), defs)
+        // Nothing about forms / attribution should leak.
+        assertFalse(defs.any { it.contains("ローリスク") && it != "low-risk" })
+        assertFalse(defs.any { it.contains("JMdict") })
+        assertFalse(defs.any { it.contains("forms") })
+    }
+
     private suspend fun parseSingleEntry(termJson: String): DictionaryEntry {
         val zipBytes = createZip(
             mapOf(

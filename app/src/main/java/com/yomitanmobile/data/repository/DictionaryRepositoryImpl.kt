@@ -47,11 +47,10 @@ class DictionaryRepositoryImpl @Inject constructor(
         return kanjiDao.getKanjis(kanjiList)
     }
 
-    override fun search(query: String): Flow<List<WordEntry>> {
+    override fun searchExact(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
-        val ftsQuery = InputSanitizer.sanitizeFtsQuery(query)
-        if (ftsQuery.isBlank()) return flowOf(emptyList())
-        return dictionaryDao.searchFts(ftsQuery)
+        val trimmed = query.trim()
+        return dictionaryDao.searchExact(trimmed)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { _ ->
                 emit(emptyList())

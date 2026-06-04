@@ -86,6 +86,7 @@ fun DetailScreen(
     val ttsReady by viewModel.ttsReady.collectAsState()
     val isFavorite by viewModel.isFavorite.collectAsState()
     val lookupCount by viewModel.lookupCount.collectAsState()
+    val kanjiInfo by viewModel.kanjiInfo.collectAsState()
     val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
@@ -338,6 +339,7 @@ fun DetailScreen(
                     isEnglish = isEnglish,
                     lookupCount = lookupCount,
                     isFavorite = isFavorite,
+                    kanjiInfo = kanjiInfo,
                     onToggleFavorite = { viewModel.toggleFavorite() },
                     modifier = Modifier.padding(paddingValues)
                 )
@@ -357,6 +359,7 @@ private fun WordDetailContent(
     isEnglish: Boolean,
     lookupCount: Int,
     isFavorite: Boolean,
+    kanjiInfo: List<com.yomitanmobile.domain.model.KanjiInfo>,
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -630,9 +633,84 @@ private fun WordDetailContent(
             Spacer(Modifier.height(12.dp))
         }
 
+        // Kanji breakdown — one row per kanji in the word, mirroring the
+        // KanjiBreakdown field on the exported Anki card (big char, On/Kun
+        // readings, meanings). Only shown when the word actually contains
+        // kanji and a kanji dictionary supplied entries for them.
+        if (kanjiInfo.isNotEmpty()) {
+            SectionCard(title = tr("Kanji", "Kanji")) {
+                kanjiInfo.forEachIndexed { index, kanji ->
+                    if (index > 0) Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            text = kanji.kanji,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(end = 12.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            val readings = buildString {
+                                if (kanji.onyomi.isNotBlank()) append(tr("On: ", "On: ")).append(kanji.onyomi)
+                                if (kanji.kunyomi.isNotBlank()) {
+                                    if (isNotEmpty()) append("   ")
+                                    append(tr("Kun: ", "Kun: ")).append(kanji.kunyomi)
+                                }
+                            }
+                            if (readings.isNotBlank()) {
+                                Text(
+                                    text = readings,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                            if (kanji.meanings.isNotEmpty()) {
+                                Text(
+                                    text = kanji.meanings.joinToString(", "),
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         // Dictionary source
         if (entry.dictionaryName.isNotBlank()) {
             Text(tr("Źródło: ${entry.dictionaryName}", "Source: ${entry.dictionaryName}"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 4.dp))
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // Cross-references and ad-hoc usage notes ("see also …", "cf. …",
+        // "Note: …") collected by NotesExtractor. Rendered as the last card
+        // on the page — keeps the main meaning column undisturbed while
+        // still surfacing the auxiliary information at the bottom for the
+        // reader who scrolls down looking for it.
+        if (entry.notes.isNotEmpty()) {
+            SectionCard(title = tr("Uwagi i odsyłacze", "Notes & see also")) {
+                entry.notes.forEachIndexed { index, note ->
+                    if (index > 0) Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            text = "• ",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = note,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
         }
 

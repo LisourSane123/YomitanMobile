@@ -937,9 +937,17 @@ class AnkiCardCreator(
         )
         val freqText = entry.frequencyLabel()
         
-        val frontExpression = InputSanitizer.escapeHtml(entry.expression.ifBlank { entry.reading })
+        val frontWord = entry.expression.ifBlank { entry.reading }
+        val frontExpression = InputSanitizer.escapeHtml(frontWord)
         val frontContent = if (randomFont != null) "<span style=\"font-family: '$randomFont', sans-serif;\">$frontExpression</span>" else frontExpression
-        val frontContext = if (stylePrefs?.showFrontContextSentence == true) {
+        // Front-context sentence is only attached for kana-only (hiragana)
+        // words. Words written with kanji already carry their own recall
+        // hint on the front, so the extra sentence is reserved for the
+        // pure-hiragana words where it actually helps disambiguate.
+        val frontContext = if (
+            stylePrefs?.showFrontContextSentence == true &&
+            com.yomitanmobile.util.KanaUtils.isHiraganaOnly(frontWord)
+        ) {
             SentenceContextHighlighter.buildHighlightedSentenceHtml(
                 sentence = entry.exampleSentence,
                 preferredTokens = listOf(entry.expression, entry.reading)

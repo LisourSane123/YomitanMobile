@@ -614,42 +614,45 @@ class YomitanDictionaryParser @Inject constructor() {
                 val sc = defElement as? JsonObject ?: continue
                 if (sc["type"]?.jsonPrimitive?.contentOrNull != "structured-content") continue
                 val topContent = sc["content"] ?: continue
-                val topItems = elementAsList(topContent)
 
-                for (item in topItems) {
-                    val node = item as? JsonObject ?: continue
-                    val dc = nodeDataContent(node)
-                    if (dc != "sense-groups") continue
+                // Real Jitendex emits TWO sense-group shapes, often side-by-side
+                // with `forms` / `attribution` blocks at the top level. See
+                // JITENDEX_STRUCTURE.md for the catalogue:
+                //   - Shape A: a single div[data-content=sense-group] at top level
+                //   - Shape B: a ul[data-content=sense-groups] wrapping
+                //     li[data-content=sense-group] children
+                // collectSenseGroups handles both — until this rewrite, the
+                // parser only accepted Shape B (and even then required an <ol>
+                // wrapper around senses that real Jitendex doesn't emit), so
+                // most entries silently fell through to the legacy flat-text
+                // path and leaked notes/xrefs/forms into the meaning column.
+                val groups = mutableListOf<JsonObject>()
+                collectSenseGroups(topContent, groups)
+                if (groups.isEmpty()) continue
+                matched = true
 
-                    matched = true
-                    val groups = elementAsList(node["content"]).filterIsInstance<JsonObject>()
-                    for (group in groups) {
-                        val groupContent = elementAsList(group["content"])
-                        for (gItem in groupContent) {
-                            val gObj = gItem as? JsonObject ?: continue
-                            val gDc = nodeDataContent(gObj)
-                            when {
-                                gDc == "part-of-speech-info" -> {
-                                    val code = gObj["data"]?.jsonObject?.get("code")
-                                        ?.jsonPrimitive?.contentOrNull?.trim()
-                                    if (!code.isNullOrBlank()) posCodes.add(code)
-                                }
-                                gObj["tag"]?.jsonPrimitive?.contentOrNull == "ol" -> {
-                                    val senses = elementAsList(gObj["content"])
-                                        .filterIsInstance<JsonObject>()
-                                    for (sense in senses) {
-                                        val idx = definitions.size
-                                        val text = extractSenseGloss(sense)
-                                        if (text.isNotBlank()) definitions.add(text)
-                                        // Even if text is blank, examples still attach to
-                                        // the most recent definition index (idx-1) — but
-                                        // skip if no definitions exist yet.
-                                        val attachIdx = if (text.isNotBlank()) idx else idx - 1
-                                        if (attachIdx >= 0) {
-                                            collectSenseExamples(sense, attachIdx, examples)
-                                        }
-                                    }
-                                }
+                for (group in groups) {
+                    val groupContent = elementAsList(group["content"])
+                    for (gItem in groupContent) {
+                        val gObj = gItem as? JsonObject ?: continue
+                        val gDc = nodeDataContent(gObj)
+                        when {
+                            gDc == "part-of-speech-info" -> {
+                                val code = gObj["data"]?.jsonObject?.get("code")
+                                    ?.jsonPrimitive?.contentOrNull?.trim()
+                                if (!code.isNullOrBlank()) posCodes.add(code)
+                            }
+                            gDc == "sense" -> {
+                                processSense(gObj, definitions, examples)
+                            }
+                            gObj["tag"]?.jsonPrimitive?.contentOrNull == "ol" -> {
+                                // Legacy / fallback layout: senses wrapped in
+                                // an <ol>. Kept so the older fixture-style
+                                // payloads still parse cleanly even though
+                                // real Jitendex doesn't emit the wrapper.
+                                val senses = elementAsList(gObj["content"])
+                                    .filterIsInstance<JsonObject>()
+                                for (sense in senses) processSense(sense, definitions, examples)
                             }
                         }
                     }
@@ -665,7 +668,57 @@ class YomitanDictionaryParser @Inject constructor() {
         } else null
     }
 
-    private fun extractSenseGloss(sense: JsonObject): String {
+    private data class SenseContent(val gloss: String, val notes: List<String>)
+
+    /**
+     * Recursively gather every `data-content="sense-group"` node in [node].
+     * Real Jitendex emits two shapes (see JITENDEX_STRUCTURE.md):
+     *   - A bare div[data-content=sense-group] at top level, or
+     *   - A ul[data-content=sense-groups] wrapping li[data-content=sense-group].
+     * Both end up in [out].
+     */
+    private fun collectSenseGroups(node: JsonElement, out: MutableList<JsonObject>) {
+        when (node) {
+            is JsonObject -> {
+                when (nodeDataContent(node)) {
+                    "sense-group" -> out.add(node)
+                    "sense-groups" -> {
+                        // Descend one level — the <li sense-group> children sit directly
+                        // inside the <ul sense-groups> wrapper.
+                        val children = elementAsList(node["content"]).filterIsInstance<JsonObject>()
+                        for (child in children) {
+                            if (nodeDataContent(child) == "sense-group") out.add(child)
+                        }
+                    }
+                    else -> node["content"]?.let { collectSenseGroups(it, out) }
+                }
+            }
+            is JsonArray -> node.forEach { collectSenseGroups(it, out) }
+            else -> Unit
+        }
+    }
+
+    /** Emit one sense's gloss + notes + examples into the running parse buffers. */
+    private fun processSense(
+        sense: JsonObject,
+        definitions: MutableList<String>,
+        examples: MutableList<ExamplePair>
+    ) {
+        val idx = definitions.size
+        val sc = extractSenseGloss(sense)
+        if (sc.gloss.isNotBlank()) definitions.add(sc.gloss)
+        // Notes are pushed as marker-prefixed entries so the mapper-side
+        // NotesExtractor can route them to the Notes card without a DB
+        // schema change.
+        for (note in sc.notes) {
+            definitions.add("${com.yomitanmobile.util.NotesExtractor.NOTE_MARKER}$note")
+        }
+        // Examples attach to the sense even if its gloss is blank.
+        val attachIdx = if (sc.gloss.isNotBlank()) idx else idx - 1
+        if (attachIdx >= 0) collectSenseExamples(sense, attachIdx, examples)
+    }
+
+    private fun extractSenseGloss(sense: JsonObject): SenseContent {
         val items = elementAsList(sense["content"])
         val glosses = mutableListOf<String>()
         // Jitendex stores per-sense usage hints ("usually written in kana",
@@ -679,24 +732,150 @@ class YomitanDictionaryParser @Inject constructor() {
         // in parens so each gloss reads "(usually written in kana) but, however".
         val tagLabels = LinkedHashSet<String>()
         collectUsageTags(sense, tagLabels)
+
+        val notes = mutableListOf<String>()
+
         for (item in items) {
             val obj = item as? JsonObject ?: continue
             val dc = nodeDataContent(obj)
-            // Only the <ul data-content="glossary"> children are real gloss text.
-            // Everything else (extra-info wrappers, cross-references, attribution)
-            // is rendered separately and must not pollute the meaning column.
-            if (dc != "glossary") continue
-            val children = elementAsList(obj["content"]).filterIsInstance<JsonObject>()
-            for (li in children) {
-                val text = extractTextFromContent(li["content"] ?: continue).trim()
-                if (text.isNotBlank()) glosses.add(text)
+            when (dc) {
+                "glossary" -> {
+                    val children = elementAsList(obj["content"]).filterIsInstance<JsonObject>()
+                    for (li in children) {
+                        val text = extractTextFromContent(li["content"] ?: continue).trim()
+                        if (text.isNotBlank()) glosses.add(text)
+                    }
+                }
+                "extra-info" -> {
+                    // Typed extra-info boxes (sense-note, xref, antonym,
+                    // lang-source, info-gloss) carry the data the user wants
+                    // routed to the bottom Notes card. Anything else inside
+                    // extra-info (e.g. an inline div of prose for a non-
+                    // Jitendex dictionary) falls back to a raw-text capture.
+                    notes.addAll(extractExtraInfoNotes(obj))
+                }
+                // Other markers (POS, tag, miscellany, headword/form wrappers)
+                // belong to other display sections and must not bleed into
+                // either the meaning column or the notes card.
+                else -> Unit
             }
         }
+
         val glossText = glosses.joinToString("; ")
-        return when {
+        val composed = when {
             tagLabels.isEmpty() -> glossText
             glossText.isBlank() -> "(${tagLabels.joinToString(", ")})"
             else -> "(${tagLabels.joinToString(", ")}) $glossText"
+        }
+        return SenseContent(composed, notes)
+    }
+
+    /**
+     * Walk an `extra-info` subtree and surface every typed Jitendex box as a
+     * labelled note string. Falls back to a raw-text extraction when nothing
+     * typed is found, which keeps non-Jitendex dictionaries that just dump
+     * prose inside `extra-info` from being silently dropped.
+     */
+    private fun extractExtraInfoNotes(extraInfo: JsonObject): List<String> {
+        val typed = mutableListOf<String>()
+        collectTypedExtraBoxes(extraInfo, typed)
+        if (typed.isNotEmpty()) return typed
+        val raw = extractTextFromContent(extraInfo).trim()
+        return if (raw.isBlank()) emptyList() else listOf(raw)
+    }
+
+    private fun collectTypedExtraBoxes(node: JsonElement, out: MutableList<String>) {
+        when (node) {
+            is JsonObject -> {
+                when (nodeDataContent(node)) {
+                    "sense-note" -> out.add(formatLabeledBox(node, "Note"))
+                    "xref" -> out.add(formatReferenceBox(node, "See also"))
+                    "antonym" -> out.add(formatReferenceBox(node, "Antonym"))
+                    "lang-source" -> out.add(formatLabeledBox(node, "Language of Origin"))
+                    "info-gloss" -> out.add(formatLabeledBox(node, "Explanation"))
+                    // Examples are extracted via the dedicated walker; don't
+                    // re-capture them as notes.
+                    "example-sentence",
+                    "example",
+                    "example-sentences",
+                    "example-sentence-list" -> Unit
+                    else -> node["content"]?.let { collectTypedExtraBoxes(it, out) }
+                }
+            }
+            is JsonArray -> node.forEach { collectTypedExtraBoxes(it, out) }
+            else -> Unit
+        }
+    }
+
+    /**
+     * Format a `<label-content>` extra-info box like:
+     *   sense-note  ⇒ "Note: <body>"
+     *   lang-source ⇒ "Language of Origin: <body>"
+     *   info-gloss  ⇒ "Explanation: <body>"
+     *
+     * Uses the box's own `*-label` text when present; falls back to
+     * [defaultLabel] otherwise so the user-facing prefix is never blank.
+     */
+    private fun formatLabeledBox(box: JsonObject, defaultLabel: String): String {
+        val children = elementAsList(box["content"])
+        var label: String? = null
+        var content: String? = null
+        for (child in children) {
+            val obj = child as? JsonObject ?: continue
+            val dc = nodeDataContent(obj) ?: continue
+            when {
+                dc.endsWith("-label") -> label = extractTextFromContent(obj).trim()
+                dc.endsWith("-content") -> content = extractTextFromContent(obj).trim()
+            }
+        }
+        val finalLabel = label?.takeIf { it.isNotBlank() } ?: defaultLabel
+        return if (content.isNullOrBlank()) finalLabel else "$finalLabel: $content"
+    }
+
+    /**
+     * Format an `xref` / `antonym` box. These boxes nest a `*-content` div
+     * which holds a `reference-label` span followed by one or more `<a>`
+     * links to the referenced entries; the sibling `*-glossary` div carries
+     * the linked entry's gloss text. We prefer the link text(s) (joined by
+     * comma) for the chip; the glossary text is a fallback when the box has
+     * no links for some reason.
+     */
+    private fun formatReferenceBox(box: JsonObject, defaultLabel: String): String {
+        val children = elementAsList(box["content"])
+        var label = defaultLabel
+        val targets = mutableListOf<String>()
+        var fallbackGloss: String? = null
+        for (child in children) {
+            val obj = child as? JsonObject ?: continue
+            val dc = nodeDataContent(obj) ?: continue
+            when {
+                dc.endsWith("-content") -> {
+                    val inner = elementAsList(obj["content"])
+                    for (n in inner) {
+                        val o = n as? JsonObject ?: continue
+                        val odc = nodeDataContent(o)
+                        val tag = o["tag"]?.jsonPrimitive?.contentOrNull
+                        when {
+                            odc == "reference-label" -> {
+                                val txt = extractTextFromContent(o).trim()
+                                if (txt.isNotBlank()) label = txt
+                            }
+                            tag == "a" -> {
+                                val txt = extractTextFromContent(o).trim()
+                                if (txt.isNotBlank()) targets.add(txt)
+                            }
+                        }
+                    }
+                }
+                dc.endsWith("-glossary") -> {
+                    fallbackGloss = extractTextFromContent(obj).trim()
+                }
+            }
+        }
+        return when {
+            targets.isNotEmpty() -> "$label: ${targets.joinToString(", ")}"
+            !fallbackGloss.isNullOrBlank() -> "$label: $fallbackGloss"
+            else -> label
         }
     }
 

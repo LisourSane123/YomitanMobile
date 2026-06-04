@@ -24,7 +24,11 @@ data class MergedWordEntry(
     val examples: List<ExamplePair> = emptyList(),
     // Usage hints (e.g. "usually kana", "formal") collected from the grouped
     // entries' WordEntry.usageTags. Rendered as a chip near the JLPT badge.
-    val usageTags: List<String> = emptyList()
+    val usageTags: List<String> = emptyList(),
+    // Cross-references and notes ("see also …", "cf. …", "Note: …") merged
+    // from the grouped entries' WordEntry.notes. Rendered as a separate
+    // card at the bottom of the detail screen.
+    val notes: List<String> = emptyList()
 ) {
     fun displayText(): String = primaryExpression.ifBlank { reading }
 
@@ -63,7 +67,8 @@ data class MergedWordEntry(
         audioFile = audioFile,
         jlptLevel = jlptLevel,
         examples = examples,
-        usageTags = usageTags
+        usageTags = usageTags,
+        notes = notes
     )
 
     companion object {
@@ -175,6 +180,12 @@ data class MergedWordEntry(
                     group.forEach { addAll(it.usageTags) }
                 }.toList()
 
+                // Union of cross-references / notes across the group, same
+                // first-seen preservation as usageTags.
+                val mergedNotes = LinkedHashSet<String>().apply {
+                    group.forEach { addAll(it.notes) }
+                }.toList()
+
                 MergedWordEntry(
                     primaryId = primary.id,
                     primaryExpression = primaryExpression,
@@ -191,7 +202,8 @@ data class MergedWordEntry(
                     audioFile = audioFile,
                     jlptLevel = jlptLevel,
                     examples = examples,
-                    usageTags = mergedUsageTags
+                    usageTags = mergedUsageTags,
+                    notes = mergedNotes
                 )
             }
                 // Preserve order from SQL query (already sorted by relevance + frequency)
