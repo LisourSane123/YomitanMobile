@@ -13,8 +13,14 @@ object SentenceContextHighlighter {
         if (trimmedSentence.isBlank()) return ""
 
         val escapedSentence = InputSanitizer.escapeHtml(trimmedSentence)
+        // Expand each preferred token into its inflected surface forms so a
+        // sentence that uses the word in a conjugated shape (dictionary 食べる
+        // vs. sentence 食べた) still gets highlighted. Longest-first matching
+        // then prefers the fullest occurring inflection over any base prefix.
         val tokens = preferredTokens
             .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .flatMap { JapaneseConjugator.inflectedForms(it) }
             .filter { it.isNotBlank() }
             .distinct()
             .sortedByDescending { it.length }

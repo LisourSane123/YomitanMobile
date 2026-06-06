@@ -1,13 +1,17 @@
 YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 ======================================================================
 
-Last verified: 2026-06-04 (kanji breakdown now also renders on the detail
-screen — same KanjiEntry source as the card's KanjiBreakdown field, via
-DetailViewModel.kanjiInfo → DetailScreen "Kanji" card; front-context
-sentence restricted to hiragana-only words (KanaUtils.isHiraganaOnly gate
-in AnkiCardCreator.createAnkiCard); search audit — dead searchFts/search()
-path removed, deconjugation alternatives now use exact match
-(DictionaryDao.searchExact) instead of prefix-LIKE. Prior: header
+Last verified: 2026-06-06 (front-context highlighter now matches INFLECTED
+occurrences: util/JapaneseConjugator expands a dictionary form into its
+surface inflections (食べる → 食べた/食べて/食べない/…) and
+SentenceContextHighlighter highlights the longest inflection that actually
+occurs in the sentence — see section 4 "FrontContext field". Prior: kanji
+breakdown now also renders on the detail screen — same KanjiEntry source as
+the card's KanjiBreakdown field, via DetailViewModel.kanjiInfo → DetailScreen
+"Kanji" card; front-context sentence restricted to hiragana-only words
+(KanaUtils.isHiraganaOnly gate in AnkiCardCreator.createAnkiCard); search
+audit — dead searchFts/search() path removed, deconjugation alternatives now
+use exact match (DictionaryDao.searchExact) instead of prefix-LIKE. Prior: header
 word-divider, AI summary integration, reorderable sections, model bumped
 to v8, online sentence API removed; AI summary opt-in per-export).
 Audience: an AI coding agent picking up an unfamiliar feature in this
@@ -182,6 +186,18 @@ only populated for HIRAGANA-ONLY front words (KanaUtils.isHiraganaOnly gate
 in createAnkiCard). Words written with kanji get no front context — they
 already carry their own recall hint. Still also requires the
 showFrontContextSentence preference to be on.
+  Highlighting (SentenceContextHighlighter.buildHighlightedSentenceHtml):
+  the preferred tokens (expression, reading) are each expanded through
+  util/JapaneseConjugator.inflectedForms — the forward counterpart to
+  JapaneseDeconjugator — so a sentence that uses the word in a conjugated
+  shape (dictionary たべる vs. sentence たべた) is still matched. All
+  candidate surface forms are tried LONGEST-FIRST, so the fullest occurring
+  inflection wins (たべている over a bare たべ prefix) and absent forms are
+  skipped. る-final words emit both ichidan and godan paradigms (ambiguous
+  from kana alone); only the form present in the sentence ever matches.
+  する / くる / i-adjectives are handled as special cases. Output stays
+  HTML-escaped. Covered by JapaneseConjugatorTest +
+  SentenceContextHighlighterTest.
 
 Header layout (top of the back side, fixed — not part of the
 reorderable section list):
@@ -418,6 +434,10 @@ Test-coverage hot spots to update when changing logic:
                                        sectionOrder; missing-section
                                        append, unknown-token tolerance,
                                        deduplication
+  JapaneseConjugatorTest             — forward inflection of ichidan /
+                                       godan / i-adjective / する / くる
+  SentenceContextHighlighterTest     — base + inflected highlighting,
+                                       longest-match preference, escaping
 
 If you change DB schema, add a Migration test before merging.
 
