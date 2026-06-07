@@ -23,6 +23,7 @@ import com.yomitanmobile.domain.model.KanjiInfo
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.PitchAccentStyle
 import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.domain.model.WordFrequencyInfo
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
 import com.yomitanmobile.util.InputSanitizer
@@ -129,6 +130,15 @@ class DetailViewModel @Inject constructor(
     val kanjiInfo: StateFlow<List<KanjiInfo>> = _kanjiInfo.asStateFlow()
 
     /**
+     * Per-source frequency ranks for the current word, already ordered by the
+     * user's priority preference and collapsed to the top list when "show all"
+     * is off. Empty when no frequency list covers the word. Rendered as chips
+     * in the detail header.
+     */
+    private val _frequencies = MutableStateFlow<List<WordFrequencyInfo>>(emptyList())
+    val frequencies: StateFlow<List<WordFrequencyInfo>> = _frequencies.asStateFlow()
+
+    /**
      * Coroutine handoff for the AI-failure dialog. Set internal so the
      * extracted gate can be exercised in tests via [resolveAiFailure].
      * [_isExporting] ensures only one decision can be in flight at a time.
@@ -178,6 +188,37 @@ class DetailViewModel @Inject constructor(
             checkFavoriteStatus()
             recordLookup()
             loadKanjiBreakdown()
+            loadFrequencies()
+        }
+    }
+
+    /**
+     * Loads every installed list's frequency rank for the current word and
+     * orders them by the user's priority preference (collapsing to the top
+     * list when "show all" is off). Best-effort: leaves the list empty on any
+     * failure so the rest of the detail screen still renders.
+     */
+    private fun loadFrequencies() {
+        val merged = _entry.value
+        if (merged == null) {
+            _frequencies.value = emptyList()
+            return
+        }
+        val expression = merged.primaryExpression.ifBlank { merged.reading }
+        val reading = merged.reading.ifBlank { expression }
+        viewModelScope.launch {
+            runCatching {
+                val raw = repository.getFrequencies(expression, reading)
+                val prefs = appContext.dataStore.data.first()
+                val priority = (prefs[MainActivity.FREQUENCY_DISPLAY_ORDER] ?: "")
+                    .split(',').map { it.trim() }.filter { it.isNotBlank() }
+                val showAll = prefs[MainActivity.FREQUENCY_SHOW_ALL] ?: true
+                WordFrequencyInfo.order(raw, priority, showAll)
+            }.onSuccess { _frequencies.value = it }
+                .onFailure { exception ->
+                    _frequencies.value = emptyList()
+                    Log.w(logTag, "Frequency load failed", exception)
+                }
         }
     }
 

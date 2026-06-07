@@ -2,16 +2,19 @@ package com.yomitanmobile.data.repository
 
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
+import com.yomitanmobile.data.local.dao.FrequencyDao
 import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.database.AppDatabase
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.data.local.entity.KanjiEntry
+import com.yomitanmobile.data.local.entity.WordFrequency
 import com.yomitanmobile.data.mapper.toDomain
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
 import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.domain.model.WordFrequencyInfo
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.Dispatchers
@@ -29,9 +32,15 @@ class DictionaryRepositoryImpl @Inject constructor(
     private val dictionaryDao: DictionaryDao,
     private val dictionaryInfoDao: DictionaryInfoDao,
     private val kanjiDao: KanjiDao,
+    private val frequencyDao: FrequencyDao,
     private val parser: YomitanDictionaryParser,
     private val database: AppDatabase
 ) : DictionaryRepository {
+
+    // Matches YomitanDictionaryParser's placeholder name: term/kanji/frequency
+    // rows are written under this and renamed to the real index.json title
+    // once parsing finishes (the title isn't reliably known mid-stream).
+    private val tempDictionaryName = "temp"
 
     // NOTE: previously we toggled `PRAGMA synchronous = OFF` and
     // `journal_mode = MEMORY` for the duration of the import to speed up
@@ -111,6 +120,10 @@ class DictionaryRepositoryImpl @Inject constructor(
             var totalPitchUpdates = 0
             var totalJlptUpdates = 0
 
+            // Clear any frequency rows left under the temp name by a previous
+            // interrupted import before we start writing this one.
+            frequencyDao.deleteByDictionary(tempDictionaryName)
+
             // Use streaming parser — entries are inserted in batches as they're parsed.
             // 10000 fits comfortably in one transaction and roughly halves the
             // transaction-commit overhead vs. 5000.
@@ -126,7 +139,22 @@ class DictionaryRepositoryImpl @Inject constructor(
                 },
                 onMetaBatch = { freqUpdates, pitchMap ->
                     if (freqUpdates.isNotEmpty()) {
+                        // Best-rank rollup into dictionary_entries.frequency (search ordering)…
                         dictionaryDao.updateFrequencyBatch(freqUpdates)
+                        // …plus the per-source row keeping THIS list's rank for
+                        // multi-list display. Written under the temp name and
+                        // renamed once we know the index.json title.
+                        frequencyDao.insertAll(
+                            freqUpdates.map { u ->
+                                WordFrequency(
+                                    expression = u.expression,
+                                    reading = u.reading?.trim().orEmpty(),
+                                    dictionary = tempDictionaryName,
+                                    rank = u.frequency,
+                                    displayValue = u.displayValue.ifBlank { u.frequency.toString() }
+                                )
+                            }
+                        )
                         totalFreqUpdates += freqUpdates.size
                     }
                     if (pitchMap.isNotEmpty()) {
@@ -149,6 +177,15 @@ class DictionaryRepositoryImpl @Inject constructor(
             )
 
             dictionaryNameFromBatch = parseResult.dictionaryName
+
+            // Promote frequency rows from the temp name to the real list title.
+            // Runs for meta AND term dicts (a term dict can carry its own freq
+            // meta banks). Drop any prior import of the same list first so a
+            // re-import replaces rather than duplicates.
+            if (dictionaryNameFromBatch != tempDictionaryName) {
+                frequencyDao.deleteByDictionary(dictionaryNameFromBatch)
+                frequencyDao.updateDictionaryName(tempDictionaryName, dictionaryNameFromBatch)
+            }
 
             // For meta-only dictionaries (frequency/pitch), we don't insert term entries
             // — the meta data was already applied to existing entries via onMetaBatch
@@ -201,10 +238,21 @@ class DictionaryRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo> {
+        if (expression.isBlank()) return emptyList()
+        return try {
+            frequencyDao.getForWord(expression, reading.trim())
+                .map { WordFrequencyInfo(it.dictionary, it.rank, it.displayValue) }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     override suspend fun deleteDictionary(dictionaryName: String) {
         withContext(Dispatchers.IO) {
             dictionaryDao.deleteByDictionary(dictionaryName)
             kanjiDao.deleteByDictionary(dictionaryName)
+            frequencyDao.deleteByDictionary(dictionaryName)
             dictionaryInfoDao.deleteByName(dictionaryName)
             try {
                 dictionaryDao.rebuildFtsIndex()

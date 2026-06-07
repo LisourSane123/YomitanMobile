@@ -1,9 +1,15 @@
 YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 ======================================================================
 
-Last verified: 2026-06-06 (front-context highlighter now matches INFLECTED
-occurrences: util/JapaneseConjugator expands a dictionary form into its
-surface inflections (食べる → 食べた/食べて/食べない/…) and
+Last verified: 2026-06-07 (multi-source frequency lists: each imported
+frequency dictionary's rank is now stored separately in the word_frequencies
+table (DB v14) instead of overwriting one column; the detail screen shows
+every installed list's rank as chips in a user-chosen priority order, with a
+"show all vs. top only" toggle — see new section 12. BCCWJ added to the
+download catalog; the four Drive-only lists from freq.txt are documented as
+self-host templates in DictionaryDownloadInfo. Prior: front-context highlighter
+now matches INFLECTED occurrences: util/JapaneseConjugator expands a dictionary
+form into its surface inflections (食べる → 食べた/食べて/食べない/…) and
 SentenceContextHighlighter highlights the longest inflection that actually
 occurs in the sentence — see section 4 "FrontContext field". Prior: kanji
 breakdown now also renders on the detail screen — same KanjiEntry source as
@@ -32,7 +38,7 @@ domain/
     DictionaryManagementUseCases) sit above it.
 
 data/
-  - data/local: Room DB (AppDatabase v11) + DAOs.
+  - data/local: Room DB (AppDatabase v14) + DAOs.
   - data/parser: streaming Yomitan ZIP parser (term banks, kanji
     banks, term meta banks).
   - data/repository: DictionaryRepositoryImpl — wraps DAOs and parser.
@@ -138,6 +144,11 @@ Schema invariants:
   • dictionary_entries has examples_json column (DB v11) holding
     List<ExamplePair> with definitionIndex.
   • dictionary_entries has jlpt_level column (DB v10).
+  • word_frequencies table (DB v14) holds one row per (expression, reading,
+    dictionary) with rank + display_value — the per-source frequency store.
+    See section 12. dictionary_entries.frequency is still written during
+    import but now holds the BEST (lowest) rank across all installed lists
+    (DictionaryDao.updateFrequencyBest*), used only for search ordering.
   • dictionary_entries_fts is a Room-managed FTS4 external-content
     table; it auto-syncs via triggers on every insert/update.
     Bulk-import path still works because the rebuild at the end
@@ -411,6 +422,13 @@ Compose. Leave it alone unless you are doing a full i18n migration.
                                  dispatch branch in
                                  AiSummaryService.generateSummary +
                                  ALLOWED_HOSTS for the new endpoint.
+  New frequency list           → just add a DictionaryDownloadInfo with
+                                 category=FREQUENCY (GitHub-hosted URL) to
+                                 AvailableDictionaries.all. Storage, per-source
+                                 display, and ordering already handle any
+                                 number of lists; the zip's index.json title
+                                 becomes the source label. Template +
+                                 self-host notes live in DictionaryDownloadInfo.
   New screen                   → ui/<feature>/{Screen, ViewModel} +
                                  AppNavHost route + Hilt-provided VM.
 
@@ -438,6 +456,10 @@ Test-coverage hot spots to update when changing logic:
                                        godan / i-adjective / する / くる
   SentenceContextHighlighterTest     — base + inflected highlighting,
                                        longest-match preference, escaping
+  YomitanFrequencyMetaTest           — freq meta parsing across BCCWJ /
+                                       JPDB shapes (rank, reading, displayValue)
+  WordFrequencyInfoTest              — priority ordering, show-all collapse,
+                                       chip label formatting
 
 If you change DB schema, add a Migration test before merging.
 
@@ -493,5 +515,59 @@ Components:
     HTML-escaped (third-party LLM output) and rendered in
     .summary-section via `white-space: pre-wrap` so multi-line
     responses preserve their breaks.
+
+----------------------------------------------------------------------
+12. FREQUENCY LISTS (multi-source)
+----------------------------------------------------------------------
+
+A word can carry a frequency rank from several installed lists at once
+(e.g. JPDB for media/colloquial, BCCWJ for formal written). Each list's
+rank is kept separately and shown side by side.
+
+Storage:
+  • entity/WordFrequency (table word_frequencies, DB v14): one row per
+    (expression, reading, dictionary) → rank + display_value. reading is
+    "" when the source shipped none; lookups match the exact reading OR
+    the empty-reading fallback (FrequencyDao.getForWord).
+  • dictionary_entries.frequency still exists but now holds the BEST
+    (lowest) rank across ALL lists, written via
+    DictionaryDao.updateFrequencyBest* (only lowers / fills 0). It is used
+    only for search ORDER BY — never for display.
+
+Import (DictionaryRepositoryImpl.importDictionary):
+  • Parser emits FrequencyUpdate(expression, reading, frequency,
+    displayValue). displayValue comes from parseFrequencyDisplayValue
+    (rank-based lists ship one; plain numeric lists leave it "" and the
+    repository falls back to the rank string).
+  • The index.json title isn't reliably known mid-stream, so freq rows are
+    written under the temp name "temp" and renamed to the real title at the
+    end (frequencyDao.updateDictionaryName) — same pattern as term/kanji
+    banks. A prior import of the same list is deleted first (re-import
+    replaces). deleteDictionary also clears word_frequencies.
+
+Display:
+  • repository.getFrequencies(expr, reading) → List<WordFrequencyInfo>.
+  • DetailViewModel.loadFrequencies orders them via
+    WordFrequencyInfo.order(list, priority, showAll): priority is the user's
+    ordered list of dictionary titles (DataStore FREQUENCY_DISPLAY_ORDER);
+    lists not in priority fall to the end keeping input order; showAll=false
+    (DataStore FREQUENCY_SHOW_ALL) collapses to the single top list.
+  • DetailScreen renders them as FlowRow chips (WordFrequencyInfo.label() =
+    "<dict> #<rank>"). Falls back to the legacy MergedWordEntry.frequencyLabel
+    star-bucket text only when no per-source rows exist (pre-re-import words).
+
+Settings:
+  • ui/settings/FrequencyDisplayScreen + FrequencySettingsViewModel: a
+    show-all switch and an up/down reorderable priority list, fed by
+    FrequencyDao.observeDictionaries() (the installed lists). Newly installed
+    lists append; uninstalled ones drop. Reached from SettingsScreen via
+    onNavigateToFrequencyDisplay → Screen.FrequencyDisplay.
+
+Catalog:
+  • AvailableDictionaries: JPDB (auto-installed) + BCCWJ (opt-in) are the
+    GitHub-hosted FREQUENCY entries. The four Drive-only lists from freq.txt
+    (Wikipedia, Anime/Drama, Innocent, Narou) are blocked by the downloader
+    allowlist; a self-host template + instructions sit in
+    DictionaryDownloadInfo for when they're mirrored to GitHub.
 
 End of file. Update the "Last verified" date when you touch this.

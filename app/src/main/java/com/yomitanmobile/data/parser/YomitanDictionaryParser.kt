@@ -301,7 +301,8 @@ class YomitanDictionaryParser @Inject constructor() {
                                                     val freq = parseFrequencyValue(meta[2])
                                                     if (freq > 0) {
                                                         val reading = parseFrequencyReading(meta[2])
-                                                        freqChunk.add(FrequencyUpdate(expr, reading, freq))
+                                                        val displayValue = parseFrequencyDisplayValue(meta[2])
+                                                        freqChunk.add(FrequencyUpdate(expr, reading, freq, displayValue))
                                                     }
                                                 }
                                             }
@@ -426,6 +427,31 @@ class YomitanDictionaryParser @Inject constructor() {
                 else -> 0
             }
         } catch (e: Exception) { 0 }
+    }
+
+    /**
+     * Extracts the human-facing label for a frequency entry. Yomitan lists may
+     * ship an explicit `displayValue` (rank-based dicts, e.g. JPDB) either at
+     * the top level or nested under `frequency`; plain numeric lists (BCCWJ)
+     * have none, so we return "" and the storage layer falls back to the rank.
+     *
+     * Shapes handled:
+     *   {"value": 1, "displayValue": "1"}                         -> "1"
+     *   {"reading": "…", "frequency": {"value": 5002, "displayValue": "5002"}} -> "5002"
+     *   {"reading": "…", "frequency": 1}                          -> ""
+     *   1                                                         -> ""
+     */
+    private fun parseFrequencyDisplayValue(element: JsonElement): String {
+        return try {
+            if (element !is JsonObject) return ""
+            val direct = element["displayValue"]?.jsonPrimitive?.contentOrNull?.trim()
+            if (!direct.isNullOrBlank()) return direct
+            val nested = (element["frequency"] as? JsonObject)
+                ?.get("displayValue")?.jsonPrimitive?.contentOrNull?.trim()
+            nested.orEmpty()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun parseFrequencyReading(element: JsonElement): String? {

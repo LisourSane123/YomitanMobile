@@ -12,6 +12,7 @@ import com.yomitanmobile.ui.dictionaries.DictionariesScreen
 import com.yomitanmobile.ui.download.DictionaryDownloadScreen
 import com.yomitanmobile.ui.favorites.FavoritesScreen
 import com.yomitanmobile.ui.search.SearchScreen
+import com.yomitanmobile.ui.settings.FrequencyDisplayScreen
 import com.yomitanmobile.ui.settings.SettingsScreen
 import com.yomitanmobile.ui.setup.SetupScreen
 import com.yomitanmobile.ui.statistics.StatisticsScreen
@@ -79,7 +80,16 @@ fun AppNavHost(
                 },
                 onNavigateToDictionaries = {
                     navController.navigate(Screen.Dictionaries.route)
+                },
+                onNavigateToFrequencyDisplay = {
+                    navController.navigate(Screen.FrequencyDisplay.route)
                 }
+            )
+        }
+
+        composable(Screen.FrequencyDisplay.route) {
+            FrequencyDisplayScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

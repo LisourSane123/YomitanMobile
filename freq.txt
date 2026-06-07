@@ -1,0 +1,36 @@
+BCCWJ (Balanced Corpus of Contemporary Written Japanese)
+
+    Opis: Oficjalny korpus akademicki bazujący na prasie, książkach i tekstach pisanych. Idealny do nauki formalnego japońskiego.
+
+    Link: https://clrd.ninjal.ac.jp/bccwj/en/ (Oficjalna strona) / https://github.com/MarvNC/yomitan-dictionaries (Format słownikowy)
+
+Japanese Wikipedia Frequency List
+
+    Opis: Baza wygenerowana z artykułów Wikipedii. Doskonała do przyswajania specjalistycznych rzeczowników i haseł encyklopedycznych.
+
+    Link: https://github.com/Kanjisensei/wikipedia-kanji-frequency (Baza) / https://github.com/MarvNC/yomitan-dictionaries (Format słownikowy)
+
+
+Anime & Drama Frequency List (Subs2SRS)
+
+    Opis: Baza stworzona z milionów linii napisów z anime i dram. Najlepsza istniejąca lista do nauki języka potocznego, slangu i rozumienia ze słuchu.
+
+    Link: https://github.com/cb4960/freqlist (Surowe bazy tekstowe)
+
+JPDB.io
+
+    Opis: Platforma posiadająca wygenerowane listy frekwencyjne dla konkretnych, indywidualnych tytułów (anime, dram, Visual Novels, Light Noveli).
+
+    Link: https://jpdb.io/
+
+Innocent Corpus
+
+    Opis: Lista oparta na skryptach z ponad 5000 Visual Novels. Absolutna podstawa dla osób chcących czytać japońską literaturę i fikcję, bogata w słownictwo opisowe.
+
+    Link: https://github.com/Doth-J/Yomichan-Japanese-Dictionaries (Format słownikowy)
+
+Narou Frequency List
+
+    Opis: Baza z portalu internetowego dla twórców "Shousetsuka ni Narou". Kluczowa do czytania współczesnych Light Noveli, fantasy oraz internetowej fikcji.
+
+    Link: https://github.com/MarvNC/yomitan-dictionaries (Format słownikowy

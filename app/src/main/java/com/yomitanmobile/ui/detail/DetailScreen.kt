@@ -46,6 +46,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -87,6 +88,7 @@ fun DetailScreen(
     val isFavorite by viewModel.isFavorite.collectAsState()
     val lookupCount by viewModel.lookupCount.collectAsState()
     val kanjiInfo by viewModel.kanjiInfo.collectAsState()
+    val frequencies by viewModel.frequencies.collectAsState()
     val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
@@ -340,6 +342,7 @@ fun DetailScreen(
                     lookupCount = lookupCount,
                     isFavorite = isFavorite,
                     kanjiInfo = kanjiInfo,
+                    frequencies = frequencies,
                     onToggleFavorite = { viewModel.toggleFavorite() },
                     modifier = Modifier.padding(paddingValues)
                 )
@@ -360,6 +363,7 @@ private fun WordDetailContent(
     lookupCount: Int,
     isFavorite: Boolean,
     kanjiInfo: List<com.yomitanmobile.domain.model.KanjiInfo>,
+    frequencies: List<com.yomitanmobile.domain.model.WordFrequencyInfo>,
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -405,9 +409,35 @@ private fun WordDetailContent(
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                val freqLabel = entry.frequencyLabel()
-                if (freqLabel.isNotBlank()) {
-                    Text(freqLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Medium)
+                // Per-source frequency chips, in the user's chosen priority
+                // order (and collapsed to the top list when "show all" is off).
+                // Falls back to the legacy single label for words whose ranks
+                // predate the per-source table (e.g. before a re-import).
+                if (frequencies.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        frequencies.forEach { freq ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer
+                            ) {
+                                Text(
+                                    text = freq.label(),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    val freqLabel = entry.frequencyLabel()
+                    if (freqLabel.isNotBlank()) {
+                        Text(freqLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Medium)
+                    }
                 }
                 val jlptLevel = JlptLevelUtil.fromDbValue(entry.jlptLevel)
                 // The classifier-derived category chip was removed at

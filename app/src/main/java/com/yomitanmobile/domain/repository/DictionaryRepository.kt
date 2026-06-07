@@ -5,6 +5,7 @@ import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
 import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.domain.model.WordFrequencyInfo
 import kotlinx.coroutines.flow.Flow
 import java.io.InputStream
 
@@ -15,6 +16,9 @@ interface DictionaryRepository {
     suspend fun getEntry(id: Long): WordEntry?
     suspend fun getEntriesByReading(reading: String): List<WordEntry>
     suspend fun getKanjis(kanjiList: List<String>): List<KanjiEntry>
+
+    /** Every installed list's rank for a word, for multi-list display. */
+    suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo>
     suspend fun importDictionary(
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit = {}

@@ -101,6 +101,12 @@ class MainActivity : ComponentActivity() {
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
 
+        // Frequency display: priority order of installed lists (comma-separated
+        // dictionary titles, highest priority first) + whether to show every
+        // list's rank at once or just the top-priority one.
+        val FREQUENCY_DISPLAY_ORDER = stringPreferencesKey("frequency_display_order")
+        val FREQUENCY_SHOW_ALL = booleanPreferencesKey("frequency_show_all")
+
         // Language (stored in SharedPreferences for sync read in attachBaseContext)
         const val LANG_PREFS_NAME = "lang_prefs"
         const val LANG_PREFS_KEY = "app_language" // "system" | "pl" | "en"

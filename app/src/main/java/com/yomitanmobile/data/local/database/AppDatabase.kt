@@ -12,6 +12,7 @@ import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.dao.LookupCountDao
+import com.yomitanmobile.data.local.dao.FrequencyDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.DictionaryEntry
@@ -23,6 +24,7 @@ import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.LookupCount
 import com.yomitanmobile.data.local.entity.SearchHistory
 import com.yomitanmobile.data.local.entity.Sentence
+import com.yomitanmobile.data.local.entity.WordFrequency
 
 @Database(
     entities = [
@@ -34,9 +36,10 @@ import com.yomitanmobile.data.local.entity.Sentence
         SearchHistory::class,
         KanjiEntry::class,
         Sentence::class,
-        LookupCount::class
+        LookupCount::class,
+        WordFrequency::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -49,9 +52,39 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun kanjiDao(): KanjiDao
     abstract fun sentenceDao(): SentenceDao
     abstract fun lookupCountDao(): LookupCountDao
+    abstract fun frequencyDao(): FrequencyDao
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Per-source frequency storage. Previously every imported
+                // frequency list overwrote a single dictionary_entries.frequency
+                // column (last import won); now each list's rank is kept so the
+                // UI can show them side by side in a user-chosen order. The
+                // legacy `frequency` column survives as the "best rank" used for
+                // search ordering. Composite PK matches @Entity(primaryKeys=…).
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS word_frequencies (
+                        expression TEXT NOT NULL,
+                        reading TEXT NOT NULL,
+                        dictionary TEXT NOT NULL,
+                        rank INTEGER NOT NULL,
+                        display_value TEXT NOT NULL,
+                        PRIMARY KEY (expression, reading, dictionary)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_word_frequencies_expression ON word_frequencies(expression)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_word_frequencies_expression_reading ON word_frequencies(expression, reading)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_word_frequencies_dictionary ON word_frequencies(dictionary)")
+                // No backfill: the old single-column data has no source label
+                // to attribute it to. Users re-import (or keep using) their
+                // frequency lists to populate the new table.
+            }
+        }
 
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {

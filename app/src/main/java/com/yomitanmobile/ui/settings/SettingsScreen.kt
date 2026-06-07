@@ -89,6 +89,7 @@ fun SettingsScreen(
     onNavigateToStatistics: () -> Unit = {},
     onNavigateToCardStyle: () -> Unit = {},
     onNavigateToDictionaries: () -> Unit = {},
+    onNavigateToFrequencyDisplay: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -522,6 +523,16 @@ fun SettingsScreen(
                     title = tr("Wygląd fiszki Anki", "Anki card style"),
                     subtitle = tr("Czcionka, rozmiar, kolory, podgląd", "Font, size, colors, preview"),
                     onClick = onNavigateToCardStyle
+                )
+            }
+
+            // Frequency display button
+            item {
+                SettingsClickableItem(
+                    icon = Icons.Default.BarChart,
+                    title = tr("Wyświetlanie częstotliwości", "Frequency display"),
+                    subtitle = tr("Kolejność list, pokaż wszystkie", "List order, show all"),
+                    onClick = onNavigateToFrequencyDisplay
                 )
             }
 

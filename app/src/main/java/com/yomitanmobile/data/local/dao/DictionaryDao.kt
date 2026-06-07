@@ -10,7 +10,10 @@ import kotlinx.coroutines.flow.Flow
 data class FrequencyUpdate(
     val expression: String,
     val reading: String?,
-    val frequency: Int
+    val frequency: Int,
+    // The label the source list ships (rank as a string, or a bucketed
+    // label). Blank falls back to [frequency] at the storage layer.
+    val displayValue: String = ""
 )
 
 data class JlptUpdate(
@@ -117,6 +120,16 @@ interface DictionaryDao {
     @Query("UPDATE dictionary_entries SET frequency = :frequency WHERE expression = :expression AND reading = :reading")
     suspend fun updateFrequencyWithReading(expression: String, reading: String, frequency: Int)
 
+    // "Best rank" variants: only lower an existing rank (or fill a 0), so the
+    // dictionary_entries.frequency column reflects the most-frequent rank
+    // across ALL installed lists rather than whichever list imported last.
+    // Per-list ranks live in the word_frequencies table.
+    @Query("UPDATE dictionary_entries SET frequency = :frequency WHERE expression = :expression AND (frequency = 0 OR frequency > :frequency)")
+    suspend fun updateFrequencyBest(expression: String, frequency: Int)
+
+    @Query("UPDATE dictionary_entries SET frequency = :frequency WHERE expression = :expression AND reading = :reading AND (frequency = 0 OR frequency > :frequency)")
+    suspend fun updateFrequencyBestWithReading(expression: String, reading: String, frequency: Int)
+
     @Query("UPDATE dictionary_entries SET pitch_accent = :pitchAccent WHERE expression = :expression AND (pitch_accent = '' OR pitch_accent IS NULL)")
     suspend fun updatePitchAccent(expression: String, pitchAccent: String)
 
@@ -128,9 +141,9 @@ interface DictionaryDao {
         for (update in batch) {
             val reading = update.reading?.trim().orEmpty()
             if (reading.isNotBlank()) {
-                updateFrequencyWithReading(update.expression, reading, update.frequency)
+                updateFrequencyBestWithReading(update.expression, reading, update.frequency)
             } else {
-                updateFrequencyForce(update.expression, update.frequency)
+                updateFrequencyBest(update.expression, update.frequency)
             }
         }
     }
