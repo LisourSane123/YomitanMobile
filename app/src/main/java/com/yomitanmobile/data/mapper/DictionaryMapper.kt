@@ -85,8 +85,8 @@ fun KanjiEntry.toKanjiInfo(): KanjiInfo {
     }
     return KanjiInfo(
         kanji = kanji,
-        onyomi = onyomi,
-        kunyomi = kunyomi,
+        onyomi = com.yomitanmobile.util.KanjiReadingFormatter.format(onyomi),
+        kunyomi = com.yomitanmobile.util.KanjiReadingFormatter.format(kunyomi),
         meanings = meaningList
     )
 }

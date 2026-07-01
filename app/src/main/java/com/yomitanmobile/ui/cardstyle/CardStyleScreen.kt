@@ -110,7 +110,7 @@ fun CardStyleScreen(
     var pitchAccentStyle by remember { mutableStateOf(PitchAccentStyle.LEGACY) }
     var showFrequency by remember { mutableStateOf(true) }
     var showSentence by remember { mutableStateOf(true) }
-    var showFrontContextSentence by remember { mutableStateOf(false) }
+    var showFrontContextSentence by remember { mutableStateOf(true) }
 
     var randomFontsEnabled by remember { mutableStateOf(false) }
     var randomFonts by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -165,7 +165,7 @@ fun CardStyleScreen(
         pitchAccentStyle = PitchAccentStyle.fromStorage(prefs[MainActivity.CARD_PITCH_ACCENT_STYLE])
         showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true
         showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true
-        showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: false
+        showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: true
         randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: false
         randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet()
         randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false
@@ -292,7 +292,7 @@ fun CardStyleScreen(
                         pitchAccentStyle = PitchAccentStyle.LEGACY
                         showFrequency = true
                         showSentence = true
-                        showFrontContextSentence = false
+                        showFrontContextSentence = true
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))

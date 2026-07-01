@@ -58,9 +58,21 @@ class SettingsViewModel @Inject constructor(
     private val deleteDictionaryUseCase: DeleteDictionaryUseCase,
     private val backupManager: BackupManager,
     private val reclassifyCategoriesUseCase: com.yomitanmobile.domain.usecase.ReclassifyCategoriesUseCase,
+    private val ankiCardCreator: com.yomitanmobile.data.anki.AnkiCardCreator,
     getDictionariesUseCase: GetDictionariesUseCase,
     exportedWordDao: ExportedWordDao
 ) : ViewModel() {
+
+    /**
+     * Existing AnkiDroid deck names, so the "Change deck" dialog can offer a
+     * pick-list instead of forcing the user to retype a name. Returns an empty
+     * list when AnkiDroid isn't installed / permission isn't granted, in which
+     * case the dialog falls back to the manual text field.
+     */
+    suspend fun getAvailableDecks(): List<String> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            ankiCardCreator.getAvailableDecks()
+        }
 
     val dictionaries: StateFlow<List<DictionaryInfo>> = getDictionariesUseCase.invoke()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

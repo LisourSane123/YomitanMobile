@@ -7,6 +7,7 @@ import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.util.JlptLevelUtil
 import com.yomitanmobile.util.PartsOfSpeechFormatter
 import com.yomitanmobile.domain.model.ExamplePair
+import com.yomitanmobile.domain.model.FuriganaSegment
 import com.yomitanmobile.domain.model.ImportProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -55,9 +56,13 @@ class YomitanDictionaryParser @Inject constructor() {
         // a meaningful memory cost (the buffer is reused across entries).
         const val BUFFER_SIZE = 256 * 1024
         const val MAX_INDEX_JSON_BYTES = 1 * 1024 * 1024
-        const val MAX_TERM_BANK_BYTES = 25 * 1024 * 1024
+        const val MAX_TERM_BANK_BYTES = 48 * 1024 * 1024
         const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
-        const val MAX_META_BANK_BYTES = 25 * 1024 * 1024
+        // BCCWJ (SUW+LUW combined, ~1M entries) ships term_meta_bank files
+        // that decompress past 25 MB, so the old cap rejected the import with
+        // "Plik … przekracza limit 25 MB". 64 MB clears the largest shipped
+        // meta bank while staying well under MAX_TOTAL_UNCOMPRESSED_BYTES.
+        const val MAX_META_BANK_BYTES = 64 * 1024 * 1024
         // Jitendex's structured-content JSON expands ~6-8x from its ~38 MB
         // ZIP — about 250-300 MB uncompressed. 1 GB is a safe upper bound
         // that still rejects malicious zip-bombs without rejecting any
@@ -972,6 +977,9 @@ class YomitanDictionaryParser @Inject constructor() {
     private fun extractJitendexExamplePair(container: JsonObject): ExamplePair? {
         var jp = ""
         var en = ""
+        // The JP-side content element, kept so we can build furigana segments
+        // (ruby readings) from the exact same subtree the plain jp came from.
+        var jpContent: JsonElement? = null
         val items = elementAsList(container["content"])
         for (item in items) {
             val obj = item as? JsonObject ?: continue
@@ -979,7 +987,9 @@ class YomitanDictionaryParser @Inject constructor() {
             when {
                 // Jitendex variants: "example-sentence-a" / "-japanese", "-b" / "-english"
                 dc.contains("example-sentence-a") || dc.contains("japanese") -> {
-                    jp = extractTextFromContent(obj["content"] ?: continue).trim()
+                    val content = obj["content"] ?: continue
+                    jpContent = content
+                    jp = extractTextFromContent(content).trim()
                 }
                 dc.contains("example-sentence-b") || dc.contains("english") -> {
                     en = extractTextFromContent(obj["content"] ?: continue).trim()
@@ -995,7 +1005,86 @@ class YomitanDictionaryParser @Inject constructor() {
             jp = jpParts.joinToString(" ").trim()
             if (en.isBlank()) en = enParts.joinToString(" ").trim()
         }
-        return if (jp.isBlank()) null else ExamplePair(jp, en)
+        if (jp.isBlank()) return null
+        val segments = jpContent?.let { buildFuriganaSegments(it) } ?: emptyList()
+        return ExamplePair(jp, en, segments = segments)
+    }
+
+    /**
+     * Turn a JP example-sentence content subtree into furigana segments,
+     * preserving the `<ruby>…<rt>reading</rt></ruby>` annotations the plain-text
+     * extractor drops. A `<ruby>` node becomes one (kanji, reading) segment;
+     * everything else is coalesced into blank-reading text segments. Adjacent
+     * text is merged so the output stays compact.
+     */
+    private fun buildFuriganaSegments(element: JsonElement): List<FuriganaSegment> {
+        val out = mutableListOf<FuriganaSegment>()
+        collectFuriganaSegments(element, out)
+        return out
+    }
+
+    private fun collectFuriganaSegments(element: JsonElement, out: MutableList<FuriganaSegment>) {
+        when (element) {
+            is JsonObject -> {
+                val tag = element["tag"]?.jsonPrimitive?.contentOrNull
+                // Stray rt/rp outside a ruby wrapper is a bare reading — drop it
+                // so it doesn't surface as body text.
+                if (tag == "rt" || tag == "rp") return
+                if (nodeDataContent(element) == "attribution-footnote") return
+                if (tag == "ruby") {
+                    val base = StringBuilder()
+                    val reading = StringBuilder()
+                    collectRuby(element["content"], base, reading)
+                    if (base.isNotEmpty()) {
+                        appendFuriganaText(out, base.toString(), reading.toString())
+                    }
+                    return
+                }
+                element["text"]?.jsonPrimitive?.contentOrNull?.let {
+                    appendFuriganaText(out, it, "")
+                }
+                element["content"]?.let { collectFuriganaSegments(it, out) }
+            }
+            is JsonArray -> element.forEach { collectFuriganaSegments(it, out) }
+            is JsonPrimitive -> element.contentOrNull?.let { appendFuriganaText(out, it, "") }
+            else -> Unit
+        }
+    }
+
+    /** Gather the base text and rt/rp reading inside a single `<ruby>` node. */
+    private fun collectRuby(element: JsonElement?, base: StringBuilder, reading: StringBuilder) {
+        when (element) {
+            is JsonObject -> {
+                val tag = element["tag"]?.jsonPrimitive?.contentOrNull
+                if (tag == "rt" || tag == "rp") {
+                    // Read the rt's own children — extractTextFromContent would
+                    // return "" for an rt/rp node itself (it filters them out).
+                    element["content"]?.let { reading.append(extractTextFromContent(it)) }
+                    element["text"]?.jsonPrimitive?.contentOrNull?.let { reading.append(it) }
+                    return
+                }
+                element["text"]?.jsonPrimitive?.contentOrNull?.let { base.append(it) }
+                element["content"]?.let { collectRuby(it, base, reading) }
+            }
+            is JsonArray -> element.forEach { collectRuby(it, base, reading) }
+            is JsonPrimitive -> element.contentOrNull?.let { base.append(it) }
+            else -> Unit
+        }
+    }
+
+    private fun appendFuriganaText(out: MutableList<FuriganaSegment>, text: String, reading: String) {
+        if (text.isEmpty()) return
+        if (reading.isBlank()) {
+            // Coalesce consecutive plain runs into the previous plain segment.
+            val last = out.lastOrNull()
+            if (last != null && last.reading.isEmpty()) {
+                out[out.lastIndex] = last.copy(text = last.text + text)
+                return
+            }
+            out.add(FuriganaSegment(text, ""))
+        } else {
+            out.add(FuriganaSegment(text, reading))
+        }
     }
 
     private fun nodeDataContent(node: JsonObject): String? {

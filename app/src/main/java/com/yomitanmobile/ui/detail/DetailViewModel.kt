@@ -481,7 +481,7 @@ class DetailViewModel @Inject constructor(
             ),
             showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true,
             showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true,
-            showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: false,
+            showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: true,
             randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: false,
             randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet(),
             randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false,

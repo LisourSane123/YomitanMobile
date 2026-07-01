@@ -65,4 +65,35 @@ class PartsOfSpeechFormatterTest {
     fun onlyFrequencyTagsResolveToEmpty() {
         assertEquals("", PartsOfSpeechFormatter.format("ichi1 news1 jlpt-5"))
     }
+
+    @Test
+    fun polishLabelsWhenNotEnglish() {
+        assertEquals(
+            "czasownik ichidan, czasownik przechodni",
+            PartsOfSpeechFormatter.format("v1 vt", english = false)
+        )
+        assertEquals("rzeczownik", PartsOfSpeechFormatter.format("n", english = false))
+        assertEquals("przymiotnik (i)", PartsOfSpeechFormatter.format("adj-i", english = false))
+        assertEquals("przymiotnik (na)", PartsOfSpeechFormatter.format("adj-na", english = false))
+    }
+
+    @Test
+    fun polishFallsBackToRawForUnknownCode() {
+        val result = PartsOfSpeechFormatter.format("n unknown-tag", english = false)
+        assertTrue(result.contains("rzeczownik"))
+        assertTrue(result.contains("unknown-tag"))
+    }
+
+    @Test
+    fun localizeUsageTagTranslatesKnownLabels() {
+        assertEquals("kolokwializm", PartsOfSpeechFormatter.localizeUsageTag("colloq.", english = false))
+        assertEquals("archaizm", PartsOfSpeechFormatter.localizeUsageTag("archaic", english = false))
+        assertEquals("zwykle kaną", PartsOfSpeechFormatter.localizeUsageTag("usually kana", english = false))
+    }
+
+    @Test
+    fun localizeUsageTagKeepsEnglishAndUnknowns() {
+        assertEquals("colloq.", PartsOfSpeechFormatter.localizeUsageTag("colloq.", english = true))
+        assertEquals("something-else", PartsOfSpeechFormatter.localizeUsageTag("something-else", english = false))
+    }
 }

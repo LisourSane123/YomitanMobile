@@ -209,6 +209,7 @@ class AnkiCardCreator(
                 background: rgba(128, 203, 196, 0.28);
                 border-radius: 4px;
                 padding: 0 2px;
+                text-decoration: underline;
             }
             .audio { margin: 8px 0; }
             .sentence {
@@ -333,6 +334,7 @@ class AnkiCardCreator(
                 background: ${prefs.accentColor}44;
                 border-radius: 4px;
                 padding: 0 2px;
+                text-decoration: underline;
             }
             .audio { margin: 8px 0; }
             .sentence {
@@ -940,14 +942,12 @@ class AnkiCardCreator(
         val frontWord = entry.expression.ifBlank { entry.reading }
         val frontExpression = InputSanitizer.escapeHtml(frontWord)
         val frontContent = if (randomFont != null) "<span style=\"font-family: '$randomFont', sans-serif;\">$frontExpression</span>" else frontExpression
-        // Front-context sentence is only attached for kana-only (hiragana)
-        // words. Words written with kanji already carry their own recall
-        // hint on the front, so the extra sentence is reserved for the
-        // pure-hiragana words where it actually helps disambiguate.
-        val frontContext = if (
-            stylePrefs?.showFrontContextSentence == true &&
-            com.yomitanmobile.util.KanaUtils.isHiraganaOnly(frontWord)
-        ) {
+        // Front-context sentence is attached for EVERY word (not just
+        // hiragana-only) when the preference is on. The highlighter expands the
+        // expression/reading into their inflected forms and underlines the
+        // occurrence in the sentence, so the target word is marked whether it's
+        // written in kana or kanji.
+        val frontContext = if (stylePrefs?.showFrontContextSentence == true) {
             SentenceContextHighlighter.buildHighlightedSentenceHtml(
                 sentence = entry.exampleSentence,
                 preferredTokens = listOf(entry.expression, entry.reading)
@@ -975,7 +975,13 @@ class AnkiCardCreator(
             else -> emptyList()
         }
 
-        val posLabel = com.yomitanmobile.util.PartsOfSpeechFormatter.format(entry.partsOfSpeech)
+        // Localize the grammar / usage labels to match the app language so the
+        // exported card reads the same as the detail screen.
+        val english = com.yomitanmobile.util.LocaleHelper.isEnglish(context.resources.configuration)
+        val posLabel = com.yomitanmobile.util.PartsOfSpeechFormatter.format(entry.partsOfSpeech, english = english)
+        val localizedUsageTags = entry.usageTags.map {
+            com.yomitanmobile.util.PartsOfSpeechFormatter.localizeUsageTag(it, english)
+        }
 
         // Sanitize the AI summary: it comes from a third-party LLM and may
         // include HTML or scripts. We escape it to text-only and rely on
@@ -988,7 +994,7 @@ class AnkiCardCreator(
             front = frontContent,
             frontContext = frontContext,
             reading = InputSanitizer.escapeHtml(entry.reading),
-            meaning = formatMeaningForCard(entry.definitions, attachedExamples, posLabel, entry.usageTags),
+            meaning = formatMeaningForCard(entry.definitions, attachedExamples, posLabel, localizedUsageTags),
             pitchAccent = pitchHtml,
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
@@ -1196,8 +1202,14 @@ class AnkiCardCreator(
                         .map { InputSanitizer.escapeHtml(it) }
                         .joinToString(", ")
                     val safeKanji = InputSanitizer.escapeHtml(kanji.kanji)
-                    val safeOnyomi = InputSanitizer.escapeHtml(kanji.onyomi)
-                    val safeKunyomi = InputSanitizer.escapeHtml(kanji.kunyomi)
+                    // Swap KANJIDIC's ASCII "." okurigana separator for the round
+                    // nakaguro "・" before escaping (た.べる → た・べる).
+                    val safeOnyomi = InputSanitizer.escapeHtml(
+                        com.yomitanmobile.util.KanjiReadingFormatter.format(kanji.onyomi)
+                    )
+                    val safeKunyomi = InputSanitizer.escapeHtml(
+                        com.yomitanmobile.util.KanjiReadingFormatter.format(kanji.kunyomi)
+                    )
 
                     append("<div class=\"kanji-item\">")
                     append("<span class=\"kanji-char\">").append(safeKanji).append("</span>")

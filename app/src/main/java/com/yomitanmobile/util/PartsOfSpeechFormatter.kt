@@ -106,6 +106,155 @@ object PartsOfSpeechFormatter {
         "music" to "music"
     )
 
+    // Polish counterparts to POS_LABELS, keyed by the same JMDict codes. Used
+    // when the app runs in Polish. Missing keys fall back to the English label,
+    // then to the raw code, so an unmapped tag never disappears.
+    private val POS_LABELS_PL = mapOf(
+        // Verbs
+        "v1" to "czasownik ichidan",
+        "v1-s" to "czasownik ichidan (specjalny)",
+        "v5u" to "czasownik godan (う)",
+        "v5k" to "czasownik godan (く)",
+        "v5g" to "czasownik godan (ぐ)",
+        "v5s" to "czasownik godan (す)",
+        "v5t" to "czasownik godan (つ)",
+        "v5n" to "czasownik godan (ぬ)",
+        "v5b" to "czasownik godan (ぶ)",
+        "v5m" to "czasownik godan (む)",
+        "v5r" to "czasownik godan (る)",
+        "v5r-i" to "czasownik godan (る, nieregularny)",
+        "v5aru" to "czasownik godan (-aru)",
+        "v5k-s" to "czasownik godan (iku/yuku)",
+        "v5u-s" to "czasownik godan (う, specjalny)",
+        "v5uru" to "czasownik godan (-uru)",
+        "v2a-s" to "czasownik nidan (specjalny)",
+        "vk" to "czasownik kuru",
+        "vs" to "czasownik suru",
+        "vs-i" to "czasownik suru (nieregularny)",
+        "vs-s" to "czasownik suru (specjalny)",
+        "vs-c" to "czasownik suru (złożony)",
+        "vt" to "czasownik przechodni",
+        "vi" to "czasownik nieprzechodni",
+        "vn" to "nieregularny czasownik nu",
+        "vr" to "nieregularny czasownik ru",
+        "vz" to "czasownik ichidan zuru",
+        "aux" to "wyraz posiłkowy",
+        "aux-v" to "czasownik posiłkowy",
+        "aux-adj" to "przymiotnik posiłkowy",
+        // Adjectives
+        "adj-i" to "przymiotnik (i)",
+        "adj-ix" to "przymiotnik (i) (yoi/ii)",
+        "adj-na" to "przymiotnik (na)",
+        "adj-no" to "określnik z の",
+        "adj-pn" to "przydawka (rentaishi)",
+        "adj-t" to "przymiotnik taru",
+        "adj-f" to "określnik rzecz./czas.",
+        "adj-ku" to "przymiotnik ku (archaiczny)",
+        "adj-shiku" to "przymiotnik shiku (archaiczny)",
+        "adj-nari" to "przymiotnik nari (archaiczny)",
+        // Nouns
+        "n" to "rzeczownik",
+        "n-suf" to "przyrostek rzeczownikowy",
+        "n-pref" to "przedrostek rzeczownikowy",
+        "n-t" to "rzeczownik czasowy",
+        "n-adv" to "rzeczownik przysłówkowy",
+        "pn" to "zaimek",
+        "num" to "liczebnik",
+        // Adverbs / particles / etc.
+        "adv" to "przysłówek",
+        "adv-to" to "przysłówek z と",
+        "prt" to "partykuła",
+        "conj" to "spójnik",
+        "int" to "wykrzyknik",
+        "exp" to "wyrażenie",
+        "pref" to "przedrostek",
+        "suf" to "przyrostek",
+        "ctr" to "licznik (klasyfikator)",
+        "cop" to "łącznik (copula)",
+        // Usage / register
+        "uk" to "zwykle pisane kaną",
+        "obs" to "przestarzały",
+        "arch" to "archaizm",
+        "rare" to "rzadki",
+        "sl" to "slang",
+        "col" to "kolokwializm",
+        "fam" to "poufały",
+        "hon" to "grzecznościowy",
+        "hum" to "skromny (kenjōgo)",
+        "pol" to "grzeczny",
+        "vulg" to "wulgarny",
+        "derog" to "pejoratywny",
+        "joc" to "żartobliwy",
+        "abbr" to "skrót",
+        "yoji" to "yojijukugo",
+        "id" to "idiomatyczny",
+        "proverb" to "przysłowie",
+        "quote" to "cytat",
+        "on-mim" to "onomatopeja",
+        // Domain
+        "comp" to "informatyka",
+        "math" to "matematyka",
+        "med" to "medycyna",
+        "law" to "prawo",
+        "Buddh" to "buddyzm",
+        "Shinto" to "shintoizm",
+        "physics" to "fizyka",
+        "chem" to "chemia",
+        "biol" to "biologia",
+        "bus" to "biznes",
+        "econ" to "ekonomia",
+        "food" to "kulinaria",
+        "sports" to "sport",
+        "music" to "muzyka"
+    )
+
+    // Polish translations for the already-normalised usage-tag labels that end
+    // up in WordEntry.usageTags (the English short forms produced by
+    // UsageTagExtractor / SHORT_USAGE_LABELS). Keyed by the English label so we
+    // can translate at display time without re-importing.
+    private val USAGE_LABELS_PL = mapOf(
+        "usually kana" to "zwykle kaną",
+        "usually kanji" to "zwykle kanji",
+        "obsolete" to "przestarzały",
+        "archaic" to "archaizm",
+        "rare" to "rzadki",
+        "slang" to "slang",
+        "colloq." to "kolokwializm",
+        "familiar" to "poufały",
+        "honorific" to "grzecznościowy",
+        "humble" to "skromny",
+        "polite" to "grzeczny",
+        "vulgar" to "wulgarny",
+        "derog." to "pejoratywny",
+        "joc." to "żartobliwy",
+        "abbr." to "skrót",
+        "yoji." to "yojijukugo",
+        "idiom" to "idiom",
+        "proverb" to "przysłowie",
+        "quote" to "cytat",
+        "onomat." to "onomatopeja",
+        "mimetic" to "mimetyczny",
+        "formal" to "formalny",
+        "male" to "męski",
+        "fem." to "żeński",
+        "children" to "dziecięcy",
+        "X-rated" to "dla dorosłych",
+        "comp." to "informatyka",
+        "math" to "matematyka",
+        "med." to "medycyna",
+        "law" to "prawo",
+        "Buddh." to "buddyzm",
+        "Shinto" to "shintoizm",
+        "phys." to "fizyka",
+        "chem." to "chemia",
+        "biol." to "biologia",
+        "bus." to "biznes",
+        "econ." to "ekonomia",
+        "food" to "kulinaria",
+        "sports" to "sport",
+        "music" to "muzyka"
+    )
+
     private val FREQUENCY_TAGS = setOf(
         "ichi1", "ichi2",
         "news1", "news2",
@@ -187,8 +336,13 @@ object PartsOfSpeechFormatter {
     /**
      * Tokenize a raw JMDict tag string and return a comma-separated readable label list.
      * Empty result means there is nothing useful to display.
+     *
+     * When [english] is false, Polish labels ([POS_LABELS_PL]) are preferred,
+     * falling back to the English label and finally the raw code so nothing is
+     * dropped. Kept as the default English-only overload for tests / callers
+     * that don't have a locale handy.
      */
-    fun format(rawTags: String): String {
+    fun format(rawTags: String, english: Boolean = true): String {
         if (rawTags.isBlank()) return ""
         val seen = LinkedHashSet<String>()
         for (token in SPLIT_REGEX.split(rawTags)) {
@@ -198,8 +352,23 @@ object PartsOfSpeechFormatter {
             if (trimmed in NON_POS_NOISE) continue
             if (JLPT_REGEX.matches(trimmed)) continue
             if (NF_REGEX.matches(trimmed)) continue
-            seen.add(POS_LABELS[trimmed] ?: trimmed)
+            val label = if (english) {
+                POS_LABELS[trimmed]
+            } else {
+                POS_LABELS_PL[trimmed] ?: POS_LABELS[trimmed]
+            }
+            seen.add(label ?: trimmed)
         }
         return seen.joinToString(", ")
+    }
+
+    /**
+     * Translate a single already-normalised usage-tag label (the English short
+     * form stored in [com.yomitanmobile.domain.model.WordEntry.usageTags]) to
+     * Polish when [english] is false. Unknown labels pass through unchanged.
+     */
+    fun localizeUsageTag(label: String, english: Boolean): String {
+        if (english) return label
+        return USAGE_LABELS_PL[label.trim()] ?: label
     }
 }

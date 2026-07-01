@@ -132,6 +132,24 @@ class YomitanJitendexFormatTest {
         assertFalse("JP must not include furigana 'くだ': ${examples[0].jp}", examples[0].jp.contains("くだ"))
         assertFalse("JP must not include furigana 'た' inline: ${examples[0].jp}", examples[0].jp.startsWith("食た"))
         assertFalse("EN must not include footnote '[1]': ${examples[0].en}", examples[0].en.contains("[1]"))
+
+        // 4. Furigana segments preserve the ruby readings that the flat jp
+        //    string drops, so the detail screen can reveal them on tap.
+        val segs = examples[0].segments
+        assertTrue("segments should be populated: $segs", segs.isNotEmpty())
+        assertTrue(
+            "segments should include (食 → た): $segs",
+            segs.any { it.text == "食" && it.reading == "た" }
+        )
+        assertTrue(
+            "segments should include (果 → くだ): $segs",
+            segs.any { it.text == "果" && it.reading == "くだ" }
+        )
+        assertEquals(
+            "segments concatenated must reproduce jp",
+            examples[0].jp,
+            segs.joinToString("") { it.text }
+        )
     }
 
     @Test

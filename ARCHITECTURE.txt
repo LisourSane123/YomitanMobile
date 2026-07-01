@@ -1,7 +1,23 @@
 YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 ======================================================================
 
-Last verified: 2026-06-07 (multi-source frequency lists: each imported
+Last verified: 2026-07-01 (7 quality fixes: (1) parser MAX_META_BANK_BYTES
+raised 25→64 MB (and MAX_TERM_BANK_BYTES→48 MB) so BCCWJ's large
+term_meta_bank files import instead of failing "przekracza limit 25 MB";
+(2) util/KanjiReadingFormatter swaps KANJIDIC's ASCII "." okurigana separator
+for the round nakaguro "・" (た.べる→た・べる), applied in KanjiEntry.toKanjiInfo
+and AnkiCardCreator kanji breakdown; (3+6) PartsOfSpeechFormatter gained Polish
+label maps + format(rawTags, english) and localizeUsageTag() — POS and usage
+tags (archaizm/kolokwializm…) now follow app language on DetailScreen and the
+Anki card; (4) SettingsScreen "Change deck" dialog lists existing AnkiDroid
+decks (SettingsViewModel.getAvailableDecks) like DetailScreen already did;
+(5) ExamplePair gained segments: List<FuriganaSegment> — the parser now keeps
+<ruby><rt> readings for example sentences (previously stripped) and
+DetailScreen renders FuriganaSentence with tap-to-reveal furigana; needs a
+Jitendex re-import to backfill existing rows; (7) front-context sentence now
+attached for EVERY word (kana-only gate removed), .context-highlight underlines
+the target, and showFrontContextSentence defaults to true. Prior: multi-source
+frequency lists: each imported
 frequency dictionary's rank is now stored separately in the word_frequencies
 table (DB v14) instead of overwriting one column; the detail screen shows
 every installed list's rank as chips in a user-chosen priority order, with a
@@ -193,10 +209,10 @@ Sentence field: only renders unattached examples (those with
 definitionIndex < 0). Jitendex-sourced examples never duplicate here.
 
 FrontContext field: the highlighted context sentence on the card front is
-only populated for HIRAGANA-ONLY front words (KanaUtils.isHiraganaOnly gate
-in createAnkiCard). Words written with kanji get no front context — they
-already carry their own recall hint. Still also requires the
-showFrontContextSentence preference to be on.
+populated for EVERY word when the showFrontContextSentence preference is on
+(default true). The old hiragana-only gate was removed — kanji words get a
+front sentence too, and .context-highlight now underlines (plus bold/tint) the
+matched target so the word is visibly marked whenever the highlighter finds it.
   Highlighting (SentenceContextHighlighter.buildHighlightedSentenceHtml):
   the preferred tokens (expression, reading) are each expanded through
   util/JapaneseConjugator.inflectedForms — the forward counterpart to

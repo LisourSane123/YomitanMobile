@@ -47,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Divider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -189,6 +190,25 @@ fun SettingsScreen(
 
     if (showDeckEditDialog) {
         var editedDeckName by remember { mutableStateOf(currentDeckName.ifBlank { "Mining Deck" }) }
+        // Existing AnkiDroid decks, fetched once when the dialog opens so the
+        // user can pick one instead of retyping. Empty when AnkiDroid is
+        // absent / unauthorized — then only the manual field shows.
+        var availableSettingsDecks by remember { mutableStateOf<List<String>>(emptyList()) }
+        LaunchedEffect(Unit) {
+            availableSettingsDecks = viewModel.getAvailableDecks()
+        }
+
+        fun saveDeck(name: String) {
+            val sanitized = InputSanitizer.sanitizeDeckName(name)
+            currentDeckName = sanitized
+            coroutineScope.launch {
+                context.dataStore.edit { prefs ->
+                    prefs[MainActivity.ANKI_DECK_NAME] = sanitized
+                }
+            }
+            showDeckEditDialog = false
+        }
+
         AlertDialog(
             onDismissRequest = { showDeckEditDialog = false },
             title = { Text(tr("Zmień talię Anki", "Change Anki deck")) },
@@ -199,6 +219,37 @@ fun SettingsScreen(
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
+                    if (availableSettingsDecks.isNotEmpty()) {
+                        Text(
+                            tr("Istniejące talie:", "Existing decks:"),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        availableSettingsDecks.forEach { deck ->
+                            OutlinedButton(
+                                onClick = { saveDeck(deck) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Text(
+                                    deck,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (deck == currentDeckName) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Divider()
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            tr("Lub utwórz nową talię:", "Or create a new deck:"),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
                     OutlinedTextField(
                         value = editedDeckName,
                         onValueChange = { editedDeckName = it },
@@ -209,16 +260,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    val sanitized = InputSanitizer.sanitizeDeckName(editedDeckName)
-                    currentDeckName = sanitized
-                    coroutineScope.launch {
-                        context.dataStore.edit { prefs ->
-                            prefs[MainActivity.ANKI_DECK_NAME] = sanitized
-                        }
-                    }
-                    showDeckEditDialog = false
-                }) {
+                TextButton(onClick = { saveDeck(editedDeckName) }) {
                     Text(tr("Zapisz", "Save"))
                 }
             },

@@ -35,7 +35,7 @@ data class CardStylePreferences(
     val pitchAccentStyle: PitchAccentStyle = PitchAccentStyle.LEGACY,
     val showFrequency: Boolean = true,
     val showSentence: Boolean = true,
-    val showFrontContextSentence: Boolean = false,
+    val showFrontContextSentence: Boolean = true,
     val randomFontsEnabled: Boolean = false,
     val randomFonts: Set<String> = emptySet(),
     val randomVoicesEnabled: Boolean = false,

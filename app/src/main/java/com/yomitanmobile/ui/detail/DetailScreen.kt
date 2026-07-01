@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -67,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -562,7 +564,7 @@ private fun WordDetailContent(
                 ) {
                     entry.usageTags.forEach { tag ->
                         Text(
-                            text = tag,
+                            text = PartsOfSpeechFormatter.localizeUsageTag(tag, isEnglish),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -593,11 +595,10 @@ private fun WordDetailContent(
                 }
                 examplesByDef[index]?.take(3)?.forEachIndexed { exIdx, ex ->
                     Spacer(Modifier.height(if (exIdx == 0) 6.dp else 4.dp))
-                    Text(
-                        text = ex.jp,
-                        fontSize = 14.sp,
+                    FuriganaSentence(
+                        example = ex,
+                        fontSizeSp = 14,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                        lineHeight = 20.sp,
                         modifier = Modifier.padding(start = 20.dp)
                     )
                     if (ex.en.isNotBlank()) {
@@ -633,11 +634,10 @@ private fun WordDetailContent(
                 Spacer(Modifier.height(6.dp))
                 unattached.take(3).forEachIndexed { idx, ex ->
                     if (idx > 0) Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = ex.jp,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                        lineHeight = 20.sp
+                    FuriganaSentence(
+                        example = ex,
+                        fontSizeSp = 14,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
                     )
                     if (ex.en.isNotBlank()) {
                         Text(
@@ -655,7 +655,7 @@ private fun WordDetailContent(
         Spacer(Modifier.height(12.dp))
 
         // Parts of speech
-        val posLabel = PartsOfSpeechFormatter.format(entry.partsOfSpeech.joinToString(" "))
+        val posLabel = PartsOfSpeechFormatter.format(entry.partsOfSpeech.joinToString(" "), english = isEnglish)
         if (posLabel.isNotEmpty()) {
             SectionCard(title = tr("Część mowy", "Part of speech")) {
                 Text(posLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -745,6 +745,68 @@ private fun WordDetailContent(
         }
 
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/**
+ * Renders an example sentence with tappable furigana. When the example carries
+ * [com.yomitanmobile.domain.model.ExamplePair.segments] (ruby readings preserved
+ * at import), each kanji run is underlined and reveals its reading above the
+ * character on tap. Falls back to plain text for older imports without segments.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FuriganaSentence(
+    example: com.yomitanmobile.domain.model.ExamplePair,
+    fontSizeSp: Int,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val segments = example.segments
+    if (segments.isEmpty()) {
+        Text(
+            text = example.jp,
+            fontSize = fontSizeSp.sp,
+            color = color,
+            lineHeight = (fontSizeSp * 1.4f).sp,
+            modifier = modifier
+        )
+        return
+    }
+    FlowRow(modifier = modifier, verticalArrangement = Arrangement.Center) {
+        segments.forEach { seg ->
+            FuriganaWord(segment = seg, fontSizeSp = fontSizeSp, color = color)
+        }
+    }
+}
+
+@Composable
+private fun FuriganaWord(
+    segment: com.yomitanmobile.domain.model.FuriganaSegment,
+    fontSizeSp: Int,
+    color: Color
+) {
+    val hasReading = segment.reading.isNotBlank()
+    var revealed by remember(segment) { mutableStateOf(false) }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (hasReading) Modifier.clickable { revealed = !revealed } else Modifier
+    ) {
+        // Reserve the furigana line height (a space when hidden) so tapping to
+        // reveal the reading doesn't shift the sentence baseline.
+        Text(
+            text = if (hasReading && revealed) segment.reading else " ",
+            fontSize = (fontSizeSp * 0.55f).sp,
+            lineHeight = (fontSizeSp * 0.7f).sp,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = segment.text,
+            fontSize = fontSizeSp.sp,
+            color = color,
+            lineHeight = (fontSizeSp * 1.2f).sp,
+            textDecoration = if (hasReading) TextDecoration.Underline else TextDecoration.None
+        )
     }
 }
 
