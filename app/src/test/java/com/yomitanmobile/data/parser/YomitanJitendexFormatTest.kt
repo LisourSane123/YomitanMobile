@@ -216,6 +216,55 @@ class YomitanJitendexFormatTest {
     }
 
     @Test
+    fun furiganaSegmentsSurviveNestedExampleWrapper() = runBlocking {
+        // Real Jitendex sometimes wraps example-sentence-a/-b under an extra
+        // <div> instead of making them direct children of the example-sentence
+        // box. The side lookup must recurse so furigana is still captured.
+        val termJson = """
+            [[
+              "飲む",
+              "のむ",
+              "★",
+              "v5m",
+              100,
+              [{
+                "type": "structured-content",
+                "content": {
+                  "tag": "div",
+                  "data": {"content": "sense-group"},
+                  "content": [
+                    {"tag":"span","data":{"code":"v5m","content":"part-of-speech-info"},"content":"5-dan"},
+                    {"tag":"div","data":{"content":"sense"},"content":[
+                      {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"to drink"}},
+                      {"tag":"div","data":{"content":"extra-info"},"content":{"tag":"div","content":{"tag":"div","data":{"content":"example-sentence"},"content":{"tag":"div","content":[
+                        {"tag":"div","data":{"content":"example-sentence-a"},"content":{"tag":"span","lang":"ja","content":[
+                          {"tag":"ruby","content":["水",{"tag":"rt","content":"みず"}]},"を",
+                          {"tag":"ruby","content":["飲",{"tag":"rt","content":"の"}]},"む。"
+                        ]}},
+                        {"tag":"div","data":{"content":"example-sentence-b"},"content":{"tag":"span","lang":"en","content":"I drink water."}}
+                      ]}}}}
+                    ]}
+                  ]
+                }
+              }],
+              1234567,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val examples = json.decodeFromString(examplesSerializer, entry.examplesJson)
+
+        assertEquals(1, examples.size)
+        assertEquals("水を飲む。", examples[0].jp)
+        assertEquals("I drink water.", examples[0].en)
+        val segs = examples[0].segments
+        assertTrue("segments populated for nested example: $segs", segs.isNotEmpty())
+        assertTrue("includes (水→みず): $segs", segs.any { it.text == "水" && it.reading == "みず" })
+        assertTrue("includes (飲→の): $segs", segs.any { it.text == "飲" && it.reading == "の" })
+    }
+
+    @Test
     fun usageTagsArePrependedInParentheses() = runBlocking {
         // 但し with the "uk" (usually written in kana) tag inlined in the
         // glossary <li>, matching how Jitendex emits it.

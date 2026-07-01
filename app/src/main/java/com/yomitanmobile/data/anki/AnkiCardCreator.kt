@@ -209,7 +209,6 @@ class AnkiCardCreator(
                 background: rgba(128, 203, 196, 0.28);
                 border-radius: 4px;
                 padding: 0 2px;
-                text-decoration: underline;
             }
             .audio { margin: 8px 0; }
             .sentence {
@@ -334,7 +333,6 @@ class AnkiCardCreator(
                 background: ${prefs.accentColor}44;
                 border-radius: 4px;
                 padding: 0 2px;
-                text-decoration: underline;
             }
             .audio { margin: 8px 0; }
             .sentence {

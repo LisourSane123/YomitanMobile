@@ -11,14 +11,17 @@ import com.yomitanmobile.domain.model.FuriganaSegment
 import com.yomitanmobile.domain.model.ImportProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.DecodeSequenceMode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeToSequence
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -58,11 +61,11 @@ class YomitanDictionaryParser @Inject constructor() {
         const val MAX_INDEX_JSON_BYTES = 1 * 1024 * 1024
         const val MAX_TERM_BANK_BYTES = 48 * 1024 * 1024
         const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
-        // BCCWJ (SUW+LUW combined, ~1M entries) ships term_meta_bank files
-        // that decompress past 25 MB, so the old cap rejected the import with
-        // "Plik … przekracza limit 25 MB". 64 MB clears the largest shipped
-        // meta bank while staying well under MAX_TOTAL_UNCOMPRESSED_BYTES.
-        const val MAX_META_BANK_BYTES = 64 * 1024 * 1024
+        // term_meta_bank files have no per-file byte cap: BCCWJ's combined
+        // bank is hundreds of MB uncompressed and can't be held in memory as a
+        // single String/JsonArray. It is decoded lazily off the zip stream
+        // (decodeToSequence, one element at a time); a counting wrapper still
+        // enforces MAX_TOTAL_UNCOMPRESSED_BYTES so a zip-bomb can't run away.
         // Jitendex's structured-content JSON expands ~6-8x from its ~38 MB
         // ZIP — about 250-300 MB uncompressed. 1 GB is a safe upper bound
         // that still rejects malicious zip-bombs without rejecting any
@@ -130,6 +133,7 @@ class YomitanDictionaryParser @Inject constructor() {
      * via [onMetaBatch] callback.
      * This avoids holding all entries in memory at once (prevents OOM).
      */
+    @OptIn(ExperimentalSerializationApi::class)
     suspend fun parseFromZipStreaming(
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit = {},
@@ -273,17 +277,32 @@ class YomitanDictionaryParser @Inject constructor() {
                         name.contains("term_meta_bank_") && name.endsWith(".json") -> {
                             hasMetaBanks = true
                             try {
-                                val content = readEntryTextLimited(name, MAX_META_BANK_BYTES)
-                                val metaArray = json.decodeFromString<JsonArray>(content)
-                                val totalMetaEntries = metaArray.size
-
                                 val META_CHUNK_SIZE = 5000
                                 var freqChunk = mutableListOf<FrequencyUpdate>()
                                 var pitchChunk = mutableMapOf<String, String>()
                                 var jlptChunk = mutableListOf<JlptUpdate>()
                                 var processedInFile = 0
 
-                                for (metaElement in metaArray) {
+                                // Lazily decode the array off the zip stream so a
+                                // multi-hundred-MB BCCWJ bank never materializes as
+                                // one String/JsonArray. The counting wrapper keeps
+                                // the global uncompressed cap enforced and must NOT
+                                // close the shared zip stream.
+                                val countingStream = CountingNonClosingInputStream(zip) { added ->
+                                    totalUncompressedBytes += added
+                                    if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                                        throw Exception(
+                                            "Archiwum przekracza limit ${MAX_TOTAL_UNCOMPRESSED_BYTES / (1024 * 1024)} MB"
+                                        )
+                                    }
+                                }
+                                val metaSequence = json.decodeToSequence(
+                                    countingStream,
+                                    JsonElement.serializer(),
+                                    DecodeSequenceMode.ARRAY_WRAPPED
+                                )
+
+                                for (metaElement in metaSequence) {
                                     try {
                                         val meta = metaElement.jsonArray
                                         if (meta.size < 3) continue
@@ -334,14 +353,17 @@ class YomitanDictionaryParser @Inject constructor() {
                                         freqChunk = mutableListOf()
                                         pitchChunk = mutableMapOf()
 
-                                        // Report progress during meta processing
+                                        // Report progress during meta processing.
+                                        // Total is unknown while streaming, so we
+                                        // report the running count with total=0
+                                        // (indeterminate) rather than a fake 100%.
                                         onProgress(
                                             ImportProgress(
                                                 currentFile = name,
                                                 filesProcessed = filesProcessed,
                                                 totalFiles = filesProcessed + 1,
                                                 entriesProcessed = processedInFile,
-                                                totalEntries = totalMetaEntries
+                                                totalEntries = 0
                                             )
                                         )
                                     }
@@ -975,27 +997,18 @@ class YomitanDictionaryParser @Inject constructor() {
     }
 
     private fun extractJitendexExamplePair(container: JsonObject): ExamplePair? {
-        var jp = ""
-        var en = ""
         // The JP-side content element, kept so we can build furigana segments
         // (ruby readings) from the exact same subtree the plain jp came from.
-        var jpContent: JsonElement? = null
-        val items = elementAsList(container["content"])
-        for (item in items) {
-            val obj = item as? JsonObject ?: continue
-            val dc = nodeDataContent(obj)?.lowercase().orEmpty()
-            when {
-                // Jitendex variants: "example-sentence-a" / "-japanese", "-b" / "-english"
-                dc.contains("example-sentence-a") || dc.contains("japanese") -> {
-                    val content = obj["content"] ?: continue
-                    jpContent = content
-                    jp = extractTextFromContent(content).trim()
-                }
-                dc.contains("example-sentence-b") || dc.contains("english") -> {
-                    en = extractTextFromContent(obj["content"] ?: continue).trim()
-                }
-            }
-        }
+        // Found recursively so it still matches when Jitendex nests the a/b
+        // divs under an intermediate wrapper rather than as direct children.
+        val jpContent = findExampleSideContent(container, "example-sentence-a")
+            ?: findExampleSideContent(container, "japanese")
+        val enContent = findExampleSideContent(container, "example-sentence-b")
+            ?: findExampleSideContent(container, "english")
+
+        var jp = jpContent?.let { extractTextFromContent(it).trim() } ?: ""
+        var en = enContent?.let { extractTextFromContent(it).trim() } ?: ""
+
         // Fallback to the lang-attribute splitter if the data-content markers
         // didn't match (older Jitendex variants).
         if (jp.isBlank()) {
@@ -1008,6 +1021,30 @@ class YomitanDictionaryParser @Inject constructor() {
         if (jp.isBlank()) return null
         val segments = jpContent?.let { buildFuriganaSegments(it) } ?: emptyList()
         return ExamplePair(jp, en, segments = segments)
+    }
+
+    /**
+     * Recursively find the `content` of the first node whose data-content
+     * contains [marker] (e.g. "example-sentence-a"). Returns null when absent.
+     * The example-sentence wrapper's own data-content ("example-sentence")
+     * doesn't contain the "-a"/"-b" marker, so the search correctly descends
+     * into its children.
+     */
+    private fun findExampleSideContent(element: JsonElement, marker: String): JsonElement? {
+        when (element) {
+            is JsonObject -> {
+                val dc = nodeDataContent(element)?.lowercase()
+                if (dc != null && dc.contains(marker)) return element["content"]
+                return element["content"]?.let { findExampleSideContent(it, marker) }
+            }
+            is JsonArray -> {
+                for (child in element) {
+                    findExampleSideContent(child, marker)?.let { return it }
+                }
+                return null
+            }
+            else -> return null
+        }
     }
 
     /**
@@ -1407,4 +1444,33 @@ class YomitanDictionaryParser @Inject constructor() {
         return tag in BLOCK_TAGS
     }
 
+}
+
+/**
+ * Wraps the shared [ZipInputStream] for streaming JSON decode of a single
+ * entry. It reports every byte read (so the caller can enforce the global
+ * uncompressed cap) and, crucially, swallows [close] — the JSON reader would
+ * otherwise close the underlying zip stream when it finishes the array,
+ * breaking iteration over the remaining zip entries.
+ */
+private class CountingNonClosingInputStream(
+    private val delegate: java.io.InputStream,
+    private val onRead: (Int) -> Unit
+) : java.io.InputStream() {
+    override fun read(): Int {
+        val b = delegate.read()
+        if (b != -1) onRead(1)
+        return b
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        val n = delegate.read(b, off, len)
+        if (n > 0) onRead(n)
+        return n
+    }
+
+    override fun available(): Int = delegate.available()
+
+    // Deliberately do NOT close the shared zip stream.
+    override fun close() {}
 }

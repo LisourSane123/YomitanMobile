@@ -1,9 +1,12 @@
 YomitanMobile — Architecture & Integration Guide for AI Coding Agents
 ======================================================================
 
-Last verified: 2026-07-01 (7 quality fixes: (1) parser MAX_META_BANK_BYTES
-raised 25→64 MB (and MAX_TERM_BANK_BYTES→48 MB) so BCCWJ's large
-term_meta_bank files import instead of failing "przekracza limit 25 MB";
+Last verified: 2026-07-01 (7 quality fixes: (1) term_meta_bank files are now
+stream-decoded element-by-element (Json.decodeToSequence over a counting,
+non-closing wrapper of the zip stream) with NO per-file byte cap — BCCWJ's
+combined bank is hundreds of MB uncompressed and can't be held in memory as one
+String/JsonArray; MAX_TOTAL_UNCOMPRESSED_BYTES (1 GB) still guards zip-bombs.
+MAX_TERM_BANK_BYTES→48 MB;
 (2) util/KanjiReadingFormatter swaps KANJIDIC's ASCII "." okurigana separator
 for the round nakaguro "・" (た.べる→た・べる), applied in KanjiEntry.toKanjiInfo
 and AnkiCardCreator kanji breakdown; (3+6) PartsOfSpeechFormatter gained Polish
@@ -15,8 +18,10 @@ decks (SettingsViewModel.getAvailableDecks) like DetailScreen already did;
 <ruby><rt> readings for example sentences (previously stripped) and
 DetailScreen renders FuriganaSentence with tap-to-reveal furigana; needs a
 Jitendex re-import to backfill existing rows; (7) front-context sentence now
-attached for EVERY word (kana-only gate removed), .context-highlight underlines
-the target, and showFrontContextSentence defaults to true. Prior: multi-source
+attached for EVERY word (kana-only gate removed), .context-highlight marks the
+target with bold + tint (no underline — user preference), and
+showFrontContextSentence defaults to true. Example-side lookup in the parser is
+recursive so furigana segments survive nested example-sentence-a/-b wrappers. Prior: multi-source
 frequency lists: each imported
 frequency dictionary's rank is now stored separately in the word_frequencies
 table (DB v14) instead of overwriting one column; the detail screen shows
