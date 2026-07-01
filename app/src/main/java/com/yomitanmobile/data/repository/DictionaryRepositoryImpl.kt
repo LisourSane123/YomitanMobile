@@ -193,6 +193,14 @@ class DictionaryRepositoryImpl @Inject constructor(
                 // Update entries that were inserted with "temp" dictionary name
                 // to the actual dictionary name from index.json
                 if (dictionaryNameFromBatch != "temp") {
+                    // Replace any PREVIOUS import of the same dictionary before
+                    // promoting the freshly-parsed rows. The new rows are still
+                    // under "temp" here, so deleting the real-name rows removes
+                    // only the OLD copy — without this a re-import (e.g. to
+                    // backfill furigana with the updated parser) would leave two
+                    // full copies of every entry in the table.
+                    dictionaryDao.deleteByDictionary(dictionaryNameFromBatch)
+                    kanjiDao.deleteByDictionary(dictionaryNameFromBatch)
                     dictionaryDao.updateDictionaryName("temp", dictionaryNameFromBatch)
                     kanjiDao.updateDictionaryName("temp", dictionaryNameFromBatch)
                 }

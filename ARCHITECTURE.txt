@@ -16,8 +16,12 @@ Anki card; (4) SettingsScreen "Change deck" dialog lists existing AnkiDroid
 decks (SettingsViewModel.getAvailableDecks) like DetailScreen already did;
 (5) ExamplePair gained segments: List<FuriganaSegment> — the parser now keeps
 <ruby><rt> readings for example sentences (previously stripped) and
-DetailScreen renders FuriganaSentence with tap-to-reveal furigana; needs a
-Jitendex re-import to backfill existing rows; (7) front-context sentence now
+DetailScreen renders FuriganaSentence with tap-to-reveal furigana. Existing
+installs backfill by re-downloading Jitendex ONCE: importDictionary now deletes
+the prior same-named term + kanji rows before promoting the freshly-parsed ones
+(DictionaryRepositoryImpl), so a re-import cleanly REPLACES instead of
+duplicating every entry (this was a latent bug — only frequency rows were
+replaced before); (7) front-context sentence now
 attached for EVERY word (kana-only gate removed), .context-highlight marks the
 target with bold + tint (no underline — user preference), and
 showFrontContextSentence defaults to true. Example-side lookup in the parser is
