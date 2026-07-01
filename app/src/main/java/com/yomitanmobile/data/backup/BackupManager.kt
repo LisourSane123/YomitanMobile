@@ -2,10 +2,36 @@ package com.yomitanmobile.data.backup
 
 import android.content.Context
 import android.util.Log
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.database.AppDatabase
+import com.yomitanmobile.dataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.float
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -22,16 +48,19 @@ class BackupManager @Inject constructor(
     private companion object {
         const val BACKUP_DIR_NAME = "yomitan_backups"
         const val DATABASE_BACKUP_NAME = "database.db"
-        // DataStore preferences are intentionally NOT included in the
-        // backup — the protobuf blob mixes the user-supplied AI API key
-        // with everything else, and getExternalFilesDir() is reachable via
-        // USB MTP and most third-party file managers. Backing up the .pb
-        // would leak the API key in plaintext. The user's actual data
-        // (dictionaries, favorites, exports, search history) all lives in
-        // the database file, which IS backed up. Card style / deck name /
-        // theme are rebuilt on next launch with their defaults — an
-        // acceptable trade for guaranteed secret hygiene.
+        // Settings are exported to a plain-text JSON file (not the raw
+        // DataStore .pb) so we can whitelist what leaves the sandbox. The
+        // AI API key (MainActivity.CARD_AI_API_KEY) is ALWAYS excluded on
+        // both export and import — getExternalFilesDir() is reachable via
+        // USB MTP / file managers, so the secret must never land in a
+        // backup. Everything else (card style, deck name, theme, section
+        // order, frequency display, daily goal…) is safe to carry over and
+        // is restored on the next launch. The user opts in per-backup via
+        // the "include settings" toggle.
+        const val SETTINGS_BACKUP_NAME = "settings.json"
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     private val logTag = "BackupManager"
 
@@ -39,7 +68,7 @@ class BackupManager @Inject constructor(
      * Create a backup of database and preferences to a timestamped folder
      * in app-specific external files directory or internal files directory.
      */
-    suspend fun createBackup(): Result<File> = withContext(Dispatchers.IO) {
+    suspend fun createBackup(includeSettings: Boolean = true): Result<File> = withContext(Dispatchers.IO) {
         try {
             val backupDir = getOrCreateBackupDir()
             // AnkiDroid's lint plugin bans both `new Date()` and
@@ -63,8 +92,16 @@ class BackupManager @Inject constructor(
                 }
             }
 
-            // Preferences blob deliberately not copied (see companion-object
-            // comment). Only the database is preserved.
+            // Optionally export the whitelisted settings (AI key excluded).
+            if (includeSettings) {
+                try {
+                    writePreferencesBackup(File(backupFolder, SETTINGS_BACKUP_NAME))
+                } catch (e: Exception) {
+                    // A settings-export failure must not sink the whole backup —
+                    // the database is the load-bearing part.
+                    Log.w(logTag, "Settings export failed; database backup kept", e)
+                }
+            }
 
             Log.i(logTag, "Backup created at: ${backupFolder.absolutePath}")
             Result.success(backupFolder)
@@ -100,12 +137,18 @@ class BackupManager @Inject constructor(
                 }
             }
 
-            // Preferences blob is not part of the backup (see companion
-            // object) so there is nothing to restore here. The user's
-            // settings stay at whatever the running DataStore currently
-            // holds; for an old-format backup that still has a
-            // `datastore_prefs.pb` we simply ignore it rather than risk
-            // re-introducing a leaked API key.
+            // Restore whitelisted settings when the backup includes them.
+            // The AI key is skipped again on the import side (defence in
+            // depth against a hand-edited settings.json). Older backups
+            // without a settings.json simply keep the current settings.
+            val settingsFile = File(backupFolder, SETTINGS_BACKUP_NAME)
+            if (settingsFile.exists()) {
+                try {
+                    restorePreferencesBackup(settingsFile)
+                } catch (e: Exception) {
+                    Log.w(logTag, "Settings restore failed; database restored anyway", e)
+                }
+            }
 
             Log.i(logTag, "Restore completed from: ${backupFolder.absolutePath}")
             Result.success(Unit)
@@ -146,6 +189,70 @@ class BackupManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(logTag, "Delete backup failed", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Serialize every DataStore preference (except the AI API key) to a typed
+     * JSON map so it can be restored on another install / device. Each entry is
+     * `{ "t": <type>, "v": <value> }` so the exact preference key type is
+     * reconstructable on import.
+     */
+    private suspend fun writePreferencesBackup(target: File) {
+        val prefs = context.dataStore.data.first()
+        val root = buildJsonObject {
+            for ((key, value) in prefs.asMap()) {
+                // Never export the AI API key — the backup dir is world-readable.
+                if (key.name == MainActivity.CARD_AI_API_KEY.name) continue
+                val entry = preferenceEntry(value) ?: continue
+                put(key.name, entry)
+            }
+        }
+        target.writeText(json.encodeToString(JsonObject.serializer(), root))
+    }
+
+    private fun preferenceEntry(value: Any?): JsonObject? = when (value) {
+        is Boolean -> buildJsonObject { put("t", "bool"); put("v", value) }
+        is Int -> buildJsonObject { put("t", "int"); put("v", value) }
+        is Long -> buildJsonObject { put("t", "long"); put("v", value) }
+        is Float -> buildJsonObject { put("t", "float"); put("v", value) }
+        is Double -> buildJsonObject { put("t", "double"); put("v", value) }
+        is String -> buildJsonObject { put("t", "string"); put("v", value) }
+        is Set<*> -> buildJsonObject {
+            put("t", "stringset")
+            put("v", JsonArray(value.map { JsonPrimitive(it.toString()) }))
+        }
+        else -> null
+    }
+
+    /**
+     * Apply a settings.json produced by [writePreferencesBackup] back into the
+     * DataStore. Malformed entries are skipped individually and the AI key is
+     * refused again here as defence in depth.
+     */
+    private suspend fun restorePreferencesBackup(source: File) {
+        val root = json.parseToJsonElement(source.readText()).jsonObject
+        context.dataStore.edit { prefs ->
+            for ((name, element) in root) {
+                if (name == MainActivity.CARD_AI_API_KEY.name) continue
+                val obj = element as? JsonObject ?: continue
+                val type = obj["t"]?.jsonPrimitive?.contentOrNull ?: continue
+                val v = obj["v"] ?: continue
+                try {
+                    when (type) {
+                        "bool" -> prefs[booleanPreferencesKey(name)] = v.jsonPrimitive.boolean
+                        "int" -> prefs[intPreferencesKey(name)] = v.jsonPrimitive.int
+                        "long" -> prefs[longPreferencesKey(name)] = v.jsonPrimitive.long
+                        "float" -> prefs[floatPreferencesKey(name)] = v.jsonPrimitive.float
+                        "double" -> prefs[doublePreferencesKey(name)] = v.jsonPrimitive.double
+                        "string" -> prefs[stringPreferencesKey(name)] = v.jsonPrimitive.content
+                        "stringset" -> prefs[stringSetPreferencesKey(name)] =
+                            v.jsonArray.map { it.jsonPrimitive.content }.toSet()
+                    }
+                } catch (_: Exception) {
+                    // Skip a single malformed entry rather than aborting restore.
+                }
+            }
         }
     }
 

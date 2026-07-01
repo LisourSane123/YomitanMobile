@@ -189,11 +189,11 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun createBackup() {
+    fun createBackup(includeSettings: Boolean = true) {
         viewModelScope.launch {
             _isBackingUp.value = true
             try {
-                val result = backupManager.createBackup()
+                val result = backupManager.createBackup(includeSettings)
                 result.fold(
                     onSuccess = { backupFolder ->
                         _events.emit(SettingsEvent.BackupSuccess(backupFolder.absolutePath))

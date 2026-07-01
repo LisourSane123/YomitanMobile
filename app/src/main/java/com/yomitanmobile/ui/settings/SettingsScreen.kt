@@ -47,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Divider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -115,6 +116,9 @@ fun SettingsScreen(
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var currentDeckName by remember { mutableStateOf("") }
+    // Whether "Create backup" also exports the whitelisted settings
+    // (everything except the AI API key). On by default.
+    var includeSettingsInBackup by remember { mutableStateOf(true) }
     var currentThemeMode by remember { mutableStateOf("system") }
     var currentLanguage by remember { mutableStateOf("system") }
     var dailyGoalCount by remember { mutableStateOf(0f) }
@@ -822,10 +826,35 @@ fun SettingsScreen(
             }
 
             item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !isBackingUp && !isRestoring) {
+                            includeSettingsInBackup = !includeSettingsInBackup
+                        }
+                ) {
+                    Checkbox(
+                        checked = includeSettingsInBackup,
+                        onCheckedChange = { includeSettingsInBackup = it },
+                        enabled = !isBackingUp && !isRestoring
+                    )
+                    Text(
+                        tr(
+                            "Dołącz ustawienia (bez klucza AI)",
+                            "Include settings (without AI key)"
+                        ),
+                        fontSize = 14.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
                 Button(
-                    onClick = { 
+                    onClick = {
                         if (!isBackingUp) {
-                            viewModel.createBackup()
+                            viewModel.createBackup(includeSettingsInBackup)
                         }
                     },
                     enabled = !isBackingUp && !isRestoring,
