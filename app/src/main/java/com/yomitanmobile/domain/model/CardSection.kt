@@ -23,7 +23,7 @@ enum class CardSection(
 
     companion object {
         fun defaultOrder(): List<CardSection> =
-            listOf(PITCH, SUMMARY, MEANING, SENTENCE, AUDIO, KANJI)
+            listOf(SUMMARY, PITCH, MEANING, SENTENCE, KANJI, AUDIO)
 
         fun encode(order: List<CardSection>): String =
             order.joinToString(",") { it.storageValue }

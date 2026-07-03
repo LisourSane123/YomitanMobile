@@ -42,6 +42,11 @@ class DictionaryRepositoryImpl @Inject constructor(
     // once parsing finishes (the title isn't reliably known mid-stream).
     private val tempDictionaryName = "temp"
 
+    // Safe batch size for `column IN (:list)` binds. Kept comfortably below
+    // SQLite's 999-variable ceiling (Android 8–11) with room for the query's
+    // other parameters.
+    private val IN_CLAUSE_CHUNK = 400
+
     // NOTE: previously we toggled `PRAGMA synchronous = OFF` and
     // `journal_mode = MEMORY` for the duration of the import to speed up
     // bulk inserts. That trade was unsafe: if the process was killed in the
@@ -54,6 +59,34 @@ class DictionaryRepositoryImpl @Inject constructor(
 
     override suspend fun getKanjis(kanjiList: List<String>): List<KanjiEntry> {
         return kanjiDao.getKanjis(kanjiList)
+    }
+
+    override suspend fun getReadingsForExpressions(
+        expressions: List<String>
+    ): Map<String, String> {
+        if (expressions.isEmpty()) return emptyMap()
+        return try {
+            // The furigana synthesiser feeds hundreds of candidate substrings in
+            // here (up to ~12 per kanji position × every example sentence on the
+            // page). A single `IN (:expressions)` bind blows past SQLite's
+            // SQLITE_MAX_VARIABLE_NUMBER (999 on Android 8–11 / API 26–30), which
+            // threw and — via the catch below — silently returned no readings, so
+            // tappable furigana never appeared on those devices. Chunk the IN
+            // list well under the limit and merge, then keep the best
+            // (frequency-ranked) reading per expression across chunks so the
+            // result is identical to one big ordered query would have produced.
+            expressions.distinct()
+                .chunked(IN_CLAUSE_CHUNK)
+                .flatMap { chunk -> dictionaryDao.getReadingsForExpressions(chunk) }
+                .groupBy { it.expression }
+                .mapValues { (_, rows) ->
+                    // Ranked rows (frequency > 0) beat unranked; among ranked the
+                    // lowest rank wins — matches the DAO's ORDER BY across chunks.
+                    rows.minByOrNull { if (it.frequency > 0) it.frequency else Int.MAX_VALUE }!!.reading
+                }
+        } catch (_: Exception) {
+            emptyMap()
+        }
     }
 
     override fun searchExact(query: String): Flow<List<WordEntry>> {

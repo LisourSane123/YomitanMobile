@@ -22,6 +22,13 @@ data class JlptUpdate(
     val level: Int
 )
 
+/** Lightweight (expression, reading) projection for furigana generation. */
+data class ExpressionReading(
+    val expression: String,
+    val reading: String,
+    val frequency: Int
+)
+
 @Dao
 interface DictionaryDao {
 
@@ -43,6 +50,21 @@ interface DictionaryDao {
 
     @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
     suspend fun getByReading(reading: String): List<DictionaryEntry>
+
+    /**
+     * Reading lookup for a batch of exact expressions, used to synthesise
+     * furigana for example sentences that shipped without ruby. Only kanji
+     * words have distinct readings worth annotating, so callers pass
+     * kanji-containing candidates. Ordering surfaces the highest-priority
+     * reading first (frequency-ranked, then shortest expression) so the
+     * caller can keep the first row per expression.
+     */
+    @Query("""
+        SELECT expression, reading, frequency FROM dictionary_entries
+        WHERE expression IN (:expressions) AND reading != ''
+        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
+    """)
+    suspend fun getReadingsForExpressions(expressions: List<String>): List<ExpressionReading>
 
     /**
      * Two-parameter signature so the equality match (`= :exactQuery`) uses

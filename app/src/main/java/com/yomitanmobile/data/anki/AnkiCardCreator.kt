@@ -54,6 +54,55 @@ class AnkiCardCreator(
 
         val FIELD_NAMES = arrayOf("Front", "FrontContext", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence", "KanjiBreakdown", "Summary")
 
+        /**
+         * Renders an example sentence as tap-to-reveal furigana HTML for the
+         * exported card. Each kanji run with a Jitendex reading becomes a
+         * `<ruby>` whose `<rt>` is hidden by default (space reserved via
+         * `visibility:hidden`, so tapping doesn't shift the line) and toggled by
+         * a self-contained inline `onclick`. Because the behaviour lives entirely
+         * in the field HTML — no card-template, CSS, or model change — it works
+         * on the existing note type and on any AnkiDroid card.
+         *
+         * Sentences with no ruby readings (plain imports) fall back to escaped
+         * plain text, exactly as before.
+         */
+        fun buildFuriganaSentenceHtml(ex: com.yomitanmobile.domain.model.ExamplePair): String {
+            val segments = ex.segments
+            if (segments.none { it.reading.isNotBlank() }) {
+                return InputSanitizer.escapeHtml(ex.jp)
+            }
+            // Jitendex splits a compound into one <ruby> PER kanji (果→くだ,
+            // 物→もの), so a naive 1-ruby-per-segment rendering would force the
+            // reader to tap each kanji separately. Group consecutive
+            // reading-bearing segments into a single <ruby> whose one tap
+            // reveals the whole word's readings at once; the toggle reads the
+            // first <rt>'s state and applies it to all of them so they never
+            // fall out of sync.
+            val toggle = "var t=this.getElementsByTagName('rt');" +
+                "if(t.length){var v=(t[0].style.visibility==='visible')?'hidden':'visible';" +
+                "for(var i=0;i<t.length;i++)t[i].style.visibility=v;}"
+            return buildString {
+                var i = 0
+                while (i < segments.size) {
+                    if (segments[i].reading.isBlank()) {
+                        append(InputSanitizer.escapeHtml(segments[i].text))
+                        i++
+                    } else {
+                        append("<ruby style=\"cursor:pointer\" onclick=\"").append(toggle).append("\">")
+                        while (i < segments.size && segments[i].reading.isNotBlank()) {
+                            val base = InputSanitizer.escapeHtml(segments[i].text)
+                            val reading = InputSanitizer.escapeHtml(segments[i].reading)
+                            append("<span style=\"border-bottom:1px dotted #888\">").append(base).append("</span>")
+                            append("<rt style=\"visibility:hidden;font-size:0.6em;color:#80cbc4\">")
+                            append(reading).append("</rt>")
+                            i++
+                        }
+                        append("</ruby>")
+                    }
+                }
+            }
+        }
+
         const val CARD_FRONT_TEMPLATE = """
             <div class="front">
                 <span class="expression">{{Front}}</span>
@@ -1002,7 +1051,7 @@ class AnkiCardCreator(
                     if (idx > 0) append("<div class=\"sentence-divider\"></div>")
                     if (ex.jp.isNotBlank()) {
                         append("<div class=\"sentence-jp\">")
-                        append(InputSanitizer.escapeHtml(ex.jp))
+                        append(buildFuriganaSentenceHtml(ex))
                         append("</div>")
                     }
                     if (ex.en.isNotBlank()) {
@@ -1060,7 +1109,7 @@ class AnkiCardCreator(
                     append("<div class=\"meaning-ex\">")
                     if (ex.jp.isNotBlank()) {
                         append("<div class=\"meaning-ex-jp\">")
-                        append(InputSanitizer.escapeHtml(ex.jp))
+                        append(buildFuriganaSentenceHtml(ex))
                         append("</div>")
                     }
                     if (ex.en.isNotBlank()) {

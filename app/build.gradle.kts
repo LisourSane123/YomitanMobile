@@ -80,6 +80,13 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
+    testOptions {
+        unitTests {
+            // Robolectric-backed Compose UI tests need real Android resources
+            // on the JVM classpath.
+            isIncludeAndroidResources = true
+        }
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -176,6 +183,12 @@ dependencies {
     // Pinned to the same 1.7.3 line as coroutines-android so test runtime
     // matches production.
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    // Robolectric + Compose UI test so interaction (tap-to-reveal furigana)
+    // can be exercised on the JVM without a device.
+    testImplementation(platform("androidx.compose:compose-bom:2023.10.01"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("androidx.test.espresso:espresso-core:3.5.1")
 
     // Instrumentation tests
     androidTestImplementation("androidx.test:runner:1.5.2")

@@ -17,10 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -91,6 +91,7 @@ fun DetailScreen(
     val lookupCount by viewModel.lookupCount.collectAsState()
     val kanjiInfo by viewModel.kanjiInfo.collectAsState()
     val frequencies by viewModel.frequencies.collectAsState()
+    val generatedFurigana by viewModel.generatedFurigana.collectAsState()
     val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
@@ -345,6 +346,7 @@ fun DetailScreen(
                     isFavorite = isFavorite,
                     kanjiInfo = kanjiInfo,
                     frequencies = frequencies,
+                    generatedFurigana = generatedFurigana,
                     onToggleFavorite = { viewModel.toggleFavorite() },
                     modifier = Modifier.padding(paddingValues)
                 )
@@ -366,6 +368,7 @@ private fun WordDetailContent(
     isFavorite: Boolean,
     kanjiInfo: List<com.yomitanmobile.domain.model.KanjiInfo>,
     frequencies: List<com.yomitanmobile.domain.model.WordFrequencyInfo>,
+    generatedFurigana: Map<String, List<com.yomitanmobile.domain.model.FuriganaSegment>> = emptyMap(),
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -599,6 +602,7 @@ private fun WordDetailContent(
                         example = ex,
                         fontSizeSp = 14,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        generatedFurigana = generatedFurigana,
                         modifier = Modifier.padding(start = 20.dp)
                     )
                     if (ex.en.isNotBlank()) {
@@ -637,7 +641,8 @@ private fun WordDetailContent(
                     FuriganaSentence(
                         example = ex,
                         fontSizeSp = 14,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        generatedFurigana = generatedFurigana
                     )
                     if (ex.en.isNotBlank()) {
                         Text(
@@ -749,20 +754,33 @@ private fun WordDetailContent(
 }
 
 /**
- * Renders an example sentence with tappable furigana. When the example carries
- * [com.yomitanmobile.domain.model.ExamplePair.segments] (ruby readings preserved
- * at import), each kanji run is underlined and reveals its reading above the
- * character on tap. Falls back to plain text for older imports without segments.
+ * Renders an example sentence with tappable furigana: each kanji run is
+ * underlined and its reading stays hidden until the user taps it, then reveals
+ * above the character. Readings come from the example's own ruby
+ * [com.yomitanmobile.domain.model.ExamplePair.segments] when present, otherwise
+ * from [generatedFurigana] (synthesised from the installed dictionary) so words
+ * from imports/sentences without ruby are still tappable. Falls back to plain
+ * text only when no readings are available at all.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FuriganaSentence(
+internal fun FuriganaSentence(
     example: com.yomitanmobile.domain.model.ExamplePair,
     fontSizeSp: Int,
     color: Color,
+    generatedFurigana: Map<String, List<com.yomitanmobile.domain.model.FuriganaSegment>> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
-    val segments = example.segments
+    // Prefer the dictionary's own ruby segments. Jitendex is all-or-nothing
+    // per sentence (~14% of example sentences ship with NO ruby at all — never
+    // partial), and for those the stored segments are just blank-reading
+    // plain-text runs, so `segments` is non-empty yet carries no readings.
+    // Detect "no real ruby" (not merely "no segments") and fall back to
+    // furigana synthesised from the installed dictionary, otherwise the kanji
+    // in those sentences stay untappable even after a fresh import.
+    val hasRealRuby = example.segments.any { it.reading.isNotBlank() }
+    val segments = if (hasRealRuby) example.segments
+        else generatedFurigana[example.jp].orEmpty()
     if (segments.isEmpty()) {
         Text(
             text = example.jp,
@@ -781,7 +799,7 @@ private fun FuriganaSentence(
 }
 
 @Composable
-private fun FuriganaWord(
+internal fun FuriganaWord(
     segment: com.yomitanmobile.domain.model.FuriganaSegment,
     fontSizeSp: Int,
     color: Color

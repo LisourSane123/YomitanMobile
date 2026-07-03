@@ -26,6 +26,7 @@ import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.model.WordFrequencyInfo
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
+import com.yomitanmobile.util.FuriganaGenerator
 import com.yomitanmobile.util.InputSanitizer
 import com.yomitanmobile.util.JlptVocabulary
 import com.yomitanmobile.util.LocaleHelper
@@ -139,6 +140,21 @@ class DetailViewModel @Inject constructor(
     val frequencies: StateFlow<List<WordFrequencyInfo>> = _frequencies.asStateFlow()
 
     /**
+     * Synthesised furigana for example sentences that arrived without ruby
+     * data (plain-JMDict examples, seeded sentences, or Jitendex imported
+     * before the parser preserved readings). Keyed by the sentence's plain JP
+     * text; the detail screen falls back to this map when an
+     * [com.yomitanmobile.domain.model.ExamplePair] carries no segments, so
+     * tapping a kanji still reveals its reading. Empty until the lookup
+     * resolves and for sentences whose words aren't in the installed
+     * dictionary.
+     */
+    private val _generatedFurigana =
+        MutableStateFlow<Map<String, List<com.yomitanmobile.domain.model.FuriganaSegment>>>(emptyMap())
+    val generatedFurigana: StateFlow<Map<String, List<com.yomitanmobile.domain.model.FuriganaSegment>>> =
+        _generatedFurigana.asStateFlow()
+
+    /**
      * Coroutine handoff for the AI-failure dialog. Set internal so the
      * extracted gate can be exercised in tests via [resolveAiFailure].
      * [_isExporting] ensures only one decision can be in flight at a time.
@@ -189,7 +205,78 @@ class DetailViewModel @Inject constructor(
             recordLookup()
             loadKanjiBreakdown()
             loadFrequencies()
+            loadExampleFurigana()
         }
+    }
+
+    /**
+     * Builds tappable furigana for any example sentence that shipped without
+     * ruby segments. Collects the kanji words across every displayed sentence,
+     * resolves their readings in a single dictionary query, then aligns each
+     * reading onto its kanji via [com.yomitanmobile.util.FuriganaGenerator].
+     * Best-effort: leaves the map empty on any failure so the sentence still
+     * renders as plain text.
+     */
+    private fun loadExampleFurigana() {
+        val merged = _entry.value ?: return
+        val sentences = buildList {
+            // Synthesise for any example that carries no real ruby reading —
+            // that's both the legacy no-segments imports AND current-Jitendex
+            // sentences that shipped with no ruby at all (~14%; Jitendex is
+            // all-or-nothing per sentence). Sentences that already have ruby
+            // readings are left to the dictionary's own segments.
+            merged.examples.forEach {
+                if (it.segments.none { seg -> seg.reading.isNotBlank() }) add(it.jp)
+            }
+            if (merged.examples.isEmpty() && merged.exampleSentence.isNotBlank()) {
+                add(merged.exampleSentence)
+            }
+        }.filter { it.isNotBlank() && MergedWordEntry.containsKanji(it) }
+            .distinct()
+        if (sentences.isEmpty()) return
+
+        viewModelScope.launch {
+            runCatching {
+                val candidates = sentences
+                    .flatMapTo(HashSet()) { FuriganaGenerator.candidateExpressions(it) }
+                    .toList()
+                val readings = repository.getReadingsForExpressions(candidates)
+                sentences.associateWith { FuriganaGenerator.generate(it, readings) }
+            }.onSuccess { _generatedFurigana.value = it }
+                .onFailure { exception ->
+                    Log.w(logTag, "Example furigana generation failed", exception)
+                }
+        }
+    }
+
+    /**
+     * Before export, fills in synthesised furigana segments for any example
+     * that shipped without Jitendex ruby (~14% of Jitendex sentences, plus
+     * plain imports), so the exported Anki card can render tap-to-reveal
+     * furigana on those sentences too. Ruby examples are left untouched.
+     * Best-effort: returns the word unchanged on any failure.
+     */
+    private suspend fun enrichExamplesWithFurigana(word: WordEntry): WordEntry {
+        val needsSynthesis = { ex: com.yomitanmobile.domain.model.ExamplePair ->
+            ex.segments.none { it.reading.isNotBlank() } && MergedWordEntry.containsKanji(ex.jp)
+        }
+        if (word.examples.none(needsSynthesis)) return word
+        return runCatching {
+            val candidates = word.examples
+                .filter(needsSynthesis)
+                .flatMapTo(HashSet()) { FuriganaGenerator.candidateExpressions(it.jp) }
+                .toList()
+            val readings = repository.getReadingsForExpressions(candidates)
+            word.copy(
+                examples = word.examples.map { ex ->
+                    if (!needsSynthesis(ex)) ex
+                    else {
+                        val segs = FuriganaGenerator.generate(ex.jp, readings)
+                        if (segs.any { it.reading.isNotBlank() }) ex.copy(segments = segs) else ex
+                    }
+                }
+            )
+        }.getOrDefault(word)
     }
 
     /**
@@ -462,31 +549,36 @@ class DetailViewModel @Inject constructor(
 
     private suspend fun loadCardStylePreferences(): CardStylePreferences {
         val prefs = appContext.dataStore.data.first()
+        // Single source of truth for defaults: fall back to the data class's
+        // own defaults for any key the user hasn't overridden, so the exported
+        // card and the CardStyleScreen can never disagree on what "default"
+        // means.
+        val d = CardStylePreferences()
         return CardStylePreferences(
-            expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: true,
-            expressionFontSize = prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: 48,
-            readingFontSize = prefs[MainActivity.CARD_READING_FONT_SIZE] ?: 28,
-            meaningFontSize = prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: 20,
-            frontContextSentenceFontSize = prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: 14,
-            backSentenceFontSize = prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: 14,
-            fontFamily = prefs[MainActivity.CARD_FONT_FAMILY] ?: "Hiragino Sans",
-            cardBackgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: "#1a1a1a",
-            expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: "#ffffff",
-            readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: "#80cbc4",
-            meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: "#e0e0e0",
-            accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: "#80cbc4",
-            showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: true,
+            expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: d.expressionBold,
+            expressionFontSize = prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: d.expressionFontSize,
+            readingFontSize = prefs[MainActivity.CARD_READING_FONT_SIZE] ?: d.readingFontSize,
+            meaningFontSize = prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: d.meaningFontSize,
+            frontContextSentenceFontSize = prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: d.frontContextSentenceFontSize,
+            backSentenceFontSize = prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: d.backSentenceFontSize,
+            fontFamily = prefs[MainActivity.CARD_FONT_FAMILY] ?: d.fontFamily,
+            cardBackgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: d.cardBackgroundColor,
+            expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: d.expressionColor,
+            readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: d.readingColor,
+            meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: d.meaningColor,
+            accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: d.accentColor,
+            showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: d.showPitchAccent,
             pitchAccentStyle = PitchAccentStyle.fromStorage(
-                prefs[MainActivity.CARD_PITCH_ACCENT_STYLE]
+                prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] ?: d.pitchAccentStyle.storageValue
             ),
-            showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true,
-            showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true,
-            showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: true,
-            randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: false,
-            randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet(),
-            randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false,
-            randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet(),
-            showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true,
+            showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: d.showFrequency,
+            showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: d.showSentence,
+            showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: d.showFrontContextSentence,
+            randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: d.randomFontsEnabled,
+            randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: d.randomFonts,
+            randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: d.randomVoicesEnabled,
+            randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: d.randomVoices,
+            showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: d.showSectionDividers,
             aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false,
             aiProvider = com.yomitanmobile.data.ai.AiProvider.fromStorage(
                 prefs[MainActivity.CARD_AI_PROVIDER]
@@ -540,8 +632,8 @@ class DetailViewModel @Inject constructor(
                 }
             } else {
                 word
-            }
-            
+            }.let { enrichExamplesWithFurigana(it) }
+
             // Fetch kanji information
             val kanjiChars = wordForExport.expression.filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }.map { it.toString() }.distinct()
             val kanjiData = if (kanjiChars.isNotEmpty()) repository.getKanjis(kanjiChars) else emptyList()

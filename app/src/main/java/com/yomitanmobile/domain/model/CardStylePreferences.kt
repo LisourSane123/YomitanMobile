@@ -19,32 +19,31 @@ enum class PitchAccentStyle(val storageValue: String) {
  * These control how the generated HTML card looks.
  */
 data class CardStylePreferences(
-    val expressionBold: Boolean = true,
+    val expressionBold: Boolean = false,
     val expressionFontSize: Int = 48,
     val readingFontSize: Int = 28,
     val meaningFontSize: Int = 20,
-    val frontContextSentenceFontSize: Int = 14,
-    val backSentenceFontSize: Int = 14,
+    val frontContextSentenceFontSize: Int = 20,
+    val backSentenceFontSize: Int = 20,
     val fontFamily: String = "Hiragino Sans",
     val cardBackgroundColor: String = "#1a1a1a",
     val expressionColor: String = "#ffffff",
-    val readingColor: String = "#80cbc4",
+    val readingColor: String = "#ffffff",
     val meaningColor: String = "#e0e0e0",
     val accentColor: String = "#80cbc4",
     val showPitchAccent: Boolean = true,
-    val pitchAccentStyle: PitchAccentStyle = PitchAccentStyle.LEGACY,
+    val pitchAccentStyle: PitchAccentStyle = PitchAccentStyle.DOT_LINE,
     val showFrequency: Boolean = true,
     val showSentence: Boolean = true,
     val showFrontContextSentence: Boolean = true,
-    val randomFontsEnabled: Boolean = false,
-    val randomFonts: Set<String> = emptySet(),
-    val randomVoicesEnabled: Boolean = false,
-    val randomVoices: Set<String> = emptySet(),
+    val randomFontsEnabled: Boolean = true,
+    val randomFonts: Set<String> = DEFAULT_RANDOM_FONTS,
+    val randomVoicesEnabled: Boolean = true,
+    val randomVoices: Set<String> = DEFAULT_RANDOM_VOICES,
     // When false, the back-side <hr> dividers between sections (header,
     // pitch, frequency, meaning, sentence, audio, kanji) are hidden via CSS
-    // for a flatter look. Defaults to true to match the section-separated
-    // layout that ships with the app.
-    val showSectionDividers: Boolean = true,
+    // for a flatter look.
+    val showSectionDividers: Boolean = false,
     // Controls the bold <hr class="word-divider"> that sits inside the header
     // between the expression and the reading. Independent of
     // [showSectionDividers] so the user can flatten the back-side sections
@@ -74,6 +73,30 @@ data class CardStylePreferences(
     val sectionOrder: List<CardSection> = CardSection.defaultOrder()
 ) {
     companion object {
+        /**
+         * Default pool for the random-expression-font feature: the three
+         * bundled-with-Google-Fonts families the app ships with random fonts
+         * enabled by default.
+         */
+        val DEFAULT_RANDOM_FONTS = setOf(
+            "Noto Sans JP",
+            "Noto Serif JP",
+            "M PLUS Rounded 1c"
+        )
+
+        /**
+         * Default pool for the random-TTS-voice feature: every standard Google
+         * Japanese voice EXCEPT the two "htm" ones (ja-jp-x-htm-local /
+         * ja-jp-x-htm-network). Voices not installed on a given device are
+         * simply skipped at export time (AnkiCardCreator falls back to the
+         * current voice), so listing all of them here is safe.
+         */
+        val DEFAULT_RANDOM_VOICES = setOf(
+            "ja-jp-x-htn-local", "ja-jp-x-htn-network",
+            "ja-jp-x-htf-local", "ja-jp-x-htf-network",
+            "ja-jp-x-htj-local", "ja-jp-x-htj-network"
+        )
+
         val FONT_FAMILIES = listOf(
             "Noto Sans JP",
             "Noto Serif JP",

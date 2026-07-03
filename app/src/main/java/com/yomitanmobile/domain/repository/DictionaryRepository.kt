@@ -17,6 +17,13 @@ interface DictionaryRepository {
     suspend fun getEntriesByReading(reading: String): List<WordEntry>
     suspend fun getKanjis(kanjiList: List<String>): List<KanjiEntry>
 
+    /**
+     * Best (frequency-ranked) reading for each of [expressions], for
+     * synthesising furigana on example sentences that lack ruby data.
+     * Missing expressions are simply absent from the returned map.
+     */
+    suspend fun getReadingsForExpressions(expressions: List<String>): Map<String, String>
+
     /** Every installed list's rank for a word, for multi-list display. */
     suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo>
     suspend fun importDictionary(

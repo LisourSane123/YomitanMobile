@@ -93,31 +93,36 @@ fun CardStyleScreen(
     val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
 
-    // Style state
-    var expressionBold by remember { mutableStateOf(true) }
-    var expressionFontSize by remember { mutableFloatStateOf(48f) }
-    var readingFontSize by remember { mutableFloatStateOf(28f) }
-    var meaningFontSize by remember { mutableFloatStateOf(20f) }
-    var frontContextSentenceFontSize by remember { mutableFloatStateOf(14f) }
-    var backSentenceFontSize by remember { mutableFloatStateOf(14f) }
-    var selectedFont by remember { mutableStateOf("Hiragino Sans") }
-    var backgroundColor by remember { mutableStateOf("#1a1a1a") }
-    var expressionColor by remember { mutableStateOf("#ffffff") }
-    var readingColor by remember { mutableStateOf("#80cbc4") }
-    var meaningColor by remember { mutableStateOf("#e0e0e0") }
-    var accentColor by remember { mutableStateOf("#80cbc4") }
-    var showPitchAccent by remember { mutableStateOf(true) }
-    var pitchAccentStyle by remember { mutableStateOf(PitchAccentStyle.LEGACY) }
-    var showFrequency by remember { mutableStateOf(true) }
-    var showSentence by remember { mutableStateOf(true) }
-    var showFrontContextSentence by remember { mutableStateOf(true) }
+    // Single source of truth for the shipped defaults — mirrors what the
+    // export path (DetailViewModel.loadCardStylePreferences) falls back to, so
+    // the screen and the actual card can never disagree.
+    val defaults = remember { CardStylePreferences() }
 
-    var randomFontsEnabled by remember { mutableStateOf(false) }
-    var randomFonts by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var randomVoicesEnabled by remember { mutableStateOf(false) }
-    var randomVoices by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var showSectionDividers by remember { mutableStateOf(true) }
-    var showWordDivider by remember { mutableStateOf(true) }
+    // Style state
+    var expressionBold by remember { mutableStateOf(defaults.expressionBold) }
+    var expressionFontSize by remember { mutableFloatStateOf(defaults.expressionFontSize.toFloat()) }
+    var readingFontSize by remember { mutableFloatStateOf(defaults.readingFontSize.toFloat()) }
+    var meaningFontSize by remember { mutableFloatStateOf(defaults.meaningFontSize.toFloat()) }
+    var frontContextSentenceFontSize by remember { mutableFloatStateOf(defaults.frontContextSentenceFontSize.toFloat()) }
+    var backSentenceFontSize by remember { mutableFloatStateOf(defaults.backSentenceFontSize.toFloat()) }
+    var selectedFont by remember { mutableStateOf(defaults.fontFamily) }
+    var backgroundColor by remember { mutableStateOf(defaults.cardBackgroundColor) }
+    var expressionColor by remember { mutableStateOf(defaults.expressionColor) }
+    var readingColor by remember { mutableStateOf(defaults.readingColor) }
+    var meaningColor by remember { mutableStateOf(defaults.meaningColor) }
+    var accentColor by remember { mutableStateOf(defaults.accentColor) }
+    var showPitchAccent by remember { mutableStateOf(defaults.showPitchAccent) }
+    var pitchAccentStyle by remember { mutableStateOf(defaults.pitchAccentStyle) }
+    var showFrequency by remember { mutableStateOf(defaults.showFrequency) }
+    var showSentence by remember { mutableStateOf(defaults.showSentence) }
+    var showFrontContextSentence by remember { mutableStateOf(defaults.showFrontContextSentence) }
+
+    var randomFontsEnabled by remember { mutableStateOf(defaults.randomFontsEnabled) }
+    var randomFonts by remember { mutableStateOf(defaults.randomFonts) }
+    var randomVoicesEnabled by remember { mutableStateOf(defaults.randomVoicesEnabled) }
+    var randomVoices by remember { mutableStateOf(defaults.randomVoices) }
+    var showSectionDividers by remember { mutableStateOf(defaults.showSectionDividers) }
+    var showWordDivider by remember { mutableStateOf(defaults.showWordDivider) }
     var aiSummaryEnabled by remember { mutableStateOf(false) }
     var aiProvider by remember { mutableStateOf(AiProvider.GEMINI) }
     var aiApiKey by remember { mutableStateOf("") }
@@ -149,29 +154,29 @@ fun CardStyleScreen(
     // Load current preferences
     LaunchedEffect(Unit) {
         val prefs = context.dataStore.data.first()
-        expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: true
-        expressionFontSize = (prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: 48).toFloat()
-        readingFontSize = (prefs[MainActivity.CARD_READING_FONT_SIZE] ?: 28).toFloat()
-        meaningFontSize = (prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: 20).toFloat()
-        frontContextSentenceFontSize = (prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: 14).toFloat()
-        backSentenceFontSize = (prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: 14).toFloat()
-        selectedFont = prefs[MainActivity.CARD_FONT_FAMILY] ?: "Hiragino Sans"
-        backgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: "#1a1a1a"
-        expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: "#ffffff"
-        readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: "#80cbc4"
-        meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: "#e0e0e0"
-        accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: "#80cbc4"
-        showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: true
-        pitchAccentStyle = PitchAccentStyle.fromStorage(prefs[MainActivity.CARD_PITCH_ACCENT_STYLE])
-        showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: true
-        showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: true
-        showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: true
-        randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: false
-        randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: emptySet()
-        randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: false
-        randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: emptySet()
-        showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: true
-        showWordDivider = prefs[MainActivity.CARD_SHOW_WORD_DIVIDER] ?: true
+        expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: defaults.expressionBold
+        expressionFontSize = (prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: defaults.expressionFontSize).toFloat()
+        readingFontSize = (prefs[MainActivity.CARD_READING_FONT_SIZE] ?: defaults.readingFontSize).toFloat()
+        meaningFontSize = (prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: defaults.meaningFontSize).toFloat()
+        frontContextSentenceFontSize = (prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: defaults.frontContextSentenceFontSize).toFloat()
+        backSentenceFontSize = (prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: defaults.backSentenceFontSize).toFloat()
+        selectedFont = prefs[MainActivity.CARD_FONT_FAMILY] ?: defaults.fontFamily
+        backgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: defaults.cardBackgroundColor
+        expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: defaults.expressionColor
+        readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: defaults.readingColor
+        meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: defaults.meaningColor
+        accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: defaults.accentColor
+        showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: defaults.showPitchAccent
+        pitchAccentStyle = PitchAccentStyle.fromStorage(prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] ?: defaults.pitchAccentStyle.storageValue)
+        showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: defaults.showFrequency
+        showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: defaults.showSentence
+        showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: defaults.showFrontContextSentence
+        randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: defaults.randomFontsEnabled
+        randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: defaults.randomFonts
+        randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: defaults.randomVoicesEnabled
+        randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: defaults.randomVoices
+        showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: defaults.showSectionDividers
+        showWordDivider = prefs[MainActivity.CARD_SHOW_WORD_DIVIDER] ?: defaults.showWordDivider
         aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false
         aiProvider = AiProvider.fromStorage(prefs[MainActivity.CARD_AI_PROVIDER])
         aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: ""
@@ -275,24 +280,31 @@ fun CardStyleScreen(
                 },
                 actions = {
                     TextButton(onClick = {
-                        // Reset to defaults
-                        expressionBold = true
-                        expressionFontSize = 48f
-                        readingFontSize = 28f
-                        meaningFontSize = 20f
-                        frontContextSentenceFontSize = 14f
-                        backSentenceFontSize = 14f
-                        selectedFont = "Hiragino Sans"
-                        backgroundColor = "#1a1a1a"
-                        expressionColor = "#ffffff"
-                        readingColor = "#80cbc4"
-                        meaningColor = "#e0e0e0"
-                        accentColor = "#80cbc4"
-                        showPitchAccent = true
-                        pitchAccentStyle = PitchAccentStyle.LEGACY
-                        showFrequency = true
-                        showSentence = true
-                        showFrontContextSentence = true
+                        // Reset every field to the shipped defaults.
+                        expressionBold = defaults.expressionBold
+                        expressionFontSize = defaults.expressionFontSize.toFloat()
+                        readingFontSize = defaults.readingFontSize.toFloat()
+                        meaningFontSize = defaults.meaningFontSize.toFloat()
+                        frontContextSentenceFontSize = defaults.frontContextSentenceFontSize.toFloat()
+                        backSentenceFontSize = defaults.backSentenceFontSize.toFloat()
+                        selectedFont = defaults.fontFamily
+                        backgroundColor = defaults.cardBackgroundColor
+                        expressionColor = defaults.expressionColor
+                        readingColor = defaults.readingColor
+                        meaningColor = defaults.meaningColor
+                        accentColor = defaults.accentColor
+                        showPitchAccent = defaults.showPitchAccent
+                        pitchAccentStyle = defaults.pitchAccentStyle
+                        showFrequency = defaults.showFrequency
+                        showSentence = defaults.showSentence
+                        showFrontContextSentence = defaults.showFrontContextSentence
+                        showSectionDividers = defaults.showSectionDividers
+                        showWordDivider = defaults.showWordDivider
+                        randomFontsEnabled = defaults.randomFontsEnabled
+                        randomFonts = defaults.randomFonts
+                        randomVoicesEnabled = defaults.randomVoicesEnabled
+                        randomVoices = defaults.randomVoices
+                        sectionOrder = CardSection.defaultOrder()
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
