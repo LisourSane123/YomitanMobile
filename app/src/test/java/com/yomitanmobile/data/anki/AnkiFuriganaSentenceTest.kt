@@ -47,6 +47,22 @@ class AnkiFuriganaSentenceTest {
     }
 
     @Test
+    fun furiganaColorDefaultsToInheritAndHonorsOverride() {
+        val ex = ExamplePair(
+            jp = "水。", en = "",
+            segments = listOf(FuriganaSegment("水", "みず"))
+        )
+        // Blank ⇒ same color as text (inherit).
+        val def = AnkiCardCreator.buildFuriganaSentenceHtml(ex, "")
+        assertTrue("default inherits text color", def.contains("color:inherit"))
+
+        // Explicit color is applied.
+        val colored = AnkiCardCreator.buildFuriganaSentenceHtml(ex, "#ffb74d")
+        assertTrue("explicit color applied", colored.contains("color:#ffb74d"))
+        assertFalse("no inherit when overridden", colored.contains("color:inherit"))
+    }
+
+    @Test
     fun plainSentenceWithoutRubyStaysEscapedText() {
         val ex = ExamplePair(
             jp = "これはテスト。",

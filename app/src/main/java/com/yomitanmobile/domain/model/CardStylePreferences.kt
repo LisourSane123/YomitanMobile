@@ -31,6 +31,9 @@ data class CardStylePreferences(
     val readingColor: String = "#ffffff",
     val meaningColor: String = "#e0e0e0",
     val accentColor: String = "#80cbc4",
+    // Furigana reading color on example sentences. Empty = inherit the
+    // sentence text color (i.e. same color as the text) — the default.
+    val furiganaColor: String = "",
     val showPitchAccent: Boolean = true,
     val pitchAccentStyle: PitchAccentStyle = PitchAccentStyle.DOT_LINE,
     val showFrequency: Boolean = true,

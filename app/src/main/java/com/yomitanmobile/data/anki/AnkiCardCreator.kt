@@ -66,11 +66,16 @@ class AnkiCardCreator(
          * Sentences with no ruby readings (plain imports) fall back to escaped
          * plain text, exactly as before.
          */
-        fun buildFuriganaSentenceHtml(ex: com.yomitanmobile.domain.model.ExamplePair): String {
+        fun buildFuriganaSentenceHtml(
+            ex: com.yomitanmobile.domain.model.ExamplePair,
+            furiganaColor: String = ""
+        ): String {
             val segments = ex.segments
             if (segments.none { it.reading.isNotBlank() }) {
                 return InputSanitizer.escapeHtml(ex.jp)
             }
+            // Blank ⇒ inherit the sentence text color (same color as the text).
+            val rtColor = furiganaColor.trim().ifBlank { "inherit" }
             // Jitendex splits a compound into one <ruby> PER kanji (果→くだ,
             // 物→もの), so a naive 1-ruby-per-segment rendering would force the
             // reader to tap each kanji separately. Group consecutive
@@ -93,7 +98,7 @@ class AnkiCardCreator(
                             val base = InputSanitizer.escapeHtml(segments[i].text)
                             val reading = InputSanitizer.escapeHtml(segments[i].reading)
                             append("<span style=\"border-bottom:1px dotted #888\">").append(base).append("</span>")
-                            append("<rt style=\"visibility:hidden;font-size:0.6em;color:#80cbc4\">")
+                            append("<rt style=\"visibility:hidden;font-size:0.6em;color:").append(rtColor).append("\">")
                             append(reading).append("</rt>")
                             i++
                         }
@@ -1041,7 +1046,7 @@ class AnkiCardCreator(
             front = frontContent,
             frontContext = frontContext,
             reading = InputSanitizer.escapeHtml(entry.reading),
-            meaning = formatMeaningForCard(entry.definitions, attachedExamples, posLabel, localizedUsageTags),
+            meaning = formatMeaningForCard(entry.definitions, attachedExamples, posLabel, localizedUsageTags, stylePrefs?.furiganaColor.orEmpty()),
             pitchAccent = pitchHtml,
             frequency = InputSanitizer.escapeHtml(freqText),
             audioFileName = audioFileName,
@@ -1051,7 +1056,7 @@ class AnkiCardCreator(
                     if (idx > 0) append("<div class=\"sentence-divider\"></div>")
                     if (ex.jp.isNotBlank()) {
                         append("<div class=\"sentence-jp\">")
-                        append(buildFuriganaSentenceHtml(ex))
+                        append(buildFuriganaSentenceHtml(ex, stylePrefs?.furiganaColor.orEmpty()))
                         append("</div>")
                     }
                     if (ex.en.isNotBlank()) {
@@ -1077,7 +1082,8 @@ class AnkiCardCreator(
         definitions: List<String>,
         attachedExamples: List<com.yomitanmobile.domain.model.ExamplePair>,
         posLabel: String,
-        usageTags: List<String> = emptyList()
+        usageTags: List<String> = emptyList(),
+        furiganaColor: String = ""
     ): String {
         val meaningLines = definitions.asSequence()
             .mapIndexed { idx, def -> idx to def.trim().replace(";", ", ") }
@@ -1109,7 +1115,7 @@ class AnkiCardCreator(
                     append("<div class=\"meaning-ex\">")
                     if (ex.jp.isNotBlank()) {
                         append("<div class=\"meaning-ex-jp\">")
-                        append(buildFuriganaSentenceHtml(ex))
+                        append(buildFuriganaSentenceHtml(ex, furiganaColor))
                         append("</div>")
                     }
                     if (ex.en.isNotBlank()) {

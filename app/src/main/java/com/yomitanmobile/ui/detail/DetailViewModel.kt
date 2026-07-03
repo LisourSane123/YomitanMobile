@@ -567,6 +567,7 @@ class DetailViewModel @Inject constructor(
             readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: d.readingColor,
             meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: d.meaningColor,
             accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: d.accentColor,
+            furiganaColor = prefs[MainActivity.CARD_FURIGANA_COLOR] ?: d.furiganaColor,
             showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: d.showPitchAccent,
             pitchAccentStyle = PitchAccentStyle.fromStorage(
                 prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] ?: d.pitchAccentStyle.storageValue

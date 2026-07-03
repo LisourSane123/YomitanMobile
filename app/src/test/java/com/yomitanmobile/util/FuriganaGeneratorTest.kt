@@ -139,6 +139,26 @@ class FuriganaGeneratorTest {
     }
 
     @Test
+    fun sameReadingDifferentKanjiIsNotCrossApplied() {
+        // The sentence writes 速い but the dictionary only knows 早い (both はやい).
+        // We must NOT lend 早い's reading to 速 — we match by exact writing, so
+        // 速 stays un-annotated rather than getting a wrong reading.
+        val segs = FuriganaGenerator.generate("速い車。", mapOf("早い" to "はやい"))
+        assertEquals("速い車。", segs.joinToString("") { it.text })
+        assertTrue("速 must not receive はやい", segs.none { it.text.contains("速") && it.reading.isNotBlank() })
+    }
+
+    @Test
+    fun kanaWrittenWordGetsNoFurigana() {
+        // The word appears in kana in the sentence — nothing to annotate even
+        // though its kanji form is in the dictionary.
+        val segs = FuriganaGenerator.generate("すしを食べる。", mapOf("寿司" to "すし", "食べる" to "たべる"))
+        assertEquals("すしを食べる。", segs.joinToString("") { it.text })
+        assertTrue("no reading over the kana すし", segs.none { it.text.contains("す") && it.reading.isNotBlank() })
+        assertTrue("食 still annotated", segs.any { it.text == "食" && it.reading == "た" })
+    }
+
+    @Test
     fun candidateExpressionsCoverKanjiWordsAndDeconjugatedForms() {
         val candidates = FuriganaGenerator.candidateExpressions("食べた")
         assertTrue("surface substrings present", "食べた" in candidates)

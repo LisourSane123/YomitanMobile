@@ -111,6 +111,7 @@ fun CardStyleScreen(
     var readingColor by remember { mutableStateOf(defaults.readingColor) }
     var meaningColor by remember { mutableStateOf(defaults.meaningColor) }
     var accentColor by remember { mutableStateOf(defaults.accentColor) }
+    var furiganaColor by remember { mutableStateOf(defaults.furiganaColor) }
     var showPitchAccent by remember { mutableStateOf(defaults.showPitchAccent) }
     var pitchAccentStyle by remember { mutableStateOf(defaults.pitchAccentStyle) }
     var showFrequency by remember { mutableStateOf(defaults.showFrequency) }
@@ -166,6 +167,7 @@ fun CardStyleScreen(
         readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: defaults.readingColor
         meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: defaults.meaningColor
         accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: defaults.accentColor
+        furiganaColor = prefs[MainActivity.CARD_FURIGANA_COLOR] ?: defaults.furiganaColor
         showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: defaults.showPitchAccent
         pitchAccentStyle = PitchAccentStyle.fromStorage(prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] ?: defaults.pitchAccentStyle.storageValue)
         showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: defaults.showFrequency
@@ -198,6 +200,7 @@ fun CardStyleScreen(
         readingColor = readingColor,
         meaningColor = meaningColor,
         accentColor = accentColor,
+        furiganaColor = furiganaColor,
         showPitchAccent = showPitchAccent,
         pitchAccentStyle = pitchAccentStyle,
         showFrequency = showFrequency,
@@ -232,6 +235,7 @@ fun CardStyleScreen(
                 prefs[MainActivity.CARD_READING_COLOR] = readingColor
                 prefs[MainActivity.CARD_MEANING_COLOR] = meaningColor
                 prefs[MainActivity.CARD_ACCENT_COLOR] = accentColor
+                prefs[MainActivity.CARD_FURIGANA_COLOR] = furiganaColor
                 prefs[MainActivity.CARD_SHOW_PITCH] = showPitchAccent
                 prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] = pitchAccentStyle.storageValue
                 prefs[MainActivity.CARD_SHOW_FREQUENCY] = showFrequency
@@ -293,6 +297,7 @@ fun CardStyleScreen(
                         readingColor = defaults.readingColor
                         meaningColor = defaults.meaningColor
                         accentColor = defaults.accentColor
+                        furiganaColor = defaults.furiganaColor
                         showPitchAccent = defaults.showPitchAccent
                         pitchAccentStyle = defaults.pitchAccentStyle
                         showFrequency = defaults.showFrequency
@@ -534,6 +539,36 @@ fun CardStyleScreen(
                     presetColors = listOf("#80cbc4", "#03dac6", "#bb86fc", "#ff7043", "#64b5f6", "#ffb74d"),
                     onColorSelected = { accentColor = it }
                 )
+            }
+
+            // Furigana color: "same as text" (empty string) by default, or a
+            // specific color the user picks below.
+            item {
+                SettingRow(
+                    title = tr("Furigana w kolorze tekstu", "Furigana same color as text"),
+                    subtitle = tr(
+                        "Czytanie nad kanji w przykładach ma ten sam kolor co tekst zdania",
+                        "The reading above kanji in examples uses the sentence text color"
+                    )
+                ) {
+                    Switch(
+                        checked = furiganaColor.isBlank(),
+                        onCheckedChange = { sameAsText ->
+                            furiganaColor = if (sameAsText) "" else "#80cbc4"
+                        }
+                    )
+                }
+            }
+
+            if (furiganaColor.isNotBlank()) {
+                item {
+                    ColorPickerRow(
+                        label = tr("Kolor furigany", "Furigana color"),
+                        currentColor = furiganaColor,
+                        presetColors = listOf("#80cbc4", "#ffffff", "#ffb74d", "#64b5f6", "#81c784", "#ce93d8"),
+                        onColorSelected = { furiganaColor = it }
+                    )
+                }
             }
 
             // Visibility toggles

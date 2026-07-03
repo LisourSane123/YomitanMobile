@@ -67,6 +67,9 @@ class MainActivity : ComponentActivity() {
         val CARD_READING_COLOR = stringPreferencesKey("card_reading_color")
         val CARD_MEANING_COLOR = stringPreferencesKey("card_meaning_color")
         val CARD_ACCENT_COLOR = stringPreferencesKey("card_accent_color")
+        // Furigana reading color on example sentences. Empty string = inherit
+        // the surrounding sentence text color ("same as text").
+        val CARD_FURIGANA_COLOR = stringPreferencesKey("card_furigana_color")
         val CARD_SHOW_PITCH = booleanPreferencesKey("card_show_pitch")
         val CARD_PITCH_ACCENT_STYLE = stringPreferencesKey("card_pitch_accent_style")
         val CARD_SHOW_FREQUENCY = booleanPreferencesKey("card_show_frequency")

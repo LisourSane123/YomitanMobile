@@ -109,14 +109,37 @@ object FuriganaGenerator {
      * each deconjugated dictionary form (inflected distribution over [surface]).
      */
     private fun segmentsFor(surface: String, readings: Map<String, String>): List<FuriganaSegment>? {
+        // 1. Exact dictionary-form match: the surface IS the headword, so its
+        //    kanji spelling and reading are guaranteed to correspond. This is
+        //    the strongest "the characters match" guarantee.
         readings[surface]?.let { return distributeFurigana(surface, it) }
-        if (isKana(surface.last())) {
-            for (base in JapaneseDeconjugator.candidateForms(surface)) {
-                val baseReading = readings[base] ?: continue
-                return distributeFuriganaInflected(base, baseReading, surface)
-            }
+
+        // 2. Inflected surface. Deconjugation is speculative (it invents forms
+        //    and can miss irregulars), so a synthesised reading is only trusted
+        //    when the candidate base:
+        //      (a) is written with the SAME kanji as the surface — blocks a
+        //          same-reading / differently-written word from lending its
+        //          reading (きゃく "avoid a char with the same reading"), and
+        //      (b) actually re-conjugates back to this exact surface — drops
+        //          the deconjugator's speculative garbage forms.
+        //    If the surviving bases disagree on the reading the surface is
+        //    genuinely ambiguous, so it is left un-annotated instead of guessed.
+        if (!isKana(surface.last())) return null
+        val surfaceKanji = kanjiOf(surface)
+        if (surfaceKanji.isEmpty()) return null
+        val distinct = LinkedHashMap<String, List<FuriganaSegment>>()
+        for (base in JapaneseDeconjugator.candidateForms(surface)) {
+            if (kanjiOf(base) != surfaceKanji) continue
+            val baseReading = readings[base] ?: continue
+            if (surface !in JapaneseConjugator.inflectedForms(base)) continue
+            val segs = distributeFuriganaInflected(base, baseReading, surface)
+            distinct[segs.joinToString("") { "${it.text}=${it.reading}" }] = segs
         }
-        return null
+        return distinct.values.singleOrNull()
+    }
+
+    private fun kanjiOf(s: String): String = buildString {
+        for (c in s) if (MergedWordEntry.isKanji(c)) append(c)
     }
 
     // ---- Yomitan furigana distribution (port of japanese.js) ----
