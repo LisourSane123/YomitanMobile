@@ -36,7 +36,11 @@ class AnkiFuriganaSentenceTest {
         // 食 is its own <ruby>. So exactly two <ruby> openings total.
         assertEquals("one ruby for 果物, one for 食", 2, Regex("<ruby").findAll(html).count())
         assertTrue("果物 group carries both readings", html.contains("くだ") && html.contains("もの"))
-        assertTrue("reading hidden by default", html.contains("visibility:hidden"))
+        // display:none (not visibility:hidden) so the hidden <rt> reserves no
+        // horizontal width — otherwise native ruby pushes the base kanji apart
+        // and the untapped sentence looks oddly spaced.
+        assertTrue("reading hidden via display:none", html.contains("display:none"))
+        assertFalse("must NOT use visibility:hidden (reserves width)", html.contains("visibility:hidden"))
         assertTrue("tap handler present", html.contains("onclick"))
         // The 果物 ruby contains two <rt> (both revealed by one tap).
         val firstRuby = Regex("<ruby.*?</ruby>", RegexOption.DOT_MATCHES_ALL).find(html)!!.value

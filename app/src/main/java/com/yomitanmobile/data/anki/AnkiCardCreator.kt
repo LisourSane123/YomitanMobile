@@ -57,11 +57,19 @@ class AnkiCardCreator(
         /**
          * Renders an example sentence as tap-to-reveal furigana HTML for the
          * exported card. Each kanji run with a Jitendex reading becomes a
-         * `<ruby>` whose `<rt>` is hidden by default (space reserved via
-         * `visibility:hidden`, so tapping doesn't shift the line) and toggled by
-         * a self-contained inline `onclick`. Because the behaviour lives entirely
-         * in the field HTML — no card-template, CSS, or model change — it works
-         * on the existing note type and on any AnkiDroid card.
+         * `<ruby>` whose `<rt>` is hidden by default with `display:none` and
+         * toggled by a self-contained inline `onclick`. Because the behaviour
+         * lives entirely in the field HTML — no card-template, CSS, or model
+         * change — it works on the existing note type and on any AnkiDroid card.
+         *
+         * `display:none` (not `visibility:hidden`) matters: a hidden-but-present
+         * `<rt>` still reserves horizontal width in native ruby layout, so a
+         * reading wider than its kanji (なに over 何) pushes the base characters
+         * apart — the sentence looked oddly spaced even though the readings were
+         * invisible. Removing the annotation box entirely makes the untapped
+         * sentence render exactly like the plain front-side sentence; the only
+         * trade-off is that revealing a reading grows the line height (a minor,
+         * on-demand reflow) instead of being pre-reserved.
          *
          * Sentences with no ruby readings (plain imports) fall back to escaped
          * plain text, exactly as before.
@@ -84,8 +92,8 @@ class AnkiCardCreator(
             // first <rt>'s state and applies it to all of them so they never
             // fall out of sync.
             val toggle = "var t=this.getElementsByTagName('rt');" +
-                "if(t.length){var v=(t[0].style.visibility==='visible')?'hidden':'visible';" +
-                "for(var i=0;i<t.length;i++)t[i].style.visibility=v;}"
+                "if(t.length){var show=(t[0].style.display==='none');" +
+                "for(var i=0;i<t.length;i++)t[i].style.display=show?'':'none';}"
             return buildString {
                 var i = 0
                 while (i < segments.size) {
@@ -101,7 +109,7 @@ class AnkiCardCreator(
                             // is still tap-to-reveal via its onclick; we just
                             // don't mark the tappable kanji visually anymore.
                             append(base)
-                            append("<rt style=\"visibility:hidden;font-size:0.6em;color:").append(rtColor).append("\">")
+                            append("<rt style=\"display:none;font-size:0.6em;color:").append(rtColor).append("\">")
                             append(reading).append("</rt>")
                             i++
                         }
