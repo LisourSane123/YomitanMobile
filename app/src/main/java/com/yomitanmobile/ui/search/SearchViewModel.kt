@@ -1,6 +1,7 @@
 package com.yomitanmobile.ui.search
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.MainActivity
@@ -80,6 +81,14 @@ class SearchViewModel @Inject constructor(
     val deconjugationCandidates: StateFlow<List<DeconjugationCandidate>> = _deconjugationCandidates.asStateFlow()
 
     private var lastInjectedExternalQuery: String? = null
+
+    // True once the user has explicitly picked a mode via [toggleSearchMode].
+    // While set, [onQueryChange] stops auto-detecting the mode on every
+    // keystroke — otherwise a manual switch (most visibly to ROMAJI, which
+    // auto-detect can never produce) was reset the moment the next character
+    // was typed. Cleared when the query is cleared or a fresh external query
+    // arrives, so auto-detection resumes for the next lookup.
+    private var manualModeOverride = false
 
     val searchHistory: StateFlow<List<SearchHistory>> = searchHistoryDao
         .getRecentSearches(20)
@@ -207,7 +216,8 @@ class SearchViewModel @Inject constructor(
                     }
                 }
                 searchFlow
-                    .catch { _ ->
+                    .catch { e ->
+                        Log.w(TAG, "search failed for query='$q' mode=$mode", e)
                         _isSearching.value = false
                         emit(emptyList())
                     }
@@ -235,7 +245,8 @@ class SearchViewModel @Inject constructor(
                     .map { results -> results.map(::enrichWithJlptFallback) }
             }
         }
-        .catch { _ ->
+        .catch { e ->
+            Log.w(TAG, "searchResults stream failed", e)
             emit(emptyList())
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -254,7 +265,10 @@ class SearchViewModel @Inject constructor(
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
     fun onQueryChange(newQuery: String) {
-        applyAutoSearchModeIfNeeded(newQuery)
+        // Respect a manual mode choice; only auto-detect while the user hasn't
+        // overridden it (see [manualModeOverride]). Pure decision lives in
+        // [modeForQueryEdit] so it's unit-testable without the whole ViewModel.
+        _searchMode.value = modeForQueryEdit(_searchMode.value, newQuery, manualModeOverride)
         _query.value = newQuery
     }
 
@@ -268,6 +282,8 @@ class SearchViewModel @Inject constructor(
         if (normalized == lastInjectedExternalQuery && normalized == _query.value) return
 
         lastInjectedExternalQuery = normalized
+        // A shared/injected query is a fresh lookup — let auto-detect run.
+        manualModeOverride = false
         applyAutoSearchModeIfNeeded(normalized)
         _query.value = normalized
     }
@@ -276,9 +292,12 @@ class SearchViewModel @Inject constructor(
         _query.value = ""
         _searchMode.value = SearchMode.JAPANESE
         _isSearching.value = false
+        manualModeOverride = false
     }
 
     fun toggleSearchMode() {
+        // Explicit user choice — pin it so onQueryChange stops overriding it.
+        manualModeOverride = true
         _searchMode.value = when (_searchMode.value) {
             SearchMode.JAPANESE -> SearchMode.ENGLISH
             SearchMode.ENGLISH -> SearchMode.ROMAJI
@@ -341,6 +360,21 @@ class SearchViewModel @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "SearchViewModel"
+
+        /**
+         * The search mode after a query edit. When the user has pinned a mode
+         * via the toggle ([manualOverride] = true) the [current] mode is kept
+         * untouched — crucially this is the only way ROMAJI survives typing,
+         * since [detectSearchMode] can only ever yield JAPANESE or ENGLISH.
+         * Otherwise the mode is auto-detected from the query's script.
+         */
+        internal fun modeForQueryEdit(
+            current: SearchMode,
+            query: String,
+            manualOverride: Boolean
+        ): SearchMode = if (manualOverride) current else detectSearchMode(query)
+
         internal fun detectSearchMode(query: String): SearchMode {
             val normalized = query.trim()
             if (normalized.isBlank()) return SearchMode.JAPANESE

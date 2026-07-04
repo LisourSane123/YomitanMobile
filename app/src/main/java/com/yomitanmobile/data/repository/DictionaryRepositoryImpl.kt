@@ -1,5 +1,6 @@
 package com.yomitanmobile.data.repository
 
+import android.util.Log
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.FrequencyDao
@@ -47,6 +48,14 @@ class DictionaryRepositoryImpl @Inject constructor(
     // other parameters.
     private val IN_CLAUSE_CHUNK = 400
 
+    private companion object {
+        // A real DB/parse failure and an empty result set both surface as an
+        // empty list to the UI; without logging the throwable first they're
+        // indistinguishable, which once hid a query-syntax crash for a whole
+        // release. Every swallow below logs before it degrades to empty.
+        const val TAG = "DictionaryRepo"
+    }
+
     // NOTE: previously we toggled `PRAGMA synchronous = OFF` and
     // `journal_mode = MEMORY` for the duration of the import to speed up
     // bulk inserts. That trade was unsafe: if the process was killed in the
@@ -84,7 +93,8 @@ class DictionaryRepositoryImpl @Inject constructor(
                     // lowest rank wins — matches the DAO's ORDER BY across chunks.
                     rows.minByOrNull { if (it.frequency > 0) it.frequency else Int.MAX_VALUE }!!.reading
                 }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "getReadingsForExpressions failed (${expressions.size} expressions)", e)
             emptyMap()
         }
     }
@@ -94,7 +104,8 @@ class DictionaryRepositoryImpl @Inject constructor(
         val trimmed = query.trim()
         return dictionaryDao.searchExact(trimmed)
             .map { entries -> entries.map { it.toDomain() } }
-            .catch { _ ->
+            .catch { e ->
+                Log.w(TAG, "searchExact failed for query='$trimmed'", e)
                 emit(emptyList())
             }
     }
@@ -109,7 +120,8 @@ class DictionaryRepositoryImpl @Inject constructor(
         val likeQuery = InputSanitizer.sanitizeLikeQuery(trimmed)
         return dictionaryDao.searchCombined(trimmed, likeQuery)
             .map { entries -> entries.map { it.toDomain() } }
-            .catch { _ ->
+            .catch { e ->
+                Log.w(TAG, "searchCombined failed for query='$trimmed'", e)
                 emit(emptyList())
             }
     }
@@ -120,7 +132,8 @@ class DictionaryRepositoryImpl @Inject constructor(
         if (ftsQuery.isBlank()) return flowOf(emptyList())
         return dictionaryDao.searchByDefinition(ftsQuery)
             .map { entries -> entries.map { it.toDomain() } }
-            .catch { _ ->
+            .catch { e ->
+                Log.w(TAG, "searchByDefinition failed for fts='$ftsQuery'", e)
                 emit(emptyList())
             }
     }
@@ -128,7 +141,8 @@ class DictionaryRepositoryImpl @Inject constructor(
     override suspend fun getEntry(id: Long): WordEntry? {
         return try {
             dictionaryDao.getById(id)?.toDomain()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "getEntry($id) failed", e)
             null
         }
     }
@@ -136,7 +150,8 @@ class DictionaryRepositoryImpl @Inject constructor(
     override suspend fun getEntriesByReading(reading: String): List<WordEntry> {
         return try {
             dictionaryDao.getByReading(reading).map { it.toDomain() }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "getEntriesByReading('$reading') failed", e)
             emptyList()
         }
     }
@@ -284,7 +299,8 @@ class DictionaryRepositoryImpl @Inject constructor(
         return try {
             frequencyDao.getForWord(expression, reading.trim())
                 .map { WordFrequencyInfo(it.dictionary, it.rank, it.displayValue) }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "getFrequencies('$expression') failed", e)
             emptyList()
         }
     }
@@ -308,7 +324,8 @@ class DictionaryRepositoryImpl @Inject constructor(
     override suspend fun getEntryCount(): Int {
         return try {
             dictionaryDao.getEntryCount()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "getEntryCount failed", e)
             0
         }
     }

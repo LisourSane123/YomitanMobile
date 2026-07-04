@@ -126,11 +126,13 @@ data class MergedWordEntry(
                 val alternatives = allExpressions
                     .filter { it != primaryExpression }
 
-                // Merge all definitions, deduplicate
-                val allDefinitions = group
-                    .flatMap { it.definitions }
-                    .filter { it.isNotBlank() }
-                    .distinct()
+                // Merge definitions (blank-filtered + deduplicated) AND remap
+                // every example's definitionIndex onto the merged list in one
+                // pass. Doing it together is the whole point: the dedup shifts
+                // positions relative to the per-entry lists the examples were
+                // indexed against, so they must be translated in lockstep — see
+                // mergeDefinitionsAndExamples.
+                val (allDefinitions, examples) = mergeDefinitionsAndExamples(group)
 
                 // Merge parts of speech, deduplicate
                 val allPartsOfSpeech = group
@@ -168,12 +170,6 @@ data class MergedWordEntry(
                 // because the word should be known from the lowest JLPT tier it appears in.
                 val jlptLevel = group.maxOfOrNull { it.jlptLevel } ?: 0
 
-                // First non-empty examples list among the merged entries.
-                val examples = group
-                    .map { it.examples }
-                    .firstOrNull { it.isNotEmpty() }
-                    ?: emptyList()
-
                 // Union of usage tags across the group, preserving first-seen
                 // order so the chip reads consistently across imports.
                 val mergedUsageTags = LinkedHashSet<String>().apply {
@@ -207,6 +203,57 @@ data class MergedWordEntry(
                 )
             }
                 // Preserve order from SQL query (already sorted by relevance + frequency)
+        }
+
+        /**
+         * Merge a group's glosses into one blank-filtered, deduplicated list
+         * and return the example list whose per-sense
+         * [ExamplePair.definitionIndex] has been remapped onto the positions in
+         * that merged list.
+         *
+         * Why this has to be one function: [mergeEntries] deduplicates
+         * definitions, which shifts their positions relative to the per-entry
+         * lists that each [ExamplePair] was originally indexed against. If the
+         * indices aren't translated in the same pass, an example renders under
+         * the wrong numbered meaning (or points past the end of the list). The
+         * consumers — the detail screen and the Anki export — can then simply
+         * trust `definitionIndex` and group by it, with no compensation logic
+         * of their own.
+         *
+         * Examples come from a single source entry (the first in the group with
+         * a non-empty list), so only that entry's local indices need mapping.
+         * An index that pointed at a gloss which got blank-filtered away resets
+         * to -1 (unattached) so the example still shows rather than latching
+         * onto an unrelated meaning.
+         */
+        internal fun mergeDefinitionsAndExamples(
+            group: List<WordEntry>
+        ): Pair<List<String>, List<ExamplePair>> {
+            // Insertion-ordered so value == position in the final keys list.
+            val defToMergedIndex = LinkedHashMap<String, Int>()
+            val exampleEntry = group.firstOrNull { it.examples.isNotEmpty() }
+            val localToMerged = HashMap<Int, Int>()
+
+            for (entry in group) {
+                entry.definitions.forEachIndexed { localIndex, def ->
+                    if (def.isBlank()) return@forEachIndexed
+                    val mergedIndex = defToMergedIndex.getOrPut(def) { defToMergedIndex.size }
+                    if (entry === exampleEntry) {
+                        localToMerged.putIfAbsent(localIndex, mergedIndex)
+                    }
+                }
+            }
+
+            val definitions = defToMergedIndex.keys.toList()
+            val examples = exampleEntry?.examples.orEmpty().map { ex ->
+                if (ex.definitionIndex < 0) ex
+                else {
+                    val remapped = localToMerged[ex.definitionIndex] ?: -1
+                    if (remapped == ex.definitionIndex) ex
+                    else ex.copy(definitionIndex = remapped)
+                }
+            }
+            return definitions to examples
         }
 
         private fun buildMergeKey(entry: WordEntry): Pair<String, String> {

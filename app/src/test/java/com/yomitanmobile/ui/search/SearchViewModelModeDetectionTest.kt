@@ -47,4 +47,30 @@ class SearchViewModelModeDetectionTest {
 
         assertFalse(shouldFallback)
     }
+
+    @Test
+    fun modeForQueryEdit_autoDetects_whenNotManuallyOverridden() {
+        assertEquals(
+            SearchMode.JAPANESE,
+            SearchViewModel.modeForQueryEdit(SearchMode.ENGLISH, "食べる", manualOverride = false)
+        )
+        assertEquals(
+            SearchMode.ENGLISH,
+            SearchViewModel.modeForQueryEdit(SearchMode.JAPANESE, "eat", manualOverride = false)
+        )
+    }
+
+    @Test
+    fun modeForQueryEdit_keepsManualMode_whileTyping() {
+        // The core of the fix: a manually chosen mode (here ROMAJI, which
+        // auto-detect can never produce) survives subsequent keystrokes.
+        assertEquals(
+            SearchMode.ROMAJI,
+            SearchViewModel.modeForQueryEdit(SearchMode.ROMAJI, "neko", manualOverride = true)
+        )
+        assertEquals(
+            SearchMode.ENGLISH,
+            SearchViewModel.modeForQueryEdit(SearchMode.ENGLISH, "食べる", manualOverride = true)
+        )
+    }
 }

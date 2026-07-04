@@ -21,7 +21,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:assembleRelease
 ```
 
-Prerequisites: JDK 17, Android SDK 34. The `gradle.properties` hardcodes `org.gradle.java.home=/usr/lib/jvm/java-17-openjdk` — override locally if your JDK path differs.
+Prerequisites: JDK 17, Android SDK 34. The build pins JDK 17 via a Gradle toolchain (`kotlin { jvmToolchain(17) }` in `app/build.gradle.kts`), which Gradle locates automatically — no machine-specific path in the committed `gradle.properties`. If your default `java` is older than 17 and the toolchain can't find a JDK 17, set `org.gradle.java.home` in your user-level `~/.gradle/gradle.properties`.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ Clean architecture in three layers: `data/`, `domain/`, `ui/`, wired together wi
 - **Repository** (`data/repository/DictionaryRepositoryImpl`): delegates search to `DictionaryDao` which uses FTS for expression/reading and a separate path for EN definition search.
 - **Anki** (`data/anki/AnkiCardCreator`): integrates with AnkiDroid via `AddContentApi`. Anki model name is `Yomitan-Mobile-v7` (stable — do not bump unless fields change). Fields: `Front`, `FrontContext`, `Reading`, `Meaning`, `PitchAccent`, `Frequency`, `Audio`, `Sentence`, `KanjiBreakdown`.
 - **Download** (`data/download/DictionaryDownloadManager`): validates HTTPS URLs against an allowlist before downloading.
-- **Sentence** (`data/sentence/OnlineSentenceService`): optional, requires user consent. Gate all calls behind the consent flag.
+- **Sentences**: example sentences come from two local sources only — Jitendex examples attached to each entry (with per-sense `definitionIndex`) and the pre-seeded `SentenceDao`. The former online Tatoeba fetch (`OnlineSentenceService`) was **removed**; there is no network sentence lookup and no consent flag anymore.
 
 ### UI layer (`ui/`)
 MVVM with Jetpack Compose. Each screen has a paired `ViewModel`. Navigation is defined in `ui/navigation/AppNavHost.kt` with sealed `Screen` routes.
@@ -48,13 +48,14 @@ Key screens: `SearchScreen` (main), `DetailScreen` (word details + Anki export),
 ### Search pipeline
 `SearchViewModel` → `SearchDictionaryUseCase` → `DictionaryRepository` → `DictionaryDao`
 
-- **JP mode**: detects kanji/kana input, calls `JapaneseDeconjugator.candidateForms()` to generate inflection candidates (max 24, depth 3), then `invokeWithAlternatives()` does sequential `first()` calls per candidate and merges by entry ID (audit finding: potential latency for long candidate lists).
+- **JP mode**: detects kanji/kana input, generates inflection candidates via `JapaneseDeconjugator.analyze()` (max 24, depth 3), then `invokeWithAlternatives()` runs the literal query + candidates **in parallel** (`coroutineScope` + `async`) and merges by entry ID, literal query first.
 - **EN mode**: FTS on definition text via `searchByDefinition`.
 - **Romaji mode**: converts via `RomajiConverter` then searches as JP.
+- Mode is auto-detected from the script per keystroke, unless the user manually picks one via the toggle (`manualModeOverride` in `SearchViewModel` pins it until the query is cleared) — this is the only way to reach ROMAJI mode, which auto-detect never produces.
 - Debounce is 100 ms in `SearchViewModel`; results are merged via `MergedWordEntry.mergeEntries()` which groups by `(expression, reading)` key.
 
 ### Result merging
-`MergedWordEntry.mergeEntries()` groups `WordEntry` items by `(expression, reading)`. Within each group it picks the primary (prefers kanji + lower frequency rank), merges definitions, and collects alternatives. This avoids homophone grouping errors.
+`MergedWordEntry.mergeEntries()` groups `WordEntry` items by `(expression, reading)`. Within each group it picks the primary (prefers kanji + lower frequency rank), merges definitions, and collects alternatives. This avoids homophone grouping errors. Dedup of the gloss list and remapping of each example's `definitionIndex` onto the merged positions happen together in `mergeDefinitionsAndExamples()` — so the detail screen and Anki export can group examples by `definitionIndex` and trust it, with no compensation logic of their own.
 
 ### Utils (`util/`)
 - `InputSanitizer`: sanitizes FTS queries and Anki card content
@@ -68,9 +69,7 @@ Key screens: `SearchScreen` (main), `DetailScreen` (word details + Anki export),
 Three Hilt modules: `AppModule` (singleton services), `DatabaseModule` (Room + DAOs), `RepositoryModule` (binds interface → impl).
 
 ### Widgets (`widget/`)
-`SearchWidgetProvider` and `QuickSearchWidgetProvider` — each creates its own Room instance on update (audit finding: extra I/O cost).
+`SearchWidgetProvider` reaches the singleton DAO graph through the Hilt `WidgetEntryPoint` (`EntryPointAccessors.fromApplication`) instead of building its own Room instance. `QuickSearchWidgetProvider` touches no database.
 
-## Known issues (from audit 2026-04-18)
-- Many strings are hardcoded in Compose screens (not in `strings.xml`) — i18n incomplete.
-- JP search does sequential `first()` per deconjugation candidate; latency can spike for long candidate lists (`SearchDictionaryUseCase:48`).
-- Widgets instantiate Room directly instead of going through a shared DI entry point (`SearchWidgetProvider:52`).
+## Known issues
+- Many strings are hardcoded in Compose screens as inline `tr(pl, en)` bilingual literals rather than `strings.xml` resources. This is the app's deliberate i18n strategy (EN/PL only, driven by `LocaleHelper`), not a bug — but it means adding a third language would require a real resource migration.

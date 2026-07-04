@@ -76,6 +76,54 @@ class MergedWordEntryTest {
     }
 
     @Test
+    fun mergeEntries_remapsExampleDefinitionIndexAfterGlossDedup() {
+        // definitions[0] and [2] are the same gloss and [1] is blank, so the
+        // merged list collapses to ["to open", "to become vacant"]. An example
+        // indexed at the pre-merge position 3 must be re-pointed at the merged
+        // position 1 — otherwise it would render under the wrong meaning (or
+        // fall off the end).
+        val entry = WordEntry(
+            id = 1,
+            expression = "空く",
+            reading = "あく",
+            definitions = listOf("to open", "", "to open", "to become vacant"),
+            examples = listOf(
+                ExamplePair(jp = "戸が空く", en = "The door opens", definitionIndex = 0),
+                ExamplePair(jp = "席が空く", en = "A seat frees up", definitionIndex = 3)
+            )
+        )
+
+        val merged = MergedWordEntry.mergeEntries(listOf(entry)).single()
+
+        assertEquals(listOf("to open", "to become vacant"), merged.definitions)
+
+        val byJp = merged.examples.associateBy { it.jp }
+        assertEquals(0, byJp.getValue("戸が空く").definitionIndex)
+        assertEquals(1, byJp.getValue("席が空く").definitionIndex)
+    }
+
+    @Test
+    fun mergeEntries_unattachableExampleIndexResetsToMinusOne() {
+        // An example that points at a gloss which gets blank-filtered away has
+        // no valid merged target; it must degrade to -1 (unattached) rather
+        // than latch onto an unrelated meaning.
+        val entry = WordEntry(
+            id = 2,
+            expression = "test",
+            reading = "test",
+            definitions = listOf("real gloss", ""),
+            examples = listOf(
+                ExamplePair(jp = "sentence", en = "translation", definitionIndex = 1)
+            )
+        )
+
+        val merged = MergedWordEntry.mergeEntries(listOf(entry)).single()
+
+        assertEquals(listOf("real gloss"), merged.definitions)
+        assertEquals(-1, merged.examples.single().definitionIndex)
+    }
+
+    @Test
     fun mergeEntries_separatesDifferentReadingsOfSameExpression() {
         val entries = listOf(
             WordEntry(

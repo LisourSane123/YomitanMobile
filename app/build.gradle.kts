@@ -122,6 +122,15 @@ android {
     }
 }
 
+// Pin the JDK used to compile Java + Kotlin to a toolchain Gradle locates
+// itself (scans standard install dirs, incl. /usr/lib/jvm). This replaces the
+// machine-specific org.gradle.java.home that used to live in gradle.properties,
+// so a checkout builds identically on any machine that has *a* JDK 17 installed
+// — no per-developer path editing.
+kotlin {
+    jvmToolchain(17)
+}
+
 // Dependency-bump notes (P2-16):
 //   * Kotlin stays at 1.9.22 for this release. Bumping to Kotlin 2.x is
 //     prerequisite for Compose BOM 2024+, Room 2.7+, and Hilt 2.52+ — that
