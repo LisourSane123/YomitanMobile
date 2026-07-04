@@ -68,7 +68,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -818,12 +817,14 @@ internal fun FuriganaWord(
             lineHeight = (fontSizeSp * 0.7f).sp,
             color = MaterialTheme.colorScheme.primary
         )
+        // No underline on kanji that carry furigana — the reading is still
+        // revealed on tap (the Column above is clickable when hasReading), we
+        // just don't visually mark the tappable run anymore.
         Text(
             text = segment.text,
             fontSize = fontSizeSp.sp,
             color = color,
-            lineHeight = (fontSizeSp * 1.2f).sp,
-            textDecoration = if (hasReading) TextDecoration.Underline else TextDecoration.None
+            lineHeight = (fontSizeSp * 1.2f).sp
         )
     }
 }

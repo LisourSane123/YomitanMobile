@@ -686,17 +686,50 @@ class YomitanDictionaryParser @Inject constructor() {
 
                 for (group in groups) {
                     val groupContent = elementAsList(group["content"])
+
+                    // First pass: harvest the group-level chip spans. Real
+                    // Jitendex marks part-of-speech, register/misc, dialect and
+                    // field with SIBLING spans of the sense (data.content =
+                    // "part-of-speech-info" / "misc-info" / "dialect-info" /
+                    // "field-info", each carrying a data.code like "arch",
+                    // "col", "sl", "ksb", "comp"). POS codes feed the POS chip;
+                    // the other three are the "archaic / colloquial / slang /
+                    // regionalism / domain" hints — they live at the sense-GROUP
+                    // level (not inside the sense), so they must be collected
+                    // here and applied to every sense in the group.
+                    val groupUsageTags = LinkedHashSet<String>()
+                    for (gItem in groupContent) {
+                        val gObj = gItem as? JsonObject ?: continue
+                        val gDc = nodeDataContent(gObj)
+                        val code = gObj["data"]?.jsonObject?.get("code")
+                            ?.jsonPrimitive?.contentOrNull?.trim()
+                        when (gDc) {
+                            "part-of-speech-info" ->
+                                if (!code.isNullOrBlank()) posCodes.add(code)
+                            "misc-info", "field-info" -> {
+                                val label = code?.let {
+                                    PartsOfSpeechFormatter.shortUsageLabelForCode(it)
+                                } ?: gObj["title"]?.jsonPrimitive?.contentOrNull?.trim()
+                                if (!label.isNullOrBlank()) groupUsageTags.add(label)
+                            }
+                            "dialect-info" -> {
+                                val label = code?.let {
+                                    PartsOfSpeechFormatter.dialectLabelForCode(it)
+                                } ?: gObj["title"]?.jsonPrimitive?.contentOrNull?.trim()
+                                if (!label.isNullOrBlank()) groupUsageTags.add(label)
+                            }
+                        }
+                    }
+                    val groupTags = groupUsageTags.toList()
+
+                    // Second pass: emit the senses, tagging each with the
+                    // group-level register/dialect/field chips.
                     for (gItem in groupContent) {
                         val gObj = gItem as? JsonObject ?: continue
                         val gDc = nodeDataContent(gObj)
                         when {
-                            gDc == "part-of-speech-info" -> {
-                                val code = gObj["data"]?.jsonObject?.get("code")
-                                    ?.jsonPrimitive?.contentOrNull?.trim()
-                                if (!code.isNullOrBlank()) posCodes.add(code)
-                            }
                             gDc == "sense" -> {
-                                processSense(gObj, definitions, examples)
+                                processSense(gObj, definitions, examples, groupTags)
                             }
                             gObj["tag"]?.jsonPrimitive?.contentOrNull == "ol" -> {
                                 // Legacy / fallback layout: senses wrapped in
@@ -705,7 +738,7 @@ class YomitanDictionaryParser @Inject constructor() {
                                 // real Jitendex doesn't emit the wrapper.
                                 val senses = elementAsList(gObj["content"])
                                     .filterIsInstance<JsonObject>()
-                                for (sense in senses) processSense(sense, definitions, examples)
+                                for (sense in senses) processSense(sense, definitions, examples, groupTags)
                             }
                         }
                     }
@@ -755,10 +788,11 @@ class YomitanDictionaryParser @Inject constructor() {
     private fun processSense(
         sense: JsonObject,
         definitions: MutableList<String>,
-        examples: MutableList<ExamplePair>
+        examples: MutableList<ExamplePair>,
+        groupTags: List<String> = emptyList()
     ) {
         val idx = definitions.size
-        val sc = extractSenseGloss(sense)
+        val sc = extractSenseGloss(sense, groupTags)
         if (sc.gloss.isNotBlank()) definitions.add(sc.gloss)
         // Notes are pushed as marker-prefixed entries so the mapper-side
         // NotesExtractor can route them to the Notes card without a DB
@@ -771,7 +805,7 @@ class YomitanDictionaryParser @Inject constructor() {
         if (attachIdx >= 0) collectSenseExamples(sense, attachIdx, examples)
     }
 
-    private fun extractSenseGloss(sense: JsonObject): SenseContent {
+    private fun extractSenseGloss(sense: JsonObject, groupTags: List<String> = emptyList()): SenseContent {
         val items = elementAsList(sense["content"])
         val glosses = mutableListOf<String>()
         // Jitendex stores per-sense usage hints ("usually written in kana",
@@ -784,6 +818,10 @@ class YomitanDictionaryParser @Inject constructor() {
         // written 但し. We collect tag labels once per sense and prepend them
         // in parens so each gloss reads "(usually written in kana) but, however".
         val tagLabels = LinkedHashSet<String>()
+        // Group-level register/dialect/field chips (archaic, colloquial, slang,
+        // Kansai dialect, computing, …) apply to this sense — seed them first
+        // so they read ahead of any sense-local tag.
+        tagLabels.addAll(groupTags)
         collectUsageTags(sense, tagLabels)
 
         val notes = mutableListOf<String>()

@@ -144,3 +144,19 @@ xref               xref-content           xref-glossary
 3. `forms`, `attribution`, `attribution-footnote`, and `graphic*` are not
    notes — they are top-level metadata or footer markers. They must not
    land in either the meaning column or the notes card.
+
+4. Register / dialect / domain live on **sibling spans of the sense** inside
+   the sense-group, exactly like `part-of-speech-info` but with
+   `data.content` = `misc-info` (arch, col, sl, uk, hon, hum, pol, euph, …),
+   `dialect-info` (ksb, ktb, kyb, …), or `field-info` (comp, food, med, …).
+   The distinguishing CSS class on all of them is `data.class = "tag"` — do
+   NOT confuse that with `data.content = "tag"` (an older/synthetic shape).
+   The parser harvests these at the sense-group level and prepends them to
+   every sense's gloss in parentheses (e.g. `(archaic, Kansai dial.) …`); the
+   mapper's `UsageTagExtractor` then peels them into `WordEntry.usageTags` for
+   the chip row. Codes map to labels via `PartsOfSpeechFormatter`
+   (`shortUsageLabelForCode` / `dialectLabelForCode`). Before 2026-07-04 these
+   three were dropped entirely, so archaic/colloquial/slang/regional/domain
+   hints never reached the UI even though the chip renderer already existed.
+   **Still unused** (no display path): `redirect-glossary`, `lang-source-wasei`
+   (the wasei flag; the etymology text itself is captured), and `graphic*`.

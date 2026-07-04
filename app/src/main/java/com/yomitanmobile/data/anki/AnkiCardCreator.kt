@@ -97,7 +97,10 @@ class AnkiCardCreator(
                         while (i < segments.size && segments[i].reading.isNotBlank()) {
                             val base = InputSanitizer.escapeHtml(segments[i].text)
                             val reading = InputSanitizer.escapeHtml(segments[i].reading)
-                            append("<span style=\"border-bottom:1px dotted #888\">").append(base).append("</span>")
+                            // No underline on the kanji base — the whole <ruby>
+                            // is still tap-to-reveal via its onclick; we just
+                            // don't mark the tappable kanji visually anymore.
+                            append(base)
                             append("<rt style=\"visibility:hidden;font-size:0.6em;color:").append(rtColor).append("\">")
                             append(reading).append("</rt>")
                             i++

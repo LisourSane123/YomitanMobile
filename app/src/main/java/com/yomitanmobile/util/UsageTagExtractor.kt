@@ -39,6 +39,7 @@ object UsageTagExtractor {
         "obsolete", "archaic", "rare",
         "slang", "colloq.", "colloquial",
         "familiar", "honorific", "humble", "polite", "vulgar",
+        "euph.", "euphemistic",
         "derog.", "derogatory", "joc.", "jocular",
         "abbr.", "abbreviation",
         "yoji.", "yojijukugo",
@@ -52,7 +53,7 @@ object UsageTagExtractor {
         "phys.", "physics", "chem.", "chemistry", "biol.", "biology",
         "bus.", "business", "econ.", "economics",
         "food", "sports", "music"
-    )
+    ) + PartsOfSpeechFormatter.dialectLabels
 
     /**
      * Wrapper labels that Jitendex prints before the actual tag list ("notes",

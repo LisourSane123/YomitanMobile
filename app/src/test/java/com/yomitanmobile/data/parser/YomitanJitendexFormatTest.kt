@@ -1,6 +1,7 @@
 package com.yomitanmobile.data.parser
 
 import com.yomitanmobile.data.local.entity.DictionaryEntry
+import com.yomitanmobile.data.mapper.toDomain
 import com.yomitanmobile.domain.model.ExamplePair
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.ListSerializer
@@ -749,6 +750,69 @@ class YomitanJitendexFormatTest {
         assertFalse(defs.any { it.contains("ローリスク") && it != "low-risk" })
         assertFalse(defs.any { it.contains("JMdict") })
         assertFalse(defs.any { it.contains("forms") })
+    }
+
+    @Test
+    fun realFormatMiscDialectFieldInfoBecomeUsageTags() = runBlocking {
+        // The shape production Jitendex actually ships (verified against the
+        // sampled real_sample_term_bank.json): register / dialect / field are
+        // SIBLING spans of the sense inside the sense-group, marked with
+        // data.content = "misc-info"/"dialect-info"/"field-info" and
+        // data.class = "tag" (NOT data.content = "tag"). Until the group-level
+        // harvest was added these were silently dropped, so archaic / colloquial
+        // / slang / regional / domain hints never reached the UI.
+        val termJson = """
+            [[
+              "御御御付け",
+              "おみおつけ",
+              "★",
+              "n",
+              10,
+              [{
+                "type": "structured-content",
+                "content": [{
+                  "tag": "div",
+                  "data": {"content": "sense-group"},
+                  "content": [
+                    {"tag":"span","title":"noun","data":{"class":"tag","code":"n","content":"part-of-speech-info"},"content":"noun"},
+                    {"tag":"span","title":"archaic","data":{"class":"tag","code":"arch","content":"misc-info"},"content":"arch"},
+                    {"tag":"span","title":"colloquialism","data":{"class":"tag","code":"col","content":"misc-info"},"content":"col"},
+                    {"tag":"span","title":"Kansai dialect","data":{"class":"tag","code":"ksb","content":"dialect-info"},"content":"ksb"},
+                    {"tag":"span","title":"food term","data":{"class":"tag","code":"food","content":"field-info"},"content":"food"},
+                    {"tag":"div","data":{"content":"sense"},"content":[
+                      {"tag":"ul","data":{"content":"glossary"},"content":{"tag":"li","content":"miso soup"}}
+                    ]}
+                  ]
+                }]
+              }],
+              1,
+              ""
+            ]]
+        """.trimIndent()
+
+        val entry = parseSingleEntry(termJson)
+        val defs = json.decodeFromString(
+            ListSerializer(String.serializer()),
+            entry.definition
+        )
+        assertEquals(1, defs.size)
+        // Parser prepends the register/dialect/field chips in parentheses …
+        assertEquals(
+            "(archaic, colloq., Kansai dial., food) miso soup",
+            defs[0]
+        )
+        // POS must stay clean — no register noise leaked into the POS chip.
+        val pos = com.yomitanmobile.util.PartsOfSpeechFormatter.format(entry.partsOfSpeech)
+        assertEquals("noun", pos)
+
+        // … and the mapper peels them back out into usageTags for the chip row,
+        // leaving the meaning column with just the gloss.
+        val word = entry.toDomain()
+        assertEquals(listOf("miso soup"), word.definitions)
+        assertTrue("archaic tag surfaced: ${word.usageTags}", word.usageTags.any { it.contains("archaic") })
+        assertTrue("colloq tag surfaced: ${word.usageTags}", word.usageTags.any { it.contains("colloq.") })
+        assertTrue("Kansai dialect surfaced: ${word.usageTags}", word.usageTags.any { it.contains("Kansai dial.") })
+        assertTrue("food field surfaced: ${word.usageTags}", word.usageTags.any { it.contains("food") })
     }
 
     private suspend fun parseSingleEntry(termJson: String): DictionaryEntry {

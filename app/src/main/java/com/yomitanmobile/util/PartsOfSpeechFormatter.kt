@@ -225,7 +225,20 @@ object PartsOfSpeechFormatter {
         "humble" to "skromny",
         "polite" to "grzeczny",
         "vulgar" to "wulgarny",
+        "euph." to "eufemizm",
         "derog." to "pejoratywny",
+        // Dialekty (regionalizmy) — klucze zgodne z DIALECT_LABELS.
+        "Hokkaido dial." to "dialekt Hokkaido",
+        "Kansai dial." to "dialekt Kansai",
+        "Kanto dial." to "dialekt Kanto",
+        "Kyoto dial." to "dialekt Kioto",
+        "Kyushu dial." to "dialekt Kiusiu",
+        "Nagano dial." to "dialekt Nagano",
+        "Osaka dial." to "dialekt Osaka",
+        "Ryukyu dial." to "dialekt Riukiu",
+        "Tohoku dial." to "dialekt Tohoku",
+        "Tosa dial." to "dialekt Tosa",
+        "Tsugaru dial." to "dialekt Tsugaru",
         "joc." to "żartobliwy",
         "abbr." to "skrót",
         "yoji." to "yojijukugo",
@@ -297,6 +310,7 @@ object PartsOfSpeechFormatter {
         "hum" to "humble",
         "pol" to "polite",
         "vulg" to "vulgar",
+        "euph" to "euph.",
         "derog" to "derog.",
         "joc" to "joc.",
         "abbr" to "abbr.",
@@ -332,6 +346,33 @@ object PartsOfSpeechFormatter {
      * `title` attribute when surfacing tags inline with a gloss.
      */
     fun shortUsageLabelForCode(code: String): String? = SHORT_USAGE_LABELS[code]
+
+    // JMdict dialect codes (regional Japanese) as Jitendex emits them under
+    // <span data-content="dialect-info" data.code="…">. Rendered as an English
+    // short label that doubles as the key for the Polish translation and for
+    // UsageTagExtractor's recognised-tag set.
+    private val DIALECT_LABELS = mapOf(
+        "hob" to "Hokkaido dial.",
+        "ksb" to "Kansai dial.",
+        "ktb" to "Kanto dial.",
+        "kyb" to "Kyoto dial.",
+        "kyu" to "Kyushu dial.",
+        "nab" to "Nagano dial.",
+        "osb" to "Osaka dial.",
+        "rkb" to "Ryukyu dial.",
+        "thb" to "Tohoku dial.",
+        "tsb" to "Tosa dial.",
+        "tsug" to "Tsugaru dial."
+    )
+
+    /** All dialect short labels — used to widen the recognised-tag set. */
+    val dialectLabels: Collection<String> get() = DIALECT_LABELS.values
+
+    /**
+     * Short label for a JMdict dialect code (e.g. "ksb" → "Kansai dial."),
+     * or null when the code isn't a known dialect.
+     */
+    fun dialectLabelForCode(code: String): String? = DIALECT_LABELS[code]
 
     /**
      * Tokenize a raw JMDict tag string and return a comma-separated readable label list.
