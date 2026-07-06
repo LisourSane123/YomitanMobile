@@ -33,11 +33,13 @@ Clean architecture in three layers: `data/`, `domain/`, `ui/`, wired together wi
 - `usecase/` — `SearchDictionaryUseCase`, `GetWordDetailUseCase`, `DictionaryManagementUseCases`
 
 ### Data layer (`data/`)
-- **Room** (`data/local/`): `AppDatabase` at version 9 with migrations defined inline. Tables: `DictionaryEntry` (FTS-enabled via `DictionaryEntryFts`), `DictionaryInfo`, `ExportedWord`, `FavoriteWord`, `SearchHistory`, `KanjiEntry`, `Sentence`. Complex columns (lists, JSON) use `Converters.kt`.
+- **Room** (`data/local/`): `AppDatabase` at version 14 with migrations defined inline. Tables: `DictionaryEntry` (FTS-enabled via `DictionaryEntryFts`), `DictionaryInfo`, `ExportedWord`, `FavoriteWord`, `SearchHistory`, `KanjiEntry`, `Sentence`, `LookupCount`, `WordFrequency`. Complex columns (lists, JSON) use `Converters.kt`.
 - **Parser** (`data/parser/YomitanDictionaryParser`): streaming ZIP parser for Yomitan/Yomichan dictionary format. ZIP contains `index.json` + `term_bank_N.json` files. Handles both term dictionaries and meta dictionaries (frequency/pitch data).
 - **Repository** (`data/repository/DictionaryRepositoryImpl`): delegates search to `DictionaryDao` which uses FTS for expression/reading and a separate path for EN definition search.
-- **Anki** (`data/anki/AnkiCardCreator`): integrates with AnkiDroid via `AddContentApi`. Anki model name is `Yomitan-Mobile-v7` (stable — do not bump unless fields change). Fields: `Front`, `FrontContext`, `Reading`, `Meaning`, `PitchAccent`, `Frequency`, `Audio`, `Sentence`, `KanjiBreakdown`.
-- **Download** (`data/download/DictionaryDownloadManager`): validates HTTPS URLs against an allowlist before downloading.
+- **Anki** (`data/anki/AnkiCardCreator`): integrates with AnkiDroid via `AddContentApi`. Anki model name is `Yomitan-Mobile-v8` (stable — do not bump unless `FIELD_NAMES` changes). Fields: `Front`, `FrontContext`, `Reading`, `Meaning`, `PitchAccent`, `Frequency`, `Audio`, `Sentence`, `KanjiBreakdown`, `Summary`.
+- **AI summaries** (`data/ai/`): optional, opt-in summary text on Anki exports. `AiSummaryService` talks to Gemini / DeepSeek / OpenAI against a hardcoded HTTPS host allowlist; the user supplies their own API key (header-based auth, never in the URL). The key lives in DataStore (`CARD_AI_API_KEY`) and is excluded from backups in `BackupManager` on both export and import.
+- **Download** (`data/download/DictionaryDownloadManager`): validates HTTPS URLs against an allowlist before downloading; entries in `AvailableDictionaries` with a `sha256` set are checksum-verified after download.
+- **Backup** (`data/backup/BackupManager`): user-triggered folder backups (DB + whitelisted settings JSON) under `getExternalFilesDir`. WAL is checkpointed before the DB copy, and restore deletes stale `-wal`/`-shm` sidecars before overwriting — keep both invariants if touching this code.
 - **Sentences**: example sentences come from two local sources only — Jitendex examples attached to each entry (with per-sense `definitionIndex`) and the pre-seeded `SentenceDao`. The former online Tatoeba fetch (`OnlineSentenceService`) was **removed**; there is no network sentence lookup and no consent flag anymore.
 
 ### UI layer (`ui/`)

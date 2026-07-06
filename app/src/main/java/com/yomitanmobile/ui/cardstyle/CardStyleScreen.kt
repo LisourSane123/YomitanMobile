@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,7 +67,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -127,6 +133,10 @@ fun CardStyleScreen(
     var aiSummaryEnabled by remember { mutableStateOf(false) }
     var aiProvider by remember { mutableStateOf(AiProvider.GEMINI) }
     var aiApiKey by remember { mutableStateOf("") }
+    // Masked by default — the key is a secret and this screen is often shown
+    // while sharing/screenshotting card previews. Eye toggle reveals it for
+    // verification while typing.
+    var aiApiKeyVisible by remember { mutableStateOf(false) }
     var aiPrompt by remember { mutableStateOf(AI_DEFAULT_PROMPT) }
     var aiModel by remember { mutableStateOf("") }
     var sectionOrder by remember { mutableStateOf(CardSection.defaultOrder()) }
@@ -839,6 +849,28 @@ fun CardStyleScreen(
                                 onValueChange = { aiApiKey = it },
                                 label = { Text(tr("Klucz API", "API key")) },
                                 singleLine = true,
+                                visualTransformation = if (aiApiKeyVisible) {
+                                    VisualTransformation.None
+                                } else {
+                                    PasswordVisualTransformation()
+                                },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                trailingIcon = {
+                                    IconButton(onClick = { aiApiKeyVisible = !aiApiKeyVisible }) {
+                                        Icon(
+                                            imageVector = if (aiApiKeyVisible) {
+                                                Icons.Filled.VisibilityOff
+                                            } else {
+                                                Icons.Filled.Visibility
+                                            },
+                                            contentDescription = if (aiApiKeyVisible) {
+                                                tr("Ukryj klucz", "Hide key")
+                                            } else {
+                                                tr("Pokaż klucz", "Show key")
+                                            }
+                                        )
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))

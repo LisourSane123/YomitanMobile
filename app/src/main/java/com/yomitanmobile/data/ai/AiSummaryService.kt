@@ -111,7 +111,12 @@ class AiSummaryService @Inject constructor() {
                 )
             }
         } catch (e: Exception) {
-            AiSummaryResult.Failure(e.message ?: "AI request failed")
+            // e.message alone is often unhelpfully terse for transport errors
+            // (SocketTimeoutException → "timeout"); prefix the exception type
+            // so the snackbar tells the user what actually went wrong.
+            val detail = e.message?.let { "${e.javaClass.simpleName}: $it" }
+                ?: e.javaClass.simpleName
+            AiSummaryResult.Failure(detail)
         }
     }
 
@@ -158,7 +163,6 @@ class AiSummaryService @Inject constructor() {
         }.toString()
 
         val response = postJson(urlString, headers = mapOf("x-goog-api-key" to apiKey), body = body)
-            ?: return AiSummaryResult.Failure("No response from Gemini")
 
         rateLimitFailure(response, providerName = "Gemini")?.let { return it }
 
@@ -200,7 +204,7 @@ class AiSummaryService @Inject constructor() {
             url = endpoint,
             headers = mapOf("Authorization" to "Bearer $apiKey"),
             body = body
-        ) ?: return AiSummaryResult.Failure("No response from $endpoint")
+        )
 
         val providerName = if (endpoint.contains("deepseek")) "DeepSeek" else "OpenAI"
         rateLimitFailure(response, providerName = providerName)?.let { return it }
@@ -218,9 +222,15 @@ class AiSummaryService @Inject constructor() {
      * before attempting to parse a success-shaped body that won't be there.
      */
     private fun rateLimitFailure(response: HttpResponse, providerName: String): AiSummaryResult? {
+        // Text heuristics only apply to ERROR responses — a perfectly valid
+        // 200 whose generated summary happens to mention "rate limit" must
+        // not be reported as a failure.
+        val isError = response.statusCode !in 200..299
         val isRateLimited = response.statusCode == 429 ||
-            response.body.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
-            response.body.contains("rate limit", ignoreCase = true)
+            (isError && (
+                response.body.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                response.body.contains("rate limit", ignoreCase = true)
+            ))
         if (!isRateLimited) return null
         val providerHint = extractErrorMessage(response.body)?.let { " ($it)" } ?: ""
         return AiSummaryResult.Failure(
@@ -250,11 +260,17 @@ class AiSummaryService @Inject constructor() {
      */
     internal data class HttpResponse(val statusCode: Int, val body: String)
 
+    /**
+     * Throws on transport-level failures (timeout, DNS, oversized response)
+     * instead of swallowing them — [generateSummary]'s catch turns the
+     * exception into a Failure whose message names the actual cause, rather
+     * than the old blanket "No response from <provider>".
+     */
     private fun postJson(
         url: String,
         headers: Map<String, String>,
         body: String
-    ): HttpResponse? {
+    ): HttpResponse {
         var connection: HttpURLConnection? = null
         return try {
             connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -293,8 +309,6 @@ class AiSummaryService @Inject constructor() {
                 out.toString(StandardCharsets.UTF_8.name())
             }
             HttpResponse(statusCode, bodyText)
-        } catch (_: Exception) {
-            null
         } finally {
             connection?.disconnect()
         }

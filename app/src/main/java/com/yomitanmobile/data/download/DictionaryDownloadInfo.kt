@@ -108,14 +108,20 @@ object AvailableDictionaries {
             fileSize = "~1 MB",
             language = "EN"
         ),
+        // The two Kuuuube files are pinned to a specific commit (not `main`)
+        // and carry a sha256, so upstream can't silently swap the content we
+        // install. The `latest/download` release URLs above intentionally
+        // stay unpinned — their content changes every upstream release and
+        // that's the point of offering them.
         DictionaryDownloadInfo(
             id = "jpdb_freq",
             name = "JPDB Frequency v2.2",
             descriptionPl = "Ranking częstotliwości z jpdb.io – anime, manga, visual novels. Najnowsza wersja.",
             descriptionEn = "Frequency ranking from jpdb.io - anime, manga, visual novels. Latest version.",
             category = DictionaryCategory.FREQUENCY,
-            url = "https://github.com/Kuuuube/yomitan-dictionaries/raw/main/dictionaries/JPDB_v2.2_Frequency_2024-10-13.zip",
+            url = "https://raw.githubusercontent.com/Kuuuube/yomitan-dictionaries/d6fde809e3f26eb5aed6d41896f332179044998c/dictionaries/JPDB_v2.2_Frequency_2024-10-13.zip",
             fileSize = "~5 MB",
+            sha256 = "1468be7ebf7b920f63f76747fe0a571add70d788afc6e55b154c678de24fb9e5",
             language = "EN"
         ),
         // BCCWJ: short- and long-unit word frequencies from the Balanced
@@ -129,8 +135,9 @@ object AvailableDictionaries {
             descriptionPl = "Częstotliwości z korpusu BCCWJ – prasa, książki, teksty formalne. Uzupełnia JPDB.",
             descriptionEn = "Frequencies from the BCCWJ corpus - news, books, formal writing. Complements JPDB.",
             category = DictionaryCategory.FREQUENCY,
-            url = "https://github.com/Kuuuube/yomitan-dictionaries/raw/main/dictionaries/BCCWJ_SUW_LUW_combined.zip",
+            url = "https://raw.githubusercontent.com/Kuuuube/yomitan-dictionaries/d6fde809e3f26eb5aed6d41896f332179044998c/dictionaries/BCCWJ_SUW_LUW_combined.zip",
             fileSize = "~19 MB",
+            sha256 = "7d17054735e738d02e9f7f62fdad5d6e592a458abd93301367500d04d0c000c3",
             language = "EN"
         ),
         DictionaryDownloadInfo(
@@ -139,8 +146,10 @@ object AvailableDictionaries {
             descriptionPl = "Słownik akcentu tonalnego (pitch accent) dla japońskiego. Pokazuje wzory akcentu dla słów.",
             descriptionEn = "Japanese pitch accent dictionary. Shows pitch patterns for words.",
             category = DictionaryCategory.PITCH_ACCENT,
+            // Versioned (1.0.0) release asset — stable enough to pin a hash.
             url = "https://github.com/toasted-nutbread/yomichan-pitch-accent-dictionary/releases/download/1.0.0/kanjium_pitch_accents.zip",
             fileSize = "~1 MB",
+            sha256 = "f89db29fd2cdec90fe6965d4ef1d92bfb59e201fc7b2f7b39f49a6cda2e99871",
             language = "EN"
         )
     )
