@@ -1,0 +1,700 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 14,
+    "identityHash": "845564bcd76ac16397433e448384d626",
+    "entities": [
+      {
+        "tableName": "dictionary_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `expression` TEXT NOT NULL, `reading` TEXT NOT NULL, `definition` TEXT NOT NULL, `frequency` INTEGER NOT NULL, `pitch_accent` TEXT NOT NULL, `parts_of_speech` TEXT NOT NULL, `dictionary_name` TEXT NOT NULL, `sequence_number` INTEGER NOT NULL, `example_sentence` TEXT NOT NULL, `example_sentence_translation` TEXT NOT NULL, `audio_file` TEXT NOT NULL, `jlpt_level` INTEGER NOT NULL, `examples_json` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expression",
+            "columnName": "expression",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reading",
+            "columnName": "reading",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "definition",
+            "columnName": "definition",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frequency",
+            "columnName": "frequency",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pitchAccent",
+            "columnName": "pitch_accent",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "partsOfSpeech",
+            "columnName": "parts_of_speech",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dictionaryName",
+            "columnName": "dictionary_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequenceNumber",
+            "columnName": "sequence_number",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exampleSentence",
+            "columnName": "example_sentence",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exampleSentenceTranslation",
+            "columnName": "example_sentence_translation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "audioFile",
+            "columnName": "audio_file",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "jlptLevel",
+            "columnName": "jlpt_level",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "examplesJson",
+            "columnName": "examples_json",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_dictionary_entries_expression",
+            "unique": false,
+            "columnNames": [
+              "expression"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_dictionary_entries_expression` ON `${TABLE_NAME}` (`expression`)"
+          },
+          {
+            "name": "index_dictionary_entries_reading",
+            "unique": false,
+            "columnNames": [
+              "reading"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_dictionary_entries_reading` ON `${TABLE_NAME}` (`reading`)"
+          },
+          {
+            "name": "index_dictionary_entries_dictionary_name",
+            "unique": false,
+            "columnNames": [
+              "dictionary_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_dictionary_entries_dictionary_name` ON `${TABLE_NAME}` (`dictionary_name`)"
+          },
+          {
+            "name": "index_dictionary_entries_frequency",
+            "unique": false,
+            "columnNames": [
+              "frequency"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_dictionary_entries_frequency` ON `${TABLE_NAME}` (`frequency`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "ftsVersion": "FTS4",
+        "ftsOptions": {
+          "tokenizer": "simple",
+          "tokenizerArgs": [],
+          "contentTable": "dictionary_entries",
+          "languageIdColumnName": "",
+          "matchInfo": "FTS4",
+          "notIndexedColumns": [],
+          "prefixSizes": [],
+          "preferredOrder": "ASC"
+        },
+        "contentSyncTriggers": [
+          "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_dictionary_entries_fts_BEFORE_UPDATE BEFORE UPDATE ON `dictionary_entries` BEGIN DELETE FROM `dictionary_entries_fts` WHERE `docid`=OLD.`rowid`; END",
+          "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_dictionary_entries_fts_BEFORE_DELETE BEFORE DELETE ON `dictionary_entries` BEGIN DELETE FROM `dictionary_entries_fts` WHERE `docid`=OLD.`rowid`; END",
+          "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_dictionary_entries_fts_AFTER_UPDATE AFTER UPDATE ON `dictionary_entries` BEGIN INSERT INTO `dictionary_entries_fts`(`docid`, `expression`, `reading`, `definition`) VALUES (NEW.`rowid`, NEW.`expression`, NEW.`reading`, NEW.`definition`); END",
+          "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_dictionary_entries_fts_AFTER_INSERT AFTER INSERT ON `dictionary_entries` BEGIN INSERT INTO `dictionary_entries_fts`(`docid`, `expression`, `reading`, `definition`) VALUES (NEW.`rowid`, NEW.`expression`, NEW.`reading`, NEW.`definition`); END"
+        ],
+        "tableName": "dictionary_entries_fts",
+        "createSql": "CREATE VIRTUAL TABLE IF NOT EXISTS `${TABLE_NAME}` USING FTS4(`expression` TEXT NOT NULL, `reading` TEXT NOT NULL, `definition` TEXT NOT NULL, content=`dictionary_entries`)",
+        "fields": [
+          {
+            "fieldPath": "expression",
+            "columnName": "expression",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reading",
+            "columnName": "reading",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "definition",
+            "columnName": "definition",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": []
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "dictionaries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `version` TEXT NOT NULL, `revision` TEXT NOT NULL, `entry_count` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `import_date` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entryCount",
+            "columnName": "entry_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importDate",
+            "columnName": "import_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "exported_words",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `expression` TEXT NOT NULL, `reading` TEXT NOT NULL, `deck_name` TEXT NOT NULL, `anki_note_id` INTEGER NOT NULL, `export_date` INTEGER NOT NULL, `export_hour` INTEGER NOT NULL, `export_category` TEXT NOT NULL DEFAULT 'OTHER', `export_categories` TEXT NOT NULL DEFAULT '', `manual_category` TEXT NOT NULL DEFAULT '')",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expression",
+            "columnName": "expression",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reading",
+            "columnName": "reading",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deckName",
+            "columnName": "deck_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ankiNoteId",
+            "columnName": "anki_note_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exportDate",
+            "columnName": "export_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exportHour",
+            "columnName": "export_hour",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exportCategory",
+            "columnName": "export_category",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'OTHER'"
+          },
+          {
+            "fieldPath": "exportCategories",
+            "columnName": "export_categories",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "manualCategory",
+            "columnName": "manual_category",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_exported_words_expression_reading_deck_name",
+            "unique": true,
+            "columnNames": [
+              "expression",
+              "reading",
+              "deck_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_exported_words_expression_reading_deck_name` ON `${TABLE_NAME}` (`expression`, `reading`, `deck_name`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "favorite_words",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `expression` TEXT NOT NULL, `reading` TEXT NOT NULL, `definition_preview` TEXT NOT NULL, `entry_id` INTEGER NOT NULL, `added_date` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expression",
+            "columnName": "expression",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reading",
+            "columnName": "reading",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "definitionPreview",
+            "columnName": "definition_preview",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entryId",
+            "columnName": "entry_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addedDate",
+            "columnName": "added_date",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_favorite_words_expression_reading",
+            "unique": true,
+            "columnNames": [
+              "expression",
+              "reading"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_favorite_words_expression_reading` ON `${TABLE_NAME}` (`expression`, `reading`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "search_history",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `query` TEXT NOT NULL, `timestamp` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "query",
+            "columnName": "query",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_search_history_query",
+            "unique": true,
+            "columnNames": [
+              "query"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_search_history_query` ON `${TABLE_NAME}` (`query`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "kanji_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `kanji` TEXT NOT NULL, `onyomi` TEXT NOT NULL, `kunyomi` TEXT NOT NULL, `meanings` TEXT NOT NULL, `dictionary_name` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kanji",
+            "columnName": "kanji",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "onyomi",
+            "columnName": "onyomi",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kunyomi",
+            "columnName": "kunyomi",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "meanings",
+            "columnName": "meanings",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dictionaryName",
+            "columnName": "dictionary_name",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_kanji_entries_kanji",
+            "unique": false,
+            "columnNames": [
+              "kanji"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_kanji_entries_kanji` ON `${TABLE_NAME}` (`kanji`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "sentences",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `word_expression` TEXT NOT NULL, `word_reading` TEXT NOT NULL, `sentence_japanese` TEXT NOT NULL, `sentence_english` TEXT NOT NULL, `source` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wordExpression",
+            "columnName": "word_expression",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wordReading",
+            "columnName": "word_reading",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sentenceJapanese",
+            "columnName": "sentence_japanese",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sentenceEnglish",
+            "columnName": "sentence_english",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sentences_word_expression",
+            "unique": false,
+            "columnNames": [
+              "word_expression"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sentences_word_expression` ON `${TABLE_NAME}` (`word_expression`)"
+          },
+          {
+            "name": "index_sentences_word_reading",
+            "unique": false,
+            "columnNames": [
+              "word_reading"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sentences_word_reading` ON `${TABLE_NAME}` (`word_reading`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "lookup_counts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`expression` TEXT NOT NULL, `reading` TEXT NOT NULL, `lookup_count` INTEGER NOT NULL DEFAULT 1, `first_lookup` INTEGER NOT NULL, `last_lookup` INTEGER NOT NULL, PRIMARY KEY(`expression`, `reading`))",
+        "fields": [
+          {
+            "fieldPath": "expression",
+            "columnName": "expression",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reading",
+            "columnName": "reading",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lookupCount",
+            "columnName": "lookup_count",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "firstLookup",
+            "columnName": "first_lookup",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastLookup",
+            "columnName": "last_lookup",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "expression",
+            "reading"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "word_frequencies",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`expression` TEXT NOT NULL, `reading` TEXT NOT NULL, `dictionary` TEXT NOT NULL, `rank` INTEGER NOT NULL, `display_value` TEXT NOT NULL, PRIMARY KEY(`expression`, `reading`, `dictionary`))",
+        "fields": [
+          {
+            "fieldPath": "expression",
+            "columnName": "expression",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reading",
+            "columnName": "reading",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dictionary",
+            "columnName": "dictionary",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rank",
+            "columnName": "rank",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayValue",
+            "columnName": "display_value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "expression",
+            "reading",
+            "dictionary"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_word_frequencies_expression",
+            "unique": false,
+            "columnNames": [
+              "expression"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_word_frequencies_expression` ON `${TABLE_NAME}` (`expression`)"
+          },
+          {
+            "name": "index_word_frequencies_expression_reading",
+            "unique": false,
+            "columnNames": [
+              "expression",
+              "reading"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_word_frequencies_expression_reading` ON `${TABLE_NAME}` (`expression`, `reading`)"
+          },
+          {
+            "name": "index_word_frequencies_dictionary",
+            "unique": false,
+            "columnNames": [
+              "dictionary"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_word_frequencies_dictionary` ON `${TABLE_NAME}` (`dictionary`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '845564bcd76ac16397433e448384d626')"
+    ]
+  }
+}

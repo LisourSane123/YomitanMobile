@@ -35,6 +35,7 @@ import kotlinx.serialization.json.put
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import javax.inject.Inject
@@ -58,6 +59,9 @@ class BackupManager @Inject constructor(
         // is restored on the next launch. The user opts in per-backup via
         // the "include settings" toggle.
         const val SETTINGS_BACKUP_NAME = "settings.json"
+        // Real settings exports are a few KB; anything past this is a
+        // mis-picked file rejected before it can balloon in memory.
+        const val MAX_SETTINGS_JSON_BYTES = 1 * 1024 * 1024
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -249,7 +253,31 @@ class BackupManager @Inject constructor(
      * refused again here as defence in depth.
      */
     private suspend fun restorePreferencesBackup(source: File) {
-        val root = json.parseToJsonElement(source.readText()).jsonObject
+        applyPreferencesJson(source.readText())
+    }
+
+    /**
+     * Standalone settings import: apply a user-picked settings.json (the
+     * same format [writePreferencesBackup] produces) WITHOUT touching the
+     * database — the counterpart to the "include settings" export toggle.
+     * No restart is needed; DataStore collectors pick the changes up live.
+     * Returns the number of applied entries so the UI can tell "imported 27
+     * settings" apart from "valid JSON but nothing recognised" (0).
+     */
+    suspend fun importSettings(input: InputStream): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val bytes = input.use { readLimited(it, MAX_SETTINGS_JSON_BYTES) }
+            Result.success(applyPreferencesJson(bytes.toString(Charsets.UTF_8)))
+        } catch (e: Exception) {
+            Log.e(logTag, "Settings import failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /** Shared restore path for both in-backup and user-picked settings.json. */
+    private suspend fun applyPreferencesJson(text: String): Int {
+        val root = json.parseToJsonElement(text).jsonObject
+        var applied = 0
         context.dataStore.edit { prefs ->
             for ((name, element) in root) {
                 if (name == MainActivity.CARD_AI_API_KEY.name) continue
@@ -257,21 +285,50 @@ class BackupManager @Inject constructor(
                 val type = obj["t"]?.jsonPrimitive?.contentOrNull ?: continue
                 val v = obj["v"] ?: continue
                 try {
-                    when (type) {
-                        "bool" -> prefs[booleanPreferencesKey(name)] = v.jsonPrimitive.boolean
-                        "int" -> prefs[intPreferencesKey(name)] = v.jsonPrimitive.int
-                        "long" -> prefs[longPreferencesKey(name)] = v.jsonPrimitive.long
-                        "float" -> prefs[floatPreferencesKey(name)] = v.jsonPrimitive.float
-                        "double" -> prefs[doublePreferencesKey(name)] = v.jsonPrimitive.double
-                        "string" -> prefs[stringPreferencesKey(name)] = v.jsonPrimitive.content
-                        "stringset" -> prefs[stringSetPreferencesKey(name)] =
-                            v.jsonArray.map { it.jsonPrimitive.content }.toSet()
+                    val handled = when (type) {
+                        "bool" -> { prefs[booleanPreferencesKey(name)] = v.jsonPrimitive.boolean; true }
+                        "int" -> { prefs[intPreferencesKey(name)] = v.jsonPrimitive.int; true }
+                        "long" -> { prefs[longPreferencesKey(name)] = v.jsonPrimitive.long; true }
+                        "float" -> { prefs[floatPreferencesKey(name)] = v.jsonPrimitive.float; true }
+                        "double" -> { prefs[doublePreferencesKey(name)] = v.jsonPrimitive.double; true }
+                        "string" -> { prefs[stringPreferencesKey(name)] = v.jsonPrimitive.content; true }
+                        "stringset" -> {
+                            prefs[stringSetPreferencesKey(name)] =
+                                v.jsonArray.map { it.jsonPrimitive.content }.toSet()
+                            true
+                        }
+                        else -> false
                     }
+                    if (handled) applied++
                 } catch (_: Exception) {
                     // Skip a single malformed entry rather than aborting restore.
                 }
             }
         }
+        return applied
+    }
+
+    /**
+     * Read at most [maxBytes] from [input]; anything larger than a real
+     * settings.json (a few KB) is a mis-picked file, and reading it whole
+     * would risk OOM before JSON parsing even gets a chance to reject it.
+     */
+    private fun readLimited(input: InputStream, maxBytes: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read == -1) break
+            total += read
+            if (total > maxBytes) {
+                throw IllegalArgumentException(
+                    "File exceeds ${maxBytes / 1024} KB — not a settings backup"
+                )
+            }
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
     }
 
     /**

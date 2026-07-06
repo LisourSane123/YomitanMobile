@@ -124,6 +124,13 @@ android {
     }
 }
 
+// Room writes a JSON snapshot of every schema version here (AppDatabase has
+// exportSchema = true). Committed to the repo: it's the ground truth future
+// migrations (and MigrationTestHelper tests) are written against.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // Pin the JDK used to compile Java + Kotlin to a toolchain Gradle locates
 // itself (scans standard install dirs, incl. /usr/lib/jvm). This replaces the
 // machine-specific org.gradle.java.home that used to live in gradle.properties,

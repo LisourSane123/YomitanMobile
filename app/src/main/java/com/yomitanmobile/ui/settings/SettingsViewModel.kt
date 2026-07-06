@@ -31,6 +31,9 @@ sealed class SettingsEvent {
     data class BackupError(val message: String) : SettingsEvent()
     object RestoreSuccess : SettingsEvent()
     data class RestoreError(val message: String) : SettingsEvent()
+    /** Standalone settings.json import — [applied] = number of entries written. */
+    data class SettingsImported(val applied: Int) : SettingsEvent()
+    data class SettingsImportError(val message: String) : SettingsEvent()
     data class ImportSuccess(val result: ImportResult) : SettingsEvent()
     data class ImportError(val message: String) : SettingsEvent()
     /**
@@ -229,6 +232,26 @@ class SettingsViewModel @Inject constructor(
             } finally {
                 _isRestoring.value = false
             }
+        }
+    }
+
+    /**
+     * Apply a user-picked settings.json (the file "Create backup" writes when
+     * "include settings" is on). Settings-only — the database is untouched,
+     * so unlike a full restore no app restart is required.
+     */
+    fun importSettings(inputStream: InputStream) {
+        viewModelScope.launch {
+            backupManager.importSettings(inputStream).fold(
+                onSuccess = { applied ->
+                    _events.emit(SettingsEvent.SettingsImported(applied))
+                },
+                onFailure = { error ->
+                    _events.emit(
+                        SettingsEvent.SettingsImportError(error.message ?: "Import failed")
+                    )
+                }
+            )
         }
     }
 

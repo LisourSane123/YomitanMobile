@@ -53,7 +53,7 @@ Key screens: `SearchScreen` (main), `DetailScreen` (word details + Anki export),
 - **JP mode**: detects kanji/kana input, generates inflection candidates via `JapaneseDeconjugator.analyze()` (max 24, depth 3), then `invokeWithAlternatives()` runs the literal query + candidates **in parallel** (`coroutineScope` + `async`) and merges by entry ID, literal query first.
 - **EN mode**: FTS on definition text via `searchByDefinition`.
 - **Romaji mode**: converts via `RomajiConverter` then searches as JP.
-- Mode is auto-detected from the script per keystroke, unless the user manually picks one via the toggle (`manualModeOverride` in `SearchViewModel` pins it until the query is cleared) — this is the only way to reach ROMAJI mode, which auto-detect never produces.
+- Mode is auto-detected from the script per keystroke; there is deliberately NO user-facing mode toggle (the app should figure out intent itself). Romaji input is covered automatically by the EN-mode fallback, which converts the query to hiragana and merges those results in. `SearchViewModel.toggleSearchMode()` + `manualModeOverride` + the ROMAJI enum value survive as internal, tested machinery, but no UI calls them.
 - Debounce is 100 ms in `SearchViewModel`; results are merged via `MergedWordEntry.mergeEntries()` which groups by `(expression, reading)` key.
 
 ### Result merging

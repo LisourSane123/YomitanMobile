@@ -100,10 +100,12 @@ class StatisticsViewModel @Inject constructor(
                 }
         }
 
+        // Only copies the words (expression + optional reading) one per line —
+        // no header, categories, or numbering, so the output is language-
+        // independent and paste-ready for Anki/notes.
         internal fun buildWeeklyLearnedWordsCopyText(words: List<WeeklyLearnedWord>): String {
             if (words.isEmpty()) return ""
 
-            // Only copy the words (expression + optional reading) per line, no categories or numbering
             val body = words.map { word ->
                 val readingPart = when {
                     word.reading.isBlank() -> ""
@@ -114,30 +116,6 @@ class StatisticsViewModel @Inject constructor(
             }
 
             return body.joinToString("\n")
-        }
-
-        internal fun buildWeeklyLearnedWordsCopyText(
-            words: List<WeeklyLearnedWord>,
-            isEnglish: Boolean
-        ): String {
-            if (words.isEmpty()) return ""
-
-            val header = if (isEnglish) {
-                "Words from last 7 days (${words.size})"
-            } else {
-                "Słowa z ostatnich 7 dni (${words.size})"
-            }
-                val body = words.map { word ->
-                    val readingPart = when {
-                        word.reading.isBlank() -> ""
-                        word.reading == word.expression -> ""
-                        else -> " (${word.reading})"
-                    }
-                    // only expression + reading
-                    "${word.expression}$readingPart"
-                }
-
-                return body.joinToString("\n")
         }
 
         internal fun categoryLabel(categoryCode: String, isEnglish: Boolean = false): String {

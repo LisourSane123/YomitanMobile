@@ -149,6 +149,23 @@ fun SettingsScreen(
         }
     }
 
+    // Standalone settings.json import — counterpart of the "include settings"
+    // export toggle on backup creation. JSON mime types vary by file manager
+    // (some report octet-stream or text/plain for .json), so accept all three.
+    val settingsPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            try {
+                val inputStream = context.contentResolver.openInputStream(it)
+                if (inputStream != null) viewModel.importSettings(inputStream)
+                else Toast.makeText(context, tr("Nie można otworzyć pliku", "Cannot open file"), Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, tr("Błąd: ${e.message}", "Error: ${e.message}"), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -175,6 +192,22 @@ fun SettingsScreen(
                 }
                 is SettingsEvent.RestoreError ->
                     Toast.makeText(context, tr("Błąd przywracania: ${event.message}", "Restore error: ${event.message}"), Toast.LENGTH_LONG).show()
+                is SettingsEvent.SettingsImported -> {
+                    val msg = if (event.applied > 0) {
+                        tr(
+                            "Zaimportowano ustawienia (${event.applied})",
+                            "Settings imported (${event.applied})"
+                        )
+                    } else {
+                        tr(
+                            "Plik nie zawiera żadnych rozpoznanych ustawień",
+                            "The file contains no recognised settings"
+                        )
+                    }
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
+                is SettingsEvent.SettingsImportError ->
+                    Toast.makeText(context, tr("Błąd importu ustawień: ${event.message}", "Settings import error: ${event.message}"), Toast.LENGTH_LONG).show()
                 is SettingsEvent.ReclassifyDone -> {
                     val msg = tr(
                         "Przeliczono ${event.updated}, zachowano ręcznych ${event.skippedManual}, pominięto ${event.skippedMissing}",
@@ -352,7 +385,13 @@ fun SettingsScreen(
             text = {
                 LazyColumn {
                     item {
-                        Text(tr("Wersja aplikacji: 1.0.0", "App version: 1.0.0"), fontWeight = FontWeight.Bold)
+                        Text(
+                            tr(
+                                "Wersja aplikacji: ${com.yomitanmobile.BuildConfig.VERSION_NAME}",
+                                "App version: ${com.yomitanmobile.BuildConfig.VERSION_NAME}"
+                            ),
+                            fontWeight = FontWeight.Bold
+                        )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
@@ -866,6 +905,31 @@ fun SettingsScreen(
                     }
                     Text(tr("Utwórz kopię zapasową", "Create backup"))
                 }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = {
+                        settingsPickerLauncher.launch(
+                            arrayOf("application/json", "application/octet-stream", "text/plain")
+                        )
+                    },
+                    enabled = !isBackingUp && !isRestoring,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(tr("Importuj ustawienia z pliku", "Import settings from file"))
+                }
+                Text(
+                    tr(
+                        "Wybierz settings.json z folderu kopii zapasowej. Baza danych nie jest zmieniana; klucz AI nigdy nie jest przenoszony.",
+                        "Pick a settings.json from a backup folder. The database is untouched; the AI key is never carried over."
+                    ),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
 
             if (backups.isNotEmpty()) {

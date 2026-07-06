@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
@@ -48,6 +49,13 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "yo
 class MainActivity : ComponentActivity() {
 
     private var sharedSearchQuery: String? by mutableStateOf(null)
+
+    // Bumped on every incoming share/PROCESS_TEXT intent. A shared query is
+    // an EVENT, not a value: sharing the same word twice must re-trigger
+    // navigation + re-apply, but state holders (and LaunchedEffect keys)
+    // don't fire when the new value equals the old one. The nonce makes
+    // every share distinct without touching the query text itself.
+    private var sharedSearchNonce: Int by mutableStateOf(0)
 
     companion object {
         val SETUP_COMPLETED = booleanPreferencesKey("setup_completed")
@@ -186,10 +194,14 @@ class MainActivity : ComponentActivity() {
                             navController = navController,
                             startDestination = route,
                             focusSearch = shouldFocusSearch,
-                            sharedSearchQuery = sharedSearchQuery
+                            sharedSearchQuery = sharedSearchQuery,
+                            sharedSearchNonce = sharedSearchNonce
                         )
 
-                        LaunchedEffect(sharedSearchQuery) {
+                        // Keyed on the nonce (not just the text) so sharing
+                        // the SAME word a second time still navigates back
+                        // to Search from wherever the user currently is.
+                        LaunchedEffect(sharedSearchQuery, sharedSearchNonce) {
                             if (!sharedSearchQuery.isNullOrBlank()) {
                                 shouldFocusSearch = false
                                 navController.navigate(Screen.Search.route) {
@@ -217,7 +229,11 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        sharedSearchQuery = extractSearchQueryFromIntent(intent)
+        val extracted = extractSearchQueryFromIntent(intent)
+        if (extracted != null) {
+            sharedSearchQuery = extracted
+            sharedSearchNonce++
+        }
     }
 
     private fun extractSearchQueryFromIntent(intent: Intent?): String? {
@@ -276,18 +292,21 @@ class MainActivity : ComponentActivity() {
 private fun CrashReportDialog(trace: String, onDismiss: () -> Unit) {
     // Surfaces the prior-run crash as a modal dialog. Monospace font
     // makes stack traces readable; verticalScroll handles long traces
-    // without truncation. The user can long-press / select-all in the
-    // dialog to copy the text out for sharing.
+    // without truncation. SelectionContainer makes the trace long-press
+    // selectable so the user can copy it out for a bug report — plain
+    // Compose Text is NOT selectable by default.
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Previous crash") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    text = trace,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
+                SelectionContainer {
+                    Text(
+                        text = trace,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
         },
         confirmButton = {

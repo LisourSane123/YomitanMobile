@@ -84,6 +84,7 @@ fun SearchScreen(
     onNavigateToStatistics: () -> Unit,
     focusSearch: Boolean = false,
     initialQuery: String? = null,
+    initialQueryNonce: Int = 0,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val query by viewModel.query.collectAsState()
@@ -118,7 +119,9 @@ fun SearchScreen(
         viewModel.refreshDailyGoal()
     }
 
-    LaunchedEffect(initialQuery) {
+    // Nonce in the key set: re-sharing the same text is a new event and must
+    // re-apply even though the query string itself didn't change.
+    LaunchedEffect(initialQuery, initialQueryNonce) {
         if (!initialQuery.isNullOrBlank()) {
             viewModel.applyExternalQuery(initialQuery)
         }
@@ -167,7 +170,7 @@ fun SearchScreen(
                     Text(
                         when (searchMode) {
                             SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku...", "Type a Japanese word...")
-                            SearchMode.ENGLISH -> tr("Type an English word...", "Type an English word...")
+                            SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku...", "Type an English word...")
                             SearchMode.ROMAJI -> tr("taberu, nomu, miru...", "taberu, nomu, miru...")
                         }
                     )
@@ -189,7 +192,8 @@ fun SearchScreen(
             if (searchMode == SearchMode.JAPANESE && query.isNotBlank() && deconjugationCandidates.isNotEmpty()) {
                 DeconjugationHintsCard(
                     candidates = deconjugationCandidates,
-                    onCandidateClick = viewModel::onQueryChange
+                    onCandidateClick = viewModel::onQueryChange,
+                    isEnglish = isEnglish
                 )
             }
 
@@ -225,6 +229,7 @@ fun SearchScreen(
                                 // for JP/romaji modes the user's input doesn't appear
                                 // verbatim in the definition text.
                                 highlightQuery = if (searchMode == SearchMode.ENGLISH) query else "",
+                                isEnglish = isEnglish,
                                 onClick = {
                                     viewModel.onWordClicked(entry)
                                     onWordClick(entry.primaryId)
@@ -243,8 +248,10 @@ fun SearchScreen(
 @Composable
 private fun DeconjugationHintsCard(
     candidates: List<com.yomitanmobile.util.DeconjugationCandidate>,
-    onCandidateClick: (String) -> Unit
+    onCandidateClick: (String) -> Unit,
+    isEnglish: Boolean
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val shown = candidates.take(4)
     if (shown.isEmpty()) return
 
@@ -259,7 +266,7 @@ private fun DeconjugationHintsCard(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                text = "Rozpoznane formy podstawowe",
+                text = tr("Rozpoznane formy podstawowe", "Detected base forms"),
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -451,8 +458,10 @@ private fun SearchHistorySection(
 private fun MergedWordEntryCard(
     entry: MergedWordEntry,
     highlightQuery: String,
+    isEnglish: Boolean,
     onClick: () -> Unit
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -473,7 +482,7 @@ private fun MergedWordEntryCard(
                 }
                 if (entry.alternativeExpressions.isNotEmpty()) {
                     Text(
-                        text = "Formy: ${entry.alternativeExpressions.joinToString(", ")}",
+                        text = tr("Formy: ", "Forms: ") + entry.alternativeExpressions.joinToString(", "),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.padding(top = 2.dp)
@@ -521,7 +530,10 @@ private fun MergedWordEntryCard(
                 }
                 if (entry.definitions.size > 3) {
                     Text(
-                        text = "…i ${entry.definitions.size - 3} więcej",
+                        text = tr(
+                            "…i ${entry.definitions.size - 3} więcej",
+                            "…and ${entry.definitions.size - 3} more"
+                        ),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -575,7 +587,7 @@ private fun EmptySearchState(searchMode: SearchMode, isEnglish: Boolean) {
             Text(
                 when (searchMode) {
                     SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku", "Type a Japanese word")
-                    SearchMode.ENGLISH -> tr("Type an English word", "Type an English word")
+                    SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku", "Type an English word")
                     SearchMode.ROMAJI -> tr("Wpisz słowo w romaji", "Type a word in romaji")
                 },
                 style = MaterialTheme.typography.bodyLarge,

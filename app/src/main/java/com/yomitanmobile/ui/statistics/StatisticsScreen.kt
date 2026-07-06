@@ -74,8 +74,8 @@ fun StatisticsScreen(
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val weeklyWordsForCopy = remember(state.weeklyLearnedWords, isEnglish) {
-        StatisticsViewModel.buildWeeklyLearnedWordsCopyText(state.weeklyLearnedWords, isEnglish)
+    val weeklyWordsForCopy = remember(state.weeklyLearnedWords) {
+        StatisticsViewModel.buildWeeklyLearnedWordsCopyText(state.weeklyLearnedWords)
     }
     val allTimeCategoryStats = remember(state.categoryActivityAllTime, isEnglish) {
         val countsByCode = state.categoryActivityAllTime.associate { it.categoryCode to it.count }

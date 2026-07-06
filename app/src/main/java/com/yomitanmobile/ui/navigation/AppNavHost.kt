@@ -22,7 +22,8 @@ fun AppNavHost(
     navController: NavHostController,
     startDestination: String = Screen.Search.route,
     focusSearch: Boolean = false,
-    sharedSearchQuery: String? = null
+    sharedSearchQuery: String? = null,
+    sharedSearchNonce: Int = 0
 ) {
     NavHost(
         navController = navController,
@@ -51,6 +52,7 @@ fun AppNavHost(
                 },
                 focusSearch = focusSearch,
                 initialQuery = sharedSearchQuery,
+                initialQueryNonce = sharedSearchNonce,
                 onNavigateToStatistics = { navController.navigate(Screen.Statistics.route) }
             )
         }

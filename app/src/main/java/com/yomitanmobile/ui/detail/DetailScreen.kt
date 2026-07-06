@@ -545,7 +545,7 @@ private fun WordDetailContent(
 
         // Pitch Accent
         if (entry.pitchAccent.isNotBlank()) {
-            SectionCard(title = "Pitch Accent") {
+            SectionCard(title = tr("Akcent tonalny", "Pitch accent")) {
                 PitchAccentDiagram(
                     reading = entry.reading.ifBlank { entry.primaryExpression },
                     pitchPositions = entry.pitchAccent

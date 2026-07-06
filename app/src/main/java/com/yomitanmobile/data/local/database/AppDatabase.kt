@@ -40,7 +40,10 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         WordFrequency::class
     ],
     version = 14,
-    exportSchema = false
+    // Schema history is written to app/schemas/ (room.schemaLocation in
+    // build.gradle.kts) and committed, so future migrations can be written
+    // against — and tested against — the exact shipped schema.
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

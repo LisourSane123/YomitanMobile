@@ -157,7 +157,7 @@ object AvailableDictionaries {
     // ─────────────────────────────────────────────────────────────────────
     // Self-hosted frequency lists (TO WIRE UP).
     //
-    // freq.txt lists four more frequency dictionaries — Japanese Wikipedia,
+    // docs/freq.txt lists four more frequency dictionaries — Japanese Wikipedia,
     // Anime & Drama (Subs2SRS), Innocent Corpus, and Narou — that are only
     // distributed via MarvNC's Google Drive. The downloader's HTTPS allowlist
     // (ALLOWED_DOWNLOAD_HOSTS in DictionaryDownloadManager) intentionally
