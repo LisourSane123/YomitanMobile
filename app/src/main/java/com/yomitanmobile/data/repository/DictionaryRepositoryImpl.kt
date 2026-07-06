@@ -168,9 +168,12 @@ class DictionaryRepositoryImpl @Inject constructor(
             var totalPitchUpdates = 0
             var totalJlptUpdates = 0
 
-            // Clear any frequency rows left under the temp name by a previous
-            // interrupted import before we start writing this one.
-            frequencyDao.deleteByDictionary(tempDictionaryName)
+            // Clear any rows left under the temp name by a previous interrupted
+            // import before we start writing this one. Term/kanji rows matter
+            // most: stale "temp" entries would surface in search results AND
+            // get renamed into THIS import's dictionary by the promotion step
+            // below, silently mixing two dictionaries' contents.
+            clearTempRows()
 
             // Use streaming parser — entries are inserted in batches as they're parsed.
             // 10000 fits comfortably in one transaction and roughly halves the
@@ -285,6 +288,13 @@ class DictionaryRepositoryImpl @Inject constructor(
                 entriesImported = entryCount
             )
         } catch (e: Exception) {
+            // Remove the partial rows this failed import wrote under the temp
+            // name so they don't pollute search until the next import runs.
+            try {
+                clearTempRows()
+            } catch (cleanupError: Exception) {
+                Log.w(TAG, "temp-row cleanup after failed import also failed", cleanupError)
+            }
             ImportResult(
                 success = false,
                 dictionaryName = "Unknown",
@@ -292,6 +302,12 @@ class DictionaryRepositoryImpl @Inject constructor(
                 errorMessage = e.message ?: "Unknown error during import"
             )
         }
+    }
+
+    private suspend fun clearTempRows() {
+        dictionaryDao.deleteByDictionary(tempDictionaryName)
+        kanjiDao.deleteByDictionary(tempDictionaryName)
+        frequencyDao.deleteByDictionary(tempDictionaryName)
     }
 
     override suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo> {

@@ -21,7 +21,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:assembleRelease
 ```
 
-Prerequisites: JDK 17, Android SDK 34. The build pins JDK 17 via a Gradle toolchain (`kotlin { jvmToolchain(17) }` in `app/build.gradle.kts`), which Gradle locates automatically — no machine-specific path in the committed `gradle.properties`. If your default `java` is older than 17 and the toolchain can't find a JDK 17, set `org.gradle.java.home` in your user-level `~/.gradle/gradle.properties`.
+Prerequisites: JDK 17, Android SDK 35. The build pins JDK 17 via a Gradle toolchain (`kotlin { jvmToolchain(17) }` in `app/build.gradle.kts`), which Gradle locates automatically — no machine-specific path in the committed `gradle.properties`. If your default `java` is older than 17 and the toolchain can't find a JDK 17, set `org.gradle.java.home` in your user-level `~/.gradle/gradle.properties`.
 
 ## Architecture
 

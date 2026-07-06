@@ -19,7 +19,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.YomitanMobile"
-        tools:targetApi="34"
+        tools:targetApi="35"
         tools:replace="android:allowBackup">
 
         <activity

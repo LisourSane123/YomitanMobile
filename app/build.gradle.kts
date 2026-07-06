@@ -22,7 +22,9 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "com.yomitanmobile"
-    compileSdk = 34
+    // Keep compileSdk >= targetSdk: we target API 35 (Play requirement), so
+    // we must also compile against the 35 platform jar.
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.yomitanmobile"

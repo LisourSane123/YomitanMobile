@@ -81,7 +81,11 @@ class BackupManager @Inject constructor(
                 return@withContext Result.failure(Exception("Failed to create backup folder"))
             }
 
-            // Backup database
+            // Backup database. Room runs SQLite in WAL mode, so recent writes
+            // live in the -wal sidecar, not the main .db file — checkpoint
+            // first so the .db alone is a complete, consistent snapshot.
+            checkpointWal()
+
             val dbFile = context.getDatabasePath(AppDatabase.DATABASE_NAME)
             if (dbFile.exists()) {
                 val dbBackupFile = File(backupFolder, DATABASE_BACKUP_NAME)
@@ -90,6 +94,12 @@ class BackupManager @Inject constructor(
                         input.copyTo(output)
                     }
                 }
+                // Belt and braces: if the checkpoint failed (locked reader,
+                // I/O error) the -wal still holds unmerged writes. Copy the
+                // sidecars too so restore can replay them instead of losing
+                // that data. After a successful TRUNCATE checkpoint these
+                // files are empty or absent, so this usually copies nothing.
+                copySidecarsIfPresent(dbFile, backupFolder)
             }
 
             // Optionally export the whitelisted settings (AI key excluded).
@@ -130,11 +140,19 @@ class BackupManager @Inject constructor(
             if (dbBackupFile.exists()) {
                 val dbFile = context.getDatabasePath(AppDatabase.DATABASE_NAME)
                 dbFile.parentFile?.mkdirs()
+                // Drop the CURRENT database's WAL sidecars before overwriting
+                // the .db. SQLite pairs a .db with whatever -wal/-shm sit next
+                // to it — leaving the old ones behind would replay the old
+                // database's WAL frames into the restored file and corrupt it.
+                deleteSidecars(dbFile)
                 FileInputStream(dbBackupFile).use { input ->
                     FileOutputStream(dbFile).use { output ->
                         input.copyTo(output)
                     }
                 }
+                // If the backup carried its own sidecars (checkpoint failed at
+                // backup time), restore them so those writes aren't lost.
+                restoreSidecarsIfPresent(dbFile, backupFolder)
             }
 
             // Restore whitelisted settings when the backup includes them.
@@ -251,6 +269,58 @@ class BackupManager @Inject constructor(
                     }
                 } catch (_: Exception) {
                     // Skip a single malformed entry rather than aborting restore.
+                }
+            }
+        }
+    }
+
+    /**
+     * Merge all WAL frames into the main .db file and truncate the log.
+     * Best-effort: on failure the backup still proceeds, but the -wal
+     * sidecar is then copied alongside so no committed write is lost.
+     */
+    private fun checkpointWal() {
+        try {
+            database.openHelper.writableDatabase
+                .query("PRAGMA wal_checkpoint(TRUNCATE)")
+                .use { it.moveToFirst() }
+        } catch (e: Exception) {
+            Log.w(logTag, "WAL checkpoint failed; falling back to copying the -wal sidecar", e)
+        }
+    }
+
+    /**
+     * Copy a non-empty -wal sidecar next to the backed-up .db. The -shm file
+     * is deliberately skipped: it's a shared-memory index SQLite rebuilds on
+     * open, and a copy taken from a live database is not meaningful.
+     */
+    private fun copySidecarsIfPresent(dbFile: File, backupFolder: File) {
+        val wal = File(dbFile.path + "-wal")
+        if (wal.exists() && wal.length() > 0) {
+            FileInputStream(wal).use { input ->
+                FileOutputStream(File(backupFolder, "$DATABASE_BACKUP_NAME-wal")).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+    }
+
+    /** Remove every journal sidecar of [dbFile] (WAL and rollback modes). */
+    private fun deleteSidecars(dbFile: File) {
+        for (suffix in listOf("-wal", "-shm", "-journal")) {
+            val sidecar = File(dbFile.path + suffix)
+            if (sidecar.exists() && !sidecar.delete()) {
+                Log.w(logTag, "Could not delete ${sidecar.name} before restore")
+            }
+        }
+    }
+
+    private fun restoreSidecarsIfPresent(dbFile: File, backupFolder: File) {
+        val walBackup = File(backupFolder, "$DATABASE_BACKUP_NAME-wal")
+        if (walBackup.exists()) {
+            FileInputStream(walBackup).use { input ->
+                FileOutputStream(File(dbFile.path + "-wal")).use { output ->
+                    input.copyTo(output)
                 }
             }
         }

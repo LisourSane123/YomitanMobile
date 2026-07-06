@@ -131,7 +131,10 @@ class AiSummaryService @Inject constructor() {
 
     // ---------- Gemini ----------
     //
-    // POST https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent?key=<KEY>
+    // POST https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent
+    // Header: x-goog-api-key: <KEY> — the key goes in a header, never the
+    // URL query string, so it can't leak into proxy/access logs that record
+    // request lines.
     // Body: {"contents":[{"parts":[{"text":"<prompt>"}]}]}
     // Response path: candidates[0].content.parts[0].text
 
@@ -139,7 +142,7 @@ class AiSummaryService @Inject constructor() {
         val urlString =
             "https://generativelanguage.googleapis.com/v1beta/models/" +
             java.net.URLEncoder.encode(model, "UTF-8") +
-            ":generateContent?key=" + java.net.URLEncoder.encode(apiKey, "UTF-8")
+            ":generateContent"
         if (!isAllowedUrl(urlString)) {
             return AiSummaryResult.Failure("Endpoint not allowed")
         }
@@ -154,7 +157,7 @@ class AiSummaryService @Inject constructor() {
             }
         }.toString()
 
-        val response = postJson(urlString, headers = emptyMap(), body = body)
+        val response = postJson(urlString, headers = mapOf("x-goog-api-key" to apiKey), body = body)
             ?: return AiSummaryResult.Failure("No response from Gemini")
 
         rateLimitFailure(response, providerName = "Gemini")?.let { return it }
