@@ -672,8 +672,8 @@ fun CardStyleScreen(
                 SettingRow(
                     title = tr("Zdanie kontekstowe na froncie", "Front context sentence"),
                     subtitle = tr(
-                        "Pokaż pod słowem japońskie zdanie i pogrub wyszukiwane słowo (tylko słowa zapisane samą hiraganą)",
-                        "Show a Japanese sentence under the word and highlight the target word (hiragana-only words)"
+                        "Pokaż pod słowem japońskie zdanie i pogrub w nim szukane słowo (także w formie odmienionej lub w katakanie)",
+                        "Show a Japanese sentence under the word and highlight the target word (also when inflected or written in katakana)"
                     )
                 ) {
                     Switch(

@@ -30,6 +30,7 @@ import com.yomitanmobile.util.FuriganaGenerator
 import com.yomitanmobile.util.InputSanitizer
 import com.yomitanmobile.util.JlptVocabulary
 import com.yomitanmobile.util.LocaleHelper
+import com.yomitanmobile.util.SentenceContextHighlighter
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -277,6 +278,63 @@ class DetailViewModel @Inject constructor(
                 }
             )
         }.getOrDefault(word)
+    }
+
+    /**
+     * Makes sure the exported word carries a usable example sentence.
+     *
+     * Sentence-source priority order:
+     *   1. Jitendex examples already attached to the entry (preferred)
+     *   2. Pre-seeded local SentenceDao matches
+     * The online Tatoeba fallback was removed — Jitendex covers most words and
+     * the seeded SentenceDao handles common beginner words. An empty Sentence
+     * field just collapses the back-side block via the {{#Sentence}} mustache.
+     *
+     * The local lookup also kicks in when the attached examples exist but NONE
+     * of them actually contains the target word: the front-context highlight
+     * would have nothing to mark there, and a seeded sentence that does contain
+     * the word is the better front. It only ever fills the legacy single
+     * example columns, so the back-side {{Sentence}} block — which prefers the
+     * attached examples — stays untouched.
+     */
+    private suspend fun fillSentenceForExport(
+        word: WordEntry,
+        stylePrefs: CardStylePreferences
+    ): WordEntry {
+        val lookup = word.expression.ifBlank { word.reading }
+        val tokens = listOf(word.expression, word.reading)
+        val hasAttachedMatch = word.examples.any {
+            it.jp.isNotBlank() && SentenceContextHighlighter.containsTarget(it.jp, tokens)
+        }
+        val needsLocalLookup = when {
+            word.examples.isEmpty() -> word.exampleSentence.isBlank()
+            // Attached examples cover the back of the card; only a missing
+            // highlightable sentence for the front justifies another query.
+            stylePrefs.showFrontContextSentence -> !hasAttachedMatch &&
+                !SentenceContextHighlighter.containsTarget(word.exampleSentence, tokens)
+            else -> false
+        }
+        if (!needsLocalLookup) return word
+
+        val localSentences = runCatching {
+            sentenceDao.getSentencesByExpressionOrReading(
+                expression = lookup,
+                reading = word.reading.ifBlank { lookup }
+            )
+        }.getOrElse {
+            Log.w(logTag, "Local sentence lookup failed", it)
+            emptyList()
+        }
+        if (localSentences.isEmpty()) return word
+
+        val best = localSentences.firstOrNull {
+            SentenceContextHighlighter.containsTarget(it.sentenceJapanese, tokens)
+        } ?: localSentences.first()
+
+        return word.copy(
+            exampleSentence = best.sentenceJapanese,
+            exampleSentenceTranslation = best.sentenceEnglish
+        )
     }
 
     /**
@@ -610,27 +668,13 @@ class DetailViewModel @Inject constructor(
             // most words and the seeded SentenceDao handles common
             // beginner words. Empty Sentence field just collapses the
             // whole back-side block via the {{#Sentence}} mustache.
-            val wordForExport = if (stylePrefs.showSentence) {
-                val lookup = word.expression.ifBlank { word.reading }
-                if (word.examples.isNotEmpty()) {
-                    // Already populated from the dictionary import — leave as-is.
-                    // AnkiCardCreator consumes word.examples directly.
-                    word
-                } else {
-                    val localSentences = sentenceDao.getSentencesByExpressionOrReading(
-                        expression = lookup,
-                        reading = word.reading.ifBlank { lookup }
-                    )
-                    if (localSentences.isNotEmpty()) {
-                        val bestSentence = localSentences.first()
-                        word.copy(
-                            exampleSentence = bestSentence.sentenceJapanese,
-                            exampleSentenceTranslation = bestSentence.sentenceEnglish
-                        )
-                    } else {
-                        word
-                    }
-                }
+            // The front-context sentence needs a sentence just as much as the
+            // back-side block does, so the local lookup runs when EITHER
+            // option is on — otherwise turning the back-side sentences off
+            // silently emptied the front of the card too.
+            val needsSentence = stylePrefs.showSentence || stylePrefs.showFrontContextSentence
+            val wordForExport = if (needsSentence) {
+                fillSentenceForExport(word, stylePrefs)
             } else {
                 word
             }.let { enrichExamplesWithFurigana(it) }

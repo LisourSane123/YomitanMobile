@@ -59,6 +59,69 @@ class SentenceContextHighlighterTest {
     }
 
     @Test
+    fun highlightsKatakanaSpellingOfKanaWord() {
+        val html = SentenceContextHighlighter.buildHighlightedSentenceHtml(
+            sentence = "そこでサボっていた。",
+            preferredTokens = listOf("さぼる")
+        )
+
+        assertTrue(html.contains("<strong class=\"context-highlight\">サボっていた</strong>"))
+    }
+
+    @Test
+    fun highlightsHiraganaSpellingOfKatakanaWord() {
+        val html = SentenceContextHighlighter.buildHighlightedSentenceHtml(
+            sentence = "まいにちこーひーをのむ。",
+            preferredTokens = listOf("コーヒー")
+        )
+
+        assertTrue(html.contains("<strong class=\"context-highlight\">こーひー</strong>"))
+    }
+
+    @Test
+    fun highlightsInflectionOutsideTheGeneratedSet() {
+        // 食べさせられなかった is not in the forward-generated list; the
+        // deconjugation scan has to recover it.
+        val html = SentenceContextHighlighter.buildHighlightedSentenceHtml(
+            sentence = "野菜を食べさせられなかった。",
+            preferredTokens = listOf("食べる", "たべる")
+        )
+
+        assertTrue(html.contains("<strong class=\"context-highlight\">食べさせられなかった</strong>"))
+    }
+
+    @Test
+    fun highlightsInflectedIAdjective() {
+        val html = SentenceContextHighlighter.buildHighlightedSentenceHtml(
+            sentence = "この本は高かった。",
+            preferredTokens = listOf("高い", "たかい")
+        )
+
+        assertTrue(html.contains("<strong class=\"context-highlight\">高かった</strong>"))
+    }
+
+    @Test
+    fun doesNotHighlightStemInsideUnrelatedCompound() {
+        val html = SentenceContextHighlighter.buildHighlightedSentenceHtml(
+            sentence = "食べ物を買う。",
+            preferredTokens = listOf("食べる")
+        )
+
+        assertFalse(html.contains("context-highlight"))
+    }
+
+    @Test
+    fun leavesSentenceIntactWhenWordIsAbsent() {
+        val html = SentenceContextHighlighter.buildHighlightedSentenceHtml(
+            sentence = "今日はいい天気ですね。",
+            preferredTokens = listOf("食べる", "たべる")
+        )
+
+        assertFalse(html.contains("context-highlight"))
+        assertTrue(html.contains("今日はいい天気ですね。"))
+    }
+
+    @Test
     fun keepsHtmlEscaped() {
         val html = SentenceContextHighlighter.buildHighlightedSentenceHtml(
             sentence = "<script>alert(1)</script> 食べる",

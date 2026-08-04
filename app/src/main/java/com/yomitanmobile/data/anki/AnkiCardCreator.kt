@@ -988,6 +988,29 @@ class AnkiCardCreator(
         }
     }
 
+    /**
+     * Picks the sentence that goes under the word on the FRONT of the card.
+     *
+     * The legacy `exampleSentence` column is only a mirror of the first parsed
+     * example, and it is empty for every entry whose examples arrived through
+     * the [WordEntry.examples] list (Jitendex) or through a dictionary that
+     * ships no examples at all — which is why the front-context option looked
+     * dead for most words. Candidates are therefore collected from both
+     * sources, and a sentence that actually CONTAINS the target word wins, so
+     * the highlight has something to mark.
+     */
+    internal fun pickFrontContextSentence(entry: WordEntry): String {
+        val tokens = listOf(entry.expression, entry.reading)
+        val candidates = buildList {
+            if (entry.exampleSentence.isNotBlank()) add(entry.exampleSentence)
+            entry.examples.forEach { if (it.jp.isNotBlank()) add(it.jp) }
+        }.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+
+        return candidates.firstOrNull { SentenceContextHighlighter.containsTarget(it, tokens) }
+            ?: candidates.firstOrNull()
+            ?: ""
+    }
+
     fun createAnkiCard(
         entry: WordEntry,
         audioFileName: String = "",
@@ -1012,7 +1035,7 @@ class AnkiCardCreator(
         // written in kana or kanji.
         val frontContext = if (stylePrefs?.showFrontContextSentence == true) {
             SentenceContextHighlighter.buildHighlightedSentenceHtml(
-                sentence = entry.exampleSentence,
+                sentence = pickFrontContextSentence(entry),
                 preferredTokens = listOf(entry.expression, entry.reading)
             )
         } else {
@@ -1029,6 +1052,11 @@ class AnkiCardCreator(
         val unattachedExamples: List<com.yomitanmobile.domain.model.ExamplePair> = when {
             attachedExamples.isNotEmpty() ->
                 entry.examples.filter { it.definitionIndex < 0 }
+            // The parsed list is always the richer source (ruby segments,
+            // several pairs); the mirrored single columns are only the
+            // fallback for entries that never got a parsed list — and they may
+            // now hold a seeded sentence picked purely for the front side.
+            entry.examples.isNotEmpty() -> entry.examples
             entry.exampleSentence.isNotBlank() -> listOf(
                 com.yomitanmobile.domain.model.ExamplePair(
                     jp = entry.exampleSentence,
