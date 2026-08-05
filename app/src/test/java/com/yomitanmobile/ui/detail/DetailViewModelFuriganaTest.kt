@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.yomitanmobile.data.ai.AiSummaryService
 import com.yomitanmobile.data.anki.AnkiCardCreator
+import com.yomitanmobile.data.anki.AnkiCollectionIndex
+import com.yomitanmobile.data.anki.AnkiCollectionStore
+import com.yomitanmobile.data.anki.MonolingualCardResolver
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.database.AppDatabase
 import com.yomitanmobile.data.local.entity.DictionaryEntry
@@ -70,6 +73,11 @@ class DetailViewModelFuriganaTest {
         sentenceDao = db.sentenceDao(),
         aiSummaryService = AiSummaryService(),
         exportedWordDao = db.exportedWordDao(),
+        ankiCollectionStore = AnkiCollectionStore(
+            AnkiCollectionIndex(context),
+            db.ankiCollectionWordDao()
+        ),
+        monolingualCardResolver = MonolingualCardResolver(repo, context),
         favoriteWordDao = db.favoriteWordDao(),
         lookupCountDao = db.lookupCountDao(),
         appContext = context

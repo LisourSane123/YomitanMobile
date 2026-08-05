@@ -74,10 +74,34 @@ object AvailableDictionaries {
         language = "EN"
     )
 
+    // The only freely licensed Japanese-Japanese dictionary that can be
+    // offered as a one-tap download. Every 国語辞典 the community recommends
+    // (三省堂, 明鏡, 新明解, 大辞泉, 岩波, 広辞苑) is a converted commercial
+    // product handed around on Drive/Mega — not redistributable, and not on a
+    // host the downloader is allowed to touch. Those go in through the
+    // "import dictionary from file" path in Settings instead.
+    //
+    // Wiktionary is thinner than a real 国語辞典 but its definitions are
+    // genuinely Japanese, so it makes the JP-JP card engine usable out of the
+    // box. Pinned to a dated release + sha256.
+    val wiktionaryJaJa = DictionaryDownloadInfo(
+        id = "wiktionary_ja_ja",
+        name = "日本語 Wiktionary (JP-JP)",
+        descriptionPl = "Słownik japońsko-japoński z Wikisłownika. Wolna licencja — działa z trybem fiszek JP-JP.",
+        descriptionEn = "Japanese-Japanese dictionary from Wiktionary. Freely licensed - powers the JP-JP card mode.",
+        category = DictionaryCategory.DICTIONARY,
+        url = "https://github.com/yomidevs/wiktionary-to-yomitan/releases/download/" +
+            "v2025-04-08-10-54-36-00-00/kty-ja-ja.zip",
+        fileSize = "~8 MB",
+        sha256 = "fa74b473d060d86a3cb0fd27c46535d1d70c4e4ab5b47ab1df39d89fc63a0b2c",
+        language = "JA"
+    )
+
     val all: List<DictionaryDownloadInfo> = listOf(
         jitendex,
         jlptVocab,
         jmdict,
+        wiktionaryJaJa,
         DictionaryDownloadInfo(
             id = "jmdict_forms",
             name = "JMdict Forms",
@@ -140,6 +164,72 @@ object AvailableDictionaries {
             sha256 = "7d17054735e738d02e9f7f62fdad5d6e592a458abd93301367500d04d0c000c3",
             language = "EN"
         ),
+        // ── Frequency lists covering the registers JPDB (media/fiction) and
+        // BCCWJ (formal writing) miss. All four are rank-based Yomitan meta
+        // dictionaries pinned to a commit + sha256, same rule as above.
+        //
+        // Everyday spoken Japanese: NINJAL's conversation corpus, recorded
+        // real-life talk. The single best list for "what people actually say"
+        // — words like うん / そう / ちょっと rank at the top here and nowhere
+        // near it in a written corpus.
+        DictionaryDownloadInfo(
+            id = "cejc_freq",
+            name = "CEJC (Conversation)",
+            descriptionPl = "Częstotliwości z korpusu codziennych rozmów (NINJAL CEJC). Najlepsza lista dla języka mówionego.",
+            descriptionEn = "Frequencies from the Corpus of Everyday Japanese Conversation (NINJAL). The best list for spoken Japanese.",
+            category = DictionaryCategory.FREQUENCY,
+            url = "https://raw.githubusercontent.com/forsakeninfinity/CEJC_yomichan_freq_dict/" +
+                "854ed02b791a9ca247d0752fb22d34f1ab3c650f/releases/" +
+                "Corpus%20of%20Everyday%20Japanese%20Conversation.zip",
+            fileSize = "~2 MB",
+            sha256 = "273c603b7ea285debfd8b7d41dc326f97b2fd42c2ed94f22e6dafc1c9cbd8a6b",
+            language = "JA"
+        ),
+        // Spontaneous speech (lectures, monologues) — complements CEJC's
+        // dialogue with the register you meet in talks and presentations.
+        DictionaryDownloadInfo(
+            id = "csj_freq",
+            name = "CSJ (Spoken)",
+            descriptionPl = "Częstotliwości z Korpusu Mowy Spontanicznej (CSJ) – wykłady, wypowiedzi mówione.",
+            descriptionEn = "Frequencies from the Corpus of Spontaneous Japanese (CSJ) - lectures and spoken monologue.",
+            category = DictionaryCategory.FREQUENCY,
+            url = "https://raw.githubusercontent.com/Maltesaa/CSJ_and_NWJC_yomitan_freq_dict/" +
+                "9902cc61eb8bfd9b5f99ad74e46349200777c103/CSJ%20releases/" +
+                "Corpus%20of%20Spontaneous%20Japanese%20-%20CSJ.zip",
+            fileSize = "~3 MB",
+            sha256 = "2d3fd1735129f4d55871ce65125cd45197b8f28894d1fbb59ebd140c9de207c8",
+            language = "JA"
+        ),
+        // Web Japanese: blogs, forums, shops. The register of most casual
+        // written Japanese online, which neither BCCWJ nor JPDB covers.
+        DictionaryDownloadInfo(
+            id = "nwjc_freq",
+            name = "NWJC (Web)",
+            descriptionPl = "Częstotliwości z korpusu japońskiego internetu (NINJAL NWJC) – blogi, fora, sklepy.",
+            descriptionEn = "Frequencies from the NINJAL Web Japanese Corpus - blogs, forums, shops.",
+            category = DictionaryCategory.FREQUENCY,
+            url = "https://raw.githubusercontent.com/Maltesaa/CSJ_and_NWJC_yomitan_freq_dict/" +
+                "9902cc61eb8bfd9b5f99ad74e46349200777c103/NWJC%20releases/" +
+                "NINJAL%20Web%20Japanese%20Corpus%20-%20NWJC.zip",
+            fileSize = "~8 MB",
+            sha256 = "b20b9e6e29f4abf4e9a1a37a59314ea66cf5868cad1a94014847381bda23e8e8",
+            language = "JA"
+        ),
+        // Literary/classical vocabulary from Aozora Bunko. Keyed by kanji
+        // compound (jukugo) with no readings, so it ranks written vocabulary
+        // rather than spoken forms — the counterpart to CEJC.
+        DictionaryDownloadInfo(
+            id = "aozora_freq",
+            name = "Aozora Bunko (Literary)",
+            descriptionPl = "Częstotliwości złożeń kanji z Aozora Bunko – literatura klasyczna i formalna.",
+            descriptionEn = "Kanji-compound frequencies from Aozora Bunko - classical and literary Japanese.",
+            category = DictionaryCategory.FREQUENCY,
+            url = "https://raw.githubusercontent.com/MarvNC/yomitan-dictionaries/" +
+                "574961e823e33fb36b6b86778a0d6b606af29c25/dl/%5BFreq%5D%20Aozora%20Bunko.zip",
+            fileSize = "~1 MB",
+            sha256 = "116009c3034d97a16b257fda10f2138067815986c954bffbb5c93aad60faa867",
+            language = "JA"
+        ),
         DictionaryDownloadInfo(
             id = "kanjium_pitch",
             name = "Kanjium Pitch Accent",
@@ -155,31 +245,33 @@ object AvailableDictionaries {
     )
 
     // ─────────────────────────────────────────────────────────────────────
-    // Self-hosted frequency lists (TO WIRE UP).
+    // Frequency lists that still need a mirror (TO WIRE UP).
     //
-    // docs/freq.txt lists four more frequency dictionaries — Japanese Wikipedia,
-    // Anime & Drama (Subs2SRS), Innocent Corpus, and Narou — that are only
-    // distributed via MarvNC's Google Drive. The downloader's HTTPS allowlist
-    // (ALLOWED_DOWNLOAD_HOSTS in DictionaryDownloadManager) intentionally
-    // permits GitHub hosts only, so Drive links can't be fetched.
+    // These are only distributed through MarvNC's Google Drive folder or
+    // catbox, and ALLOWED_DOWNLOAD_HOSTS in DictionaryDownloadManager permits
+    // GitHub hosts only (so a pinned URL + sha256 can't be swapped under us):
     //
-    // Plan: mirror those zips to a GitHub repo, then add an entry per list to
-    // the `all` list above using this template (no code change beyond the URL):
+    //   • CC100            – web crawl corpus, the list learnjapanese.moe pairs
+    //                        with JPDB
+    //   • Innocent Corpus  – ~5000 visual novel scripts
+    //   • Narou            – 小説家になろう web novels
+    //   • Anime & Drama    – subs2srs subtitle corpus
+    //   • YouTube (x16)    – domain-specific spoken lists
+    //
+    // Once mirrored to a GitHub repo, each becomes one entry in `all` above —
+    // no code change beyond the URL, because storage, per-source display and
+    // the ordering settings already handle any number of FREQUENCY lists (the
+    // zip's index.json title becomes the source label automatically):
     //
     //   DictionaryDownloadInfo(
-    //       id = "wikipedia_freq",
-    //       name = "Japanese Wikipedia Frequency",
-    //       descriptionPl = "Częstotliwości z artykułów Wikipedii.",
-    //       descriptionEn = "Frequencies from Japanese Wikipedia articles.",
+    //       id = "cc100_freq",
+    //       name = "CC100 (Web crawl)",
+    //       descriptionPl = "…", descriptionEn = "…",
     //       category = DictionaryCategory.FREQUENCY,
-    //       url = "https://github.com/<you>/<repo>/raw/main/wikipedia_freq.zip",
+    //       url = "https://raw.githubusercontent.com/<user>/<repo>/<commit>/cc100.zip",
     //       fileSize = "~? MB",
+    //       sha256 = "<sha256sum of the zip>",
     //   ),
-    //   // …same for anime_drama_freq, innocent_corpus_freq, narou_freq.
-    //
-    // Everything downstream (storage, per-source display, ordering settings)
-    // already handles any number of FREQUENCY lists — the title in the zip's
-    // index.json becomes the source label automatically.
     // ─────────────────────────────────────────────────────────────────────
 
     fun getByCategory(category: DictionaryCategory): List<DictionaryDownloadInfo> {

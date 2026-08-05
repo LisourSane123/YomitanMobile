@@ -9,6 +9,8 @@ import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.ai.AiSummaryResult
 import com.yomitanmobile.data.ai.AiSummaryService
 import com.yomitanmobile.data.anki.AnkiCardCreator
+import com.yomitanmobile.data.anki.AnkiCollectionStore
+import com.yomitanmobile.data.anki.MonolingualCardResolver
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
@@ -59,6 +61,15 @@ sealed class DetailEvent {
     data class AlreadyExported(val expression: String, val deckName: String) : DetailEvent()
 
     /**
+     * The word is not in this app's export log, but the stored AnkiDroid
+     * collection scan says a card for it already exists somewhere — a Core /
+     * Kaishi deck, or mining done before this app was installed. The UI offers
+     * "export anyway"; we never block outright, because the scan matches on
+     * the written form and a homograph could be a genuinely different word.
+     */
+    data class AlreadyInCollection(val expression: String) : DetailEvent()
+
+    /**
      * AI summary call failed. The export coroutine is parked on a
      * CompletableDeferred until the UI calls [DetailViewModel.resolveAiFailure]
      * with the user's choice — either finish the card with an empty summary
@@ -84,6 +95,8 @@ class DetailViewModel @Inject constructor(
     private val sentenceDao: SentenceDao,
     private val aiSummaryService: AiSummaryService,
     private val exportedWordDao: ExportedWordDao,
+    private val ankiCollectionStore: AnkiCollectionStore,
+    private val monolingualCardResolver: MonolingualCardResolver,
     private val favoriteWordDao: FavoriteWordDao,
     private val lookupCountDao: LookupCountDao,
     @ApplicationContext private val appContext: Context
@@ -519,6 +532,15 @@ class DetailViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Second guard: a card may exist in AnkiDroid without ever
+                // passing through this app (Core, Kaishi, an older setup). The
+                // stored collection scan knows about those; an empty store just
+                // means "not scanned" and lets the export through.
+                if (isInScannedCollection(safeExpression, safeReading)) {
+                    _events.emit(DetailEvent.AlreadyInCollection(safeExpression))
+                    return@launch
+                }
+
                 performExport(word, sanitizedDeck, includeAiSummary)
             } catch (exception: Exception) {
                 Log.e(logTag, "Export pre-check failed", exception)
@@ -568,6 +590,15 @@ class DetailViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Second guard: a card may exist in AnkiDroid without ever
+                // passing through this app (Core, Kaishi, an older setup). The
+                // stored collection scan knows about those; an empty store just
+                // means "not scanned" and lets the export through.
+                if (isInScannedCollection(safeExpression, safeReading)) {
+                    _events.emit(DetailEvent.AlreadyInCollection(safeExpression))
+                    return@launch
+                }
+
                 performExport(word, sanitizedDeck, includeAiSummary)
             } catch (exception: Exception) {
                 Log.e(logTag, "Export with deck failed", exception)
@@ -584,6 +615,13 @@ class DetailViewModel @Inject constructor(
     private fun normalizeReading(expression: String, reading: String): String {
         return reading.trim().ifBlank { expression.trim() }
     }
+
+    private suspend fun isInScannedCollection(expression: String, reading: String): Boolean =
+        runCatching { ankiCollectionStore.contains(expression, reading) }
+            .getOrElse {
+                Log.w(logTag, "Collection duplicate check failed; allowing the export", it)
+                false
+            }
 
     private suspend fun findExistingExport(
         expression: String,
@@ -634,7 +672,13 @@ class DetailViewModel @Inject constructor(
                 fillSentenceForExport(word, stylePrefs)
             } else {
                 word
-            }.let { enrichExamplesWithFurigana(it) }
+            }
+                .let { enrichExamplesWithFurigana(it) }
+                // Card engine last: it swaps the meaning for a monolingual
+                // definition and strips the sentence translations, so it has to
+                // see the sentences the previous steps attached. A no-op when
+                // the engine is left on JP-EN.
+                .let { monolingualCardResolver.apply(it) }
 
             // Fetch kanji information
             val kanjiChars = wordForExport.expression.filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }.map { it.toString() }.distinct()

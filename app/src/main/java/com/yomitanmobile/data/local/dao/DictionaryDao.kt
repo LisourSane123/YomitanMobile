@@ -212,6 +212,25 @@ interface DictionaryDao {
     )
     suspend fun updateJlptLevelWithReading(expression: String, reading: String, level: Int)
 
+    /**
+     * Entries for a set of words from ONE dictionary. Feeds the monolingual
+     * card engine, which must read the definition from a specific installed
+     * dictionary rather than "whatever matched first".
+     *
+     * Callers MUST chunk below SQLite's 999-variable ceiling — see
+     * IN_CLAUSE_CHUNK in the repository.
+     */
+    @Query(
+        """
+        SELECT * FROM dictionary_entries
+        WHERE dictionary_name = :dictionaryName AND expression IN (:expressions)
+        """
+    )
+    suspend fun getEntriesByExpressionsFromDictionary(
+        expressions: List<String>,
+        dictionaryName: String
+    ): List<DictionaryEntry>
+
     @Query("UPDATE dictionary_entries SET jlpt_level = :level WHERE expression = :expression AND jlpt_level < :level")
     suspend fun updateJlptLevelByExpression(expression: String, level: Int)
 

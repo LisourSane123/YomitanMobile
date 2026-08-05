@@ -88,7 +88,16 @@ fun AppNavHost(
                 },
                 onNavigateToJlptDeck = {
                     navController.navigate(Screen.JlptDeck.route)
+                },
+                onNavigateToAnkiScan = {
+                    navController.navigate(Screen.AnkiScan.route)
                 }
+            )
+        }
+
+        composable(Screen.AnkiScan.route) {
+            com.yomitanmobile.ui.ankiscan.AnkiScanScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

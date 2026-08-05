@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -76,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.MainActivity
+import com.yomitanmobile.data.anki.CardMeaningLanguage
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.flow.first
@@ -94,6 +96,7 @@ fun SettingsScreen(
     onNavigateToDictionaries: () -> Unit = {},
     onNavigateToFrequencyDisplay: () -> Unit = {},
     onNavigateToJlptDeck: () -> Unit = {},
+    onNavigateToAnkiScan: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -124,6 +127,11 @@ fun SettingsScreen(
     var currentThemeMode by remember { mutableStateOf("system") }
     var currentLanguage by remember { mutableStateOf("system") }
     var dailyGoalCount by remember { mutableStateOf(0f) }
+    // Card meaning engine (JP-EN vs JP-JP) and the dictionary the JP-JP mode
+    // reads definitions from.
+    var cardMeaningLanguage by remember { mutableStateOf(CardMeaningLanguage.ENGLISH) }
+    var monolingualDictionary by remember { mutableStateOf("") }
+    var showMonolingualPicker by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     // Load current deck name, theme mode and daily goal
@@ -132,9 +140,64 @@ fun SettingsScreen(
         currentDeckName = prefs[MainActivity.ANKI_DECK_NAME] ?: ""
         currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
         dailyGoalCount = (prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0).toFloat()
+        cardMeaningLanguage = CardMeaningLanguage.fromStorage(prefs[MainActivity.CARD_MEANING_LANGUAGE])
+        monolingualDictionary = prefs[MainActivity.CARD_MONOLINGUAL_DICTIONARY] ?: ""
         // Language is stored in SharedPreferences (needed for synchronous read at startup)
         val langPrefs = context.getSharedPreferences(MainActivity.LANG_PREFS_NAME, android.content.Context.MODE_PRIVATE)
         currentLanguage = langPrefs.getString(MainActivity.LANG_PREFS_KEY, "system") ?: "system"
+    }
+
+    // Picks which installed dictionary supplies JP-JP definitions. Listing the
+    // installed dictionaries (instead of hardcoding a name) is what makes the
+    // engine work with any monolingual zip the user imported themselves — the
+    // commercial 国語辞典 can't be shipped as downloads.
+    if (showMonolingualPicker) {
+        val installed by viewModel.dictionaries.collectAsState()
+        AlertDialog(
+            onDismissRequest = { showMonolingualPicker = false },
+            title = { Text(tr("Słownik JP-JP", "JP-JP dictionary")) },
+            text = {
+                if (installed.isEmpty()) {
+                    Text(
+                        tr(
+                            "Brak zainstalowanych słowników.",
+                            "No dictionaries installed."
+                        )
+                    )
+                } else {
+                    LazyColumn {
+                        items(installed) { info ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        monolingualDictionary = info.name
+                                        showMonolingualPicker = false
+                                        coroutineScope.launch {
+                                            context.dataStore.edit {
+                                                it[MainActivity.CARD_MONOLINGUAL_DICTIONARY] = info.name
+                                            }
+                                        }
+                                    }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(info.name, modifier = Modifier.weight(1f))
+                                if (info.name == monolingualDictionary) {
+                                    Text("✓", color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            Divider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMonolingualPicker = false }) {
+                    Text(tr("Zamknij", "Close"))
+                }
+            }
+        )
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -674,6 +737,97 @@ fun SettingsScreen(
                 }
             }
 
+            // Card engine: which language the Meaning field is written in.
+            item {
+                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            tr("Silnik fiszek", "Card engine"),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            tr(
+                                "Język pola „Znaczenie”. W trybie JP-JP definicja pochodzi z wybranego " +
+                                    "słownika japońsko-japońskiego, a zdania z Jitendex zostają bez " +
+                                    "angielskiego tłumaczenia. Gdy słowa nie ma w słowniku JP-JP, " +
+                                    "zostaje definicja angielska.",
+                                "Language of the Meaning field. In JP-JP mode the definition comes from the " +
+                                    "chosen Japanese-Japanese dictionary and Jitendex sentences keep their " +
+                                    "Japanese only, without the English translation. Words missing from the " +
+                                    "JP-JP dictionary keep their English definition."
+                            ),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = cardMeaningLanguage == CardMeaningLanguage.ENGLISH,
+                                onClick = {
+                                    cardMeaningLanguage = CardMeaningLanguage.ENGLISH
+                                    coroutineScope.launch {
+                                        context.dataStore.edit {
+                                            it[MainActivity.CARD_MEANING_LANGUAGE] =
+                                                CardMeaningLanguage.ENGLISH.storageValue
+                                        }
+                                    }
+                                },
+                                label = { Text("JP → EN") }
+                            )
+                            FilterChip(
+                                selected = cardMeaningLanguage == CardMeaningLanguage.JAPANESE,
+                                onClick = {
+                                    cardMeaningLanguage = CardMeaningLanguage.JAPANESE
+                                    coroutineScope.launch {
+                                        context.dataStore.edit {
+                                            it[MainActivity.CARD_MEANING_LANGUAGE] =
+                                                CardMeaningLanguage.JAPANESE.storageValue
+                                        }
+                                    }
+                                },
+                                label = { Text("JP → JP") }
+                            )
+                        }
+                        if (cardMeaningLanguage == CardMeaningLanguage.JAPANESE) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                tr("Słownik japońsko-japoński", "Japanese-Japanese dictionary"),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedButton(
+                                onClick = { showMonolingualPicker = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    monolingualDictionary.ifBlank {
+                                        tr("Wybierz słownik…", "Pick a dictionary…")
+                                    }
+                                )
+                            }
+                            if (monolingualDictionary.isBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    tr(
+                                        "Bez wybranego słownika tryb JP-JP nic nie zmienia. Zainstaluj np. " +
+                                            "„日本語 Wiktionary” z ekranu pobierania albo zaimportuj własny " +
+                                            "słownik (三省堂, 明鏡…) z pliku.",
+                                        "With no dictionary chosen JP-JP mode changes nothing. Install e.g. " +
+                                            "“日本語 Wiktionary” from the download screen, or import your own " +
+                                            "dictionary (三省堂, 明鏡…) from a file."
+                                    ),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // JLPT deck generator
             item {
                 SettingsClickableItem(
@@ -684,6 +838,20 @@ fun SettingsScreen(
                         "A whole JLPT level as ready-made cards, no mining"
                     ),
                     onClick = onNavigateToJlptDeck
+                )
+            }
+
+            // Anki collection scan — the duplicate guard both mining and the
+            // JLPT generator read from.
+            item {
+                SettingsClickableItem(
+                    icon = Icons.Default.Search,
+                    title = tr("Skan kolekcji Anki", "Anki collection scan"),
+                    subtitle = tr(
+                        "Wykrywa słowa, które już masz (Core, Kaishi, własne) i blokuje duplikaty",
+                        "Detects words you already have (Core, Kaishi, your own) and blocks duplicates"
+                    ),
+                    onClick = onNavigateToAnkiScan
                 )
             }
 

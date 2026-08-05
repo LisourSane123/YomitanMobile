@@ -100,6 +100,7 @@ fun DetailScreen(
     var showDeckDialog by remember { mutableStateOf(false) }
     var availableDecks by remember { mutableStateOf<List<String>>(emptyList()) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
+    var collectionDuplicate by remember { mutableStateOf<String?>(null) }
     var duplicateInfo by remember { mutableStateOf("" to "") }
     // Tracks whether the user clicked the plain or the AI-flavored
     // export button. Carried across deck-pick / duplicate / permission
@@ -129,6 +130,37 @@ fun DetailScreen(
                 viewModel.exportToAnkiWithDeck(deckName, pendingIncludeAi)
             },
             onDismiss = { showDeckDialog = false }
+        )
+    }
+
+    // Word already present in the scanned AnkiDroid collection (Core, Kaishi,
+    // pre-existing mining). Separate from the export log above: this one is
+    // about cards this app never created.
+    collectionDuplicate?.let { expression ->
+        AlertDialog(
+            onDismissRequest = { collectionDuplicate = null },
+            title = { Text(tr("Masz już to słowo w Anki", "You already have this word in Anki")) },
+            text = {
+                Text(tr(
+                    "Skan kolekcji znalazł fiszkę ze słowem \"$expression\" (np. z Core, Kaishi albo " +
+                        "wcześniejszego kopania). Utworzyć mimo to?",
+                    "The collection scan found a card containing \"$expression\" (e.g. from Core, Kaishi or " +
+                        "earlier mining). Create it anyway?"
+                ))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    collectionDuplicate = null
+                    viewModel.forceExport(pendingIncludeAi)
+                }) {
+                    Text(tr("Utwórz mimo to", "Create anyway"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { collectionDuplicate = null }) {
+                    Text(tr("Anuluj", "Cancel"))
+                }
+            }
         )
     }
 
@@ -177,6 +209,9 @@ fun DetailScreen(
                 is DetailEvent.AlreadyExported -> {
                     duplicateInfo = event.expression to event.deckName
                     showDuplicateDialog = true
+                }
+                is DetailEvent.AlreadyInCollection -> {
+                    collectionDuplicate = event.expression
                 }
                 is DetailEvent.AiSummaryFailedNeedsChoice ->
                     aiFailureMessage = event.message

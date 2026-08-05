@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.anki.AnkiCollectionIndex
+import com.yomitanmobile.data.anki.AnkiCollectionStore
+import com.yomitanmobile.data.anki.MonolingualCardResolver
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.JlptTagDao
@@ -55,7 +57,8 @@ sealed class JlptDeckEvent {
 class JlptDeckViewModel @Inject constructor(
     private val repository: DictionaryRepository,
     private val ankiCardCreator: AnkiCardCreator,
-    private val ankiCollectionIndex: AnkiCollectionIndex,
+    private val ankiCollectionStore: AnkiCollectionStore,
+    private val monolingualCardResolver: MonolingualCardResolver,
     private val exportedWordDao: ExportedWordDao,
     private val jlptTagDao: JlptTagDao,
     private val audioPlayer: AudioPlayer,
@@ -155,8 +158,14 @@ class JlptDeckViewModel @Inject constructor(
                 val filters = _filters.value
                 val candidates = collectCandidates(level)
 
+                // Read the stored scan rather than sweeping the collection
+                // again: the scan screen owns that (it needs the permission
+                // prompt and takes seconds), and reusing its result means the
+                // generator and the mining screen agree on what "already have
+                // it" means. An empty store degrades to "not checked", which
+                // the plan reports — never to silently skipping nothing.
                 val index = if (filters.skipAlreadyInAnki) {
-                    ankiCollectionIndex.build()
+                    ankiCollectionStore.asIndex()
                 } else {
                     AnkiCollectionIndex.Index.EMPTY
                 }
@@ -204,8 +213,14 @@ class JlptDeckViewModel @Inject constructor(
                 val tts = if (_filters.value.generateAudio) audioPlayer.getTts() else null
                 val deck = _deckName.value.trim().ifBlank { defaultDeckName(plan.level) }
 
+                // One batched lookup rewrites the whole deck when the JP-JP
+                // engine is on; a no-op otherwise.
+                val entries = monolingualCardResolver.apply(
+                    plan.selected.map { it.toWordEntry() }
+                )
+
                 val result = ankiCardCreator.exportBatchToAnki(
-                    entries = plan.selected.map { it.toWordEntry() },
+                    entries = entries,
                     deckName = deck,
                     stylePrefs = stylePrefs,
                     kanjiProvider = { kanji -> repository.getKanjis(kanji) },

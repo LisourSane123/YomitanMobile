@@ -37,6 +37,16 @@ interface DictionaryRepository {
      */
     suspend fun getEntriesForExpressions(expressions: List<String>): List<WordEntry>
 
+    /**
+     * Same lookup restricted to one installed dictionary. Used by the
+     * monolingual (JP-JP) card engine, which must read the definition from the
+     * dictionary the user picked, not from whichever one matched first.
+     */
+    suspend fun getEntriesForExpressionsFromDictionary(
+        expressions: List<String>,
+        dictionaryName: String
+    ): List<WordEntry>
+
     /** Every installed list's rank for a word, for multi-list display. */
     suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo>
     suspend fun importDictionary(

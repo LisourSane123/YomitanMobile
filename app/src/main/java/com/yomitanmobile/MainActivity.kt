@@ -109,6 +109,13 @@ class MainActivity : ComponentActivity() {
         // hide new sections after an upgrade.
         val CARD_SECTION_ORDER = stringPreferencesKey("card_section_order")
 
+        // Card meaning engine: which language the Meaning field is written in.
+        // "EN" (default) uses whatever the search dictionaries give; "JA" pulls
+        // the definition from a monolingual dictionary named by
+        // CARD_MONOLINGUAL_DICTIONARY. See MonolingualCardResolver.
+        val CARD_MEANING_LANGUAGE = stringPreferencesKey("card_meaning_language")
+        val CARD_MONOLINGUAL_DICTIONARY = stringPreferencesKey("card_monolingual_dictionary")
+
         // Daily goal
         val DAILY_GOAL_COUNT = intPreferencesKey("daily_goal_count") // 0 = disabled
 

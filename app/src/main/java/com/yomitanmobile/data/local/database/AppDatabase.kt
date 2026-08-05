@@ -10,6 +10,7 @@ import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
+import com.yomitanmobile.data.local.dao.AnkiCollectionWordDao
 import com.yomitanmobile.data.local.dao.JlptTagDao
 import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.dao.LookupCountDao
@@ -21,6 +22,7 @@ import com.yomitanmobile.data.local.entity.DictionaryEntryFts
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
+import com.yomitanmobile.data.local.entity.AnkiCollectionWord
 import com.yomitanmobile.data.local.entity.JlptTag
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.LookupCount
@@ -40,9 +42,10 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         Sentence::class,
         LookupCount::class,
         WordFrequency::class,
-        JlptTag::class
+        JlptTag::class,
+        AnkiCollectionWord::class
     ],
-    version = 15,
+    version = 16,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -60,9 +63,33 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun lookupCountDao(): LookupCountDao
     abstract fun frequencyDao(): FrequencyDao
     abstract fun jlptTagDao(): JlptTagDao
+    abstract fun ankiCollectionWordDao(): AnkiCollectionWordDao
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Cached AnkiDroid collection scan. Reading the provider takes
+                // seconds on a real collection, so the duplicate check that
+                // guards both mining and the JLPT generator reads this table
+                // instead of rescanning per word.
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS anki_collection_words (
+                        word TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        scanned_at INTEGER NOT NULL,
+                        PRIMARY KEY (word)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_anki_collection_words_source " +
+                        "ON anki_collection_words(source)"
+                )
+            }
+        }
 
         val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {

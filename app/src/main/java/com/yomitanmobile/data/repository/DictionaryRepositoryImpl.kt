@@ -129,6 +129,26 @@ class DictionaryRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getEntriesForExpressionsFromDictionary(
+        expressions: List<String>,
+        dictionaryName: String
+    ): List<WordEntry> {
+        if (expressions.isEmpty() || dictionaryName.isBlank()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            try {
+                expressions.distinct()
+                    .chunked(IN_CLAUSE_CHUNK)
+                    .flatMap { chunk ->
+                        dictionaryDao.getEntriesByExpressionsFromDictionary(chunk, dictionaryName)
+                    }
+                    .map { it.toDomain() }
+            } catch (e: Exception) {
+                Log.w(TAG, "getEntriesForExpressionsFromDictionary('$dictionaryName') failed", e)
+                emptyList()
+            }
+        }
+    }
+
     override fun searchExact(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
         val trimmed = query.trim()

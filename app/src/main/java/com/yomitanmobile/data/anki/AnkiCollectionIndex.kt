@@ -69,10 +69,16 @@ class AnkiCollectionIndex @Inject constructor(
     suspend fun build(
         deckNames: List<String> = emptyList(),
         maxNotes: Int = MAX_NOTES
-    ): Index = withContext(Dispatchers.IO) {
+    ): Index = scan(deckNames, maxNotes).index
+
+    /** Full sweep, including the per-note-type breakdown. */
+    suspend fun scan(
+        deckNames: List<String> = emptyList(),
+        maxNotes: Int = MAX_NOTES
+    ): Scan = withContext(Dispatchers.IO) {
         if (!hasPermission()) {
             Log.i(TAG, "Anki read permission missing — duplicate check disabled")
-            return@withContext Index.EMPTY
+            return@withContext Scan.EMPTY
         }
 
         // The provider interprets `selection` as an Anki search string, but
@@ -92,20 +98,43 @@ class AnkiCollectionIndex @Inject constructor(
                 Log.i(TAG, "Search '$search' matched no notes; trying a broader one")
                 continue
             }
-            Log.i(TAG, "Indexed ${scan.noteCount} notes -> ${scan.keyCount} word keys")
-            return@withContext scan.index
+            Log.i(TAG, "Indexed ${scan.noteCount} notes -> ${scan.wordCount} word keys")
+            return@withContext scan
         }
-        Index.EMPTY
+        Scan.EMPTY
     }
 
-    private class ScanResult(val index: Index, val noteCount: Int, val keyCount: Int)
+    /**
+     * Result of one provider sweep: the lookup index plus, for every word, the
+     * note type it was first seen in. The note type is not used for matching —
+     * it exists so the scan screen can show WHERE the matches came from, which
+     * is the only way to tell "the provider returned nothing" apart from "the
+     * collection really has no Japanese notes".
+     */
+    class Scan(
+        val index: Index,
+        val wordSources: Map<String, String>,
+        val noteCount: Int
+    ) {
+        val wordCount: Int get() = wordSources.size
+
+        companion object {
+            val EMPTY = Scan(Index.EMPTY, emptyMap(), 0)
+        }
+    }
 
     /** Runs one search; null means the provider refused it. */
-    private fun scanNotes(search: String?, maxNotes: Int): ScanResult? {
-        val keys = HashSet<String>(4096)
+    private fun scanNotes(search: String?, maxNotes: Int): Scan? {
+        val sources = LinkedHashMap<String, String>(4096)
+        val perNote = HashSet<String>(16)
         var notes = 0
         return try {
-            val projection = arrayOf(FlashCardsContract.Note._ID, FlashCardsContract.Note.FLDS)
+            val modelNames = loadModelNames()
+            val projection = arrayOf(
+                FlashCardsContract.Note._ID,
+                FlashCardsContract.Note.FLDS,
+                FlashCardsContract.Note.MID
+            )
             val cursor = context.contentResolver.query(
                 FlashCardsContract.Note.CONTENT_URI,
                 projection,
@@ -122,13 +151,23 @@ class AnkiCollectionIndex @Inject constructor(
                     Log.w(TAG, "Note provider returned no ${FlashCardsContract.Note.FLDS} column")
                     return null
                 }
+                val midIndex = it.getColumnIndex(FlashCardsContract.Note.MID)
                 while (it.moveToNext() && notes < maxNotes) {
                     notes++
                     val flds = it.getString(fldsIndex) ?: continue
-                    AnkiNoteFieldIndexer.collectKeysFromNote(flds, keys)
+                    val noteType = if (midIndex >= 0) {
+                        modelNames[runCatching { it.getLong(midIndex) }.getOrNull()].orEmpty()
+                    } else {
+                        ""
+                    }
+                    perNote.clear()
+                    AnkiNoteFieldIndexer.collectKeysFromNote(flds, perNote)
+                    // First note type wins: a word shared by Core and a mining
+                    // deck is reported once, under whichever was scanned first.
+                    for (key in perNote) sources.putIfAbsent(key, noteType)
                 }
             }
-            ScanResult(Index(keys, notes, available = true), notes, keys.size)
+            Scan(Index(sources.keys.toSet(), notes, available = true), sources, notes)
         } catch (e: Exception) {
             // Older AnkiDroid builds, a revoked permission or a locked
             // collection all land here. The generator degrades to "no
@@ -136,6 +175,34 @@ class AnkiCollectionIndex @Inject constructor(
             Log.w(TAG, "Collection scan failed for search='$search'", e)
             null
         }
+    }
+
+    /**
+     * Model id → note type name. One extra provider query for the whole
+     * collection; if it fails the scan still works, just without labels.
+     */
+    private fun loadModelNames(): Map<Long, String> = try {
+        val out = HashMap<Long, String>()
+        context.contentResolver.query(
+            FlashCardsContract.Model.CONTENT_URI,
+            arrayOf(FlashCardsContract.Model._ID, FlashCardsContract.Model.NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val idIndex = cursor.getColumnIndex(FlashCardsContract.Model._ID)
+            val nameIndex = cursor.getColumnIndex(FlashCardsContract.Model.NAME)
+            if (idIndex >= 0 && nameIndex >= 0) {
+                while (cursor.moveToNext()) {
+                    val id = cursor.getString(idIndex)?.toLongOrNull() ?: continue
+                    out[id] = cursor.getString(nameIndex).orEmpty()
+                }
+            }
+        }
+        out
+    } catch (e: Exception) {
+        Log.w(TAG, "Reading note types failed; scan continues without labels", e)
+        emptyMap()
     }
 
     private fun hasPermission(): Boolean =
