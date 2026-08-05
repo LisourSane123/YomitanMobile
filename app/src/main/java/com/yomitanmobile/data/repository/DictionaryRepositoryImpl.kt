@@ -4,10 +4,12 @@ import android.util.Log
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.FrequencyDao
+import com.yomitanmobile.data.local.dao.JlptTagDao
 import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.database.AppDatabase
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.DictionaryInfo
+import com.yomitanmobile.data.local.entity.JlptTag
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.WordFrequency
 import com.yomitanmobile.data.mapper.toDomain
@@ -34,6 +36,7 @@ class DictionaryRepositoryImpl @Inject constructor(
     private val dictionaryInfoDao: DictionaryInfoDao,
     private val kanjiDao: KanjiDao,
     private val frequencyDao: FrequencyDao,
+    private val jlptTagDao: JlptTagDao,
     private val parser: YomitanDictionaryParser,
     private val database: AppDatabase
 ) : DictionaryRepository {
@@ -96,6 +99,33 @@ class DictionaryRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "getReadingsForExpressions failed (${expressions.size} expressions)", e)
             emptyMap()
+        }
+    }
+
+    override suspend fun getEntriesByJlptLevel(level: Int): List<WordEntry> {
+        if (level !in 1..5) return emptyList()
+        return withContext(Dispatchers.IO) {
+            try {
+                dictionaryDao.getEntriesByJlptLevel(level).map { it.toDomain() }
+            } catch (e: Exception) {
+                Log.w(TAG, "getEntriesByJlptLevel($level) failed", e)
+                emptyList()
+            }
+        }
+    }
+
+    override suspend fun getEntriesForExpressions(expressions: List<String>): List<WordEntry> {
+        if (expressions.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            try {
+                expressions.distinct()
+                    .chunked(IN_CLAUSE_CHUNK)
+                    .flatMap { chunk -> dictionaryDao.getEntriesByExpressions(chunk) }
+                    .map { it.toDomain() }
+            } catch (e: Exception) {
+                Log.w(TAG, "getEntriesForExpressions failed (${expressions.size} expressions)", e)
+                emptyList()
+            }
         }
     }
 
@@ -221,6 +251,20 @@ class DictionaryRepositoryImpl @Inject constructor(
                 },
                 onJlptBatch = { jlptUpdates ->
                     if (jlptUpdates.isNotEmpty()) {
+                        // Persist first, apply second. The table is the source
+                        // of truth: term rows lose their jlpt_level on every
+                        // re-import, and a tag dictionary installed before its
+                        // term dictionary would have nothing to update at all.
+                        jlptTagDao.insertAll(
+                            jlptUpdates.map { u ->
+                                JlptTag(
+                                    expression = u.expression,
+                                    reading = u.reading?.trim().orEmpty(),
+                                    dictionary = tempDictionaryName,
+                                    level = u.level
+                                )
+                            }
+                        )
                         dictionaryDao.updateJlptLevelBatch(jlptUpdates)
                         totalJlptUpdates += jlptUpdates.size
                     }
@@ -236,6 +280,9 @@ class DictionaryRepositoryImpl @Inject constructor(
             if (dictionaryNameFromBatch != tempDictionaryName) {
                 frequencyDao.deleteByDictionary(dictionaryNameFromBatch)
                 frequencyDao.updateDictionaryName(tempDictionaryName, dictionaryNameFromBatch)
+                // Same replace-don't-duplicate rename for the JLPT tag rows.
+                jlptTagDao.deleteByDictionary(dictionaryNameFromBatch)
+                jlptTagDao.updateDictionaryName(tempDictionaryName, dictionaryNameFromBatch)
             }
 
             // For meta-only dictionaries (frequency/pitch), we don't insert term entries
@@ -260,6 +307,17 @@ class DictionaryRepositoryImpl @Inject constructor(
                     dictionaryDao.rebuildFtsIndex()
                 } catch (_: Exception) { /* FTS rebuild error */ }
             }
+
+            // Roll the stored meta tables back down onto the term rows. Needed
+            // in both directions:
+            //  • a term import writes rows with jlpt_level = 0 / frequency = 0
+            //    (a plain JMdict carries neither) and replaces rows that had
+            //    the meta data applied to them,
+            //  • a meta import may have arrived BEFORE the term dictionary it
+            //    describes, so its per-row updates matched nothing.
+            // Without this the JLPT deck generator silently drops to zero
+            // candidates depending only on install order.
+            reapplyStoredMeta()
 
             // Clean up any previous DictionaryInfo for this dictionary (both meta and regular)
             val existingInfo = dictionaryInfoDao.getByName(dictionaryNameFromBatch)
@@ -308,6 +366,32 @@ class DictionaryRepositoryImpl @Inject constructor(
         dictionaryDao.deleteByDictionary(tempDictionaryName)
         kanjiDao.deleteByDictionary(tempDictionaryName)
         frequencyDao.deleteByDictionary(tempDictionaryName)
+        jlptTagDao.deleteByDictionary(tempDictionaryName)
+    }
+
+    /**
+     * Re-applies the two side tables (`jlpt_tags`, `word_frequencies`) onto
+     * `dictionary_entries`. Runs after every import, so the term rows always
+     * reflect all installed meta data no matter what order things were
+     * installed or reinstalled in. Both statements only ever improve a row
+     * (easiest JLPT level wins, best frequency rank wins), so running it more
+     * often than strictly necessary is safe.
+     *
+     * Failures are logged and swallowed: the import itself already succeeded,
+     * and the next import (or a manual re-import of the meta dictionary)
+     * repairs the rollup.
+     */
+    private suspend fun reapplyStoredMeta() {
+        try {
+            dictionaryDao.applyJlptLevelsFromTags()
+        } catch (e: Exception) {
+            Log.w(TAG, "Re-applying stored JLPT levels failed", e)
+        }
+        try {
+            dictionaryDao.applyFrequenciesFromTable()
+        } catch (e: Exception) {
+            Log.w(TAG, "Re-applying stored frequencies failed", e)
+        }
     }
 
     override suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo> {
@@ -326,6 +410,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             dictionaryDao.deleteByDictionary(dictionaryName)
             kanjiDao.deleteByDictionary(dictionaryName)
             frequencyDao.deleteByDictionary(dictionaryName)
+            jlptTagDao.deleteByDictionary(dictionaryName)
             dictionaryInfoDao.deleteByName(dictionaryName)
             try {
                 dictionaryDao.rebuildFtsIndex()

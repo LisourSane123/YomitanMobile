@@ -2,6 +2,7 @@ package com.yomitanmobile.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class JlptVocabularyTest {
@@ -95,6 +96,28 @@ class JlptVocabularyTest {
     fun lookupWithBlankReadingFallsBackToExpression() {
         // For kana-only words, a missing reading is OK because expression == reading.
         assertEquals(5, JlptVocabulary.getLevel("ありがとう", ""))
+    }
+
+    @Test
+    fun wordsForLevelEnumeratesTheCuratedList() {
+        val n5 = JlptVocabulary.wordsForLevel(5)
+
+        assertTrue(n5.isNotEmpty())
+        assertTrue("食べる" to "たべる" in n5)
+        // Every pair must round-trip through the level lookup, otherwise the
+        // deck generator would build candidates the rest of the app disagrees
+        // with.
+        assertTrue(n5.all { (expression, reading) ->
+            JlptVocabulary.getLevel(expression, reading) == 5
+        })
+        // Kana-only lines carry the same string in both slots.
+        assertTrue(n5.none { it.first.isBlank() || it.second.isBlank() })
+    }
+
+    @Test
+    fun wordsForLevelIsEmptyForUnknownLevels() {
+        assertTrue(JlptVocabulary.wordsForLevel(0).isEmpty())
+        assertTrue(JlptVocabulary.wordsForLevel(6).isEmpty())
     }
 
     @Test

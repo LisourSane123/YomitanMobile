@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -92,6 +93,7 @@ fun SettingsScreen(
     onNavigateToCardStyle: () -> Unit = {},
     onNavigateToDictionaries: () -> Unit = {},
     onNavigateToFrequencyDisplay: () -> Unit = {},
+    onNavigateToJlptDeck: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -670,6 +672,19 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+
+            // JLPT deck generator
+            item {
+                SettingsClickableItem(
+                    icon = Icons.Default.School,
+                    title = tr("Generator talii JLPT", "JLPT deck generator"),
+                    subtitle = tr(
+                        "Cała lista słów z poziomu jako gotowe fiszki, bez kopania",
+                        "A whole JLPT level as ready-made cards, no mining"
+                    ),
+                    onClick = onNavigateToJlptDeck
+                )
             }
 
             // ═══════════════════════════════════════

@@ -41,6 +41,7 @@ class FuriganaFallbackDbTest {
             dictionaryInfoDao = db.dictionaryInfoDao(),
             kanjiDao = db.kanjiDao(),
             frequencyDao = db.frequencyDao(),
+            jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
             database = db
         )

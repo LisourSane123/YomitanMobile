@@ -11,7 +11,9 @@ import androidx.room.PrimaryKey
         Index(value = ["expression"]),
         Index(value = ["reading"]),
         Index(value = ["dictionary_name"]),
-        Index(value = ["frequency"])
+        Index(value = ["frequency"]),
+        // The JLPT deck generator selects a whole level in one query.
+        Index(value = ["jlpt_level"])
     ]
 )
 data class DictionaryEntry(

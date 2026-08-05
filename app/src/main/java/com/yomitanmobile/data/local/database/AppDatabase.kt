@@ -10,6 +10,7 @@ import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
+import com.yomitanmobile.data.local.dao.JlptTagDao
 import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.dao.LookupCountDao
 import com.yomitanmobile.data.local.dao.FrequencyDao
@@ -20,6 +21,7 @@ import com.yomitanmobile.data.local.entity.DictionaryEntryFts
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
+import com.yomitanmobile.data.local.entity.JlptTag
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.LookupCount
 import com.yomitanmobile.data.local.entity.SearchHistory
@@ -37,9 +39,10 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         KanjiEntry::class,
         Sentence::class,
         LookupCount::class,
-        WordFrequency::class
+        WordFrequency::class,
+        JlptTag::class
     ],
-    version = 14,
+    version = 15,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -56,9 +59,53 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun sentenceDao(): SentenceDao
     abstract fun lookupCountDao(): LookupCountDao
     abstract fun frequencyDao(): FrequencyDao
+    abstract fun jlptTagDao(): JlptTagDao
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Persistent JLPT tag storage — see the JlptTag entity. Until
+                // now the level only existed as a column on term rows, so it
+                // was lost whenever a term dictionary was re-imported and never
+                // written at all when the tag dictionary was installed first.
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS jlpt_tags (
+                        expression TEXT NOT NULL,
+                        reading TEXT NOT NULL,
+                        dictionary TEXT NOT NULL,
+                        level INTEGER NOT NULL,
+                        PRIMARY KEY (expression, reading, dictionary)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_jlpt_tags_expression ON jlpt_tags(expression)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_jlpt_tags_expression_reading ON jlpt_tags(expression, reading)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_jlpt_tags_dictionary ON jlpt_tags(dictionary)")
+
+                // Backfill from whatever levels the current rows still carry so
+                // an existing install keeps its JLPT data (and survives the next
+                // re-import). The source is unknown, hence the placeholder name.
+                db.execSQL(
+                    """
+                    INSERT OR REPLACE INTO jlpt_tags (expression, reading, dictionary, level)
+                    SELECT expression, reading, 'imported', MAX(jlpt_level)
+                    FROM dictionary_entries
+                    WHERE jlpt_level > 0
+                    GROUP BY expression, reading
+                    """.trimIndent()
+                )
+
+                // The deck generator selects a whole level at once; without this
+                // that is a full scan of every term row.
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_dictionary_entries_jlpt_level " +
+                        "ON dictionary_entries(jlpt_level)"
+                )
+            }
+        }
 
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {

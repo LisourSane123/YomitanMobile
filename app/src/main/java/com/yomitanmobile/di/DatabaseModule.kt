@@ -41,7 +41,8 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_10_11,
                 AppDatabase.MIGRATION_11_12,
                 AppDatabase.MIGRATION_12_13,
-                AppDatabase.MIGRATION_13_14
+                AppDatabase.MIGRATION_13_14,
+                AppDatabase.MIGRATION_14_15
             )
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -162,5 +163,11 @@ object DatabaseModule {
     @Singleton
     fun provideFrequencyDao(database: AppDatabase): com.yomitanmobile.data.local.dao.FrequencyDao {
         return database.frequencyDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideJlptTagDao(database: AppDatabase): com.yomitanmobile.data.local.dao.JlptTagDao {
+        return database.jlptTagDao()
     }
 }

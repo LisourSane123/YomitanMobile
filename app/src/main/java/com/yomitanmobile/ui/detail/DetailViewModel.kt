@@ -17,6 +17,7 @@ import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
 import com.yomitanmobile.data.mapper.toKanjiInfo
+import com.yomitanmobile.data.settings.readCardStylePreferences
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.KanjiInfo
@@ -605,52 +606,8 @@ class DetailViewModel @Inject constructor(
         return null
     }
 
-    private suspend fun loadCardStylePreferences(): CardStylePreferences {
-        val prefs = appContext.dataStore.data.first()
-        // Single source of truth for defaults: fall back to the data class's
-        // own defaults for any key the user hasn't overridden, so the exported
-        // card and the CardStyleScreen can never disagree on what "default"
-        // means.
-        val d = CardStylePreferences()
-        return CardStylePreferences(
-            expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: d.expressionBold,
-            expressionFontSize = prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: d.expressionFontSize,
-            readingFontSize = prefs[MainActivity.CARD_READING_FONT_SIZE] ?: d.readingFontSize,
-            meaningFontSize = prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: d.meaningFontSize,
-            frontContextSentenceFontSize = prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: d.frontContextSentenceFontSize,
-            backSentenceFontSize = prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: d.backSentenceFontSize,
-            fontFamily = prefs[MainActivity.CARD_FONT_FAMILY] ?: d.fontFamily,
-            cardBackgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: d.cardBackgroundColor,
-            expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: d.expressionColor,
-            readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: d.readingColor,
-            meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: d.meaningColor,
-            accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: d.accentColor,
-            furiganaColor = prefs[MainActivity.CARD_FURIGANA_COLOR] ?: d.furiganaColor,
-            showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: d.showPitchAccent,
-            pitchAccentStyle = PitchAccentStyle.fromStorage(
-                prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] ?: d.pitchAccentStyle.storageValue
-            ),
-            showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: d.showFrequency,
-            showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: d.showSentence,
-            showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: d.showFrontContextSentence,
-            randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: d.randomFontsEnabled,
-            randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: d.randomFonts,
-            randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: d.randomVoicesEnabled,
-            randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: d.randomVoices,
-            showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: d.showSectionDividers,
-            aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false,
-            aiProvider = com.yomitanmobile.data.ai.AiProvider.fromStorage(
-                prefs[MainActivity.CARD_AI_PROVIDER]
-            ),
-            aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: "",
-            aiPrompt = prefs[MainActivity.CARD_AI_PROMPT]
-                ?: com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT,
-            aiModel = prefs[MainActivity.CARD_AI_MODEL] ?: "",
-            sectionOrder = com.yomitanmobile.domain.model.CardSection.decode(
-                prefs[MainActivity.CARD_SECTION_ORDER]
-            )
-        )
-    }
+    private suspend fun loadCardStylePreferences(): CardStylePreferences =
+        readCardStylePreferences(appContext.dataStore.data.first())
 
     private suspend fun performExport(
         word: WordEntry,

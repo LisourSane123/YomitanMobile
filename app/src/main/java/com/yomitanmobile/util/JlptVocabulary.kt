@@ -43,6 +43,30 @@ object JlptVocabulary {
         return 0
     }
 
+    /**
+     * Every curated (expression, reading) pair for one level, easiest level
+     * first in the source data. Used by the bulk JLPT deck generator as a
+     * floor: whatever the installed dictionaries tag themselves, these words
+     * are always considered for the level.
+     *
+     * The list is deliberately incomplete (see the class docs) — a
+     * JLPT-tagged dictionary such as Jitendex carries far more.
+     */
+    fun wordsForLevel(level: Int): List<Pair<String, String>> {
+        val raw = LEVELS_EASIEST_FIRST.firstOrNull { it.second == level }?.first ?: return emptyList()
+        return raw.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { line ->
+                val parts = line.split('\t', limit = 2)
+                val expression = parts[0]
+                val reading = if (parts.size == 2) parts[1] else parts[0]
+                expression to reading
+            }
+            .distinct()
+            .toList()
+    }
+
     private fun String.isKanaOnly(): Boolean {
         if (isEmpty()) return false
         return all { c ->

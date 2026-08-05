@@ -177,10 +177,42 @@ interface DictionaryDao {
         }
     }
 
-    @Query("UPDATE dictionary_entries SET jlpt_level = :level WHERE expression = :expression AND reading = :reading AND jlpt_level = 0")
+    /**
+     * Every entry a dictionary tagged with the given JLPT level. Feeds the
+     * bulk JLPT deck generator; the ordering puts the most frequent words
+     * first so a capped deck keeps the useful half.
+     */
+    @Query("""
+        SELECT * FROM dictionary_entries
+        WHERE jlpt_level = :level
+        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
+    """)
+    suspend fun getEntriesByJlptLevel(level: Int): List<DictionaryEntry>
+
+    /**
+     * Exact-expression batch lookup. Callers MUST chunk the list well below
+     * SQLite's 999-variable ceiling — see IN_CLAUSE_CHUNK in the repository.
+     */
+    @Query("""
+        SELECT * FROM dictionary_entries
+        WHERE expression IN (:expressions)
+        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
+    """)
+    suspend fun getEntriesByExpressions(expressions: List<String>): List<DictionaryEntry>
+
+    // A word may be tagged by several sources, or belong to more than one
+    // level in the same source. The lower tier wins (5 = N5 = easiest): the
+    // word should be learned at the earliest level it appears in, which is
+    // also the rule MergedWordEntry.mergeEntries applies when grouping.
+    @Query(
+        """
+        UPDATE dictionary_entries SET jlpt_level = :level
+        WHERE expression = :expression AND reading = :reading AND jlpt_level < :level
+        """
+    )
     suspend fun updateJlptLevelWithReading(expression: String, reading: String, level: Int)
 
-    @Query("UPDATE dictionary_entries SET jlpt_level = :level WHERE expression = :expression AND jlpt_level = 0")
+    @Query("UPDATE dictionary_entries SET jlpt_level = :level WHERE expression = :expression AND jlpt_level < :level")
     suspend fun updateJlptLevelByExpression(expression: String, level: Int)
 
     @androidx.room.Transaction
@@ -194,4 +226,55 @@ interface DictionaryDao {
             }
         }
     }
+
+    /**
+     * Re-applies every stored JLPT tag onto the term rows in one statement.
+     *
+     * This is what makes the JLPT data survive: term rows are deleted and
+     * re-inserted on every re-import (losing their `jlpt_level`), and a meta
+     * dictionary imported BEFORE its term dictionary has nothing to write to.
+     * Running this after each import repairs both cases regardless of order.
+     *
+     * A tag row with an empty reading matches on the expression alone; MAX
+     * picks the easiest level when several tags cover the same word.
+     */
+    @Query(
+        """
+        UPDATE dictionary_entries SET jlpt_level = MAX(jlpt_level, COALESCE((
+            SELECT MAX(t.level) FROM jlpt_tags t
+            WHERE t.expression = dictionary_entries.expression
+              AND (t.reading = dictionary_entries.reading OR t.reading = '')
+        ), 0))
+        WHERE EXISTS (
+            SELECT 1 FROM jlpt_tags t
+            WHERE t.expression = dictionary_entries.expression
+              AND (t.reading = dictionary_entries.reading OR t.reading = '')
+        )
+        """
+    )
+    suspend fun applyJlptLevelsFromTags()
+
+    /**
+     * Same idea for frequency: `dictionary_entries.frequency` is the best rank
+     * across installed lists and is used for search ordering AND for the JLPT
+     * deck's rarity filter, but it lives on rows a term re-import throws away.
+     * `word_frequencies` keeps the real data, so roll it back down afterwards.
+     */
+    @Query(
+        """
+        UPDATE dictionary_entries SET frequency = COALESCE((
+            SELECT MIN(f.rank) FROM word_frequencies f
+            WHERE f.expression = dictionary_entries.expression
+              AND (f.reading = dictionary_entries.reading OR f.reading = '')
+              AND f.rank > 0
+        ), frequency)
+        WHERE EXISTS (
+            SELECT 1 FROM word_frequencies f
+            WHERE f.expression = dictionary_entries.expression
+              AND (f.reading = dictionary_entries.reading OR f.reading = '')
+              AND f.rank > 0
+        )
+        """
+    )
+    suspend fun applyFrequenciesFromTable()
 }

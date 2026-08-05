@@ -33,19 +33,21 @@ Clean architecture in three layers: `data/`, `domain/`, `ui/`, wired together wi
 - `usecase/` — `SearchDictionaryUseCase`, `GetWordDetailUseCase`, `DictionaryManagementUseCases`
 
 ### Data layer (`data/`)
-- **Room** (`data/local/`): `AppDatabase` at version 14 with migrations defined inline. Tables: `DictionaryEntry` (FTS-enabled via `DictionaryEntryFts`), `DictionaryInfo`, `ExportedWord`, `FavoriteWord`, `SearchHistory`, `KanjiEntry`, `Sentence`, `LookupCount`, `WordFrequency`. Complex columns (lists, JSON) use `Converters.kt`.
+- **Room** (`data/local/`): `AppDatabase` at version 15 with migrations defined inline. Tables: `DictionaryEntry` (FTS-enabled via `DictionaryEntryFts`), `DictionaryInfo`, `ExportedWord`, `FavoriteWord`, `SearchHistory`, `KanjiEntry`, `Sentence`, `LookupCount`, `WordFrequency`, `JlptTag`. Complex columns (lists, JSON) use `Converters.kt`.
 - **Parser** (`data/parser/YomitanDictionaryParser`): streaming ZIP parser for Yomitan/Yomichan dictionary format. ZIP contains `index.json` + `term_bank_N.json` files. Handles both term dictionaries and meta dictionaries (frequency/pitch data).
 - **Repository** (`data/repository/DictionaryRepositoryImpl`): delegates search to `DictionaryDao` which uses FTS for expression/reading and a separate path for EN definition search.
-- **Anki** (`data/anki/AnkiCardCreator`): integrates with AnkiDroid via `AddContentApi`. Anki model name is `Yomitan-Mobile-v8` (stable — do not bump unless `FIELD_NAMES` changes). Fields: `Front`, `FrontContext`, `Reading`, `Meaning`, `PitchAccent`, `Frequency`, `Audio`, `Sentence`, `KanjiBreakdown`, `Summary`.
+- **Anki** (`data/anki/AnkiCardCreator`): integrates with AnkiDroid via `AddContentApi`. Anki model name is `Yomitan-Mobile-v8` (stable — do not bump unless `FIELD_NAMES` changes). Fields: `Front`, `FrontContext`, `Reading`, `Meaning`, `PitchAccent`, `Frequency`, `Audio`, `Sentence`, `KanjiBreakdown`, `Summary`. `exportBatchToAnki()` is the bulk path used by the JLPT deck generator: it resolves model/deck/CSS once and writes through `addNotes` in chunks of 50, with no AI summaries and audio only on request.
+- **Anki duplicate scan** (`data/anki/AnkiCollectionIndex` + `AnkiNoteFieldIndexer`): reads the whole AnkiDroid collection through `FlashCardsContract.Note` (selection = Anki search string) and indexes every short, purely-Japanese field value. Note-type agnostic on purpose, so it matches Core 2k/6k/10k, Kaishi 1.5k and hand-rolled note types without per-deck field mappings; `漢字[かんじ]` ruby fields are indexed under both the expression and the reading. Degrades to "unavailable" (never to false positives) when the provider can't be read.
 - **AI summaries** (`data/ai/`): optional, opt-in summary text on Anki exports. `AiSummaryService` talks to Gemini / DeepSeek / OpenAI against a hardcoded HTTPS host allowlist; the user supplies their own API key (header-based auth, never in the URL). The key lives in DataStore (`CARD_AI_API_KEY`) and is excluded from backups in `BackupManager` on both export and import.
 - **Download** (`data/download/DictionaryDownloadManager`): validates HTTPS URLs against an allowlist before downloading; entries in `AvailableDictionaries` with a `sha256` set are checksum-verified after download.
+- **Meta side tables** (`word_frequencies`, `jlpt_tags`): frequency ranks and JLPT levels are stored independently of the term rows, because `dictionary_entries` is deleted and re-inserted on every re-import (and a meta dictionary installed BEFORE its term dictionary has nothing to update). `DictionaryRepositoryImpl.reapplyStoredMeta()` runs `applyJlptLevelsFromTags()` + `applyFrequenciesFromTable()` after every import, so install order no longer matters. Both statements only improve a row — easiest JLPT level wins (5 = N5), best frequency rank wins. Removing this is what silently emptied the JLPT deck generator.
 - **Backup** (`data/backup/BackupManager`): user-triggered folder backups (DB + whitelisted settings JSON) under `getExternalFilesDir`. WAL is checkpointed before the DB copy, and restore deletes stale `-wal`/`-shm` sidecars before overwriting — keep both invariants if touching this code.
 - **Sentences**: example sentences come from two local sources only — Jitendex examples attached to each entry (with per-sense `definitionIndex`) and the pre-seeded `SentenceDao`. The former online Tatoeba fetch (`OnlineSentenceService`) was **removed**; there is no network sentence lookup and no consent flag anymore.
 
 ### UI layer (`ui/`)
 MVVM with Jetpack Compose. Each screen has a paired `ViewModel`. Navigation is defined in `ui/navigation/AppNavHost.kt` with sealed `Screen` routes.
 
-Key screens: `SearchScreen` (main), `DetailScreen` (word details + Anki export), `DictionaryDownloadScreen`, `SetupScreen`, `FavoritesScreen`, `StatisticsScreen`, `SettingsScreen`, `CardStyleScreen`.
+Key screens: `SearchScreen` (main), `DetailScreen` (word details + Anki export), `DictionaryDownloadScreen`, `SetupScreen`, `FavoritesScreen`, `StatisticsScreen`, `SettingsScreen`, `CardStyleScreen`, `JlptDeckScreen`.
 
 ### Search pipeline
 `SearchViewModel` → `SearchDictionaryUseCase` → `DictionaryRepository` → `DictionaryDao`
@@ -55,6 +57,17 @@ Key screens: `SearchScreen` (main), `DetailScreen` (word details + Anki export),
 - **Romaji mode**: converts via `RomajiConverter` then searches as JP.
 - Mode is auto-detected from the script per keystroke; there is deliberately NO user-facing mode toggle (the app should figure out intent itself). Romaji input is covered automatically by the EN-mode fallback, which converts the query to hiragana and merges those results in. `SearchViewModel.toggleSearchMode()` + `manualModeOverride` + the ROMAJI enum value survive as internal, tested machinery, but no UI calls them.
 - Debounce is 100 ms in `SearchViewModel`; results are merged via `MergedWordEntry.mergeEntries()` which groups by `(expression, reading)` key.
+
+### JLPT deck generator
+`JlptDeckScreen` → `JlptDeckViewModel` → `JlptDeckPlanner` (pure, `domain/usecase/`) → `AnkiCardCreator.exportBatchToAnki()`.
+
+Builds a whole JLPT level as cards without mining. Candidates are the union of dictionary entries tagged with the level (`jlpt_level` column, fed from `jlpt_tags`) and `JlptVocabulary.wordsForLevel()` resolved against the installed dictionaries. The built-in list is curated and deliberately small (844 words across all five levels), so **deck completeness comes from the `JLPT Vocab Tags` meta dictionary** (~8000 words, in `AvailableDictionaries`); when no installed dictionary tags the selected level, `JlptDeckScreen` says so upfront rather than after an empty analysis.
+
+`JlptDeckPlanner` matches tags token by token: `MergedWordEntry.partsOfSpeech` holds one *joined* tag string per source entry ("n, v5r, arch"), not one tag per element — comparing whole strings against the tag sets matched nothing. The proper-name check prefers the entry's own tags and only falls back to the dictionary name when there are none, because a merged entry carries a single dictionary name for the whole group.
+
+`JlptDeckPlanner` applies the filters in a fixed order (no definition → proper name → unranked → too rare → archaic → already in Anki → already mined → over limit) so each skipped word is counted exactly once and `selected + skipped == candidates`. Kept words are sorted most-frequent-first, which is also the order a capped deck keeps.
+
+Generated cards are deliberately NOT written to `exported_words`: they aren't mined, so counting them would swamp the mining statistics. The "don't recreate what I already have" guarantee comes from `AnkiCollectionIndex` instead, which also covers Core/Kaishi and previously generated levels. Notes are tagged `yomitan-mobile`, `jlpt-nX`, `auto-generated` so they stay findable and bulk-deletable in Anki.
 
 ### Result merging
 `MergedWordEntry.mergeEntries()` groups `WordEntry` items by `(expression, reading)`. Within each group it picks the primary (prefers kanji + lower frequency rank), merges definitions, and collects alternatives. This avoids homophone grouping errors. Dedup of the gloss list and remapping of each example's `definitionIndex` onto the merged positions happen together in `mergeDefinitionsAndExamples()` — so the detail screen and Anki export can group examples by `definitionIndex` and trust it, with no compensation logic of their own.

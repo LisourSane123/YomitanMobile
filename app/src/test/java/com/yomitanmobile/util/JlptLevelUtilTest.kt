@@ -78,6 +78,22 @@ class JlptLevelUtilTest {
         assertEquals(JlptLevelUtil.JlptLevel.N1, result)
     }
 
+    /**
+     * Yomitan tag strings are space-separated, and the import path feeds
+     * definitionTags + termTags in as one string. A bare level tag has to be
+     * found next to its neighbours, not only when it stands alone.
+     */
+    @Test
+    fun testStandaloneLevelTagAmongOtherSpaceSeparatedTags() {
+        assertEquals(
+            JlptLevelUtil.JlptLevel.N5,
+            JlptLevelUtil.getLevel("ichi1 news1 nf01 n5")
+        )
+        assertEquals(5, JlptLevelUtil.extractAsInt("v5r vt n5"))
+        // Neighbouring tags that merely contain a digit stay untouched.
+        assertEquals(0, JlptLevelUtil.extractAsInt("ichi1 news1 nf01 v5r"))
+    }
+
     @Test
     fun testStandaloneN1TagWithoutJlptPrefix() {
         val result = JlptLevelUtil.getLevel("noun, n1")

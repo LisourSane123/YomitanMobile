@@ -24,6 +24,19 @@ interface DictionaryRepository {
      */
     suspend fun getReadingsForExpressions(expressions: List<String>): Map<String, String>
 
+    /**
+     * Every entry carrying the given JLPT level tag (5 = N5 … 1 = N1).
+     * Source for the bulk JLPT deck generator.
+     */
+    suspend fun getEntriesByJlptLevel(level: Int): List<WordEntry>
+
+    /**
+     * Exact-expression batch lookup, chunked internally against SQLite's
+     * variable limit. Used to resolve the built-in JLPT word list against
+     * whatever dictionaries the user actually has installed.
+     */
+    suspend fun getEntriesForExpressions(expressions: List<String>): List<WordEntry>
+
     /** Every installed list's rank for a word, for multi-list display. */
     suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo>
     suspend fun importDictionary(

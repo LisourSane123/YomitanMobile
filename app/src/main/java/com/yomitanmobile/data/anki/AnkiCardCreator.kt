@@ -17,6 +17,8 @@ import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.util.InputSanitizer
 import com.yomitanmobile.util.SentenceContextHighlighter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -25,11 +27,24 @@ import java.util.UUID
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 
+/** Outcome of a bulk write; [failed] counts notes AnkiDroid rejected. */
+data class BatchExportResult(
+    val added: Int,
+    val failed: Int
+)
+
 @Singleton
 class AnkiCardCreator(
     private val context: Context
 ) {
     companion object {
+        /**
+         * Notes per `addNotes` call. Big enough that the per-transaction
+         * overhead disappears, small enough that a cancelled generation loses
+         * at most this many cards' worth of work and progress still moves.
+         */
+        private const val BATCH_CHUNK_SIZE = 50
+
         // Yomitan typically shows every sense; for cards a soft cap keeps the
         // back side scrollable. Bumped up from 3 because Jitendex entries with
         // many senses (聞く has 8) were getting truncated to almost nothing.
@@ -1283,7 +1298,19 @@ class AnkiCardCreator(
             randomFont = stylePrefs.randomFonts.random()
         }
         
-        val kanjiHtml = if (kanjiData.isNotEmpty()) {
+        val kanjiHtml = buildKanjiBreakdownHtml(entry, kanjiData)
+
+        val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs, aiSummaryText)
+            .copy(kanjiBreakdown = kanjiHtml)
+        return addNote(card, deckName, stylePrefs)
+    }
+
+    /** Kanji column HTML for one entry, ordered as the kanji appear in it. */
+    private fun buildKanjiBreakdownHtml(
+        entry: WordEntry,
+        kanjiData: List<com.yomitanmobile.data.local.entity.KanjiEntry>
+    ): String {
+        return if (kanjiData.isNotEmpty()) {
             val ordered = kanjiData.sortedBy {
                 entry.expression.indexOf(it.kanji).takeIf { idx -> idx >= 0 } ?: Int.MAX_VALUE
             }
@@ -1324,10 +1351,129 @@ class AnkiCardCreator(
                 }
             }
         } else ""
+    }
 
-        val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs, aiSummaryText)
-            .copy(kanjiBreakdown = kanjiHtml)
-        return addNote(card, deckName, stylePrefs)
+    /**
+     * Writes many cards in one go, for the bulk JLPT deck generator.
+     *
+     * Differences from [exportToAnki], all of them deliberate:
+     *  - the note type, deck and CSS are resolved ONCE instead of per word;
+     *  - notes go in through `addNotes` in chunks, so AnkiDroid commits one
+     *    transaction per chunk rather than one per card (a 1 000-word deck is
+     *    seconds instead of minutes);
+     *  - kanji rows for a whole chunk are fetched with a single query through
+     *    [kanjiProvider];
+     *  - TTS audio is opt-in ([tts] non-null), because synthesising a file per
+     *    word dominates the runtime;
+     *  - no AI summaries: one API call per word would be slow and expensive.
+     *
+     * The coroutine is cancellable between chunks — a cancelled job keeps the
+     * cards written so far, which is why [onProgress] reports committed counts.
+     */
+    suspend fun exportBatchToAnki(
+        entries: List<WordEntry>,
+        deckName: String,
+        stylePrefs: CardStylePreferences?,
+        kanjiProvider: suspend (List<String>) -> List<com.yomitanmobile.data.local.entity.KanjiEntry>,
+        tts: TextToSpeech? = null,
+        tags: Set<String> = emptySet(),
+        onProgress: suspend (done: Int, total: Int, currentWord: String) -> Unit = { _, _, _ -> }
+    ): Result<BatchExportResult> = withContext(Dispatchers.IO) {
+        if (entries.isEmpty()) return@withContext Result.success(BatchExportResult(0, 0))
+        if (!hasAnkiPermission()) {
+            return@withContext Result.failure(SecurityException("AnkiDroid permission not granted"))
+        }
+        if (!isAnkiInstalled()) {
+            return@withContext Result.failure(IllegalStateException("AnkiDroid is not installed"))
+        }
+
+        val deckId = getOrCreateDeck(deckName)
+            ?: return@withContext Result.failure(IllegalStateException("Failed to create/find deck"))
+        val css = if (stylePrefs != null) buildCssFromPreferences(stylePrefs) else CARD_CSS
+        val backTemplate = buildBackTemplate(
+            stylePrefs?.sectionOrder
+                ?: com.yomitanmobile.domain.model.CardSection.defaultOrder()
+        )
+        val modelId = getOrCreateModel(css, backTemplate)
+            ?: return@withContext Result.failure(IllegalStateException("Failed to create/find note type"))
+
+        var added = 0
+        var failed = 0
+
+        for (chunk in entries.chunked(BATCH_CHUNK_SIZE)) {
+            currentCoroutineContext().ensureActive()
+
+            // One kanji query per chunk instead of one per word.
+            val kanjiChars = chunk
+                .flatMap { entry ->
+                    entry.expression.filter {
+                        com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it)
+                    }.map(Char::toString)
+                }
+                .distinct()
+            val kanjiByChar = runCatching { kanjiProvider(kanjiChars) }
+                .getOrElse {
+                    android.util.Log.w("AnkiCardCreator", "Batch kanji lookup failed", it)
+                    emptyList()
+                }
+                .associateBy { it.kanji }
+
+            val fieldsList = ArrayList<Array<String>>(chunk.size)
+            for (entry in chunk) {
+                currentCoroutineContext().ensureActive()
+                onProgress(added, entries.size, entry.expression.ifBlank { entry.reading })
+
+                val audioFileName = if (tts != null) {
+                    applyRandomVoice(tts, stylePrefs)
+                    generateTtsAudio(entry.reading.ifBlank { entry.expression }, tts)
+                } else ""
+                val randomFont = if (
+                    stylePrefs != null && stylePrefs.randomFontsEnabled &&
+                    stylePrefs.randomFonts.isNotEmpty()
+                ) {
+                    stylePrefs.randomFonts.random()
+                } else null
+
+                val kanjiData = entry.expression
+                    .filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }
+                    .map(Char::toString)
+                    .distinct()
+                    .mapNotNull { kanjiByChar[it] }
+
+                val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs)
+                    .copy(kanjiBreakdown = buildKanjiBreakdownHtml(entry, kanjiData))
+                fieldsList.add(card.toFieldArray())
+            }
+
+            val tagsList = List(fieldsList.size) { tags }
+            val inserted = runCatching { ankiApi.addNotes(modelId, deckId, fieldsList, tagsList) }
+                .getOrElse { error ->
+                    android.util.Log.w("AnkiCardCreator", "addNotes failed for a chunk", error)
+                    -1
+                }
+
+            if (inserted >= 0) {
+                added += inserted
+                failed += fieldsList.size - inserted
+            } else {
+                failed += fieldsList.size
+            }
+            onProgress(added, entries.size, "")
+        }
+
+        Result.success(BatchExportResult(added = added, failed = failed))
+    }
+
+    /** Picks one of the user's random TTS voices, if that option is on. */
+    private fun applyRandomVoice(tts: TextToSpeech, stylePrefs: CardStylePreferences?) {
+        if (stylePrefs == null || !stylePrefs.randomVoicesEnabled) return
+        if (stylePrefs.randomVoices.isEmpty()) return
+        try {
+            val randomVoiceName = stylePrefs.randomVoices.random()
+            tts.voices?.find { it.name == randomVoiceName }?.let { tts.setVoice(it) }
+        } catch (e: Exception) {
+            android.util.Log.w("AnkiCardCreator", "Random voice selection failed", e)
+        }
     }
 
     private fun parseKanjiMeanings(raw: String): List<String> {

@@ -85,7 +85,16 @@ fun AppNavHost(
                 },
                 onNavigateToFrequencyDisplay = {
                     navController.navigate(Screen.FrequencyDisplay.route)
+                },
+                onNavigateToJlptDeck = {
+                    navController.navigate(Screen.JlptDeck.route)
                 }
+            )
+        }
+
+        composable(Screen.JlptDeck.route) {
+            com.yomitanmobile.ui.jlptdeck.JlptDeckScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

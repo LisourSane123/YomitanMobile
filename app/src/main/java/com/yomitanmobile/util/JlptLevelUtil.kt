@@ -100,12 +100,20 @@ object JlptLevelUtil {
         val matches = mutableListOf<Int>()
         
         for (chunk in chunks) {
-            // Try jlpt-prefixed pattern first
+            // Try jlpt-prefixed pattern first. The pattern tolerates spaces
+            // inside the tag ("jlpt n 1"), so the chunk stays whole here.
             jlptPrefixPattern.find(chunk)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { matches.add(it) }
-            
-            // Try standalone n1-n5 pattern if no jlpt prefix found in this chunk
+
+            // Try the standalone n1-n5 pattern when this chunk carries no jlpt
+            // prefix of its own. Yomitan tag strings are space-separated
+            // ("ichi1 news1 n5"), so look at each whitespace-delimited tag
+            // rather than only the first match in the chunk.
             if (!chunk.contains("jlpt")) {
-                standaloneLevelPattern.find(chunk)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { matches.add(it) }
+                for (token in chunk.split(' ', '\t', '\n')) {
+                    standaloneLevelPattern.find(token)
+                        ?.groupValues?.getOrNull(1)?.toIntOrNull()
+                        ?.let { matches.add(it) }
+                }
             }
         }
 
