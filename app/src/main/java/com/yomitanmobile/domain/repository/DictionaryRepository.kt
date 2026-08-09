@@ -38,6 +38,20 @@ interface DictionaryRepository {
     suspend fun getEntriesForExpressions(expressions: List<String>): List<WordEntry>
 
     /**
+     * Every written form and reading in the installed dictionaries, as one
+     * set. This is the lexicon the text scanner segments Japanese text
+     * against — see `DictionaryDao.getAllExpressions` for why it has to be
+     * held in memory rather than queried per candidate.
+     */
+    suspend fun getSurfaceLexicon(): Set<String>
+
+    /**
+     * Batch reading lookup, chunked like [getEntriesForExpressions]. Resolves
+     * the words a text spells in kana only (みる, ある) to dictionary entries.
+     */
+    suspend fun getEntriesForReadings(readings: List<String>): List<WordEntry>
+
+    /**
      * Same lookup restricted to one installed dictionary. Used by the
      * monolingual (JP-JP) card engine, which must read the definition from the
      * dictionary the user picked, not from whichever one matched first.

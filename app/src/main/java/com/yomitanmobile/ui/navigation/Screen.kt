@@ -16,4 +16,5 @@ sealed class Screen(val route: String) {
     data object Dictionaries : Screen("dictionaries")
     data object JlptDeck : Screen("jlpt_deck")
     data object AnkiScan : Screen("anki_scan")
+    data object TextScan : Screen("text_scan")
 }

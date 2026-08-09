@@ -91,12 +91,21 @@ fun AppNavHost(
                 },
                 onNavigateToAnkiScan = {
                     navController.navigate(Screen.AnkiScan.route)
+                },
+                onNavigateToTextScan = {
+                    navController.navigate(Screen.TextScan.route)
                 }
             )
         }
 
         composable(Screen.AnkiScan.route) {
             com.yomitanmobile.ui.ankiscan.AnkiScanScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.TextScan.route) {
+            com.yomitanmobile.ui.textscan.TextScanScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

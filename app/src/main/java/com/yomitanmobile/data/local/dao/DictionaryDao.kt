@@ -190,6 +190,22 @@ interface DictionaryDao {
     suspend fun getEntriesByJlptLevel(level: Int): List<DictionaryEntry>
 
     /**
+     * Every written form and every reading in the installed dictionaries.
+     *
+     * The text scanner needs the whole word list in memory at once: Japanese
+     * has no spaces, so segmenting a subtitle file means testing every
+     * substring of every sentence against the dictionary — hundreds of
+     * thousands of lookups that cannot go through SQLite one at a time.
+     * Both columns are needed because a text writes 見る with kanji and
+     * みる without, and either spelling must resolve to the same word.
+     */
+    @Query("SELECT DISTINCT expression FROM dictionary_entries WHERE expression != ''")
+    suspend fun getAllExpressions(): List<String>
+
+    @Query("SELECT DISTINCT reading FROM dictionary_entries WHERE reading != ''")
+    suspend fun getAllReadings(): List<String>
+
+    /**
      * Exact-expression batch lookup. Callers MUST chunk the list well below
      * SQLite's 999-variable ceiling — see IN_CLAUSE_CHUNK in the repository.
      */
@@ -199,6 +215,18 @@ interface DictionaryDao {
         ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
     """)
     suspend fun getEntriesByExpressions(expressions: List<String>): List<DictionaryEntry>
+
+    /**
+     * Batch counterpart of [getByReading]: resolves the kana words a text
+     * writes without kanji (みる, ある) to their dictionary entries. Same
+     * 999-variable chunking rule as [getEntriesByExpressions].
+     */
+    @Query("""
+        SELECT * FROM dictionary_entries
+        WHERE reading IN (:readings)
+        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
+    """)
+    suspend fun getEntriesByReadings(readings: List<String>): List<DictionaryEntry>
 
     // A word may be tagged by several sources, or belong to more than one
     // level in the same source. The lower tier wins (5 = N5 = easiest): the

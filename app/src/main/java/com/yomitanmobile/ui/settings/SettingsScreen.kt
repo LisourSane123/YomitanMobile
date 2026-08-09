@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -97,6 +98,7 @@ fun SettingsScreen(
     onNavigateToFrequencyDisplay: () -> Unit = {},
     onNavigateToJlptDeck: () -> Unit = {},
     onNavigateToAnkiScan: () -> Unit = {},
+    onNavigateToTextScan: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -838,6 +840,19 @@ fun SettingsScreen(
                         "A whole JLPT level as ready-made cards, no mining"
                     ),
                     onClick = onNavigateToJlptDeck
+                )
+            }
+
+            // Text scan: subtitles / EPUB in, cards for the unknown words out.
+            item {
+                SettingsClickableItem(
+                    icon = Icons.Default.Subtitles,
+                    title = tr("Fiszki z napisów lub książki", "Cards from subtitles or a book"),
+                    subtitle = tr(
+                        "Wczytaj .srt/.ass/.epub — aplikacja zrobi fiszki z nieznanych słów",
+                        "Load .srt/.ass/.epub — the app makes cards from the unknown words"
+                    ),
+                    onClick = onNavigateToTextScan
                 )
             }
 

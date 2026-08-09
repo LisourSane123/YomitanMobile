@@ -129,6 +129,35 @@ class DictionaryRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getEntriesForReadings(readings: List<String>): List<WordEntry> {
+        if (readings.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            try {
+                readings.distinct()
+                    .chunked(IN_CLAUSE_CHUNK)
+                    .flatMap { chunk -> dictionaryDao.getEntriesByReadings(chunk) }
+                    .map { it.toDomain() }
+            } catch (e: Exception) {
+                Log.w(TAG, "getEntriesForReadings failed (${readings.size} readings)", e)
+                emptyList()
+            }
+        }
+    }
+
+    override suspend fun getSurfaceLexicon(): Set<String> = withContext(Dispatchers.IO) {
+        try {
+            val expressions = dictionaryDao.getAllExpressions()
+            val readings = dictionaryDao.getAllReadings()
+            HashSet<String>(expressions.size + readings.size).apply {
+                addAll(expressions)
+                addAll(readings)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "getSurfaceLexicon failed", e)
+            emptySet()
+        }
+    }
+
     override suspend fun getEntriesForExpressionsFromDictionary(
         expressions: List<String>,
         dictionaryName: String

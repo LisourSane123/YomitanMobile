@@ -46,6 +46,7 @@ data class MergedWordEntry(
         frequency <= 5000 -> "★★ Top 5K"
         frequency <= 10000 -> "★ Top 10K"
         frequency <= 20000 -> "Top 20K"
+        frequency <= 30000 -> "Top 30K"
         frequency <= 50000 -> "Top 50K"
         else -> "#$frequency"
     }
