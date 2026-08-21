@@ -12,6 +12,14 @@ import java.io.InputStream
 interface DictionaryRepository {
     fun searchExact(query: String): Flow<List<WordEntry>>
     fun searchCombined(query: String): Flow<List<WordEntry>>
+
+    /**
+     * Entries containing the query somewhere other than at the start — the
+     * compounds (食欲 for 欲) that the prefix-based [searchCombined] misses.
+     * Disjoint from [searchCombined] by construction, so callers can simply
+     * append the results.
+     */
+    fun searchContains(query: String): Flow<List<WordEntry>>
     fun searchByDefinition(query: String): Flow<List<WordEntry>>
     suspend fun getEntry(id: Long): WordEntry?
     suspend fun getEntriesByReading(reading: String): List<WordEntry>

@@ -224,6 +224,21 @@ fun AnkiScanScreen(
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                tr(
+                                    "Słów jest więcej niż notatek i to jest poprawne: z każdej notatki " +
+                                        "indeksowany jest i zapis, i czytanie (食べる oraz たべる). " +
+                                        "Liczba kart w AnkiDroidzie to jeszcze co innego — jedna notatka " +
+                                        "z dwoma szablonami daje dwie karty.",
+                                    "More words than notes is expected: each note is indexed under both " +
+                                        "its written form and its reading (食べる and たべる). AnkiDroid's " +
+                                        "card count is a third number again — one note with two templates " +
+                                        "makes two cards."
+                                ),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             if (result.noteCount == 0) {
                                 Spacer(Modifier.height(8.dp))
                                 Text(

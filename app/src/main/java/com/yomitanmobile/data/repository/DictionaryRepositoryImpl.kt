@@ -205,6 +205,19 @@ class DictionaryRepositoryImpl @Inject constructor(
             }
     }
 
+    override fun searchContains(query: String): Flow<List<WordEntry>> {
+        if (query.isBlank()) return flowOf(emptyList())
+        val trimmed = query.trim()
+        val likeQuery = InputSanitizer.sanitizeLikeQuery(trimmed)
+        if (likeQuery.isBlank()) return flowOf(emptyList())
+        return dictionaryDao.searchContains(likeQuery)
+            .map { entries -> entries.map { it.toDomain() } }
+            .catch { e ->
+                Log.w(TAG, "searchContains failed for query='$trimmed'", e)
+                emit(emptyList())
+            }
+    }
+
     override fun searchByDefinition(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
         val ftsQuery = InputSanitizer.sanitizeFtsQuery(query)

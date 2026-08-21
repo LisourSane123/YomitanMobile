@@ -15,6 +15,10 @@ package com.yomitanmobile.util
  * genuinely ambiguous boundary is resolved by "longest wins". For building a
  * vocabulary list that is the right bias — it prefers 東京都 over 東京 + 都 and
  * never invents a word that is not in the dictionary.
+ *
+ * Text is walked sentence by sentence so every word can carry the sentence it
+ * was first seen in: that sentence goes on the front of the card, which is the
+ * whole point of mining from material you actually watched or read.
  */
 object JapaneseTokenizer {
 
@@ -27,7 +31,18 @@ object JapaneseTokenizer {
         /** How many times it occurred. */
         val count: Int,
         /** True when the surface had to be deconjugated to reach the base form. */
-        val wasInflected: Boolean
+        val wasInflected: Boolean,
+        /**
+         * Sentence the word was first met in, ready for the card front.
+         * Empty when no sentence of a usable length contained it.
+         */
+        val sentence: String = "",
+        /**
+         * Character offset of the first occurrence. Drives the "a word that
+         * shows up in chapter 1 is worth learning before one that shows up in
+         * the last volume" half of the card ordering.
+         */
+        val firstOffset: Int = 0
     )
 
     /** The word list token boundaries are tested against. */
@@ -42,68 +57,199 @@ object JapaneseTokenizer {
      */
     private const val MAX_TOKEN_LENGTH = 12
 
+    /**
+     * Copula and auxiliary chains, matched before the dictionary.
+     *
+     * [JapaneseDeconjugator] cannot reach these: it refuses candidates shorter
+     * than two characters (deliberately — the search screen would drown in
+     * one-kana hits), so だった never reduces to だ. What it does instead is
+     * apply the godan ~った rule and offer だつ, which some dictionary really
+     * does list, and the scan quietly proposes a card for it.
+     *
+     * Every form here is at least three characters and cannot open a content
+     * word, so consuming it whole is safe — たい and ない are deliberately
+     * absent, since they would eat the front of たいへん and ないよう.
+     *
+     * They are still counted, not dropped: the planner rejects them as
+     * [com.yomitanmobile.domain.usecase.TextScanPlanner.FUNCTION_WORDS], which
+     * keeps them in the "grammar" skip bucket and in the known-coverage figure
+     * where they belong.
+     */
+    val GRAMMAR_FORMS = setOf(
+        "だった", "だったら", "だろう", "であった", "である", "でした", "でしょう",
+        "じゃない", "じゃなかった", "ではない", "ではなかった", "じゃなくて",
+        "ました", "ません", "ませんでした", "なかった", "なければ", "なくて",
+        "かもしれない", "かもしれません", "ということ", "というのは", "だけど",
+        "ですが", "ますが", "しれない"
+    )
+
+    private val MAX_GRAMMAR_LENGTH = GRAMMAR_FORMS.maxOf { it.length }
+
+    /** The longest grammar form starting at [start], or null. */
+    private fun grammarFormAt(text: String, start: Int, end: Int): String? {
+        for (len in minOf(MAX_GRAMMAR_LENGTH, end - start) downTo 3) {
+            val candidate = text.substring(start, start + len)
+            if (candidate in GRAMMAR_FORMS) return candidate
+        }
+        return null
+    }
+
+    /**
+     * A sentence worth putting on a card front. Shorter than this is usually
+     * an interjection ("はい。"), longer is a wall of text on a flashcard.
+     */
+    private const val MIN_SENTENCE_LENGTH = 6
+    private const val MAX_SENTENCE_LENGTH = 90
+
+    /** Sentence terminators, Japanese and Latin, plus the line break. */
+    private const val SENTENCE_BREAKS = "。！？!?\n"
+
     fun tokenize(text: String, lexicon: Lexicon): List<Token> {
-        if (text.isEmpty()) return emptyList()
+        val accumulator = Accumulator()
+        accumulator.add(text, lexicon, offsetBase = 0)
+        return accumulator.tokens()
+    }
 
-        val counts = LinkedHashMap<String, MutableToken>()
-        // Resolution is by far the hot path and text repeats heavily
-        // (particles, names, the same verb in the same form), so every
-        // surface → base decision is memoised for the whole document.
-        val resolved = HashMap<String, String?>()
+    /**
+     * Collects tokens across several documents (a season of subtitles, a
+     * series of EPUBs) into one word list.
+     *
+     * Counts add up, while the sentence and the first-occurrence offset come
+     * from the earliest document the word appears in — feed the files in the
+     * order they are meant to be watched or read.
+     */
+    class Accumulator {
+        private val counts = LinkedHashMap<String, MutableToken>()
+        private var consumed = 0
 
-        var i = 0
-        val length = text.length
-        while (i < length) {
-            if (!isJapanese(text[i])) {
-                i++
-                continue
+        /** Total characters handed to the accumulator so far. */
+        val totalLength: Int get() = consumed
+
+        fun add(text: String, lexicon: Lexicon, offsetBase: Int = consumed) {
+            // Resolution is by far the hot path and text repeats heavily
+            // (particles, names, the same verb in the same form), so every
+            // surface → base decision is memoised across the whole document.
+            val resolved = HashMap<String, String?>()
+            forEachSentence(text) { sentence, sentenceStart ->
+                scanSentence(sentence, sentenceStart + offsetBase, lexicon, resolved)
             }
-            // Never let a match run past the end of the Japanese stretch.
-            var runEnd = i
-            while (runEnd < length && isJapanese(text[runEnd])) runEnd++
-            val maxLength = minOf(MAX_TOKEN_LENGTH, runEnd - i)
-
-            var matchedLength = 0
-            var base: String? = null
-            var surface = ""
-            for (len in maxLength downTo 1) {
-                val candidate = text.substring(i, i + len)
-                val hit = resolved.getOrPut(candidate) { resolve(candidate, lexicon) }
-                if (hit != null) {
-                    matchedLength = len
-                    base = hit
-                    surface = candidate
-                    break
-                }
-            }
-
-            if (base == null) {
-                // Nothing in the dictionary starts here (a name, a typo, an
-                // emoji-adjacent character): skip one character and retry.
-                i++
-                continue
-            }
-
-            if (isWorthCounting(base, surface)) {
-                val entry = counts.getOrPut(base) { MutableToken(surface, base != surface) }
-                entry.count++
-            }
-            i += matchedLength
+            consumed = offsetBase + text.length
         }
 
-        return counts.map { (base, value) ->
+        fun tokens(): List<Token> = counts.map { (base, value) ->
             Token(
                 baseForm = base,
                 surface = value.surface,
                 count = value.count,
-                wasInflected = value.wasInflected
+                wasInflected = value.wasInflected,
+                sentence = value.sentence,
+                firstOffset = value.firstOffset
             )
+        }
+
+        private fun scanSentence(
+            sentence: String,
+            sentenceOffset: Int,
+            lexicon: Lexicon,
+            resolved: HashMap<String, String?>
+        ) {
+            val usableSentence = sentence.takeIf {
+                it.length in MIN_SENTENCE_LENGTH..MAX_SENTENCE_LENGTH
+            }.orEmpty()
+
+            var i = 0
+            val length = sentence.length
+            while (i < length) {
+                if (!isJapanese(sentence[i])) {
+                    i++
+                    continue
+                }
+                // Never let a match run past the end of the Japanese stretch.
+                var runEnd = i
+                while (runEnd < length && isJapanese(sentence[runEnd])) runEnd++
+                val maxLength = minOf(MAX_TOKEN_LENGTH, runEnd - i)
+
+                var matchedLength = 0
+                var base: String? = null
+                var surface = ""
+                // Copula and auxiliary chains first: they must be consumed
+                // whole, or longest-match hands them to whatever entry happens
+                // to share their letters (だった deconjugates to だつ, and a
+                // card for 脱つ is worse than no card).
+                val grammar = grammarFormAt(sentence, i, runEnd)
+                if (grammar != null) {
+                    matchedLength = grammar.length
+                    base = grammar
+                    surface = grammar
+                } else {
+                    for (len in maxLength downTo 1) {
+                        val candidate = sentence.substring(i, i + len)
+                        val hit = resolved.getOrPut(candidate) { resolve(candidate, lexicon) }
+                        if (hit != null) {
+                            matchedLength = len
+                            base = hit
+                            surface = candidate
+                            break
+                        }
+                    }
+                }
+
+                if (base == null) {
+                    // Nothing in the dictionary starts here (a name, a typo, an
+                    // emoji-adjacent character): skip one character and retry.
+                    i++
+                    continue
+                }
+
+                if (isWorthCounting(base, surface)) {
+                    val entry = counts.getOrPut(base) {
+                        MutableToken(surface, base != surface, sentenceOffset + i)
+                    }
+                    entry.count++
+                    // A word first met in a too-long or too-short sentence still
+                    // deserves a usable one, so the first suitable sentence wins
+                    // even if it is not the first occurrence.
+                    if (entry.sentence.isEmpty() && usableSentence.isNotEmpty()) {
+                        entry.sentence = usableSentence
+                    }
+                }
+                i += matchedLength
+            }
         }
     }
 
-    private class MutableToken(val surface: String, val wasInflected: Boolean) {
+    private class MutableToken(
+        val surface: String,
+        val wasInflected: Boolean,
+        val firstOffset: Int
+    ) {
         var count: Int = 0
+        var sentence: String = ""
     }
+
+    /**
+     * Splits on sentence terminators, handing each sentence to [block] with its
+     * offset. Closing quotes and brackets stay with the sentence they end, so a
+     * line of dialogue keeps its 」.
+     */
+    private inline fun forEachSentence(text: String, block: (String, Int) -> Unit) {
+        var start = 0
+        var i = 0
+        while (i < text.length) {
+            if (text[i] in SENTENCE_BREAKS) {
+                var end = i + 1
+                while (end < text.length && text[end] in TRAILING_CHARS) end++
+                block(text.substring(start, end).trim(), start)
+                i = end
+                start = end
+            } else {
+                i++
+            }
+        }
+        if (start < text.length) block(text.substring(start).trim(), start)
+    }
+
+    private const val TRAILING_CHARS = "」』）\")〉》】"
 
     /**
      * Base form for a surface, or null when it is not a word.

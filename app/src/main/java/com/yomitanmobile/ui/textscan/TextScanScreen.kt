@@ -104,9 +104,12 @@ fun TextScanScreen(
         }
     }
 
+    // Multiple documents on purpose: a season of subtitles or a series of
+    // volumes is one body of text, and scanning it in one go is what makes the
+    // word counts and the "appears early" ordering meaningful.
     val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri -> if (uri != null) viewModel.analyze(uri) }
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris -> if (uris.isNotEmpty()) viewModel.analyze(uris) }
 
     val filters by viewModel.filters.collectAsState()
     val deckName by viewModel.deckName.collectAsState()
@@ -171,10 +174,12 @@ fun TextScanScreen(
         ) {
             Text(
                 tr(
-                    "Wczytaj napisy (.srt, .ass, .ssa, .vtt), książkę (.epub) lub zwykły tekst (.txt). " +
+                    "Wczytaj napisy (.srt, .ass, .ssa, .vtt), książkę (.epub) lub zwykły tekst (.txt) — " +
+                        "możesz zaznaczyć wiele plików naraz, np. cały sezon albo całą serię. " +
                         "Aplikacja podzieli tekst na słowa, odrzuci te, które już znasz (kolekcja Anki " +
                         "i wcześniejsze eksporty) i zrobi fiszki z reszty.",
-                    "Load subtitles (.srt, .ass, .ssa, .vtt), a book (.epub) or plain text (.txt). " +
+                    "Load subtitles (.srt, .ass, .ssa, .vtt), a book (.epub) or plain text (.txt) — " +
+                        "you can pick several files at once, e.g. a whole season or a whole series. " +
                         "The app splits the text into words, drops the ones you already know (Anki " +
                         "collection and earlier exports) and makes cards from the rest."
                 ),
@@ -189,7 +194,7 @@ fun TextScanScreen(
                 enabled = !isAnalyzing && progress == null,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(tr("Wybierz plik", "Pick a file"))
+                Text(tr("Wybierz pliki", "Pick files"))
             }
 
             if (isAnalyzing) {
@@ -217,20 +222,38 @@ fun TextScanScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            currentPlan.source.fileName,
+                            if (currentPlan.fileCount == 1) {
+                                currentPlan.sources.first().fileName
+                            } else {
+                                tr(
+                                    "${currentPlan.fileCount} plików",
+                                    "${currentPlan.fileCount} files"
+                                )
+                            },
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
+                        val characters = currentPlan.sources.sumOf { it.characterCount }
+                        val formats = currentPlan.sources.map { it.formatLabel }.distinct()
+                            .joinToString(", ")
+                        val charsets = currentPlan.sources.map { it.charsetName }.distinct()
+                            .joinToString(", ")
                         Text(
                             tr(
-                                "${currentPlan.source.formatLabel} · ${currentPlan.source.charsetName} · " +
-                                    "${currentPlan.source.characterCount} znaków japońskich",
-                                "${currentPlan.source.formatLabel} · ${currentPlan.source.charsetName} · " +
-                                    "${currentPlan.source.characterCount} Japanese characters"
+                                "$formats · $charsets · $characters znaków japońskich",
+                                "$formats · $charsets · $characters Japanese characters"
                             ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (currentPlan.fileCount > 1) {
+                            // The order matters for the card order, so show it.
+                            Text(
+                                currentPlan.sources.joinToString(" → ") { it.fileName },
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Text(
                             tr(
                                 "Słów w tekście: ${currentPlan.totalTokenCount}, różnych: ${currentPlan.distinctWordCount}",
@@ -286,6 +309,35 @@ fun TextScanScreen(
 
             Spacer(Modifier.height(16.dp))
 
+            SectionTitle(tr("Znam już najczęstsze", "Already know the commonest"))
+            Text(
+                tr(
+                    "Talia jest ułożona od najczęstszych słów, więc jej początek to z definicji " +
+                        "słowa, które znasz. Powiedz, ile najczęstszych słów pominąć.",
+                    "The deck is ordered commonest-first, so its opening is by definition made of " +
+                        "words you already know. Say how many of the commonest to skip."
+                ),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ASSUME_KNOWN_RANKS.forEach { rank ->
+                    FilterChip(
+                        selected = filters.assumeKnownTopRank == rank,
+                        onClick = { viewModel.updateFilters { it.copy(assumeKnownTopRank = rank) } },
+                        label = {
+                            Text(
+                                if (rank == 0) tr("Żadnych", "None")
+                                else "Top ${rank / 1000}K"
+                            )
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
             SectionTitle(tr("Filtry", "Filters"))
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -333,12 +385,28 @@ fun TextScanScreen(
                     ToggleRow(
                         title = tr("Pomiń słowa gramatyczne", "Skip function words"),
                         subtitle = tr(
-                            "Partykuły, です/ます, する/いる — inaczej pierwsze sto fiszek to sama gramatyka.",
-                            "Particles, です/ます, する/いる — otherwise the first hundred cards are pure grammar."
+                            "Partykuły, です/ます, する/いる oraz wszystko, co słownik oznacza jako " +
+                                "spójnik, partykułę, kopulę czy końcówkę posiłkową (それでも, ということ).",
+                            "Particles, です/ます, する/いる, plus anything the dictionary tags as a " +
+                                "conjunction, particle, copula or auxiliary (それでも, ということ)."
                         ),
                         checked = filters.skipFunctionWords,
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(skipFunctionWords = value) }
+                        }
+                    )
+
+                    ToggleRow(
+                        title = tr("Zdanie ze źródła na froncie", "Source sentence on the front"),
+                        subtitle = tr(
+                            "Fiszka pokazuje słowo w zdaniu, w którym padło — zaznaczone w tekście. " +
+                                "Włącza kontekst na froncie dla tej partii kart, niezależnie od stylu kart.",
+                            "The card shows the word in the sentence it appeared in, highlighted. " +
+                                "Forces the front-context slot for this batch, whatever the card style says."
+                        ),
+                        checked = filters.useSourceSentences,
+                        onCheckedChange = { value ->
+                            viewModel.updateFilters { it.copy(useSourceSentences = value) }
                         }
                     )
 
@@ -505,6 +573,21 @@ fun TextScanScreen(
                 }
                 Text(
                     tr(
+                        "Kolejność kart: najpierw słowa najczęstsze w japońszczyźnie w ogóle, potem te " +
+                            "najczęstsze w tych plikach, a przy remisie te, które pojawiają się wcześniej " +
+                            "(przy serii — w pierwszych tomach). Anki wprowadza nowe karty w kolejności " +
+                            "dodania, więc zostaw w talii domyślne „nowe karty: kolejność dodania”.",
+                        "Card order: words most common in Japanese overall first, then the ones most " +
+                            "frequent in these files, ties going to whatever appears earliest (in a " +
+                            "series, the first volumes). AnkiDroid introduces new cards in the order " +
+                            "they were added, so keep the deck's default “new cards: order added”."
+                    ),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Text(
+                    tr(
                         "Karty dostają tagi yomitan-mobile i text-scan oraz nazwę pliku, więc łatwo je w Anki " +
                             "odnaleźć lub usunąć. Nie są liczone w statystykach kopania.",
                         "Cards are tagged yomitan-mobile, text-scan and the file name, so they are easy to find " +
@@ -603,6 +686,13 @@ private fun stageLabel(stage: String, isEnglish: Boolean): String = when (stage)
     else -> if (isEnglish) "Analysing…" else "Analizuję…"
 }
 
+/**
+ * Offered "I already know the top N words" cut-offs. Beginners take none;
+ * 1K–5K is the useful range for someone who has finished a core deck and wants
+ * the scan to hand them only what that deck did not cover.
+ */
+private val ASSUME_KNOWN_RANKS = listOf(0, 1_000, 2_000, 3_000, 5_000)
+
 private fun skipReasonLabel(reason: TextScanSkipReason, isEnglish: Boolean): String = when (reason) {
     TextScanSkipReason.NOT_IN_DICTIONARY ->
         if (isEnglish) "Not in any dictionary" else "Brak w słownikach"
@@ -616,6 +706,8 @@ private fun skipReasonLabel(reason: TextScanSkipReason, isEnglish: Boolean): Str
         if (isEnglish) "Outside the frequency range" else "Poza zakresem częstotliwości"
     TextScanSkipReason.UNRANKED ->
         if (isEnglish) "No frequency data" else "Bez danych o częstości"
+    TextScanSkipReason.ASSUMED_KNOWN ->
+        if (isEnglish) "Too common (assumed known)" else "Zbyt częste (uznane za znane)"
     TextScanSkipReason.ARCHAIC ->
         if (isEnglish) "Archaic / obsolete / rare" else "Archaizmy i przestarzałe"
     TextScanSkipReason.PROPER_NAME ->

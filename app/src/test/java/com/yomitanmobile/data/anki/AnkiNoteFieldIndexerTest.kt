@@ -66,6 +66,34 @@ class AnkiNoteFieldIndexerTest {
     }
 
     @Test
+    fun ignoresSpacedFuriganaSentences() {
+        // Core's Expression field: a whole sentence in Anki ruby notation.
+        // Nothing else rejects it — strip the brackets and it is a flawless
+        // Japanese string of ten characters.
+        val keys = AnkiNoteFieldIndexer.keysFromNote(
+            note("私[わたし] は 毎日[まいにち] 野菜[やさい] を 食[た]べる")
+        )
+
+        assertTrue(keys.toString(), keys.isEmpty())
+    }
+
+    @Test
+    fun ignoresUnpunctuatedRunningText() {
+        val keys = AnkiNoteFieldIndexer.keysFromNote(note("今日はとてもいい天気だから散歩に行こう"))
+
+        assertTrue(keys.toString(), keys.isEmpty())
+    }
+
+    @Test
+    fun indexesALongRubyHeadword() {
+        // 18 raw characters, 10 once the readings are resolved.
+        val keys = AnkiNoteFieldIndexer.keysFromNote(note("取[と]り返[かえ]しのつかない"))
+
+        assertTrue("取り返しのつかない" in keys)
+        assertTrue("とりかえしのつかない" in keys)
+    }
+
+    @Test
     fun kanaWordMatchesOnReadingButKanjiWordDoesNot() {
         val index = AnkiCollectionIndex.Index(
             keys = setOf("きく", "食べる"),

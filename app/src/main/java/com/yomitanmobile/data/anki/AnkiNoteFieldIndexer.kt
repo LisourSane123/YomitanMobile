@@ -17,10 +17,32 @@ internal object AnkiNoteFieldIndexer {
     private const val FIELD_SEPARATOR = '\u001f'
 
     /**
-     * Fields longer than this are sentences, meanings or notes — never a
-     * headword — and indexing them would produce false duplicates.
+     * Ceiling on the RAW field, before ruby brackets are resolved. Generous on
+     * purpose: 取[と]り返[かえ]しのつかない is a legitimate headword and carries
+     * its readings inline. Its only job is to bail out of obvious prose early.
      */
-    private const val MAX_FIELD_LENGTH = 24
+    private const val MAX_RAW_FIELD_LENGTH = 40
+
+    /**
+     * Ceiling on the finished key. Japanese headwords essentially never run
+     * past this — the longest entries in JMdict that anyone mines sit around
+     * ten characters — so anything longer is a sentence, a meaning or a note.
+     * Indexing those inflates the "words found" figure and, worse, a field
+     * that happens to hold exactly one common word would mark that word as
+     * already known and silently drop it from every later scan.
+     */
+    private const val MAX_KEY_LENGTH = 16
+
+    /**
+     * Whitespace-separated Japanese runs a headword may have. Anki's ruby
+     * notation puts a space before each kanji block, so a word can legitimately
+     * look like two runs — but three or more means the field is a spaced-out
+     * sentence (`私[わたし] は 毎日[まいにち] 野菜[やさい] を 食[た]べる`), which
+     * strips down to a perfectly Japanese-looking key nothing else rejects.
+     */
+    private const val MAX_RUNS = 2
+
+    private val WHITESPACE = Regex("\\s+")
 
     private val HTML_TAG = Regex("<[^>]*>")
     private val SOUND_OR_IMAGE = Regex("\\[(sound|anki):[^]]*]")
@@ -52,7 +74,8 @@ internal object AnkiNoteFieldIndexer {
             .replace("&quot;", "\"")
             .replace("&#39;", "'")
             .trim()
-        if (text.isEmpty() || text.length > MAX_FIELD_LENGTH) return
+        if (text.isEmpty() || text.length > MAX_RAW_FIELD_LENGTH) return
+        if (text.split(WHITESPACE).count { it.isNotBlank() } > MAX_RUNS) return
 
         if (FURIGANA.containsMatchIn(text)) {
             // 食[た]べる -> expression 食べる AND reading たべる, so a deck that
@@ -79,7 +102,7 @@ internal object AnkiNoteFieldIndexer {
 
     private fun addKey(value: String, out: MutableSet<String>) {
         val key = normalizeKey(value)
-        if (key.isNotEmpty() && key.length <= MAX_FIELD_LENGTH && isJapanese(key)) {
+        if (key.isNotEmpty() && key.length <= MAX_KEY_LENGTH && isJapanese(key)) {
             out.add(key)
         }
     }

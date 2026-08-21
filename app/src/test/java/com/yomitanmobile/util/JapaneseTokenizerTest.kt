@@ -72,6 +72,64 @@ class JapaneseTokenizerTest {
     }
 
     @Test
+    fun `each word carries the sentence it was met in`() {
+        val lexicon = lexiconOf("洗濯", "干す", "散歩")
+        val tokens = JapaneseTokenizer.tokenize(
+            "朝から洗濯物を干していた。それから散歩に出かけた。",
+            lexicon
+        ).associateBy { it.baseForm }
+
+        assertEquals("朝から洗濯物を干していた。", tokens.getValue("洗濯").sentence)
+        assertEquals("それから散歩に出かけた。", tokens.getValue("散歩").sentence)
+    }
+
+    @Test
+    fun `an unusable first sentence does not block a later one`() {
+        // The first hit sits in a one-word sentence, too short for a card
+        // front; the next occurrence provides a usable sentence.
+        val lexicon = lexiconOf("猫")
+        val token = JapaneseTokenizer.tokenize("猫。庭に猫がすわっていた。", lexicon).single()
+
+        assertEquals("庭に猫がすわっていた。", token.sentence)
+        assertEquals(2, token.count)
+    }
+
+    @Test
+    fun `several documents merge into one word list`() {
+        val lexicon = lexiconOf("洗濯", "散歩")
+        val accumulator = JapaneseTokenizer.Accumulator()
+        accumulator.add("庭で洗濯をしていた。", lexicon)
+        accumulator.add("公園まで散歩した。洗濯も済ませた。", lexicon)
+
+        val tokens = accumulator.tokens().associateBy { it.baseForm }
+
+        // Counts add up across files…
+        assertEquals(2, tokens.getValue("洗濯").count)
+        // …and the first occurrence (file 1) decides how early the word is.
+        assertTrue(tokens.getValue("洗濯").firstOffset < tokens.getValue("散歩").firstOffset)
+        assertEquals("庭で洗濯をしていた。", tokens.getValue("洗濯").sentence)
+    }
+
+    @Test
+    fun `the copula is kept whole instead of being deconjugated into a lookalike`() {
+        // だつ is a real dictionary reading, and the ~った rule offers it for
+        // だった. Without the grammar table the scan proposes that card.
+        val lexicon = lexiconOf("だつ", "だる", "元気")
+        val tokens = baseForms("元気だった。", lexicon)
+
+        assertEquals(listOf("元気", "だった"), tokens)
+        assertFalse("だつ" in tokens)
+    }
+
+    @Test
+    fun `a grammar form never eats the front of a content word`() {
+        // たいへん and ないよう start with auxiliary-looking kana; that is why
+        // たい and ない are not in the table.
+        val lexicon = lexiconOf("たいへん", "ないよう")
+        assertEquals(listOf("たいへん", "ないよう"), baseForms("たいへんないようだ。", lexicon))
+    }
+
+    @Test
     fun `empty text yields nothing`() {
         assertTrue(JapaneseTokenizer.tokenize("", lexiconOf("猫")).isEmpty())
     }

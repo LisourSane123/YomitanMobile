@@ -94,6 +94,43 @@ interface DictionaryDao {
     """)
     fun searchCombined(exactQuery: String, likeQuery: String, limit: Int = 50): Flow<List<DictionaryEntry>>
 
+    /**
+     * Substring match: every entry that CONTAINS the query somewhere other
+     * than at the start (食欲 for 欲), which the prefix-only [searchCombined]
+     * can never reach. Kanji carry meaning inside compounds, so looking up a
+     * single character and seeing only the words that begin with it hides
+     * most of what the character is used for.
+     *
+     * Rows that already prefix-match are excluded here rather than deduped by
+     * the caller: they are the frequent ones, so without the exclusion the
+     * LIMIT would be spent entirely on results [searchCombined] already
+     * returned, and the compounds — the whole point of this query — would
+     * fall off the end.
+     *
+     * `LIKE '%x%'` cannot use an index for seeking, but the id-subquery form
+     * keeps the scan inside the small `expression` / `reading` indexes (which
+     * carry the rowid) instead of dragging every `definition` blob through
+     * the page cache. Callers gate this on query shape — see
+     * `SearchDictionaryUseCase.shouldSearchSubstring`.
+     */
+    @Query("""
+        SELECT * FROM dictionary_entries
+        WHERE id IN (
+                SELECT id FROM dictionary_entries
+                WHERE expression LIKE '%' || :likeQuery || '%' ESCAPE '\'
+            UNION
+                SELECT id FROM dictionary_entries
+                WHERE reading LIKE '%' || :likeQuery || '%' ESCAPE '\'
+          )
+          AND expression NOT LIKE :likeQuery || '%' ESCAPE '\'
+          AND reading NOT LIKE :likeQuery || '%' ESCAPE '\'
+        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
+                 frequency ASC,
+                 LENGTH(expression) ASC
+        LIMIT :limit
+    """)
+    fun searchContains(likeQuery: String, limit: Int = 30): Flow<List<DictionaryEntry>>
+
     @Query("SELECT * FROM dictionary_entries WHERE id = :id")
     suspend fun getById(id: Long): DictionaryEntry?
 
