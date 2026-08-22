@@ -14,6 +14,8 @@ import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.WordFrequency
 import com.yomitanmobile.data.mapper.toDomain
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
+import com.yomitanmobile.data.settings.LanguageSettings
+import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
 import com.yomitanmobile.domain.model.WordEntry
@@ -38,8 +40,16 @@ class DictionaryRepositoryImpl @Inject constructor(
     private val frequencyDao: FrequencyDao,
     private val jlptTagDao: JlptTagDao,
     private val parser: YomitanDictionaryParser,
-    private val database: AppDatabase
+    private val database: AppDatabase,
+    private val languageSettings: LanguageSettings
 ) : DictionaryRepository {
+
+    // Every read below is scoped to the language being studied. Reading it
+    // per call rather than caching a field here keeps the repository correct
+    // if the setting is ever changed without a restart; today it cannot be,
+    // but a stale field would fail silently (empty results) rather than loudly.
+    private val language: String
+        get() = languageSettings.current.entryTag
 
     // Matches YomitanDictionaryParser's placeholder name: term/kanji/frequency
     // rows are written under this and renamed to the real index.json title
@@ -89,7 +99,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             // result is identical to one big ordered query would have produced.
             expressions.distinct()
                 .chunked(IN_CLAUSE_CHUNK)
-                .flatMap { chunk -> dictionaryDao.getReadingsForExpressions(chunk) }
+                .flatMap { chunk -> dictionaryDao.getReadingsForExpressions(chunk, language) }
                 .groupBy { it.expression }
                 .mapValues { (_, rows) ->
                     // Ranked rows (frequency > 0) beat unranked; among ranked the
@@ -120,7 +130,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             try {
                 expressions.distinct()
                     .chunked(IN_CLAUSE_CHUNK)
-                    .flatMap { chunk -> dictionaryDao.getEntriesByExpressions(chunk) }
+                    .flatMap { chunk -> dictionaryDao.getEntriesByExpressions(chunk, language) }
                     .map { it.toDomain() }
             } catch (e: Exception) {
                 Log.w(TAG, "getEntriesForExpressions failed (${expressions.size} expressions)", e)
@@ -135,7 +145,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             try {
                 readings.distinct()
                     .chunked(IN_CLAUSE_CHUNK)
-                    .flatMap { chunk -> dictionaryDao.getEntriesByReadings(chunk) }
+                    .flatMap { chunk -> dictionaryDao.getEntriesByReadings(chunk, language) }
                     .map { it.toDomain() }
             } catch (e: Exception) {
                 Log.w(TAG, "getEntriesForReadings failed (${readings.size} readings)", e)
@@ -146,8 +156,8 @@ class DictionaryRepositoryImpl @Inject constructor(
 
     override suspend fun getSurfaceLexicon(): Set<String> = withContext(Dispatchers.IO) {
         try {
-            val expressions = dictionaryDao.getAllExpressions()
-            val readings = dictionaryDao.getAllReadings()
+            val expressions = dictionaryDao.getAllExpressions(language)
+            val readings = dictionaryDao.getAllReadings(language)
             HashSet<String>(expressions.size + readings.size).apply {
                 addAll(expressions)
                 addAll(readings)
@@ -181,7 +191,7 @@ class DictionaryRepositoryImpl @Inject constructor(
     override fun searchExact(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
         val trimmed = query.trim()
-        return dictionaryDao.searchExact(trimmed)
+        return dictionaryDao.searchExact(trimmed, language)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { e ->
                 Log.w(TAG, "searchExact failed for query='$trimmed'", e)
@@ -197,7 +207,7 @@ class DictionaryRepositoryImpl @Inject constructor(
         // in the DAO query. Without this, a user typing `%` matched every
         // entry and `_` matched any single character.
         val likeQuery = InputSanitizer.sanitizeLikeQuery(trimmed)
-        return dictionaryDao.searchCombined(trimmed, likeQuery)
+        return dictionaryDao.searchCombined(trimmed, likeQuery, language)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { e ->
                 Log.w(TAG, "searchCombined failed for query='$trimmed'", e)
@@ -210,7 +220,7 @@ class DictionaryRepositoryImpl @Inject constructor(
         val trimmed = query.trim()
         val likeQuery = InputSanitizer.sanitizeLikeQuery(trimmed)
         if (likeQuery.isBlank()) return flowOf(emptyList())
-        return dictionaryDao.searchContains(likeQuery)
+        return dictionaryDao.searchContains(likeQuery, language)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { e ->
                 Log.w(TAG, "searchContains failed for query='$trimmed'", e)
@@ -222,7 +232,7 @@ class DictionaryRepositoryImpl @Inject constructor(
         if (query.isBlank()) return flowOf(emptyList())
         val ftsQuery = InputSanitizer.sanitizeFtsQuery(query)
         if (ftsQuery.isBlank()) return flowOf(emptyList())
-        return dictionaryDao.searchByDefinition(ftsQuery)
+        return dictionaryDao.searchByDefinition(ftsQuery, language)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { e ->
                 Log.w(TAG, "searchByDefinition failed for fts='$ftsQuery'", e)
@@ -241,7 +251,7 @@ class DictionaryRepositoryImpl @Inject constructor(
 
     override suspend fun getEntriesByReading(reading: String): List<WordEntry> {
         return try {
-            dictionaryDao.getByReading(reading).map { it.toDomain() }
+            dictionaryDao.getByReading(reading, language).map { it.toDomain() }
         } catch (e: Exception) {
             Log.w(TAG, "getEntriesByReading('$reading') failed", e)
             emptyList()
@@ -271,8 +281,12 @@ class DictionaryRepositoryImpl @Inject constructor(
             // 10000 fits comfortably in one transaction and roughly halves the
             // transaction-commit overhead vs. 5000.
             val batchSize = 10000
+            // What the rows are stamped with while streaming; corrected below
+            // if index.json declares a sourceLanguage of its own.
+            val importLanguage = languageSettings.current
             val parseResult = parser.parseFromZipStreaming(
                 inputStream = inputStream,
+                defaultLanguage = importLanguage.entryTag,
                 onProgress = onProgress,
                 onBatch = { batch, _ ->
                     batch.chunked(batchSize).forEach { chunk ->
@@ -334,6 +348,8 @@ class DictionaryRepositoryImpl @Inject constructor(
             )
 
             dictionaryNameFromBatch = parseResult.dictionaryName
+            val declaredLanguage = AppLanguage.fromSourceLanguageCode(parseResult.sourceLanguage)
+            val effectiveLanguage = declaredLanguage ?: importLanguage
 
             // Promote frequency rows from the temp name to the real list title.
             // Runs for meta AND term dicts (a term dict can carry its own freq
@@ -363,6 +379,18 @@ class DictionaryRepositoryImpl @Inject constructor(
                     kanjiDao.deleteByDictionary(dictionaryNameFromBatch)
                     dictionaryDao.updateDictionaryName("temp", dictionaryNameFromBatch)
                     kanjiDao.updateDictionaryName("temp", dictionaryNameFromBatch)
+                }
+
+                // index.json wins over the language that was active when the
+                // user tapped import: a kty-en-pl zip is an English dictionary
+                // whether or not the app happened to be in Japanese mode. Only
+                // written when the declared language actually differs, so the
+                // common case (no sourceLanguage field) costs nothing.
+                if (declaredLanguage != null && declaredLanguage != importLanguage) {
+                    dictionaryDao.updateLanguageForDictionary(
+                        dictionaryNameFromBatch,
+                        declaredLanguage.entryTag
+                    )
                 }
 
                 try {
@@ -398,7 +426,8 @@ class DictionaryRepositoryImpl @Inject constructor(
                     name = dictionaryNameFromBatch,
                     version = parseResult.version,
                     revision = parseResult.revision,
-                    entryCount = entryCount
+                    entryCount = entryCount,
+                    language = effectiveLanguage.entryTag
                 )
             )
 

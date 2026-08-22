@@ -45,7 +45,7 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         JlptTag::class,
         AnkiCollectionWord::class
     ],
-    version = 16,
+    version = 17,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -67,6 +67,31 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        /**
+         * Language becomes a first-class column.
+         *
+         * Everything already in the database predates multi-language support
+         * and is therefore Japanese, which is why both DEFAULTs are 'ja' and
+         * why AppLanguage.DEFAULT has to agree with them — an upgrading user
+         * whose rows say 'ja' while the app filters on 'en' would open to an
+         * empty dictionary.
+         *
+         * No index on the column on purpose: two values over hundreds of
+         * thousands of rows is not selective enough to seek on, and every
+         * query that carries the filter already narrows through the
+         * expression / reading / FTS indexes first.
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE dictionary_entries ADD COLUMN language TEXT NOT NULL DEFAULT 'ja'"
+                )
+                db.execSQL(
+                    "ALTER TABLE dictionaries ADD COLUMN language TEXT NOT NULL DEFAULT 'ja'"
+                )
+            }
+        }
 
         val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {

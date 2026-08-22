@@ -57,6 +57,13 @@ data class DictionaryEntry(
     @ColumnInfo(name = "jlpt_level")
     val jlptLevel: Int = 0,
 
+    // Study language this row belongs to ("ja" / "en"). Search filters on
+    // it so a bilingual install never mixes 猫 into an English result list.
+    // Taken from the dictionary's index.json sourceLanguage when it declares
+    // one, otherwise from the language active at import time.
+    @ColumnInfo(name = "language")
+    val language: String = "ja",
+
     // JSON-serialized List<ExamplePair> — extracted from Jitendex structured-content
     // example containers. Empty for dictionaries without embedded examples (plain JMDict).
     @ColumnInfo(name = "examples_json")

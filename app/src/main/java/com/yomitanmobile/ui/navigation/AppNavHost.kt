@@ -11,6 +11,7 @@ import com.yomitanmobile.ui.detail.DetailScreen
 import com.yomitanmobile.ui.dictionaries.DictionariesScreen
 import com.yomitanmobile.ui.download.DictionaryDownloadScreen
 import com.yomitanmobile.ui.favorites.FavoritesScreen
+import com.yomitanmobile.ui.language.LanguageSelectScreen
 import com.yomitanmobile.ui.search.SearchScreen
 import com.yomitanmobile.ui.settings.FrequencyDisplayScreen
 import com.yomitanmobile.ui.settings.SettingsScreen
@@ -29,6 +30,16 @@ fun AppNavHost(
         navController = navController,
         startDestination = startDestination
     ) {
+        composable(Screen.LanguageSelect.route) {
+            LanguageSelectScreen(
+                onLanguageChosen = {
+                    navController.navigate(Screen.Setup.route) {
+                        popUpTo(Screen.LanguageSelect.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Setup.route) {
             SetupScreen(
                 onSetupComplete = {

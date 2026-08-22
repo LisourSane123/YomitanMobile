@@ -1,5 +1,7 @@
 package com.yomitanmobile.data.download
 
+import com.yomitanmobile.domain.model.AppLanguage
+
 /**
  * Represents a downloadable dictionary resource.
  */
@@ -12,7 +14,18 @@ data class DictionaryDownloadInfo(
     val url: String,
     val fileSize: String,
     val sha256: String? = null,
-    val language: String = "EN"
+    /**
+     * Language the *glosses* are written in ("EN", "JA", "PL"). Display
+     * only — it tells the user what they will be reading, and says nothing
+     * about which language the dictionary teaches.
+     */
+    val language: String = "EN",
+    /**
+     * Language this dictionary is FOR. Decides whether it is offered at all:
+     * a Japanese learner is never shown an English Wiktionary and vice
+     * versa. Every pre-existing entry teaches Japanese, hence the default.
+     */
+    val studyLanguage: AppLanguage = AppLanguage.JAPANESE
 )
 
 fun DictionaryDownloadInfo.localizedDescription(isEnglish: Boolean): String {
@@ -97,8 +110,76 @@ object AvailableDictionaries {
         language = "JA"
     )
 
+    // ── English → Polish ─────────────────────────────────────────────────
+    //
+    // There is no JMdict for English. No freely licensed English-Polish
+    // dictionary exists in Yomitan format outside the Wiktionary
+    // conversions, and the commercial ones (PWN, Diki) are not
+    // redistributable at all — so coverage is assembled from three files
+    // rather than taken from one:
+    //
+    //   • kty-en-pl — Polish glosses for ~79 000 English headwords, about a
+    //     quarter of which carry an English example sentence WITH its Polish
+    //     translation. This is what cards are built from.
+    //   • kty-en-en — English definitions for essentially all of English.
+    //     This is what the Polish-first lookup falls back TO: a word no
+    //     Polish translator ever reached is still worth a card with an
+    //     English definition, and it carries examples for many of the words
+    //     kty-en-pl leaves bare.
+    //   • kty-en-ipa — pronunciations, which fill the slot furigana occupies
+    //     on a Japanese card.
+    //
+    // All three are pinned to the same dated release + sha256 as the
+    // Japanese Wiktionary above; `latest/download` would let the content
+    // change underneath a hash we published.
+    private const val WIKTIONARY_RELEASE =
+        "https://github.com/yomidevs/wiktionary-to-yomitan/releases/download/" +
+            "v2025-04-08-10-54-36-00-00"
+
+    val wiktionaryEnPl = DictionaryDownloadInfo(
+        id = "wiktionary_en_pl",
+        name = "Wiktionary EN→PL",
+        descriptionPl = "Słownik angielsko-polski z Wikisłownika. ~79 000 haseł, wiele z przykładami zdań wraz z tłumaczeniem. Główny słownik dla angielskiego.",
+        descriptionEn = "English-Polish dictionary from Wiktionary. ~79,000 headwords, many with example sentences and their translation. Primary dictionary for English.",
+        category = DictionaryCategory.DICTIONARY,
+        url = "$WIKTIONARY_RELEASE/kty-en-pl.zip",
+        fileSize = "~4 MB",
+        sha256 = "64cb29e22ad7a48d653a8b88bdf01132c6f880ddaecdaaf399e780ece6b19e04",
+        language = "PL",
+        studyLanguage = AppLanguage.ENGLISH
+    )
+
+    val wiktionaryEnEn = DictionaryDownloadInfo(
+        id = "wiktionary_en_en",
+        name = "Wiktionary EN→EN",
+        descriptionPl = "Angielsko-angielski Wikisłownik. Rezerwa dla słów bez polskiego tłumaczenia oraz źródło dodatkowych przykładów. Duży plik.",
+        descriptionEn = "English-English Wiktionary. Fallback for words with no Polish gloss, and a source of extra examples. Large download.",
+        category = DictionaryCategory.DICTIONARY,
+        url = "$WIKTIONARY_RELEASE/kty-en-en.zip",
+        fileSize = "~120 MB",
+        sha256 = "3cf1f90ea930cf890293085d990e55415236a92cf935b0df6081627369033219",
+        language = "EN",
+        studyLanguage = AppLanguage.ENGLISH
+    )
+
+    val wiktionaryEnIpa = DictionaryDownloadInfo(
+        id = "wiktionary_en_ipa",
+        name = "Wymowa IPA (EN)",
+        descriptionPl = "Transkrypcja fonetyczna IPA dla ~82 000 angielskich słów. Wypełnia pole wymowy na fiszkach.",
+        descriptionEn = "IPA pronunciations for ~82,000 English words. Fills the pronunciation field on cards.",
+        category = DictionaryCategory.PITCH_ACCENT,
+        url = "$WIKTIONARY_RELEASE/kty-en-ipa.zip",
+        fileSize = "~2 MB",
+        sha256 = "224ee34ab05970cedd102741c1b5d9cb690eddfab7f2d37adddcdfb6c5a6e9c4",
+        language = "EN",
+        studyLanguage = AppLanguage.ENGLISH
+    )
+
     val all: List<DictionaryDownloadInfo> = listOf(
         jitendex,
+        wiktionaryEnPl,
+        wiktionaryEnEn,
+        wiktionaryEnIpa,
         jlptVocab,
         jmdict,
         wiktionaryJaJa,
@@ -277,6 +358,30 @@ object AvailableDictionaries {
     fun getByCategory(category: DictionaryCategory): List<DictionaryDownloadInfo> {
         return all.filter { it.category == category }
     }
+
+    /** Everything on offer for one study language, in list order. */
+    fun forLanguage(language: AppLanguage): List<DictionaryDownloadInfo> =
+        all.filter { it.studyLanguage == language }
+
+    fun getByCategory(
+        category: DictionaryCategory,
+        language: AppLanguage
+    ): List<DictionaryDownloadInfo> =
+        all.filter { it.category == category && it.studyLanguage == language }
+
+    /**
+     * The first-install bundle for a language.
+     *
+     * English deliberately leaves kty-en-en out: 120 MB in front of a first
+     * run is a bad trade for a fallback most lookups never reach. It is one
+     * tap away in the download screen, and the app points there when a word
+     * turns out to have no Polish gloss.
+     */
+    fun recommendedFor(language: AppLanguage): List<DictionaryDownloadInfo> =
+        when (language) {
+            AppLanguage.JAPANESE -> recommended
+            AppLanguage.ENGLISH -> listOf(wiktionaryEnPl, wiktionaryEnIpa)
+        }
 
     /**
      * Recommended dictionaries for first-time setup.

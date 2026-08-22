@@ -29,5 +29,11 @@ data class DictionaryInfo(
     val priority: Int = 0,
 
     @ColumnInfo(name = "import_date")
-    val importDate: Long = Instant.now().toEpochMilli()
+    val importDate: Long = Instant.now().toEpochMilli(),
+
+    // Study language of this dictionary's entries, mirroring the column on
+    // DictionaryEntry. Lets the dictionary list show only what is relevant
+    // to the active language without joining against the term table.
+    @ColumnInfo(name = "language")
+    val language: String = "ja"
 )

@@ -1,6 +1,7 @@
 package com.yomitanmobile.ui.navigation
 
 sealed class Screen(val route: String) {
+    data object LanguageSelect : Screen("language_select")
     data object Setup : Screen("setup")
     data object Search : Screen("search")
     data object Detail : Screen("detail/{entryId}") {

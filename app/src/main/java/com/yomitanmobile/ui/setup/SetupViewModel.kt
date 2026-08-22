@@ -6,6 +6,8 @@ import com.yomitanmobile.data.download.AvailableDictionaries
 import com.yomitanmobile.data.download.DictionaryDownloadManager
 import com.yomitanmobile.data.download.DownloadProgress
 import com.yomitanmobile.data.download.DownloadResult
+import com.yomitanmobile.data.settings.LanguageSettings
+import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,8 +30,24 @@ enum class SetupState {
 @HiltViewModel
 class SetupViewModel @Inject constructor(
     private val downloadManager: DictionaryDownloadManager,
-    private val repository: DictionaryRepository
+    private val repository: DictionaryRepository,
+    languageSettings: LanguageSettings
 ) : ViewModel() {
+
+    /**
+     * Set on the language screen immediately before this one, so it is
+     * already current here. Everything setup offers is derived from it —
+     * there is no separate "which dictionaries" question to ask.
+     */
+    val language: AppLanguage = languageSettings.current
+
+    /** The single most useful dictionary for this language. */
+    private val primaryDictionary = when (language) {
+        AppLanguage.JAPANESE -> AvailableDictionaries.jmdict
+        AppLanguage.ENGLISH -> AvailableDictionaries.wiktionaryEnPl
+    }
+
+    val recommendedDictionaries = AvailableDictionaries.recommendedFor(language)
 
     private val _setupState = MutableStateFlow(SetupState.WELCOME)
     val setupState: StateFlow<SetupState> = _setupState.asStateFlow()
@@ -43,10 +61,10 @@ class SetupViewModel @Inject constructor(
         .map { it.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    fun startJmDictDownload() {
+    fun startPrimaryDownload() {
         _setupState.value = SetupState.DOWNLOADING
         viewModelScope.launch {
-            val result = downloadManager.downloadAndImport(AvailableDictionaries.jmdict)
+            val result = downloadManager.downloadAndImport(primaryDictionary)
             when (result) {
                 is DownloadResult.Success -> {
                     _setupState.value = SetupState.COMPLETED
@@ -63,7 +81,7 @@ class SetupViewModel @Inject constructor(
         _setupState.value = SetupState.DOWNLOADING
         viewModelScope.launch {
             var anyError: String? = null
-            for (dict in AvailableDictionaries.recommended) {
+            for (dict in recommendedDictionaries) {
                 val result = downloadManager.downloadAndImport(dict)
                 if (result is DownloadResult.Error) {
                     anyError = "${dict.name}: ${result.message}"
@@ -84,6 +102,6 @@ class SetupViewModel @Inject constructor(
 
     fun retry() {
         _errorMessage.value = null
-        startJmDictDownload()
+        startPrimaryDownload()
     }
 }

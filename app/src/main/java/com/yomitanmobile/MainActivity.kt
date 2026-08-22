@@ -59,6 +59,12 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         val SETUP_COMPLETED = booleanPreferencesKey("setup_completed")
+
+        // The language being studied ("ja" / "en"). Absent = never chosen,
+        // which is what routes first launch to the language screen; an
+        // upgrading install reads as absent too and is sent there once,
+        // with Japanese pre-selected to match its existing data.
+        val APP_LANGUAGE = stringPreferencesKey("app_language")
         val ANKI_DECK_NAME = stringPreferencesKey("anki_deck_name")
         val THEME_MODE = stringPreferencesKey("theme_mode") // "system", "light", "dark"
 
@@ -169,11 +175,17 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 val prefs = dataStore.data.first()
                 val setupDone = prefs[SETUP_COMPLETED] ?: false
+                val languageChosen = prefs[APP_LANGUAGE] != null
                 themeMode = prefs[THEME_MODE] ?: "system"
-                startRoute = if (setupDone) {
-                    Screen.Search.route
-                } else {
-                    Screen.Setup.route
+                // The language question comes before the dictionary question,
+                // because the answer decides which dictionaries setup offers.
+                // An install that predates this setting has no stored language
+                // and passes through here once; picking Japanese leaves it
+                // exactly as it was, since that is what its existing rows are.
+                startRoute = when {
+                    !languageChosen -> Screen.LanguageSelect.route
+                    setupDone -> Screen.Search.route
+                    else -> Screen.Setup.route
                 }
             }
 

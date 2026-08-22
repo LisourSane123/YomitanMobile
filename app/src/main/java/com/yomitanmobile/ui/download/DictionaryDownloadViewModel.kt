@@ -30,10 +30,15 @@ sealed class DownloadEvent {
 @HiltViewModel
 class DictionaryDownloadViewModel @Inject constructor(
     private val downloadManager: DictionaryDownloadManager,
-    getDictionariesUseCase: GetDictionariesUseCase
+    getDictionariesUseCase: GetDictionariesUseCase,
+    private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings
 ) : ViewModel() {
 
-    val availableDictionaries: List<DictionaryDownloadInfo> = AvailableDictionaries.all
+    // Only what is useful for the language being studied. A Japanese learner
+    // has no use for an English Wiktionary and would import it into a search
+    // index that filters it straight back out again.
+    val availableDictionaries: List<DictionaryDownloadInfo> =
+        AvailableDictionaries.forLanguage(languageSettings.current)
 
     val installedDictionaries: StateFlow<List<DictionaryInfo>> = getDictionariesUseCase.invoke()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -101,12 +106,17 @@ class DictionaryDownloadViewModel @Inject constructor(
     }
 
     fun downloadJmdict() {
-        downloadDictionary(AvailableDictionaries.jmdict)
+        downloadDictionary(
+            when (languageSettings.current) {
+                com.yomitanmobile.domain.model.AppLanguage.JAPANESE -> AvailableDictionaries.jmdict
+                com.yomitanmobile.domain.model.AppLanguage.ENGLISH -> AvailableDictionaries.wiktionaryEnPl
+            }
+        )
     }
 
     fun downloadAllRecommended() {
         viewModelScope.launch {
-            for (dict in AvailableDictionaries.recommended) {
+            for (dict in AvailableDictionaries.recommendedFor(languageSettings.current)) {
                 if (!isDictionaryInstalled(dict)) {
                     try {
                         val result = downloadManager.downloadAndImport(dict)

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.data.download.DownloadPhase
+import com.yomitanmobile.domain.model.AppLanguage
 
 @Composable
 fun SetupScreen(
@@ -57,8 +58,10 @@ fun SetupScreen(
         ) { state ->
             when (state) {
                 SetupState.WELCOME -> WelcomeContent(
+                    language = viewModel.language,
+                    isEnglish = isEnglish,
                     onDownloadRecommended = { viewModel.startRecommendedDownload() },
-                    onDownloadJmdict = { viewModel.startJmDictDownload() },
+                    onDownloadPrimary = { viewModel.startPrimaryDownload() },
                     onSkip = {
                         viewModel.skip()
                         onSetupComplete()
@@ -88,10 +91,13 @@ fun SetupScreen(
 
 @Composable
 private fun WelcomeContent(
+    language: AppLanguage,
+    isEnglish: Boolean,
     onDownloadRecommended: () -> Unit,
-    onDownloadJmdict: () -> Unit,
+    onDownloadPrimary: () -> Unit,
     onSkip: () -> Unit
 ) {
+    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -118,7 +124,10 @@ private fun WelcomeContent(
         Spacer(Modifier.height(8.dp))
 
         Text(
-            "Słownik japońsko-angielski",
+            when (language) {
+                AppLanguage.JAPANESE -> tr("Słownik japońsko-angielski", "Japanese-English dictionary")
+                AppLanguage.ENGLISH -> tr("Słownik angielsko-polski", "English-Polish dictionary")
+            },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -126,10 +135,34 @@ private fun WelcomeContent(
         Spacer(Modifier.height(32.dp))
 
         Text(
-            "Pobierz rekomendowane słowniki, aby w pełni korzystać z aplikacji:\n" +
-                "• JMdict — główny słownik (~200K wpisów)\n" +
-                "• JPDB Frequency — ranking częstotliwości\n" +
-                "• Kanjium — akcent tonalny (pitch accent)",
+            when (language) {
+                AppLanguage.JAPANESE -> tr(
+                    "Pobierz rekomendowane słowniki, aby w pełni korzystać z aplikacji:\n" +
+                        "• Jitendex — główny słownik (~200K wpisów)\n" +
+                        "• Tagi JLPT — poziomy N5–N1\n" +
+                        "• JPDB Frequency — ranking częstotliwości\n" +
+                        "• Kanjium — akcent tonalny (pitch accent)\n" +
+                        "• KANJIDIC — rozbiór kanji na fiszkach",
+                    "Download the recommended dictionaries to get the most out of the app:\n" +
+                        "• Jitendex - main dictionary (~200K entries)\n" +
+                        "• JLPT tags - N5-N1 levels\n" +
+                        "• JPDB Frequency - frequency ranking\n" +
+                        "• Kanjium - pitch accent\n" +
+                        "• KANJIDIC - kanji breakdown on cards"
+                )
+                AppLanguage.ENGLISH -> tr(
+                    "Pobierz rekomendowane słowniki, aby w pełni korzystać z aplikacji:\n" +
+                        "• Wiktionary EN→PL — ~79 000 haseł z polskimi znaczeniami\n" +
+                        "• Wymowa IPA — transkrypcja fonetyczna\n\n" +
+                        "Słownik angielsko-angielski (rezerwa dla słów bez polskiego " +
+                        "tłumaczenia) pobierzesz później w ustawieniach — waży 120 MB.",
+                    "Download the recommended dictionaries to get the most out of the app:\n" +
+                        "• Wiktionary EN→PL - ~79,000 headwords with Polish meanings\n" +
+                        "• IPA pronunciation - phonetic transcription\n\n" +
+                        "The English-English dictionary (the fallback for words with no " +
+                        "Polish gloss) is a 120 MB download you can add later in settings."
+                )
+            },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
@@ -150,24 +183,36 @@ private fun WelcomeContent(
                 modifier = Modifier.size(24.dp)
             )
             Spacer(Modifier.size(12.dp))
-            Text(text = "Download recommended (~19 MB)", fontSize = 16.sp)
+            Text(
+                text = when (language) {
+                    AppLanguage.JAPANESE -> tr("Pobierz rekomendowane (~19 MB)", "Download recommended (~19 MB)")
+                    AppLanguage.ENGLISH -> tr("Pobierz rekomendowane (~6 MB)", "Download recommended (~6 MB)")
+                },
+                fontSize = 16.sp
+            )
         }
 
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            onClick = onDownloadJmdict,
+            onClick = onDownloadPrimary,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text("Download JMdict only (~15 MB)", fontSize = 14.sp)
+            Text(
+                when (language) {
+                    AppLanguage.JAPANESE -> tr("Tylko JMdict (~15 MB)", "JMdict only (~15 MB)")
+                    AppLanguage.ENGLISH -> tr("Tylko słownik EN→PL (~4 MB)", "EN→PL dictionary only (~4 MB)")
+                },
+                fontSize = 14.sp
+            )
         }
 
         Spacer(Modifier.height(16.dp))
 
         TextButton(onClick = onSkip) {
-            Text("Skip — I'll import manually")
+            Text(tr("Pomiń — zaimportuję ręcznie", "Skip - I'll import manually"))
         }
     }
 }

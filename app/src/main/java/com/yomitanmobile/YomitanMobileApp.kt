@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.Toast
+import com.yomitanmobile.data.settings.LanguageSettings
 import dagger.hilt.android.HiltAndroidApp
 import java.io.File
 import java.io.PrintWriter
@@ -15,9 +16,18 @@ import java.util.Locale
 @HiltAndroidApp
 class YomitanMobileApp : Application() {
 
+    /**
+     * Primed before any screen or DAO runs. The data layer reads the active
+     * language synchronously on every query, so it has to be in memory
+     * before the first search can happen.
+     */
+    @javax.inject.Inject
+    lateinit var languageSettings: LanguageSettings
+
     override fun onCreate() {
         super.onCreate()
         installLastResortHandler()
+        languageSettings.loadBlocking()
     }
 
     /**

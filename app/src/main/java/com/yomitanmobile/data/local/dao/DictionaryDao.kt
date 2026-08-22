@@ -40,16 +40,20 @@ interface DictionaryDao {
      */
     @Query("""
         SELECT * FROM dictionary_entries
-        WHERE expression = :exactQuery OR reading = :exactQuery
+        WHERE language = :language
+          AND (expression = :exactQuery OR reading = :exactQuery)
         ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
                  frequency ASC,
                  LENGTH(expression) ASC
         LIMIT :limit
     """)
-    fun searchExact(exactQuery: String, limit: Int = 50): Flow<List<DictionaryEntry>>
+    fun searchExact(exactQuery: String, language: String, limit: Int = 50): Flow<List<DictionaryEntry>>
 
-    @Query("SELECT * FROM dictionary_entries WHERE reading = :reading ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC")
-    suspend fun getByReading(reading: String): List<DictionaryEntry>
+    @Query(
+        "SELECT * FROM dictionary_entries WHERE reading = :reading AND language = :language " +
+            "ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC"
+    )
+    suspend fun getByReading(reading: String, language: String): List<DictionaryEntry>
 
     /**
      * Reading lookup for a batch of exact expressions, used to synthesise
@@ -61,10 +65,13 @@ interface DictionaryDao {
      */
     @Query("""
         SELECT expression, reading, frequency FROM dictionary_entries
-        WHERE expression IN (:expressions) AND reading != ''
+        WHERE expression IN (:expressions) AND reading != '' AND language = :language
         ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
     """)
-    suspend fun getReadingsForExpressions(expressions: List<String>): List<ExpressionReading>
+    suspend fun getReadingsForExpressions(
+        expressions: List<String>,
+        language: String
+    ): List<ExpressionReading>
 
     /**
      * Two-parameter signature so the equality match (`= :exactQuery`) uses
@@ -77,10 +84,13 @@ interface DictionaryDao {
      */
     @Query("""
         SELECT * FROM dictionary_entries
-        WHERE expression = :exactQuery
-           OR reading = :exactQuery
-           OR expression LIKE :likeQuery || '%' ESCAPE '\'
-           OR reading LIKE :likeQuery || '%' ESCAPE '\'
+        WHERE language = :language
+          AND (
+               expression = :exactQuery
+            OR reading = :exactQuery
+            OR expression LIKE :likeQuery || '%' ESCAPE '\'
+            OR reading LIKE :likeQuery || '%' ESCAPE '\'
+          )
         ORDER BY
             CASE
                 WHEN expression = :exactQuery THEN 0
@@ -92,7 +102,12 @@ interface DictionaryDao {
             LENGTH(expression) ASC
         LIMIT :limit
     """)
-    fun searchCombined(exactQuery: String, likeQuery: String, limit: Int = 50): Flow<List<DictionaryEntry>>
+    fun searchCombined(
+        exactQuery: String,
+        likeQuery: String,
+        language: String,
+        limit: Int = 50
+    ): Flow<List<DictionaryEntry>>
 
     /**
      * Substring match: every entry that CONTAINS the query somewhere other
@@ -122,6 +137,7 @@ interface DictionaryDao {
                 SELECT id FROM dictionary_entries
                 WHERE reading LIKE '%' || :likeQuery || '%' ESCAPE '\'
           )
+          AND language = :language
           AND expression NOT LIKE :likeQuery || '%' ESCAPE '\'
           AND reading NOT LIKE :likeQuery || '%' ESCAPE '\'
         ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
@@ -129,7 +145,11 @@ interface DictionaryDao {
                  LENGTH(expression) ASC
         LIMIT :limit
     """)
-    fun searchContains(likeQuery: String, limit: Int = 30): Flow<List<DictionaryEntry>>
+    fun searchContains(
+        likeQuery: String,
+        language: String,
+        limit: Int = 30
+    ): Flow<List<DictionaryEntry>>
 
     @Query("SELECT * FROM dictionary_entries WHERE id = :id")
     suspend fun getById(id: Long): DictionaryEntry?
@@ -146,6 +166,9 @@ interface DictionaryDao {
     @Query("SELECT COUNT(*) FROM dictionary_entries")
     suspend fun getEntryCount(): Int
 
+    @Query("SELECT COUNT(*) FROM dictionary_entries WHERE language = :language")
+    suspend fun getEntryCountForLanguage(language: String): Int
+
     @Query("SELECT COUNT(*) FROM dictionary_entries WHERE dictionary_name = :dictionaryName")
     suspend fun getEntryCountForDictionary(dictionaryName: String): Int
 
@@ -160,12 +183,28 @@ interface DictionaryDao {
         SELECT dictionary_entries.* FROM dictionary_entries
         JOIN dictionary_entries_fts ON dictionary_entries.rowid = dictionary_entries_fts.rowid
         WHERE dictionary_entries_fts MATCH :query
+          AND dictionary_entries.language = :language
         ORDER BY CASE WHEN dictionary_entries.frequency > 0 THEN 0 ELSE 1 END,
                  dictionary_entries.frequency ASC,
                  LENGTH(dictionary_entries.expression) ASC
         LIMIT :limit
     """)
-    fun searchByDefinition(query: String, limit: Int = 50): Flow<List<DictionaryEntry>>
+    fun searchByDefinition(
+        query: String,
+        language: String,
+        limit: Int = 50
+    ): Flow<List<DictionaryEntry>>
+
+    /**
+     * Corrects the language stamp on a freshly imported dictionary.
+     *
+     * Rows are written with the language active at import time, because ZIP
+     * order does not guarantee index.json is read before the term banks. When
+     * the index turns out to declare a `sourceLanguage` of its own, that is
+     * the authoritative answer and this rewrites the batch.
+     */
+    @Query("UPDATE dictionary_entries SET language = :language WHERE dictionary_name = :dictionaryName")
+    suspend fun updateLanguageForDictionary(dictionaryName: String, language: String)
 
     @Query("UPDATE dictionary_entries SET dictionary_name = :newName WHERE dictionary_name = :oldName")
     suspend fun updateDictionaryName(oldName: String, newName: String)
@@ -236,11 +275,11 @@ interface DictionaryDao {
      * Both columns are needed because a text writes 見る with kanji and
      * みる without, and either spelling must resolve to the same word.
      */
-    @Query("SELECT DISTINCT expression FROM dictionary_entries WHERE expression != ''")
-    suspend fun getAllExpressions(): List<String>
+    @Query("SELECT DISTINCT expression FROM dictionary_entries WHERE expression != '' AND language = :language")
+    suspend fun getAllExpressions(language: String): List<String>
 
-    @Query("SELECT DISTINCT reading FROM dictionary_entries WHERE reading != ''")
-    suspend fun getAllReadings(): List<String>
+    @Query("SELECT DISTINCT reading FROM dictionary_entries WHERE reading != '' AND language = :language")
+    suspend fun getAllReadings(language: String): List<String>
 
     /**
      * Exact-expression batch lookup. Callers MUST chunk the list well below
@@ -248,10 +287,13 @@ interface DictionaryDao {
      */
     @Query("""
         SELECT * FROM dictionary_entries
-        WHERE expression IN (:expressions)
+        WHERE expression IN (:expressions) AND language = :language
         ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
     """)
-    suspend fun getEntriesByExpressions(expressions: List<String>): List<DictionaryEntry>
+    suspend fun getEntriesByExpressions(
+        expressions: List<String>,
+        language: String
+    ): List<DictionaryEntry>
 
     /**
      * Batch counterpart of [getByReading]: resolves the kana words a text
@@ -260,10 +302,13 @@ interface DictionaryDao {
      */
     @Query("""
         SELECT * FROM dictionary_entries
-        WHERE reading IN (:readings)
+        WHERE reading IN (:readings) AND language = :language
         ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
     """)
-    suspend fun getEntriesByReadings(readings: List<String>): List<DictionaryEntry>
+    suspend fun getEntriesByReadings(
+        readings: List<String>,
+        language: String
+    ): List<DictionaryEntry>
 
     // A word may be tagged by several sources, or belong to more than one
     // level in the same source. The lower tier wins (5 = N5 = easiest): the

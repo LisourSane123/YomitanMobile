@@ -36,6 +36,14 @@ data class ParseResult(
     val dictionaryName: String,
     val version: String,
     val revision: String,
+    /**
+     * `sourceLanguage` from index.json, when the dictionary declares one.
+     * Kaikki-derived dictionaries (kty-*) always do; Jitendex, JMdict and
+     * every frequency list do not, which is why the caller falls back to
+     * the language active at import time rather than treating null as an
+     * error.
+     */
+    val sourceLanguage: String? = null,
     val entriesCount: Int,
     val isMetaDictionary: Boolean = false,
     val metaFrequencyCount: Int = 0,
@@ -136,6 +144,14 @@ class YomitanDictionaryParser @Inject constructor() {
     @OptIn(ExperimentalSerializationApi::class)
     suspend fun parseFromZipStreaming(
         inputStream: InputStream,
+        /**
+         * Language stamped on every parsed row. index.json is not
+         * guaranteed to arrive before the term banks in ZIP order, so rows
+         * are written with this value and corrected afterwards by the
+         * caller if the index turns out to declare a different one — the
+         * same shape as the existing temp-name promotion.
+         */
+        defaultLanguage: String = "ja",
         onProgress: (ImportProgress) -> Unit = {},
         onBatch: suspend (List<DictionaryEntry>, String) -> Unit,
         onMetaBatch: suspend (List<FrequencyUpdate>, Map<String, String>) -> Unit = { _, _ -> },
@@ -196,7 +212,7 @@ class YomitanDictionaryParser @Inject constructor() {
                                 for (termElement in termArray) {
                                     try {
                                         val term = termElement.jsonArray
-                                        val parsed = parseTermEntry(term, dictionaryName)
+                                        val parsed = parseTermEntry(term, dictionaryName, defaultLanguage)
                                         if (parsed != null) {
                                             batch.add(parsed)
                                         }
@@ -334,6 +350,19 @@ class YomitanDictionaryParser @Inject constructor() {
                                                 val pitchStr = parsePitchValue(meta[2])
                                                 if (pitchStr.isNotBlank()) pitchChunk[expr] = pitchStr
                                             }
+                                            // English pronunciation lists
+                                            // (kty-en-ipa) travel as their own
+                                            // meta type. They land in the same
+                                            // column as Japanese pitch accent:
+                                            // both answer "how is this said",
+                                            // neither is ever populated for the
+                                            // other language, and the card
+                                            // builder reads the column through
+                                            // whichever field its note type has.
+                                            "ipa" -> {
+                                                val ipa = parseIpaValue(meta[2])
+                                                if (ipa.isNotBlank()) pitchChunk[expr] = ipa
+                                            }
                                         }
                                     } catch (_: Exception) {
                                         // Skip malformed meta entry
@@ -424,6 +453,7 @@ class YomitanDictionaryParser @Inject constructor() {
             dictionaryName = dictionaryName,
             version = version,
             revision = revision,
+            sourceLanguage = indexData?.get("sourceLanguage")?.jsonPrimitive?.contentOrNull,
             entriesCount = totalEntries,
             isMetaDictionary = hasMetaBanks && !hasTermBanks,
             metaFrequencyCount = totalFreqUpdates,
@@ -529,6 +559,27 @@ class YomitanDictionaryParser @Inject constructor() {
         } catch (e: Exception) { "" }
     }
 
+    /**
+     * First IPA transcription out of a kty-en-ipa meta entry:
+     * `{"reading": "zero", "transcriptions": [{"ipa": "/ˈziːɹəʊ/", …}, …]}`.
+     *
+     * Only the first is kept. The list is ordered with the most general
+     * pronunciation first and the rest are regional variants (🇺🇸 / 🏴󠁧󠁢󠁥󠁮󠁧󠁿 …);
+     * putting four of them in a card field turns a pronunciation hint into a
+     * dialect table.
+     */
+    private fun parseIpaValue(element: JsonElement): String {
+        return try {
+            if (element !is JsonObject) return ""
+            val transcriptions = element["transcriptions"]?.jsonArray ?: return ""
+            transcriptions.firstNotNullOfOrNull { entry ->
+                entry.jsonObject["ipa"]?.jsonPrimitive?.contentOrNull?.trim()?.ifBlank { null }
+            }.orEmpty()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     private fun safeString(element: JsonElement): String = when (element) {
         is JsonPrimitive -> element.content
         is JsonArray -> element.joinToString(", ") { safeString(it) }
@@ -536,7 +587,11 @@ class YomitanDictionaryParser @Inject constructor() {
         else -> ""
     }
 
-    private fun parseTermEntry(term: JsonArray, dictionaryName: String): DictionaryEntry? {
+    private fun parseTermEntry(
+        term: JsonArray,
+        dictionaryName: String,
+        language: String
+    ): DictionaryEntry? {
         if (term.size < 6) return null
 
         val expression = safeString(term[0])
@@ -618,6 +673,7 @@ class YomitanDictionaryParser @Inject constructor() {
             pitchAccent = "",
             partsOfSpeech = combinedTags,
             dictionaryName = dictionaryName,
+            language = language,
             sequenceNumber = sequenceNumber,
             exampleSentence = firstExample?.jp.orEmpty(),
             exampleSentenceTranslation = firstExample?.en.orEmpty(),
