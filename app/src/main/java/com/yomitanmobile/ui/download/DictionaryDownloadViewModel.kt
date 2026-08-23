@@ -110,6 +110,7 @@ class DictionaryDownloadViewModel @Inject constructor(
             when (languageSettings.current) {
                 com.yomitanmobile.domain.model.AppLanguage.JAPANESE -> AvailableDictionaries.jmdict
                 com.yomitanmobile.domain.model.AppLanguage.ENGLISH -> AvailableDictionaries.wiktionaryEnPl
+                com.yomitanmobile.domain.model.AppLanguage.SPANISH -> AvailableDictionaries.wiktionaryEsEn
             }
         )
     }

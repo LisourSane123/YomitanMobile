@@ -152,8 +152,8 @@ object AvailableDictionaries {
     val wiktionaryEnEn = DictionaryDownloadInfo(
         id = "wiktionary_en_en",
         name = "Wiktionary EN→EN",
-        descriptionPl = "Angielsko-angielski Wikisłownik. Rezerwa dla słów bez polskiego tłumaczenia oraz źródło dodatkowych przykładów. Duży plik.",
-        descriptionEn = "English-English Wiktionary. Fallback for words with no Polish gloss, and a source of extra examples. Large download.",
+        descriptionPl = "Angielsko-angielski Wikisłownik. Rezerwa dla słów bez polskiego tłumaczenia oraz źródło dodatkowych przykładów. Uwaga: ~2,7 GB po imporcie, który trwa kilkadziesiąt minut.",
+        descriptionEn = "English-English Wiktionary. Fallback for words with no Polish gloss, and a source of extra examples. Note: ~2.7 GB once imported, and the import takes tens of minutes.",
         category = DictionaryCategory.DICTIONARY,
         url = "$WIKTIONARY_RELEASE/kty-en-en.zip",
         fileSize = "~120 MB",
@@ -175,9 +175,65 @@ object AvailableDictionaries {
         studyLanguage = AppLanguage.ENGLISH
     )
 
+    // ── Spanish → English ────────────────────────────────────────────────
+    //
+    // Better covered than English→Polish, by a wide margin: kty-es-en is
+    // 21 MB against kty-en-pl's 4 MB, because English is a far better served
+    // target language on Wiktionary than Polish is.
+    //
+    // It is also shaped differently. 1.16M headwords, of which only a small
+    // fraction are lemmas — Wiktionary lists every inflected Spanish form as
+    // its own entry pointing back at the base word ("hablando" → "hablar
+    // (gerund)"). That is why there is no Spanish lemmatiser in the app: the
+    // dictionary already resolves the conjugations, irregulars included,
+    // which no rule table could.
+    //
+    // The size that matters is the one after import, not the download.
+    val wiktionaryEsEn = DictionaryDownloadInfo(
+        id = "wiktionary_es_en",
+        name = "Wiktionary ES→EN",
+        descriptionPl = "Słownik hiszpańsko-angielski z Wikisłownika. 1,16 mln haseł wraz z formami odmienionymi (hablando → hablar). Import trwa kilkanaście minut i zajmuje ~600 MB.",
+        descriptionEn = "Spanish-English dictionary from Wiktionary. 1.16M headwords including inflected forms (hablando → hablar). Import takes several minutes and needs ~600 MB.",
+        category = DictionaryCategory.DICTIONARY,
+        url = "$WIKTIONARY_RELEASE/kty-es-en.zip",
+        fileSize = "~21 MB",
+        sha256 = "e6600cbff3639ac1cac56b56a556c7fd4ce13346f0bd3bff7329213ebfd0d99e",
+        language = "EN",
+        studyLanguage = AppLanguage.SPANISH
+    )
+
+    val wiktionaryEsEs = DictionaryDownloadInfo(
+        id = "wiktionary_es_es",
+        name = "Wiktionary ES→ES",
+        descriptionPl = "Hiszpańsko-hiszpański Wikisłownik. Rezerwa dla haseł bez angielskiego tłumaczenia. Bardzo duży — ~1,4 GB po imporcie.",
+        descriptionEn = "Spanish-Spanish Wiktionary. Fallback for entries with no English gloss. Very large - ~1.4 GB once imported.",
+        category = DictionaryCategory.DICTIONARY,
+        url = "$WIKTIONARY_RELEASE/kty-es-es.zip",
+        fileSize = "~37 MB",
+        sha256 = "3dc2de5f45fd263ee4fade493b8e3012a705c7d1751cd9529442b1e2fab4d8d3",
+        language = "ES",
+        studyLanguage = AppLanguage.SPANISH
+    )
+
+    val wiktionaryEsIpa = DictionaryDownloadInfo(
+        id = "wiktionary_es_ipa",
+        name = "Wymowa IPA (ES)",
+        descriptionPl = "Transkrypcja fonetyczna IPA dla hiszpańskich słów. Wypełnia pole wymowy na fiszkach.",
+        descriptionEn = "IPA pronunciations for Spanish words. Fills the pronunciation field on cards.",
+        category = DictionaryCategory.PITCH_ACCENT,
+        url = "$WIKTIONARY_RELEASE/kty-es-ipa.zip",
+        fileSize = "~11 MB",
+        sha256 = "494e866bce88be014b9511957a0a81707a1fb540270e3a5e487d8cbccda53aa5",
+        language = "ES",
+        studyLanguage = AppLanguage.SPANISH
+    )
+
     val all: List<DictionaryDownloadInfo> = listOf(
         jitendex,
         wiktionaryEnPl,
+        wiktionaryEsEn,
+        wiktionaryEsIpa,
+        wiktionaryEsEs,
         wiktionaryEnEn,
         wiktionaryEnIpa,
         jlptVocab,
@@ -381,6 +437,7 @@ object AvailableDictionaries {
         when (language) {
             AppLanguage.JAPANESE -> recommended
             AppLanguage.ENGLISH -> listOf(wiktionaryEnPl, wiktionaryEnIpa)
+            AppLanguage.SPANISH -> listOf(wiktionaryEsEn, wiktionaryEsIpa)
         }
 
     /**

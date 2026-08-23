@@ -21,7 +21,35 @@ enum class AppLanguage(
     val entryTag: String
 ) {
     JAPANESE("ja", "ja"),
-    ENGLISH("en", "en");
+    ENGLISH("en", "en"),
+    SPANISH("es", "es");
+
+    /**
+     * Whether this language uses the Japanese-only machinery: JLPT levels
+     * and their deck generator, pitch accent, furigana, kanji breakdown, the
+     * longest-match text scanner and the "looks Japanese" Anki collection
+     * scan. Every one of those rests on a data source or a script property
+     * no other language has, so they are hidden rather than shown empty.
+     */
+    val hasJapaneseFeatures: Boolean get() = this == JAPANESE
+
+    /**
+     * index.json title prefix of the dictionary whose glosses this language's
+     * cards should prefer.
+     *
+     * Both non-Japanese languages install two term dictionaries: a bilingual
+     * one that is the point (Polish for English, English for Spanish) and a
+     * far larger monolingual one that fills the gaps. Search returns whichever
+     * matched, so the card builder has to name the preferred source rather
+     * than trust ordering. Null for Japanese, whose preferred source is a
+     * user choice in settings instead (see MonolingualCardResolver).
+     */
+    val preferredGlossDictionary: String?
+        get() = when (this) {
+            JAPANESE -> null
+            ENGLISH -> "kty-en-pl"
+            SPANISH -> "kty-es-en"
+        }
 
     companion object {
         /**
@@ -46,6 +74,7 @@ enum class AppLanguage(
             when (code?.trim()?.lowercase()) {
                 "ja", "jp", "jpn", "japanese" -> JAPANESE
                 "en", "eng", "english" -> ENGLISH
+                "es", "spa", "spanish" -> SPANISH
                 else -> null
             }
     }

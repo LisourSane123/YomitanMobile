@@ -100,6 +100,16 @@ fun LanguageSelectScreen(
                 ),
                 onClick = { viewModel.choose(AppLanguage.ENGLISH) }
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            LanguageCard(
+                flag = "🇪🇸",
+                title = tr("Hiszpański", "Spanish"),
+                subtitle = tr(
+                    "Znaczenia po angielsku, wymowa IPA, formy odmienione (hablando → hablar).",
+                    "English meanings, IPA pronunciation, inflected forms (hablando → hablar)."
+                ),
+                onClick = { viewModel.choose(AppLanguage.SPANISH) }
+            )
         }
     }
 }

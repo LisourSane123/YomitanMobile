@@ -80,8 +80,9 @@ class MonolingualCardResolver @Inject constructor(
      */
     suspend fun apply(entries: List<WordEntry>): List<WordEntry> {
         if (entries.isEmpty()) return entries
-        if (languageSettings.current == AppLanguage.ENGLISH) {
-            return applyPolishFirst(entries)
+        val language = languageSettings.current
+        if (!language.hasJapaneseFeatures) {
+            return applyPreferredGlossFirst(entries, language)
         }
         val settings = runCatching { readSettings() }.getOrElse {
             Log.w(TAG, "Reading card language settings failed; keeping English", it)
@@ -127,41 +128,46 @@ class MonolingualCardResolver @Inject constructor(
     }
 
     /**
-     * English cards: Polish gloss if there is one, English definition if
-     * there isn't.
+     * Non-Japanese cards: the bilingual gloss if there is one, whatever
+     * search found if there isn't.
      *
-     * Both dictionaries are installed side by side and search returns
-     * whichever matched, so without this a card could come out with the
-     * Polish and English definitions interleaved, or with the English one on
-     * top purely because of insertion order. Asking the Polish dictionary
-     * explicitly makes it deterministic: a word kty-en-pl covers gets a
-     * purely Polish back, and only a word it never reached falls through to
-     * the English definition search already found.
+     * "Preferred" is the dictionary that is the point of the language —
+     * kty-en-pl for English, kty-es-en for Spanish. Its monolingual
+     * companion (kty-en-en, kty-es-es) is installed alongside it and search
+     * returns whichever matched, so without this a card could come out with
+     * both languages' definitions interleaved, or with the monolingual one
+     * on top purely because of insertion order. Naming the preferred source
+     * makes it deterministic: a word it covers gets a purely bilingual back,
+     * and only a word it never reached falls through.
      *
-     * The fallback is not an error path. kty-en-pl has ~79 000 headwords
-     * against an English vocabulary several times larger, so an English
-     * definition is the expected outcome for rarer words — and far better
-     * than a blank card. With kty-en-en not installed either, whatever the
-     * Polish dictionary had stays untouched.
+     * The fallback is not an error path — for English it is the expected
+     * outcome for rarer words, since kty-en-pl has ~79 000 headwords against
+     * a much larger vocabulary, and a monolingual definition beats a blank
+     * card. With no companion installed either, what the preferred
+     * dictionary had stays untouched.
      */
-    private suspend fun applyPolishFirst(entries: List<WordEntry>): List<WordEntry> {
-        val polishDictionary = runCatching { findPolishDictionary() }.getOrElse {
+    private suspend fun applyPreferredGlossFirst(
+        entries: List<WordEntry>,
+        language: AppLanguage
+    ): List<WordEntry> {
+        val preferredPrefix = language.preferredGlossDictionary ?: return entries
+        val glossDictionary = runCatching { findGlossDictionary(preferredPrefix) }.getOrElse {
             Log.w(TAG, "Listing dictionaries failed; leaving definitions as found", it)
             return entries
         } ?: return entries
 
-        val polish = runCatching {
+        val preferred = runCatching {
             repository.getEntriesForExpressionsFromDictionary(
                 entries.map { it.expression.ifBlank { it.reading } },
-                polishDictionary
+                glossDictionary
             )
         }.getOrElse {
             Log.w(TAG, "Polish gloss lookup failed; keeping what search found", it)
             return entries
         }
 
-        val byExpression = HashMap<String, List<String>>(polish.size)
-        for (row in polish) {
+        val byExpression = HashMap<String, List<String>>(preferred.size)
+        for (row in preferred) {
             val definitions = row.definitions.filter { it.isNotBlank() }
             if (definitions.isEmpty()) continue
             byExpression.putIfAbsent(row.expression.trim(), definitions)
@@ -170,8 +176,8 @@ class MonolingualCardResolver @Inject constructor(
 
         return entries.map { entry ->
             val expression = entry.expression.ifBlank { entry.reading }.trim()
-            val polishDefinitions = byExpression[expression]
-            if (polishDefinitions == null) entry else entry.copy(definitions = polishDefinitions)
+            val preferredDefinitions = byExpression[expression]
+            if (preferredDefinitions == null) entry else entry.copy(definitions = preferredDefinitions)
         }
     }
 
@@ -182,10 +188,10 @@ class MonolingualCardResolver @Inject constructor(
      * ("kty-en-pl-2026") still resolves, and so a user who imported the zip
      * by hand instead of downloading it in-app gets the same behaviour.
      */
-    private suspend fun findPolishDictionary(): String? =
+    private suspend fun findGlossDictionary(prefix: String): String? =
         repository.getImportedDictionaries().first()
             .map { it.name }
-            .firstOrNull { it.trim().lowercase().startsWith(POLISH_DICTIONARY_PREFIX) }
+            .firstOrNull { it.trim().lowercase().startsWith(prefix) }
 
     private fun pairKey(expression: String, reading: String): String {
         val expr = expression.trim()
@@ -196,7 +202,5 @@ class MonolingualCardResolver @Inject constructor(
     private companion object {
         const val TAG = "MonolingualCard"
 
-        /** index.json title of the kaikki English→Polish dictionary. */
-        const val POLISH_DICTIONARY_PREFIX = "kty-en-pl"
     }
 }

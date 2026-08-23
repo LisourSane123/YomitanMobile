@@ -315,7 +315,7 @@ class DictionaryRepositoryImpl @Inject constructor(
                         totalFreqUpdates += freqUpdates.size
                     }
                     if (pitchMap.isNotEmpty()) {
-                        dictionaryDao.updatePitchAccentBatch(pitchMap)
+                        dictionaryDao.updatePitchAccentBatch(pitchMap, importLanguage.entryTag)
                         totalPitchUpdates += pitchMap.size
                     }
                 },

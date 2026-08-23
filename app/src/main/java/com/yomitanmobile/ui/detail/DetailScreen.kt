@@ -585,7 +585,7 @@ private fun WordDetailContent(
         // to split "/ˈwɜːd/" into morae, so English renders it as the text it
         // is.
         if (entry.pitchAccent.isNotBlank()) {
-            if (studyLanguage == com.yomitanmobile.domain.model.AppLanguage.ENGLISH) {
+            if (!studyLanguage.hasJapaneseFeatures) {
                 SectionCard(title = tr("Wymowa", "Pronunciation")) {
                     Text(
                         text = entry.pitchAccent,

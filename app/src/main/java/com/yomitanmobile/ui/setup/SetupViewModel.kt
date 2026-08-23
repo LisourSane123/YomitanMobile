@@ -45,6 +45,7 @@ class SetupViewModel @Inject constructor(
     private val primaryDictionary = when (language) {
         AppLanguage.JAPANESE -> AvailableDictionaries.jmdict
         AppLanguage.ENGLISH -> AvailableDictionaries.wiktionaryEnPl
+        AppLanguage.SPANISH -> AvailableDictionaries.wiktionaryEsEn
     }
 
     val recommendedDictionaries = AvailableDictionaries.recommendedFor(language)

@@ -44,6 +44,8 @@ class LanguageIsolationDbTest {
         insert("学校", "がっこう", "ja", frequency = 100)
         insert("school", "school", "en", frequency = 100)
         insert("want", "want", "en", frequency = 300)
+        insert("escuela", "escuela", "es", frequency = 100)
+        insert("hablar", "hablar", "es", frequency = 300)
     }
 
     @After
@@ -105,11 +107,25 @@ class LanguageIsolationDbTest {
     }
 
     @Test
+    fun `each language sees only its own rows`() = runBlocking {
+        // Three languages in one table: the pair that would be easiest to
+        // confuse is English and Spanish, since both are Latin script and
+        // nothing but the column separates them.
+        assertEquals(
+            listOf("escuela"),
+            repoFor(AppLanguage.SPANISH).searchCombined("escuela").first().map { it.expression }
+        )
+        assertTrue(repoFor(AppLanguage.SPANISH).searchCombined("school").first().isEmpty())
+        assertTrue(repoFor(AppLanguage.ENGLISH).searchCombined("escuela").first().isEmpty())
+    }
+
+    @Test
     fun `the scanner lexicon is scoped to the active language too`() = runBlocking {
         // getSurfaceLexicon feeds segmentation; an unscoped one would make a
         // Japanese scan match English words and vice versa.
         assertEquals(setOf("欲しい", "ほしい", "学校", "がっこう"), repoFor(AppLanguage.JAPANESE).getSurfaceLexicon())
         assertEquals(setOf("school", "want"), repoFor(AppLanguage.ENGLISH).getSurfaceLexicon())
+        assertEquals(setOf("escuela", "hablar"), repoFor(AppLanguage.SPANISH).getSurfaceLexicon())
     }
 
     @Test

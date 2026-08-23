@@ -231,8 +231,20 @@ interface DictionaryDao {
     @Query("UPDATE dictionary_entries SET pitch_accent = :pitchAccent WHERE expression = :expression AND (pitch_accent = '' OR pitch_accent IS NULL)")
     suspend fun updatePitchAccent(expression: String, pitchAccent: String)
 
-    @Query("UPDATE dictionary_entries SET pitch_accent = :pitchAccent WHERE expression = :expression")
-    suspend fun updatePitchAccentForce(expression: String, pitchAccent: String)
+    /**
+     * Scoped to one language, unlike its sibling above.
+     *
+     * The column carries Japanese pitch positions for Japanese rows and an
+     * IPA transcription for the others, and plenty of words are spelled the
+     * same in two languages ("no", "hotel", "final"). A user with both an
+     * English and a Spanish dictionary installed would otherwise have the
+     * second IPA import silently overwrite the first one's pronunciations.
+     */
+    @Query(
+        "UPDATE dictionary_entries SET pitch_accent = :pitchAccent " +
+            "WHERE expression = :expression AND language = :language"
+    )
+    suspend fun updatePitchAccentForce(expression: String, pitchAccent: String, language: String)
 
     @androidx.room.Transaction
     suspend fun updateFrequencyBatch(batch: List<FrequencyUpdate>) {
@@ -247,9 +259,9 @@ interface DictionaryDao {
     }
 
     @androidx.room.Transaction
-    suspend fun updatePitchAccentBatch(batch: Map<String, String>) {
+    suspend fun updatePitchAccentBatch(batch: Map<String, String>, language: String) {
         for ((expression, pitchAccent) in batch) {
-            updatePitchAccentForce(expression, pitchAccent)
+            updatePitchAccentForce(expression, pitchAccent, language)
         }
     }
 

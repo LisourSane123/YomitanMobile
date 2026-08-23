@@ -30,7 +30,7 @@ data class AnkiCard(
                 front, frontContext, reading, meaning, pitchAccent, frequency,
                 audioFileName, sentence, kanjiBreakdown, summary
             )
-            CardProfile.ENGLISH -> arrayOf(
+            CardProfile.ENGLISH, CardProfile.SPANISH -> arrayOf(
                 front, frontContext, reading, meaning, frequency,
                 audioFileName, sentence, summary
             )

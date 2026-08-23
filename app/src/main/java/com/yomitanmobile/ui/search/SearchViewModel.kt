@@ -167,7 +167,7 @@ class SearchViewModel @Inject constructor(
                 flowOf(emptyList())
             } else {
                 _isSearching.value = true
-                val searchFlow = if (appLanguage == AppLanguage.ENGLISH) {
+                val searchFlow = if (!appLanguage.hasJapaneseFeatures) {
                     // English never uses the JP/EN/ROMAJI split. There is one
                     // lookup: the headword the user typed (plus its base
                     // forms), merged with whatever the definition search
@@ -176,7 +176,16 @@ class SearchViewModel @Inject constructor(
                     // through its Polish gloss — without asking the user
                     // which of the two they meant.
                     _deconjugationCandidates.value = emptyList()
-                    val lemmas = EnglishLemmatizer.analyze(q)
+                    // Spanish needs no lemmatiser: kty-es-en lists every
+                    // inflected form as its own headword pointing back at the
+                    // lemma, irregulars included, which no rule table could
+                    // reproduce. Running English suffix rules over Spanish
+                    // would only spend queries on words that cannot exist.
+                    val lemmas = if (appLanguage == AppLanguage.ENGLISH) {
+                        EnglishLemmatizer.analyze(q)
+                    } else {
+                        emptyList()
+                    }
                     searchDictionaryUseCase
                         .invokeWithAlternatives(query = q, alternatives = lemmas)
                         .map { headwordResults ->
@@ -259,11 +268,11 @@ class SearchViewModel @Inject constructor(
                         _isSearching.value = false
                         val merged = MergedWordEntry.mergeEntries(results)
                         val romajiCandidate =
-                            if (appLanguage == AppLanguage.ENGLISH) null
+                            if (!appLanguage.hasJapaneseFeatures) null
                             else romajiQueryToHiragana(q)
                         if (romajiCandidate != null) {
                             sortRomajiExactFirst(merged, romajiCandidate)
-                        } else if (appLanguage == AppLanguage.ENGLISH) {
+                        } else if (!appLanguage.hasJapaneseFeatures) {
                             // Already ordered headword-first by the merge
                             // above; re-sorting on definition position would
                             // push the word the user actually typed below

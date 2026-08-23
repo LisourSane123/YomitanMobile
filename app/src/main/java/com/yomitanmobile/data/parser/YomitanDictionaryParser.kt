@@ -67,18 +67,32 @@ class YomitanDictionaryParser @Inject constructor() {
         // a meaningful memory cost (the buffer is reused across entries).
         const val BUFFER_SIZE = 256 * 1024
         const val MAX_INDEX_JSON_BYTES = 1 * 1024 * 1024
-        const val MAX_TERM_BANK_BYTES = 48 * 1024 * 1024
         const val MAX_KANJI_BANK_BYTES = 20 * 1024 * 1024
+
+        /**
+         * Term entries emitted per [onBatch] call while streaming.
+         *
+         * Term banks used to be read whole and handed over as one batch per
+         * file, which put a per-file size cap on the parser and an entire
+         * file's worth of parsed entries in memory. The Wiktionary
+         * conversions broke both: kty-es-en's first bank alone is 76 MB and
+         * kty-en-en's is 170 MB. They are now decoded lazily off the zip
+         * stream — exactly like term_meta_bank already was — so memory is
+         * bounded by this number rather than by the largest file in the zip.
+         */
+        const val TERM_BATCH_SIZE = 10_000
         // term_meta_bank files have no per-file byte cap: BCCWJ's combined
         // bank is hundreds of MB uncompressed and can't be held in memory as a
         // single String/JsonArray. It is decoded lazily off the zip stream
         // (decodeToSequence, one element at a time); a counting wrapper still
         // enforces MAX_TOTAL_UNCOMPRESSED_BYTES so a zip-bomb can't run away.
-        // Jitendex's structured-content JSON expands ~6-8x from its ~38 MB
-        // ZIP — about 250-300 MB uncompressed. 1 GB is a safe upper bound
-        // that still rejects malicious zip-bombs without rejecting any
-        // dictionary the app actually ships in its download list.
-        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 1L * 1024L * 1024L * 1024L
+        // Sized against the largest dictionary in the download list rather
+        // than a round number: kty-en-en is 120 MB zipped and 2.7 GB
+        // uncompressed (Wiktionary ships every inflected form as its own
+        // entry). The cap exists to stop a zip-bomb, and 4 GB still does
+        // that by orders of magnitude, while 1 GB silently rejected a file
+        // the app itself offers for download.
+        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 4L * 1024L * 1024L * 1024L
 
         // HTML-ish tags that break a flow of inline text. When walking a
         // structured-content array, adjacent block children must be
@@ -100,6 +114,17 @@ class YomitanDictionaryParser @Inject constructor() {
         // gloss. Without filtering, those text fragments get concatenated
         // onto the meaning column.
         val NON_GLOSS_DATA_CONTENT = setOf(
+            // The kaikki conversions (kty-*) wrap a sense's examples in a
+            // collapsible <details> whose <summary> is a COUNT, localised into
+            // the target language ("1 przykład", "2 ejemplos"). The examples
+            // themselves are skipped as example containers, but the summary is
+            // ordinary text and fused straight onto the gloss — every card for
+            // a word with examples read "pies1 przykład".
+            // NOT "extra-info": Jitendex uses that one for the note boxes the
+            // detail screen renders (YomitanJitendexFormatTest pins it), and
+            // skipping it here silently dropped them.
+            "details-entry-examples",
+            "summary-entry",
             "part-of-speech-info",
             "attribution-footnote",
             "attribution",
@@ -202,14 +227,30 @@ class YomitanDictionaryParser @Inject constructor() {
                         }
                         name.contains("term_bank_") && name.endsWith(".json") -> {
                             hasTermBanks = true
-                            // Parse this term bank file immediately and emit batch
                             try {
-                                val content = readEntryTextLimited(name, MAX_TERM_BANK_BYTES)
-                                val termArray = json.decodeFromString<JsonArray>(content)
+                                // Decoded lazily off the zip stream, one entry
+                                // at a time, so peak memory depends on
+                                // TERM_BATCH_SIZE and not on how big the file
+                                // is. The counting wrapper keeps the global
+                                // cap enforced and must NOT close the shared
+                                // zip stream.
+                                val countingStream = CountingNonClosingInputStream(zip) { added ->
+                                    totalUncompressedBytes += added
+                                    if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                                        throw Exception(
+                                            "Archiwum przekracza limit ${MAX_TOTAL_UNCOMPRESSED_BYTES / (1024 * 1024)} MB"
+                                        )
+                                    }
+                                }
+                                val termSequence = json.decodeToSequence(
+                                    countingStream,
+                                    JsonElement.serializer(),
+                                    DecodeSequenceMode.ARRAY_WRAPPED
+                                )
 
                                 val dictionaryName = TEMP_DICTIONARY_NAME
-                                val batch = mutableListOf<DictionaryEntry>()
-                                for (termElement in termArray) {
+                                var batch = mutableListOf<DictionaryEntry>()
+                                for (termElement in termSequence) {
                                     try {
                                         val term = termElement.jsonArray
                                         val parsed = parseTermEntry(term, dictionaryName, defaultLanguage)
@@ -218,6 +259,21 @@ class YomitanDictionaryParser @Inject constructor() {
                                         }
                                     } catch (_: Exception) {
                                         // Skip malformed term entry
+                                    }
+
+                                    if (batch.size >= TERM_BATCH_SIZE) {
+                                        totalEntries += batch.size
+                                        onBatch(batch, name)
+                                        batch = mutableListOf()
+                                        onProgress(
+                                            ImportProgress(
+                                                currentFile = name,
+                                                filesProcessed = filesProcessed,
+                                                totalFiles = filesProcessed,
+                                                entriesProcessed = totalEntries,
+                                                totalEntries = totalEntries
+                                            )
+                                        )
                                     }
                                 }
 
@@ -1292,6 +1348,23 @@ class YomitanDictionaryParser @Inject constructor() {
     }
 
     private fun extractJpEnPair(container: JsonObject): ExamplePair? {
+        // Structure first, script second.
+        //
+        // The two sides of an example are marked positionally —
+        // `example-sentence-a` is the sentence in the language being studied,
+        // `example-sentence-b` its translation — and that holds whatever the
+        // scripts are. The script-based split below cannot: it decides "is
+        // this Japanese?", so for an English→Polish or Spanish→English pair
+        // BOTH sentences look like the translation side, the source side
+        // comes out empty and the example is dropped entirely.
+        val sideA = findExampleSideContent(container, "example-sentence-a")
+        val sideB = findExampleSideContent(container, "example-sentence-b")
+        if (sideA != null) {
+            val source = flattenExampleText(sideA)
+            val translation = sideB?.let { flattenExampleText(it) }.orEmpty()
+            if (source.isNotBlank()) return ExamplePair(source, translation)
+        }
+
         val jpParts = mutableListOf<String>()
         val enParts = mutableListOf<String>()
         try {
@@ -1305,6 +1378,30 @@ class YomitanDictionaryParser @Inject constructor() {
         val jp = jpParts.joinToString("").trim()
         val en = enParts.joinToString(" ").trim()
         return if (jp.isBlank()) null else ExamplePair(jp, en)
+    }
+
+    /**
+     * Plain text of one example side, with `<rt>`/`<rp>` furigana dropped so
+     * a reading is never concatenated into the sentence it annotates.
+     */
+    private fun flattenExampleText(element: JsonElement): String {
+        val parts = mutableListOf<String>()
+        fun walk(node: JsonElement) {
+            when (node) {
+                is JsonObject -> {
+                    val tag = node["tag"]?.jsonPrimitive?.contentOrNull
+                    if (tag == "rt" || tag == "rp") return
+                    if (nodeDataContent(node) == "attribution-footnote") return
+                    node["text"]?.jsonPrimitive?.contentOrNull?.let { parts.add(it) }
+                    node["content"]?.let { walk(it) }
+                }
+                is JsonArray -> node.forEach { walk(it) }
+                is JsonPrimitive -> node.contentOrNull?.let { parts.add(it) }
+                else -> Unit
+            }
+        }
+        walk(element)
+        return parts.joinToString("").trim()
     }
 
     private fun walkLangSplit(
@@ -1377,13 +1474,14 @@ class YomitanDictionaryParser @Inject constructor() {
                             is JsonPrimitive -> listOf(item.content)
                             is JsonObject -> parseStructuredContentAsList(item)
                             is JsonArray -> listOf(
-                                item.mapNotNull { subItem ->
-                                    when (subItem) {
-                                        is JsonPrimitive -> subItem.content
-                                        is JsonObject -> parseStructuredContent(subItem)
-                                        else -> null
-                                    }
-                                }.joinToString("; ")
+                                formatFormOfDefinition(item)
+                                    ?: item.mapNotNull { subItem ->
+                                        when (subItem) {
+                                            is JsonPrimitive -> subItem.content
+                                            is JsonObject -> parseStructuredContent(subItem)
+                                            else -> null
+                                        }
+                                    }.joinToString("; ")
                             )
                             else -> emptyList()
                         }
@@ -1395,6 +1493,35 @@ class YomitanDictionaryParser @Inject constructor() {
             is JsonObject -> parseStructuredContentAsList(element).filter { it.isNotBlank() }
             else -> emptyList()
         }
+    }
+
+    /**
+     * Renders a Yomitan "form-of" definition: `["hablar", ["gerund"]]` →
+     * `hablar (gerund)`.
+     *
+     * This is not a corner case for the Spanish and English Wiktionary
+     * conversions — it is most of the file. kty-es-en has 1.16M headwords
+     * and only a small fraction are lemmas; the rest are inflected forms
+     * whose entire definition is a pointer back to the base word. The
+     * generic array handling dropped the nested tag list, so every one of
+     * those entries read simply "hablar" with no indication of which form
+     * the user had actually looked up.
+     *
+     * Returns null for any array that isn't this shape, leaving the
+     * previous behaviour untouched.
+     */
+    private fun formatFormOfDefinition(item: JsonArray): String? {
+        if (item.size < 2) return null
+        val base = (item[0] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (base.isBlank()) return null
+        val tags = item.drop(1).flatMap { element ->
+            when (element) {
+                is JsonArray -> element.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
+                else -> emptyList()
+            }
+        }.filter { it.isNotBlank() }
+        if (tags.isEmpty()) return null
+        return "$base (${tags.joinToString(", ")})"
     }
 
     /**

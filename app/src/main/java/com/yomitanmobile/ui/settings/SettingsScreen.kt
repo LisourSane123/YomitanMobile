@@ -124,6 +124,7 @@ fun SettingsScreen(
     // Study-language switch. Holds the language the user tapped, which is
     // also what makes the dialog visible; null = no switch pending.
     var pendingStudyLanguage by remember { mutableStateOf<AppLanguage?>(null) }
+    var showLanguagePicker by remember { mutableStateOf(false) }
     var selectedBackupForRestore by remember { mutableStateOf<File?>(null) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -411,6 +412,50 @@ fun SettingsScreen(
         )
     }
 
+    if (showLanguagePicker) {
+        AlertDialog(
+            onDismissRequest = { showLanguagePicker = false },
+            title = { Text(tr("Język nauki", "Study language")) },
+            text = {
+                Column {
+                    AppLanguage.entries.forEach { language ->
+                        val label = when (language) {
+                            AppLanguage.JAPANESE -> tr("🇯🇵  Japoński", "🇯🇵  Japanese")
+                            AppLanguage.ENGLISH -> tr("🇬🇧  Angielski → polski", "🇬🇧  English → Polish")
+                            AppLanguage.SPANISH -> tr("🇪🇸  Hiszpański → angielski", "🇪🇸  Spanish → English")
+                        }
+                        TextButton(
+                            onClick = {
+                                showLanguagePicker = false
+                                // Picking the language already in use is a
+                                // no-op, not a pointless restart.
+                                if (language != viewModel.studyLanguage) {
+                                    pendingStudyLanguage = language
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                label,
+                                modifier = Modifier.fillMaxWidth(),
+                                fontWeight = if (language == viewModel.studyLanguage) {
+                                    FontWeight.Bold
+                                } else {
+                                    FontWeight.Normal
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLanguagePicker = false }) {
+                    Text(tr("Anuluj", "Cancel"))
+                }
+            }
+        )
+    }
+
     val pendingLanguageTarget = pendingStudyLanguage
     if (pendingLanguageTarget != null) {
         AlertDialog(
@@ -599,21 +644,17 @@ fun SettingsScreen(
                     title = when (current) {
                         AppLanguage.JAPANESE -> tr("Japoński", "Japanese")
                         AppLanguage.ENGLISH -> tr("Angielski → polski", "English → Polish")
+                        AppLanguage.SPANISH -> tr("Hiszpański → angielski", "Spanish → English")
                     },
                     subtitle = tr(
-                        "Dotknij, aby przełączyć. Wymaga restartu aplikacji.",
-                        "Tap to switch. Requires an app restart."
+                        "Dotknij, aby zmienić. Wymaga restartu aplikacji.",
+                        "Tap to change. Requires an app restart."
                     ),
-                    onClick = {
-                        pendingStudyLanguage = when (current) {
-                            AppLanguage.JAPANESE -> AppLanguage.ENGLISH
-                            AppLanguage.ENGLISH -> AppLanguage.JAPANESE
-                        }
-                    }
+                    onClick = { showLanguagePicker = true }
                 )
             }
 
-            if (viewModel.studyLanguage == AppLanguage.ENGLISH) {
+            if (!viewModel.studyLanguage.hasJapaneseFeatures) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -623,10 +664,16 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(
-                                tr(
-                                    "Czego nie ma w trybie angielskim",
-                                    "Not available in English mode"
-                                ),
+                                when (viewModel.studyLanguage) {
+                                    AppLanguage.SPANISH -> tr(
+                                        "Czego nie ma w trybie hiszpańskim",
+                                        "Not available in Spanish mode"
+                                    )
+                                    else -> tr(
+                                        "Czego nie ma w trybie angielskim",
+                                        "Not available in English mode"
+                                    )
+                                },
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp
                             )
@@ -640,16 +687,26 @@ fun SettingsScreen(
                                         "— wyłączone; każde opiera się na czymś, czego angielski " +
                                         "nie ma (tagi JLPT, kolejność wg częstotliwości, " +
                                         "rozpoznawanie japońskich pól).\n" +
-                                        "• Akcent tonalny, furigana i rozbiór kanji — zastąpione wymową IPA.\n" +
-                                        "• Formy nieregularne (went, better) trzeba wpisać w bezokoliczniku.",
+                                        "• Akcent tonalny, furigana i rozbiór kanji — zastąpione wymową IPA." +
+                                        if (viewModel.studyLanguage == AppLanguage.ENGLISH) {
+                                            "\n• Formy nieregularne (went, better) trzeba wpisać " +
+                                                "w bezokoliczniku — słownik ich nie odmienia."
+                                        } else {
+                                            ""
+                                        },
                                     "• Frequency ranking - no Yomitan-format list exists for English, " +
                                         "so results are not ordered by how common a word is.\n" +
                                         "• The JLPT deck generator, the subtitle/EPUB scanner and the Anki " +
                                         "collection scan are disabled - each rests on something " +
                                         "English has no source for (JLPT tags, frequency-based " +
                                         "study order, recognising Japanese fields).\n" +
-                                        "• Pitch accent, furigana and kanji breakdown - replaced by IPA.\n" +
-                                        "• Irregular forms (went, better) have to be typed as the base word."
+                                        "• Pitch accent, furigana and kanji breakdown - replaced by IPA." +
+                                        if (viewModel.studyLanguage == AppLanguage.ENGLISH) {
+                                            "\n• Irregular forms (went, better) have to be typed as the " +
+                                                "base word - the dictionary does not list them."
+                                        } else {
+                                            ""
+                                        }
                                 ),
                                 fontSize = 13.sp,
                                 lineHeight = 19.sp

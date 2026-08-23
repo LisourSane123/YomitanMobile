@@ -16,6 +16,17 @@ package com.yomitanmobile.domain.model
  * (a copy of the expression, as the parser writes it) is deliberately not
  * what gets exported.
  */
+/**
+ * Shared by every non-Japanese profile: the Japanese field list minus
+ * PitchAccent and KanjiBreakdown, with Reading holding the IPA
+ * transcription. A top-level value rather than a companion one — enum
+ * constructors run before the companion object is initialised.
+ */
+private val LATIN_FIELDS = arrayOf(
+    "Front", "FrontContext", "Reading", "Meaning",
+    "Frequency", "Audio", "Sentence", "Summary"
+)
+
 enum class CardProfile(
     val modelName: String,
     val fieldNames: Array<String>
@@ -30,25 +41,34 @@ enum class CardProfile(
 
     ENGLISH(
         modelName = "Yomitan-Mobile-EN-v1",
-        fieldNames = arrayOf(
-            "Front", "FrontContext", "Reading", "Meaning",
-            "Frequency", "Audio", "Sentence", "Summary"
-        )
+        fieldNames = LATIN_FIELDS
+    ),
+
+    /**
+     * Same field set as English, separate note type on purpose: the two are
+     * different decks with different card styling in practice, and merging
+     * them would mean a user studying both cannot tell their notes apart in
+     * the AnkiDroid browser.
+     */
+    SPANISH(
+        modelName = "Yomitan-Mobile-ES-v1",
+        fieldNames = LATIN_FIELDS
     );
 
     /** Sections this profile can actually render; the rest are dropped. */
     fun supports(section: CardSection): Boolean = when (this) {
         JAPANESE -> true
-        // No pitch diagram and no kanji breakdown exist for English, so the
-        // template must not reference fields the note type does not have —
-        // AnkiDroid renders an unknown `{{Field}}` as literal text.
-        ENGLISH -> section != CardSection.PITCH && section != CardSection.KANJI
+        // No pitch diagram and no kanji breakdown exist outside Japanese, so
+        // the template must not reference fields the note type does not have
+        // — AnkiDroid renders an unknown `{{Field}}` as literal text.
+        ENGLISH, SPANISH -> section != CardSection.PITCH && section != CardSection.KANJI
     }
 
     companion object {
         fun forLanguage(language: AppLanguage): CardProfile = when (language) {
             AppLanguage.JAPANESE -> JAPANESE
             AppLanguage.ENGLISH -> ENGLISH
+            AppLanguage.SPANISH -> SPANISH
         }
     }
 }

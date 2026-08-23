@@ -127,6 +127,7 @@ private fun WelcomeContent(
             when (language) {
                 AppLanguage.JAPANESE -> tr("Słownik japońsko-angielski", "Japanese-English dictionary")
                 AppLanguage.ENGLISH -> tr("Słownik angielsko-polski", "English-Polish dictionary")
+                AppLanguage.SPANISH -> tr("Słownik hiszpańsko-angielski", "Spanish-English dictionary")
             },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -162,6 +163,20 @@ private fun WelcomeContent(
                         "The English-English dictionary (the fallback for words with no " +
                         "Polish gloss) is a 120 MB download you can add later in settings."
                 )
+                AppLanguage.SPANISH -> tr(
+                    "Pobierz rekomendowane słowniki, aby w pełni korzystać z aplikacji:\n" +
+                        "• Wiktionary ES→EN — 1,16 mln haseł z angielskimi znaczeniami, " +
+                        "razem z formami odmienionymi (hablando → hablar)\n" +
+                        "• Wymowa IPA — transkrypcja fonetyczna\n\n" +
+                        "Import słownika trwa kilkanaście minut i zajmuje ~600 MB " +
+                        "w pamięci urządzenia.",
+                    "Download the recommended dictionaries to get the most out of the app:\n" +
+                        "• Wiktionary ES→EN - 1.16M headwords with English meanings, " +
+                        "inflected forms included (hablando → hablar)\n" +
+                        "• IPA pronunciation - phonetic transcription\n\n" +
+                        "The import takes several minutes and needs about 600 MB of " +
+                        "device storage."
+                )
             },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
@@ -187,6 +202,7 @@ private fun WelcomeContent(
                 text = when (language) {
                     AppLanguage.JAPANESE -> tr("Pobierz rekomendowane (~19 MB)", "Download recommended (~19 MB)")
                     AppLanguage.ENGLISH -> tr("Pobierz rekomendowane (~6 MB)", "Download recommended (~6 MB)")
+                    AppLanguage.SPANISH -> tr("Pobierz rekomendowane (~32 MB)", "Download recommended (~32 MB)")
                 },
                 fontSize = 16.sp
             )
@@ -204,6 +220,7 @@ private fun WelcomeContent(
                 when (language) {
                     AppLanguage.JAPANESE -> tr("Tylko JMdict (~15 MB)", "JMdict only (~15 MB)")
                     AppLanguage.ENGLISH -> tr("Tylko słownik EN→PL (~4 MB)", "EN→PL dictionary only (~4 MB)")
+                    AppLanguage.SPANISH -> tr("Tylko słownik ES→EN (~21 MB)", "ES→EN dictionary only (~21 MB)")
                 },
                 fontSize = 14.sp
             )
