@@ -460,7 +460,11 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val reading = merged.reading.ifBlank { merged.primaryExpression }
-                favoriteWordDao.isFavorite(merged.primaryExpression, reading).collect { fav ->
+                favoriteWordDao.isFavorite(
+                    merged.primaryExpression,
+                    reading,
+                    studyLanguage.entryTag
+                ).collect { fav ->
                     _isFavorite.value = fav
                 }
             } catch (_: Exception) { }
@@ -474,14 +478,15 @@ class DetailViewModel @Inject constructor(
                 val expression = merged.primaryExpression
                 val reading = merged.reading.ifBlank { expression }
                 if (_isFavorite.value) {
-                    favoriteWordDao.delete(expression, reading)
+                    favoriteWordDao.delete(expression, reading, studyLanguage.entryTag)
                 } else {
                     favoriteWordDao.insert(
                         FavoriteWord(
                             expression = expression,
                             reading = reading,
                             definitionPreview = merged.definitionTextShort(),
-                            entryId = merged.primaryId
+                            entryId = merged.primaryId,
+                            language = studyLanguage.entryTag
                         )
                     )
                 }

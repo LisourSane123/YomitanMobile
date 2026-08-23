@@ -10,8 +10,11 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface SearchHistoryDao {
 
-    @Query("SELECT * FROM search_history ORDER BY timestamp DESC LIMIT :limit")
-    fun getRecentSearches(limit: Int = 20): Flow<List<SearchHistory>>
+    @Query(
+        "SELECT * FROM search_history WHERE language = :language " +
+            "ORDER BY timestamp DESC LIMIT :limit"
+    )
+    fun getRecentSearches(language: String, limit: Int = 20): Flow<List<SearchHistory>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(searchHistory: SearchHistory): Long

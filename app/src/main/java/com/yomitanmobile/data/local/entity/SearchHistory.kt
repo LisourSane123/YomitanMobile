@@ -17,6 +17,12 @@ data class SearchHistory(
     @ColumnInfo(name = "query")
     val query: String,
 
+    // Study language this row belongs to. Favorites and history are
+    // per-language: a Japanese word in an English session's favourites is
+    // one the user cannot look up, cannot export and did not ask for.
+    @ColumnInfo(name = "language")
+    val language: String = "ja",
+
     @ColumnInfo(name = "timestamp")
     val timestamp: Long = Instant.now().toEpochMilli()
 )

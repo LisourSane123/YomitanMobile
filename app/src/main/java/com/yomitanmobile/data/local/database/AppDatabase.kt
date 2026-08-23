@@ -45,7 +45,7 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         JlptTag::class,
         AnkiCollectionWord::class
     ],
-    version = 17,
+    version = 19,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -67,6 +67,57 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        /**
+         * Favorites and search history become per-language.
+         *
+         * They were the last user-facing tables with no language: after
+         * switching to English you still saw your Japanese favourites, the
+         * widget could pick one, and history offered queries that could no
+         * longer match anything. Existing rows are Japanese for the same
+         * reason dictionary rows are.
+         */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE favorite_words ADD COLUMN language TEXT NOT NULL DEFAULT 'ja'"
+                )
+                db.execSQL(
+                    "ALTER TABLE search_history ADD COLUMN language TEXT NOT NULL DEFAULT 'ja'"
+                )
+            }
+        }
+
+        /**
+         * Rebuilds the definition index with the `unicode61` tokenizer.
+         *
+         * The default `simple` tokenizer case-folds ASCII and nothing else,
+         * which was invisible while every definition was English: "gad" and
+         * "GAD" both matched, but "żaba" did not match a definition reading
+         * "Żaba", and "año" only matched if typed with the tilde. That makes
+         * meaning-search unreliable in exactly the two languages this app
+         * gained — Polish glosses for English, English for Spanish.
+         *
+         * The CREATE statement must match what Room generates for the entity
+         * (schemas/18.json) verbatim, or the identity check fails on open.
+         * The rebuild re-reads every row from the content table, so it costs
+         * one pass over the dictionary on first launch after upgrading and
+         * nothing afterwards.
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `dictionary_entries_fts`")
+                db.execSQL(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS `dictionary_entries_fts` " +
+                        "USING FTS4(`expression` TEXT NOT NULL, `reading` TEXT NOT NULL, " +
+                        "`definition` TEXT NOT NULL, tokenize=unicode61, " +
+                        "content=`dictionary_entries`)"
+                )
+                db.execSQL(
+                    "INSERT INTO dictionary_entries_fts(dictionary_entries_fts) VALUES('rebuild')"
+                )
+            }
+        }
 
         /**
          * Language becomes a first-class column.

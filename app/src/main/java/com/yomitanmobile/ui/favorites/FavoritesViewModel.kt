@@ -14,17 +14,20 @@ import javax.inject.Inject
 
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
-    private val favoriteWordDao: FavoriteWordDao
+    private val favoriteWordDao: FavoriteWordDao,
+    languageSettings: com.yomitanmobile.data.settings.LanguageSettings
 ) : ViewModel() {
 
+    private val language = languageSettings.current.entryTag
+
     val favorites: StateFlow<List<FavoriteWord>> = favoriteWordDao
-        .getAllFavorites()
+        .getAllFavorites(language)
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun deleteFavorite(favorite: FavoriteWord) {
         viewModelScope.launch {
-            favoriteWordDao.delete(favorite.expression, favorite.reading)
+            favoriteWordDao.delete(favorite.expression, favorite.reading, language)
         }
     }
 

@@ -8,6 +8,33 @@ package com.yomitanmobile.util
 object PartsOfSpeechFormatter {
 
     private val POS_LABELS = mapOf(
+        // Wiktionary (kty-*) part-of-speech codes, used by the English and
+        // Spanish dictionaries. They are coarser than JMdict's — a verb is
+        // just "v", with no conjugation class — and they do not overlap with
+        // it, so both sets live in one map. Without these, cards and the
+        // detail screen printed the raw code: "v", "adj", "prep".
+        "v" to "verb",
+        "adj" to "adjective",
+        "prep" to "preposition",
+        "pron" to "pronoun",
+        "intj" to "interjection",
+        "name" to "proper noun",
+        "phrase" to "phrase",
+        "prefix" to "prefix",
+        "suffix" to "suffix",
+        "infix" to "infix",
+        "postp" to "postposition",
+        "det" to "determiner",
+        "article" to "article",
+        "particle" to "particle",
+        "contraction" to "contraction",
+        "abbrev" to "abbreviation",
+        "character" to "character",
+        "punct" to "punctuation",
+        // kaikki's placeholder for an entry whose part of speech it could not
+        // determine. Printing "unknown" on a card is noise, so it collapses to
+        // nothing via NON_POS_NOISE below.
+
         // Verbs
         "v1" to "ichidan verb",
         "v1-s" to "ichidan verb (special)",
@@ -110,6 +137,26 @@ object PartsOfSpeechFormatter {
     // when the app runs in Polish. Missing keys fall back to the English label,
     // then to the raw code, so an unmapped tag never disappears.
     private val POS_LABELS_PL = mapOf(
+        // Wiktionary (kty-*) codes — see POS_LABELS.
+        "v" to "czasownik",
+        "adj" to "przymiotnik",
+        "prep" to "przyimek",
+        "pron" to "zaimek",
+        "intj" to "wykrzyknik",
+        "name" to "nazwa własna",
+        "phrase" to "wyrażenie",
+        "prefix" to "przedrostek",
+        "suffix" to "przyrostek",
+        "infix" to "wrostek",
+        "postp" to "poimek",
+        "det" to "określnik",
+        "article" to "przedimek",
+        "particle" to "partykuła",
+        "contraction" to "forma ściągnięta",
+        "abbrev" to "skrót",
+        "character" to "znak",
+        "punct" to "interpunkcja",
+
         // Verbs
         "v1" to "czasownik ichidan",
         "v1-s" to "czasownik ichidan (specjalny)",
@@ -279,7 +326,11 @@ object PartsOfSpeechFormatter {
     // real grammar info. "P" = priority form; the unicode glyphs come from
     // Jitendex's badge tags. Filtering them keeps the POS chip readable.
     private val NON_POS_NOISE = setOf(
-        "P", "★", "priority", "form"
+        "P", "★", "priority", "form",
+        // kaikki's placeholder when it could not determine a part of speech.
+        // Roughly 3% of kty-en-pl entries carry it, and "unknown" printed
+        // above a gloss tells the reader nothing.
+        "unknown"
     )
 
     private val JLPT_REGEX = Regex("""(?i)^jlpt[\s_-]?n?[\s_-]?[1-5]$""")

@@ -565,7 +565,10 @@ fun CardStyleScreen(
             }
 
             // Furigana color: "same as text" (empty string) by default, or a
-            // specific color the user picks below.
+            // specific color the user picks below. Furigana is ruby text over
+            // kanji — there is none outside Japanese, so the option would
+            // change nothing on the card.
+            if (studyLanguage.hasJapaneseFeatures) {
             item {
                 SettingRow(
                     title = tr("Furigana w kolorze tekstu", "Furigana same color as text"),
@@ -592,6 +595,7 @@ fun CardStyleScreen(
                         onColorSelected = { furiganaColor = it }
                     )
                 }
+            }
             }
 
             // Visibility toggles
@@ -711,6 +715,10 @@ fun CardStyleScreen(
                 }
             }
 
+            // The divider separates the word from the reading printed under
+            // it, and only the Japanese header has one — elsewhere the header
+            // is the word alone and this toggle would do nothing.
+            if (studyLanguage.hasJapaneseFeatures) {
             item {
                 SettingRow(
                     title = tr("Linia między słowem a resztą", "Word divider line"),
@@ -724,6 +732,7 @@ fun CardStyleScreen(
                         onCheckedChange = { showWordDivider = it }
                     )
                 }
+            }
             }
 
             item {
@@ -748,7 +757,12 @@ fun CardStyleScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        sectionOrder.forEachIndexed { index, section ->
+                        val profile = com.yomitanmobile.domain.model.CardProfile
+                            .forLanguage(studyLanguage)
+                        // A section the note type has no field for is not
+                        // reorderable — it is absent. Listing it would let the
+                        // user move something that never appears.
+                        sectionOrder.filter { profile.supports(it) }.forEachIndexed { index, section ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -756,8 +770,7 @@ fun CardStyleScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${index + 1}. " +
-                                        if (isEnglish) section.englishLabel else section.polishLabel,
+                                    text = "${index + 1}. " + section.labelFor(studyLanguage, isEnglish),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.weight(1f)

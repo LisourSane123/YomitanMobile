@@ -21,6 +21,20 @@ enum class CardSection(
     AUDIO("audio", "Audio", "Audio"),
     KANJI("kanji", "Rozkład kanji", "Kanji breakdown");
 
+    /**
+     * Label for this section under a given study language.
+     *
+     * PITCH is one slot with two meanings: a pitch-accent diagram in
+     * Japanese, the IPA pronunciation everywhere else. Calling it "pitch
+     * accent" on an English card names something that card does not have.
+     */
+    fun labelFor(language: AppLanguage, english: Boolean): String {
+        if (this == PITCH && !language.hasJapaneseFeatures) {
+            return if (english) "Pronunciation" else "Wymowa"
+        }
+        return if (english) englishLabel else polishLabel
+    }
+
     companion object {
         fun defaultOrder(): List<CardSection> =
             listOf(SUMMARY, PITCH, MEANING, SENTENCE, KANJI, AUDIO)

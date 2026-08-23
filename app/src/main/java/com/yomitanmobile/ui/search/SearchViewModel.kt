@@ -101,7 +101,7 @@ class SearchViewModel @Inject constructor(
     private var manualModeOverride = false
 
     val searchHistory: StateFlow<List<SearchHistory>> = searchHistoryDao
-        .getRecentSearches(20)
+        .getRecentSearches(appLanguage.entryTag, 20)
         .catch { emit(emptyList()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -465,7 +465,9 @@ class SearchViewModel @Inject constructor(
         if (expression.isNotBlank()) {
             viewModelScope.launch {
                 try {
-                    searchHistoryDao.insert(SearchHistory(query = expression))
+                    searchHistoryDao.insert(
+                        SearchHistory(query = expression, language = appLanguage.entryTag)
+                    )
                 } catch (_: Exception) { }
             }
         }

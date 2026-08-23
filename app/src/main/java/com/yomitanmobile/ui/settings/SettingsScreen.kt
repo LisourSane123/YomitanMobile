@@ -926,6 +926,12 @@ fun SettingsScreen(
             }
 
             // Card engine: which language the Meaning field is written in.
+            //
+            // Japanese only. Outside it the Meaning field already follows a
+            // fixed rule — the bilingual dictionary if it has the word, its
+            // monolingual companion if not — so the JP-EN / JP-JP choice has
+            // nothing to switch and setting it would appear to do something.
+            if (viewModel.studyLanguage.hasJapaneseFeatures) {
             item {
                 Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -1015,6 +1021,7 @@ fun SettingsScreen(
                     }
                 }
             }
+            }
 
             // JLPT deck generator, the text scanner and the collection scan
             // are Japanese-only. They are hidden rather than shown disabled:
@@ -1022,7 +1029,7 @@ fun SettingsScreen(
             // frequency-ordered study order, a "looks Japanese" filter over
             // Anki fields — so there would be nothing behind the row. The
             // card at the top of Settings says as much.
-            if (viewModel.studyLanguage == AppLanguage.JAPANESE) {
+            if (viewModel.studyLanguage.hasJapaneseFeatures) {
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.School,

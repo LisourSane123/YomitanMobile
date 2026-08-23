@@ -63,7 +63,8 @@ class SearchWidgetProvider : AppWidgetProvider() {
                         context.applicationContext,
                         WidgetEntryPoint::class.java
                     )
-                    val favorite = entryPoint.favoriteWordDao().getRandomFavorite()
+                    val favorite = entryPoint.favoriteWordDao()
+                        .getRandomFavorite(entryPoint.languageSettings().current.entryTag)
                     if (favorite != null) {
                         views.setViewVisibility(R.id.widget_word_section, View.VISIBLE)
                         views.setTextViewText(R.id.widget_word_expression, favorite.expression)

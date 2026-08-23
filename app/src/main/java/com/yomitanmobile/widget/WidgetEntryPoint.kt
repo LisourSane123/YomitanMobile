@@ -21,4 +21,7 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 interface WidgetEntryPoint {
     fun favoriteWordDao(): FavoriteWordDao
+
+    /** So the widget shows a word from the language being studied. */
+    fun languageSettings(): com.yomitanmobile.data.settings.LanguageSettings
 }
