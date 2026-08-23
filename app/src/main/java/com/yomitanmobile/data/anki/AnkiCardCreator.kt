@@ -207,24 +207,39 @@ class AnkiCardCreator(
             // keep working) but no longer rendered — users asked for a
             // cleaner header.
             sb.append("        <div class=\"expression\">{{Front}}</div>\n")
-            sb.append("        <hr class=\"word-divider\">\n")
-            sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
+            // Japanese only: see CardProfile.readingInHeader. On a Latin-script
+            // card the Reading field is IPA and lives in its own section below.
+            if (profile.readingInHeader) {
+                sb.append("        <hr class=\"word-divider\">\n")
+                sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
+            }
             sb.append("    </div>\n")
             sb.append("    <hr>\n")
             // A section whose field the note type doesn't have would render
-            // as the literal text "{{PitchAccent}}" on the card, so it is
+            // as the literal text "{{KanjiBreakdown}}" on the card, so it is
             // dropped here rather than left to collapse at display time.
-            for (section in sectionOrder.filter { profile.supports(it) }) {
-                sb.append("    ").append(blockHtmlFor(section)).append("\n")
+            for (section in profile.orderSections(sectionOrder)) {
+                sb.append("    ").append(blockHtmlFor(section, profile)).append("\n")
             }
             sb.append("</div>")
             return sb.toString()
         }
 
-        private fun blockHtmlFor(section: com.yomitanmobile.domain.model.CardSection): String =
+        private fun blockHtmlFor(
+            section: com.yomitanmobile.domain.model.CardSection,
+            profile: com.yomitanmobile.domain.model.CardProfile =
+                com.yomitanmobile.domain.model.CardProfile.JAPANESE
+        ): String =
             when (section) {
+                // One "how is this said" slot, two sources: the pitch diagram
+                // built into PitchAccent, or the IPA that sits in Reading on a
+                // note type which has no PitchAccent field at all.
                 com.yomitanmobile.domain.model.CardSection.PITCH ->
-                    """{{#PitchAccent}}<div class="section"><div class="pitch">{{PitchAccent}}</div></div><hr>{{/PitchAccent}}"""
+                    if (profile.readingInHeader) {
+                        """{{#PitchAccent}}<div class="section"><div class="pitch">{{PitchAccent}}</div></div><hr>{{/PitchAccent}}"""
+                    } else {
+                        """{{#Reading}}<div class="section"><div class="pitch">{{Reading}}</div></div><hr>{{/Reading}}"""
+                    }
                 com.yomitanmobile.domain.model.CardSection.SUMMARY ->
                     """{{#Summary}}<div class="section summary-section"><div class="summary">{{Summary}}</div></div><hr>{{/Summary}}"""
                 com.yomitanmobile.domain.model.CardSection.MEANING ->
@@ -479,25 +494,106 @@ class AnkiCardCreator(
         /**
          * Build a full HTML page for preview purposes.
          */
-        fun buildPreviewHtml(prefs: CardStylePreferences): String {
+        /**
+         * Sample data for the live preview, per language.
+         *
+         * The preview used to be Japanese regardless of what was being
+         * studied, so someone setting up English cards was adjusting fonts
+         * and colours against 食べる / たべる — and could not see what their
+         * own cards would look like, which is the entire purpose of the
+         * screen.
+         */
+        private data class PreviewSample(
+            val word: String,
+            val reading: String,
+            val pitchPositions: String,
+            val posLine: String,
+            val glossOne: String,
+            val glossTwo: String,
+            val exampleSource: String,
+            val exampleTranslation: String,
+            val contextSentence: String,
+            val contextWord: String,
+            val summary: String
+        )
+
+        private fun previewSampleFor(
+            language: com.yomitanmobile.domain.model.AppLanguage
+        ): PreviewSample = when (language) {
+            com.yomitanmobile.domain.model.AppLanguage.JAPANESE -> PreviewSample(
+                word = "食べる",
+                reading = "たべる",
+                pitchPositions = "2",
+                posLine = "ichidan verb, transitive verb",
+                glossOne = "to eat",
+                glossTwo = "to live on (e.g. a salary), to live off, to subsist on",
+                exampleSource = "朝ごはんに納豆を食べる。",
+                exampleTranslation = "I eat natto for breakfast.",
+                contextSentence = "毎日野菜を",
+                contextWord = "食べる",
+                summary = "食べる (taberu) — ichidan verb meaning \"to eat\" or, idiomatically, " +
+                    "\"to live on\" (e.g. a salary). Common JLPT N5 vocabulary."
+            )
+            com.yomitanmobile.domain.model.AppLanguage.ENGLISH -> PreviewSample(
+                word = "dog",
+                reading = "/dɒɡ/",
+                pitchPositions = "",
+                posLine = "rzeczownik",
+                glossOne = "pies",
+                glossTwo = "pies, samiec psa (t. wilka, lisa)",
+                exampleSource = "It is said that a dog is a human's best friend.",
+                exampleTranslation = "Mówi się, że pies jest najlepszym przyjacielem człowieka.",
+                contextSentence = "She walked her ",
+                contextWord = "dog",
+                summary = "dog — rzeczownik, jedno z najczęstszych słów w języku angielskim."
+            )
+            com.yomitanmobile.domain.model.AppLanguage.SPANISH -> PreviewSample(
+                word = "hablar",
+                reading = "/aˈβlaɾ/",
+                pitchPositions = "",
+                posLine = "verb",
+                glossOne = "to speak, to talk",
+                glossTwo = "to address, to speak to someone",
+                exampleSource = "¿Podemos hablar un momento?",
+                exampleTranslation = "Can we talk for a moment?",
+                contextSentence = "Quiero ",
+                contextWord = "hablar"
+                    ,
+                summary = "hablar — regular -ar verb; hablando is its gerund."
+            )
+        }
+
+        fun buildPreviewHtml(
+            prefs: CardStylePreferences,
+            language: com.yomitanmobile.domain.model.AppLanguage =
+                com.yomitanmobile.domain.model.AppLanguage.DEFAULT
+        ): String {
+            val sample = previewSampleFor(language)
+            val profile = com.yomitanmobile.domain.model.CardProfile.forLanguage(language)
             val css = buildCssFromPreferences(prefs)
             val fontImportUrl = CardStylePreferences.googleFontsImportUrl(prefs.fontFamily)
             val fontImport = if (fontImportUrl != null) {
                 """<link rel="stylesheet" href="$fontImportUrl">"""
             } else ""
             val frontContext = if (prefs.showFrontContextSentence) {
-                """<div class="front-context">毎日野菜を<strong class="context-highlight">食べる</strong>。<br><small style="opacity:0.7;">(kontekst na froncie)</small></div>"""
+                """<div class="front-context">${sample.contextSentence}<strong class="context-highlight">${sample.contextWord}</strong><br><small style="opacity:0.7;">(kontekst na froncie)</small></div>"""
             } else {
                 ""
             }
-            val previewPitch = buildPitchAccentHtml(
-                reading = "たべる",
-                pitchPositions = "2",
-                prefs = prefs
-            )
+            // Latin-script profiles have no pitch diagram; their pronunciation
+            // block shows the IPA that the Reading field carries.
+            val previewPitch = if (profile.readingInHeader) {
+                buildPitchAccentHtml(
+                    reading = sample.reading,
+                    pitchPositions = sample.pitchPositions,
+                    prefs = prefs
+                )
+            } else {
+                InputSanitizer.escapeHtml(sample.reading)
+            }
             val sectionsHtml = buildString {
-                for (section in prefs.sectionOrder) {
-                    append(previewBlockHtmlFor(section, previewPitch))
+                for (section in profile.orderSections(prefs.sectionOrder)) {
+                    append(previewBlockHtmlFor(section, previewPitch, sample))
                     append("\n")
                 }
             }
@@ -512,15 +608,17 @@ class AnkiCardCreator(
             </head>
             <body class="card">
                 <div class="front" style="margin-bottom: 20px;">
-                    <div class="expression">食べる</div>
+                    <div class="expression">${sample.word}</div>
                     $frontContext
                 </div>
                 <hr>
                 <div class="back">
                     <div class="section header-section">
-                        <div class="expression">食べる</div>
-                        <hr class="word-divider">
-                        <div class="reading">たべる</div>
+                        <div class="expression">${sample.word}</div>
+                        ${if (profile.readingInHeader) {
+                            """<hr class="word-divider">
+                        <div class="reading">${sample.reading}</div>"""
+                        } else ""}
                     </div>
                     <hr>
                     $sectionsHtml
@@ -538,33 +636,34 @@ class AnkiCardCreator(
          */
         private fun previewBlockHtmlFor(
             section: com.yomitanmobile.domain.model.CardSection,
-            previewPitch: String
+            previewPitch: String,
+            sample: PreviewSample
         ): String = when (section) {
             com.yomitanmobile.domain.model.CardSection.PITCH ->
                 """<div class="section"><div class="pitch">$previewPitch</div></div><hr>"""
             com.yomitanmobile.domain.model.CardSection.SUMMARY ->
-                """<div class="section summary-section"><div class="summary">食べる (taberu) — ichidan verb meaning "to eat" or, idiomatically, "to live on" (e.g. a salary). Common JLPT N5 vocabulary.</div></div><hr>"""
+                """<div class="section summary-section"><div class="summary">${sample.summary}</div></div><hr>"""
             com.yomitanmobile.domain.model.CardSection.MEANING ->
                 """
                 <div class="section meaning-section"><div class="meaning">
-                  <div class="pos-line">ichidan verb, transitive verb</div>
+                  <div class="pos-line">${sample.posLine}</div>
                   <ol class="meanings">
                     <li class="meaning-item">
-                      <span class="gloss">to eat</span>
+                      <span class="gloss">${sample.glossOne}</span>
                       <div class="meaning-ex">
-                        <div class="meaning-ex-jp">毎日野菜を食べます。</div>
-                        <div class="meaning-ex-en">I eat vegetables every day.</div>
+                        <div class="meaning-ex-jp">${sample.exampleSource}</div>
+                        <div class="meaning-ex-en">${sample.exampleTranslation}</div>
                       </div>
                     </li>
                     <li class="meaning-item">
-                      <span class="gloss">to live on (e.g. a salary), to live off, to subsist on</span>
+                      <span class="gloss">${sample.glossTwo}</span>
                     </li>
                   </ol>
                 </div></div>
                 <hr>
                 """.trimIndent()
             com.yomitanmobile.domain.model.CardSection.SENTENCE ->
-                """<div class="section"><div class="sentence"><div class="sentence-jp">朝ごはんに納豆を食べる。</div><div class="sentence-translation">I eat natto for breakfast.</div></div></div><hr>"""
+                """<div class="section"><div class="sentence"><div class="sentence-jp">${sample.exampleSource}</div><div class="sentence-translation">${sample.exampleTranslation}</div></div></div><hr>"""
             com.yomitanmobile.domain.model.CardSection.AUDIO ->
                 """<div class="section audio-section"><div class="audio">🔊 [audio]</div></div><hr>"""
             com.yomitanmobile.domain.model.CardSection.KANJI ->

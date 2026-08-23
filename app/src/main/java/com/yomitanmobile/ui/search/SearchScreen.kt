@@ -69,6 +69,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.util.WordCategoryClassifier
 import com.yomitanmobile.util.JlptLevelUtil
@@ -167,11 +168,20 @@ fun SearchScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .focusRequester(focusRequester),
                 placeholder = {
+                    // SearchMode is Japanese-internal machinery (JP / EN gloss
+                    // / romaji). It says nothing about which language is being
+                    // studied, so outside Japanese the prompt has to come from
+                    // the study language or it reads "type a Japanese word" to
+                    // someone learning English.
                     Text(
-                        when (searchMode) {
-                            SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku...", "Type a Japanese word...")
-                            SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku...", "Type an English word...")
-                            SearchMode.ROMAJI -> tr("taberu, nomu, miru...", "taberu, nomu, miru...")
+                        when (viewModel.appLanguage) {
+                            AppLanguage.ENGLISH -> tr("Wpisz słowo po angielsku lub polsku...", "Type an English or Polish word...")
+                            AppLanguage.SPANISH -> tr("Wpisz słowo po hiszpańsku lub angielsku...", "Type a Spanish or English word...")
+                            AppLanguage.JAPANESE -> when (searchMode) {
+                                SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku...", "Type a Japanese word...")
+                                SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku...", "Type an English word...")
+                                SearchMode.ROMAJI -> tr("taberu, nomu, miru...", "taberu, nomu, miru...")
+                            }
                         }
                     )
                 },
@@ -207,7 +217,7 @@ fun SearchScreen(
                             isEnglish = isEnglish
                         )
                     } else {
-                        EmptySearchState(searchMode, isEnglish)
+                        EmptySearchState(searchMode, viewModel.appLanguage, isEnglish)
                     }
                 }
                 results.isEmpty() && isSearching -> {
@@ -215,7 +225,7 @@ fun SearchScreen(
                         CircularProgressIndicator()
                     }
                 }
-                results.isEmpty() -> NoResultsState(query, searchMode, isEnglish)
+                results.isEmpty() -> NoResultsState(query, searchMode, viewModel.appLanguage, isEnglish)
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -574,7 +584,11 @@ private fun MergedWordEntryCard(
 }
 
 @Composable
-private fun EmptySearchState(searchMode: SearchMode, isEnglish: Boolean) {
+private fun EmptySearchState(
+    searchMode: SearchMode,
+    appLanguage: AppLanguage,
+    isEnglish: Boolean
+) {
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -585,10 +599,14 @@ private fun EmptySearchState(searchMode: SearchMode, isEnglish: Boolean) {
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                when (searchMode) {
-                    SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku", "Type a Japanese word")
-                    SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku", "Type an English word")
-                    SearchMode.ROMAJI -> tr("Wpisz słowo w romaji", "Type a word in romaji")
+                when (appLanguage) {
+                    AppLanguage.ENGLISH -> tr("Wpisz słowo po angielsku lub polsku", "Type an English or Polish word")
+                    AppLanguage.SPANISH -> tr("Wpisz słowo po hiszpańsku lub angielsku", "Type a Spanish or English word")
+                    AppLanguage.JAPANESE -> when (searchMode) {
+                        SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku", "Type a Japanese word")
+                        SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku", "Type an English word")
+                        SearchMode.ROMAJI -> tr("Wpisz słowo w romaji", "Type a word in romaji")
+                    }
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
@@ -684,19 +702,37 @@ private fun highlightTermsInDefinition(text: String, tokens: List<String>): Anno
 }
 
 @Composable
-private fun NoResultsState(query: String, searchMode: SearchMode, isEnglish: Boolean) {
+private fun NoResultsState(
+    query: String,
+    searchMode: SearchMode,
+    appLanguage: AppLanguage,
+    isEnglish: Boolean
+) {
     fun tr(pl: String, en: String): String = if (isEnglish) en else pl
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(tr("Brak wyników dla:", "No results for:"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
-            Text("「$query」", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            // Corner brackets are Japanese punctuation; around an English or
+            // Spanish word they just look wrong.
+            val quoted = if (appLanguage == AppLanguage.JAPANESE) "「$query」" else "\u201C$query\u201D"
+            Text(quoted, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(16.dp))
             Text(
-                when (searchMode) {
-                    SearchMode.JAPANESE -> tr("Sprawdź pisownię lub zaimportuj słownik", "Check the spelling or import a dictionary")
-                    SearchMode.ENGLISH -> tr("Spróbuj innego słowa angielskiego", "Try a different English word")
-                    SearchMode.ROMAJI -> tr("Sprawdź pisownię romaji", "Check the romaji spelling")
+                when (appLanguage) {
+                    AppLanguage.ENGLISH -> tr(
+                        "Sprawdź pisownię. Formy nieregularne (went, better) wpisz w podstawowej postaci.",
+                        "Check the spelling. Type irregular forms (went, better) as the base word."
+                    )
+                    AppLanguage.SPANISH -> tr(
+                        "Sprawdź pisownię lub zaimportuj słownik",
+                        "Check the spelling or import a dictionary"
+                    )
+                    AppLanguage.JAPANESE -> when (searchMode) {
+                        SearchMode.JAPANESE -> tr("Sprawdź pisownię lub zaimportuj słownik", "Check the spelling or import a dictionary")
+                        SearchMode.ENGLISH -> tr("Spróbuj innego słowa angielskiego", "Try a different English word")
+                        SearchMode.ROMAJI -> tr("Sprawdź pisownię romaji", "Check the romaji spelling")
+                    }
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)

@@ -81,6 +81,22 @@ class RealEnglishPolishParseTest {
         val first = examples.first()
         assertTrue("English side missing: $first", first.jp.contains("dog"))
         assertTrue("Polish side missing: $first", first.en.contains("pies"))
+
+        // Each example knows which meaning it illustrates. Without this the
+        // card cannot put a sentence under its gloss, and a four-sense word
+        // renders as four definitions followed by four loose sentences.
+        assertTrue(
+            "examples are not attached to a sense: ${examples.map { it.definitionIndex }}",
+            examples.all { it.definitionIndex in definitions.indices }
+        )
+        // "It is said that a dog is a human's best friend" illustrates the
+        // animal, which is the first sense.
+        assertEquals(0, first.definitionIndex)
+        // Different senses, different examples — not everything piled onto one.
+        assertTrue(
+            "every example landed on the same sense: ${examples.map { it.definitionIndex }}",
+            examples.map { it.definitionIndex }.distinct().size > 1
+        )
     }
 
     private fun parser() = YomitanDictionaryParser()

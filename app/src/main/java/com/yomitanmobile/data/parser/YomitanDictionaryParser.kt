@@ -670,6 +670,7 @@ class YomitanDictionaryParser @Inject constructor() {
         // <span data-content="part-of-speech-info"> so they don't leak into the
         // gloss text; example sentences carry definitionIndex back to their sense.
         val jitendex = tryParseJitendexStructure(term[5])
+            ?: tryParseKaikkiGlossList(term[5])
         val definitions: List<String>
         val examples: List<ExamplePair>
         val posFromContent: List<String>
@@ -765,6 +766,87 @@ class YomitanDictionaryParser @Inject constructor() {
         val examples: List<ExamplePair>,
         val posCodes: List<String>
     )
+
+    /**
+     * The kaikki (kty-*) sense layout: an `<ol data-content="glosses">` whose
+     * every `<li>` is one meaning, with that meaning's examples nested inside
+     * it behind a `<details>`.
+     *
+     * Without this, kaikki entries fell through to the flat text path, which
+     * collects examples with no idea which gloss they came from. Every example
+     * then carried definitionIndex = -1, so the card builder could not place
+     * them under their meaning and dumped all of them together at the bottom —
+     * a word with four senses rendered as four definitions followed by four
+     * unattached sentences.
+     *
+     * Returns null for anything that isn't this shape, leaving Jitendex and
+     * plain-JMDict handling exactly as they were.
+     */
+    private fun tryParseKaikkiGlossList(definitionsElement: JsonElement): JitendexParseResult? {
+        val arr = definitionsElement as? JsonArray ?: return null
+
+        val definitions = mutableListOf<String>()
+        val examples = mutableListOf<ExamplePair>()
+        var matched = false
+
+        try {
+            for (defElement in arr) {
+                val sc = defElement as? JsonObject ?: continue
+                if (sc["type"]?.jsonPrimitive?.contentOrNull != "structured-content") continue
+                val glossLists = mutableListOf<JsonElement>()
+                collectGlossLists(sc["content"] ?: continue, glossLists)
+                if (glossLists.isEmpty()) continue
+
+                for (list in glossLists) {
+                    for (item in elementAsList(list)) {
+                        val li = item as? JsonObject ?: continue
+                        if (li["tag"]?.jsonPrimitive?.contentOrNull != "li") continue
+                        matched = true
+
+                        // extractTextFromContent already skips the example
+                        // block and its count summary, so this is the gloss on
+                        // its own.
+                        val gloss = extractTextFromContent(li).trim()
+                        val senseIndex = definitions.size
+                        if (gloss.isNotBlank()) definitions.add(gloss)
+
+                        // Examples belong to the sense they are nested in even
+                        // when its gloss came out blank, in which case they
+                        // attach to the preceding one.
+                        val attachIndex = if (gloss.isNotBlank()) senseIndex else senseIndex - 1
+                        if (attachIndex < 0) continue
+                        val senseExamples = mutableListOf<ExamplePair>()
+                        walkForExamples(li, senseExamples)
+                        senseExamples.forEach { examples.add(it.copy(definitionIndex = attachIndex)) }
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            return null
+        }
+
+        return if (matched && definitions.isNotEmpty()) {
+            JitendexParseResult(definitions, examples, emptyList())
+        } else {
+            null
+        }
+    }
+
+    /** Every `<ol|ul data-content="glosses">` node in a subtree. */
+    private fun collectGlossLists(element: JsonElement, out: MutableList<JsonElement>) {
+        when (element) {
+            is JsonObject -> {
+                val tag = element["tag"]?.jsonPrimitive?.contentOrNull
+                if ((tag == "ol" || tag == "ul") && nodeDataContent(element) == "glosses") {
+                    element["content"]?.let { out.add(it) }
+                    return
+                }
+                element["content"]?.let { collectGlossLists(it, out) }
+            }
+            is JsonArray -> element.forEach { collectGlossLists(it, out) }
+            else -> Unit
+        }
+    }
 
     private fun tryParseJitendexStructure(definitionsElement: JsonElement): JitendexParseResult? {
         val arr = definitionsElement as? JsonArray ?: return null

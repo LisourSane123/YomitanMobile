@@ -71,7 +71,7 @@ class DetailViewModelFuriganaTest {
         getWordDetailUseCase = GetWordDetailUseCase(repo),
         repository = repo,
         ankiCardCreator = AnkiCardCreator(context, LanguageSettings(context)),
-        audioPlayer = AudioPlayer(context),
+        audioPlayer = AudioPlayer(context, LanguageSettings(context)),
         sentenceDao = db.sentenceDao(),
         aiSummaryService = AiSummaryService(),
         exportedWordDao = db.exportedWordDao(),

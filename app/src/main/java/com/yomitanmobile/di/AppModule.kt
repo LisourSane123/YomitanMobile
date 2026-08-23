@@ -28,9 +28,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAudioPlayer(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        languageSettings: com.yomitanmobile.data.settings.LanguageSettings
     ): AudioPlayer {
-        return AudioPlayer(context)
+        return AudioPlayer(context, languageSettings)
     }
 
     @Provides

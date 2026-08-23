@@ -104,6 +104,13 @@ fun CardStyleScreen(
     // the screen and the actual card can never disagree.
     val defaults = remember { CardStylePreferences() }
 
+    // Read from preferences below rather than injected: this screen has no
+    // ViewModel. The TTS effect and the preview both key on it, so they
+    // rebuild once the stored value arrives.
+    var studyLanguage by remember {
+        mutableStateOf(com.yomitanmobile.domain.model.AppLanguage.DEFAULT)
+    }
+
     // Style state
     var expressionBold by remember { mutableStateOf(defaults.expressionBold) }
     var expressionFontSize by remember { mutableFloatStateOf(defaults.expressionFontSize.toFloat()) }
@@ -143,14 +150,18 @@ fun CardStyleScreen(
     var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
     var activeTts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
 
-    DisposableEffect(context) {
+    DisposableEffect(context, studyLanguage) {
         var ttsInstance: android.speech.tts.TextToSpeech? = null
         ttsInstance = android.speech.tts.TextToSpeech(context) { status ->
             if (status == android.speech.tts.TextToSpeech.SUCCESS) {
                 try {
                     val currentTts = ttsInstance
                     val voices = if (currentTts != null) {
-                        currentTts.voices.filter { it.locale.language == "ja" }.map { it.name }
+                        // Voices for the language being studied. Filtering to
+                        // "ja" meant the random-voice picker offered nothing at
+                        // all outside Japanese.
+                        val tag = studyLanguage.ttsLanguageTag
+                        currentTts.voices.filter { it.locale.language == tag }.map { it.name }
                     } else {
                         emptyList()
                     }
@@ -165,6 +176,8 @@ fun CardStyleScreen(
     // Load current preferences
     LaunchedEffect(Unit) {
         val prefs = context.dataStore.data.first()
+        studyLanguage = com.yomitanmobile.domain.model.AppLanguage
+            .fromStorage(prefs[MainActivity.APP_LANGUAGE])
         expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: defaults.expressionBold
         expressionFontSize = (prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: defaults.expressionFontSize).toFloat()
         readingFontSize = (prefs[MainActivity.CARD_READING_FONT_SIZE] ?: defaults.readingFontSize).toFloat()
@@ -279,7 +292,7 @@ fun CardStyleScreen(
         showFrontContextSentence, pitchAccentStyle, showSectionDividers,
         showWordDivider, sectionOrder
     ) {
-        AnkiCardCreator.buildPreviewHtml(currentPreferences())
+        AnkiCardCreator.buildPreviewHtml(currentPreferences(), studyLanguage)
     }
 
     Scaffold(

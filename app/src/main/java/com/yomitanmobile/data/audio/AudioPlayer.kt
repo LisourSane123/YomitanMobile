@@ -13,7 +13,8 @@ import javax.inject.Singleton
 
 @Singleton
 class AudioPlayer(
-    private val context: Context
+    private val context: Context,
+    private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings
 ) {
 
     private var tts: TextToSpeech? = null
@@ -29,7 +30,11 @@ class AudioPlayer(
         tts?.shutdown() // Release previous TTS instance to prevent resource leak
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                val result = tts?.setLanguage(Locale.JAPANESE)
+                // The voice has to match what is being studied: a Japanese
+                // engine reading "dog" pronounces it as romaji.
+                val result = tts?.setLanguage(
+                    Locale.forLanguageTag(languageSettings.current.ttsLanguageTag)
+                )
                 _ttsReady.value = result != TextToSpeech.LANG_MISSING_DATA
                         && result != TextToSpeech.LANG_NOT_SUPPORTED
                 if (_ttsReady.value) {

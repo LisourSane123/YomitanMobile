@@ -34,6 +34,20 @@ enum class AppLanguage(
     val hasJapaneseFeatures: Boolean get() = this == JAPANESE
 
     /**
+     * BCP-47 tag for text-to-speech and voice selection.
+     *
+     * The app used to hardcode Japanese here, so an English or Spanish card
+     * was read aloud by a Japanese voice — which pronounces Latin text as if
+     * it were romaji, and produced TTS audio that was useless on the card.
+     */
+    val ttsLanguageTag: String
+        get() = when (this) {
+            JAPANESE -> "ja"
+            ENGLISH -> "en"
+            SPANISH -> "es"
+        }
+
+    /**
      * index.json title prefix of the dictionary whose glosses this language's
      * cards should prefer.
      *

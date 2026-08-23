@@ -58,10 +58,42 @@ enum class CardProfile(
     /** Sections this profile can actually render; the rest are dropped. */
     fun supports(section: CardSection): Boolean = when (this) {
         JAPANESE -> true
-        // No pitch diagram and no kanji breakdown exist outside Japanese, so
-        // the template must not reference fields the note type does not have
-        // — AnkiDroid renders an unknown `{{Field}}` as literal text.
-        ENGLISH, SPANISH -> section != CardSection.PITCH && section != CardSection.KANJI
+        // No kanji breakdown exists outside Japanese, and the template must
+        // not reference a field the note type lacks — AnkiDroid renders an
+        // unknown `{{Field}}` as literal text. PITCH survives because for
+        // these profiles it is the pronunciation block, reading {{Reading}}
+        // (the IPA) instead of {{PitchAccent}}.
+        ENGLISH, SPANISH -> section != CardSection.KANJI
+    }
+
+    /**
+     * Whether the reading belongs in the header, directly under the word.
+     *
+     * It does for Japanese: the kana ARE how the word is read, and a learner
+     * looks at them together with the kanji. IPA is not that — it is a
+     * footnote to the entry, and putting /ˈwɜːd/ under an English word pushes
+     * the meaning down for something the reader rarely needs. So for the
+     * Latin-script profiles the header is the word alone and the
+     * pronunciation moves down into its own section.
+     */
+    val readingInHeader: Boolean get() = this == JAPANESE
+
+    /**
+     * The section order actually used, given the user's [order].
+     *
+     * The stored order is shared across languages and its default puts the
+     * pronunciation block second, which is right for pitch accent (read with
+     * the word) and wrong for IPA (read after the meaning, if at all). Rather
+     * than keeping a separate saved order per language, the block is moved to
+     * just after the meaning for the profiles where it is IPA.
+     */
+    fun orderSections(order: List<CardSection>): List<CardSection> {
+        val supported = order.filter { supports(it) }
+        if (this == JAPANESE || !supported.contains(CardSection.PITCH)) return supported
+        val withoutPitch = supported.filterNot { it == CardSection.PITCH }
+        val meaningAt = withoutPitch.indexOf(CardSection.MEANING)
+        if (meaningAt < 0) return supported
+        return withoutPitch.toMutableList().apply { add(meaningAt + 1, CardSection.PITCH) }
     }
 
     companion object {

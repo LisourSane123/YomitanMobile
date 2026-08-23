@@ -79,7 +79,7 @@ class SearchViewModel @Inject constructor(
      * changing it restarts the app — so it is read once here rather than
      * collected.
      */
-    private val appLanguage: AppLanguage = languageSettings.current
+    val appLanguage: AppLanguage = languageSettings.current
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
