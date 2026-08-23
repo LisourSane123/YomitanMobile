@@ -14,6 +14,8 @@ import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import com.yomitanmobile.util.DeconjugationCandidate
+import com.yomitanmobile.domain.model.AppLanguage
+import com.yomitanmobile.util.EnglishLemmatizer
 import com.yomitanmobile.util.JapaneseDeconjugator
 import com.yomitanmobile.util.JlptVocabulary
 import com.yomitanmobile.util.RomajiConverter
@@ -68,8 +70,16 @@ class SearchViewModel @Inject constructor(
     private val dictionaryDao: DictionaryDao,
     private val searchHistoryDao: SearchHistoryDao,
     private val exportedWordDao: ExportedWordDao,
-    @ApplicationContext private val appContext: Context
+    @ApplicationContext private val appContext: Context,
+    languageSettings: com.yomitanmobile.data.settings.LanguageSettings
 ) : ViewModel() {
+
+    /**
+     * The language being studied. Fixed for the lifetime of the process —
+     * changing it restarts the app — so it is read once here rather than
+     * collected.
+     */
+    private val appLanguage: AppLanguage = languageSettings.current
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -157,7 +167,31 @@ class SearchViewModel @Inject constructor(
                 flowOf(emptyList())
             } else {
                 _isSearching.value = true
-                val searchFlow = when (mode) {
+                val searchFlow = if (appLanguage == AppLanguage.ENGLISH) {
+                    // English never uses the JP/EN/ROMAJI split. There is one
+                    // lookup: the headword the user typed (plus its base
+                    // forms), merged with whatever the definition search
+                    // matched. That covers both directions of use — typing
+                    // "running" finds the verb, typing "biegać" finds it
+                    // through its Polish gloss — without asking the user
+                    // which of the two they meant.
+                    _deconjugationCandidates.value = emptyList()
+                    val lemmas = EnglishLemmatizer.analyze(q)
+                    searchDictionaryUseCase
+                        .invokeWithAlternatives(query = q, alternatives = lemmas)
+                        .map { headwordResults ->
+                            val definitionResults = runCatching {
+                                searchDictionaryUseCase.invokeEnglish(q).first()
+                            }.getOrDefault(emptyList())
+                            // Headword hits first: a word the user spelled out
+                            // outranks every word that merely mentions it in a
+                            // definition.
+                            val mergedById = LinkedHashMap<Long, WordEntry>()
+                            headwordResults.forEach { mergedById.putIfAbsent(it.id, it) }
+                            definitionResults.forEach { mergedById.putIfAbsent(it.id, it) }
+                            mergedById.values.toList()
+                        }
+                } else when (mode) {
                     SearchMode.JAPANESE -> {
                         val candidates = JapaneseDeconjugator.analyze(q)
                         _deconjugationCandidates.value = candidates
@@ -224,9 +258,17 @@ class SearchViewModel @Inject constructor(
                     .map { results ->
                         _isSearching.value = false
                         val merged = MergedWordEntry.mergeEntries(results)
-                        val romajiCandidate = romajiQueryToHiragana(q)
+                        val romajiCandidate =
+                            if (appLanguage == AppLanguage.ENGLISH) null
+                            else romajiQueryToHiragana(q)
                         if (romajiCandidate != null) {
                             sortRomajiExactFirst(merged, romajiCandidate)
+                        } else if (appLanguage == AppLanguage.ENGLISH) {
+                            // Already ordered headword-first by the merge
+                            // above; re-sorting on definition position would
+                            // push the word the user actually typed below
+                            // words that merely mention it.
+                            merged
                         } else if (mode == SearchMode.ENGLISH && q.isNotBlank()) {
                             // Sort by how early the query appears in the definitions list
                             val queryLower = q.lowercase()

@@ -140,7 +140,7 @@ class JlptTagApplyDbTest {
         dao.insertAll(listOf(entry("学校", "がっこう", frequency = 0)))
         dao.applyFrequenciesFromTable()
 
-        val best = dao.getEntriesByExpressions(listOf("学校")).single().frequency
+        val best = dao.getEntriesByExpressions(listOf("学校"), "ja").single().frequency
         assertEquals(812, best)
     }
 }

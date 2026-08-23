@@ -19,8 +19,20 @@ data class AnkiCard(
      */
     val summary: String = ""
 ) {
-    fun toFieldArray(): Array<String> = arrayOf(
-        front, frontContext, reading, meaning, pitchAccent, frequency,
-        audioFileName, sentence, kanjiBreakdown, summary
-    )
+    /**
+     * Field values in the order [profile] declares them. The two orders are
+     * NOT a prefix of one another — English drops PitchAccent from the
+     * middle — so this has to be built per profile rather than truncated.
+     */
+    fun toFieldArray(profile: CardProfile = CardProfile.JAPANESE): Array<String> =
+        when (profile) {
+            CardProfile.JAPANESE -> arrayOf(
+                front, frontContext, reading, meaning, pitchAccent, frequency,
+                audioFileName, sentence, kanjiBreakdown, summary
+            )
+            CardProfile.ENGLISH -> arrayOf(
+                front, frontContext, reading, meaning, frequency,
+                audioFileName, sentence, summary
+            )
+        }
 }

@@ -63,8 +63,26 @@ class SettingsViewModel @Inject constructor(
     private val reclassifyCategoriesUseCase: com.yomitanmobile.domain.usecase.ReclassifyCategoriesUseCase,
     private val ankiCardCreator: com.yomitanmobile.data.anki.AnkiCardCreator,
     getDictionariesUseCase: GetDictionariesUseCase,
-    exportedWordDao: ExportedWordDao
+    exportedWordDao: ExportedWordDao,
+    private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings
 ) : ViewModel() {
+
+    /** The language currently being studied, for the settings row. */
+    val studyLanguage: com.yomitanmobile.domain.model.AppLanguage
+        get() = languageSettings.current
+
+    /**
+     * Persists a new study language.
+     *
+     * The caller restarts the process immediately afterwards, which is not
+     * cosmetic: the search lexicon, the note-type profile and every
+     * ViewModel that captured the old language live for as long as the
+     * process does. Restarting is what makes the switch total instead of
+     * leaving half the app answering for the previous language.
+     */
+    suspend fun setStudyLanguage(language: com.yomitanmobile.domain.model.AppLanguage) {
+        languageSettings.setLanguage(language)
+    }
 
     /**
      * Existing AnkiDroid deck names, so the "Change deck" dialog can offer a

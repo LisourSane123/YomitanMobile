@@ -35,8 +35,18 @@ data class BatchExportResult(
 
 @Singleton
 class AnkiCardCreator(
-    private val context: Context
+    private val context: Context,
+    private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings
 ) {
+
+    /**
+     * Which note type this export writes to. Read per call rather than
+     * captured once: the setting only changes across a process restart
+     * today, but a stale profile would write English content into Japanese
+     * field slots, which is silent corruption rather than a visible failure.
+     */
+    private val profile: com.yomitanmobile.domain.model.CardProfile
+        get() = com.yomitanmobile.domain.model.CardProfile.forLanguage(languageSettings.current)
     companion object {
         /**
          * Notes per `addNotes` call. Big enough that the per-transaction
@@ -67,7 +77,10 @@ class AnkiCardCreator(
         private const val LEGACY_MODEL_NAME_V7 = "Yomitan-Mobile-v7"
         const val PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
 
-        val FIELD_NAMES = arrayOf("Front", "FrontContext", "Reading", "Meaning", "PitchAccent", "Frequency", "Audio", "Sentence", "KanjiBreakdown", "Summary")
+        // Kept as the Japanese profile's field list for tests and for the
+        // legacy-model comparison above. The authoritative per-language
+        // lists live on CardProfile.
+        val FIELD_NAMES = com.yomitanmobile.domain.model.CardProfile.JAPANESE.fieldNames
 
         /**
          * Renders an example sentence as tap-to-reveal furigana HTML for the
@@ -181,7 +194,11 @@ class AnkiCardCreator(
          * `{{#Field}}…{{/Field}}` so empty data collapses the entire block,
          * trailing `<hr>` included.
          */
-        fun buildBackTemplate(sectionOrder: List<com.yomitanmobile.domain.model.CardSection>): String {
+        fun buildBackTemplate(
+            sectionOrder: List<com.yomitanmobile.domain.model.CardSection>,
+            profile: com.yomitanmobile.domain.model.CardProfile =
+                com.yomitanmobile.domain.model.CardProfile.JAPANESE
+        ): String {
             val sb = StringBuilder()
             sb.append("<div class=\"back\">\n")
             sb.append("    <div class=\"section header-section\">\n")
@@ -194,7 +211,10 @@ class AnkiCardCreator(
             sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
             sb.append("    </div>\n")
             sb.append("    <hr>\n")
-            for (section in sectionOrder) {
+            // A section whose field the note type doesn't have would render
+            // as the literal text "{{PitchAccent}}" on the card, so it is
+            // dropped here rather than left to collapse at display time.
+            for (section in sectionOrder.filter { profile.supports(it) }) {
                 sb.append("    ").append(blockHtmlFor(section)).append("\n")
             }
             sb.append("</div>")
@@ -781,6 +801,7 @@ class AnkiCardCreator(
         css: String = CARD_CSS,
         backTemplate: String = CARD_BACK_TEMPLATE
     ): Long? {
+        val profile = this.profile
         val modelList = ankiApi.modelList ?: run {
             return null
         }
@@ -788,10 +809,15 @@ class AnkiCardCreator(
         val compatibleModelId = modelList
             .entries
             .asSequence()
-            .filter { (_, name) -> name.startsWith(MODEL_NAME_PREFIX) }
-            .sortedBy { (_, name) -> modelNamePriority(name) }
+            // Only models belonging to THIS profile are candidates. Both
+            // names start with "Yomitan-Mobile", so matching on the prefix
+            // alone would offer a Japanese note type to an English export;
+            // the field-list check below would reject it, but only after
+            // the CSS and templates had been pushed to it.
+            .filter { (_, name) -> name.startsWith(profile.modelName) }
+            .sortedBy { (_, name) -> modelNamePriority(name, profile) }
             .map { it.key }
-            .firstOrNull { modelId -> isModelCompatible(modelId) }
+            .firstOrNull { modelId -> isModelCompatible(modelId, profile) }
 
         if (compatibleModelId != null) {
             updateModelCss(compatibleModelId, css)
@@ -815,7 +841,14 @@ class AnkiCardCreator(
         return createCompatibleModel(css, backTemplate)
     }
 
-    private fun modelNamePriority(name: String): Int {
+    private fun modelNamePriority(
+        name: String,
+        profile: com.yomitanmobile.domain.model.CardProfile
+    ): Int {
+        if (profile != com.yomitanmobile.domain.model.CardProfile.JAPANESE) {
+            // English has no legacy note types to migrate from — it is new.
+            return if (name == profile.modelName) 0 else 1
+        }
         return when (name) {
             MODEL_NAME -> 0
             LEGACY_MODEL_NAME -> 1
@@ -825,11 +858,14 @@ class AnkiCardCreator(
         }
     }
 
-    private fun isModelCompatible(modelId: Long): Boolean {
+    private fun isModelCompatible(
+        modelId: Long,
+        profile: com.yomitanmobile.domain.model.CardProfile
+    ): Boolean {
         return try {
             val existingFields = ankiApi.getFieldList(modelId)
                 .map { it.trim() }
-            val expectedFields = FIELD_NAMES.map { it.trim() }
+            val expectedFields = profile.fieldNames.map { it.trim() }
 
             existingFields == expectedFields
         } catch (_: Exception) {
@@ -849,10 +885,11 @@ class AnkiCardCreator(
         backTemplate: String = CARD_BACK_TEMPLATE,
         skipPrimaryName: Boolean = false
     ): Long? {
+        val profile = this.profile
         val candidateNames = buildList {
-            if (!skipPrimaryName) add(MODEL_NAME)
+            if (!skipPrimaryName) add(profile.modelName)
             for (index in 1..MAX_MODEL_CREATE_RETRIES) {
-                add("$MODEL_NAME-$index")
+                add("${profile.modelName}-$index")
             }
         }
 
@@ -860,7 +897,7 @@ class AnkiCardCreator(
             val createdModelId = runCatching {
                 ankiApi.addNewCustomModel(
                     candidateName,
-                    FIELD_NAMES,
+                    profile.fieldNames,
                     arrayOf("Card 1"),
                     arrayOf(CARD_FRONT_TEMPLATE),
                     arrayOf(backTemplate),
@@ -886,7 +923,7 @@ class AnkiCardCreator(
                 ?.firstOrNull { (_, name) -> name == candidateName }
                 ?.key
 
-            if (existingCandidateId != null && isModelCompatible(existingCandidateId)) {
+            if (existingCandidateId != null && isModelCompatible(existingCandidateId, profile)) {
                 updateModelCss(existingCandidateId, css)
                 updateModelTemplates(existingCandidateId, CARD_FRONT_TEMPLATE, backTemplate)
                 return existingCandidateId
@@ -1033,11 +1070,23 @@ class AnkiCardCreator(
         stylePrefs: CardStylePreferences? = null,
         aiSummaryText: String = ""
     ): AnkiCard {
-        val pitchHtml = buildPitchAccentHtml(
-            entry.reading.ifBlank { entry.expression },
-            entry.pitchAccent,
-            stylePrefs
-        )
+        val isEnglishProfile = profile == com.yomitanmobile.domain.model.CardProfile.ENGLISH
+        // On an English card the pitch_accent column holds an IPA string
+        // (see the parser's "ipa" meta handling), not a Japanese accent
+        // pattern — running it through the mora splitter would produce a
+        // diagram of nonsense. It goes to the Reading slot instead, which is
+        // otherwise a copy of the front word and would render the headword
+        // twice.
+        val pitchHtml = if (isEnglishProfile) {
+            ""
+        } else {
+            buildPitchAccentHtml(
+                entry.reading.ifBlank { entry.expression },
+                entry.pitchAccent,
+                stylePrefs
+            )
+        }
+        val readingText = if (isEnglishProfile) entry.pitchAccent else entry.reading
         // The Frequency field carries the RAW rank (e.g. "4821"), not the
         // starred tier label the search/detail screens show. The field is no
         // longer rendered on either template, so its only consumer is Anki
@@ -1104,7 +1153,7 @@ class AnkiCardCreator(
         return AnkiCard(
             front = frontContent,
             frontContext = frontContext,
-            reading = InputSanitizer.escapeHtml(entry.reading),
+            reading = InputSanitizer.escapeHtml(readingText),
             meaning = formatMeaningForCard(entry.definitions, attachedExamples, posLabel, localizedUsageTags, stylePrefs?.furiganaColor.orEmpty()),
             pitchAccent = pitchHtml,
             frequency = InputSanitizer.escapeHtml(freqText),
@@ -1203,7 +1252,8 @@ class AnkiCardCreator(
             val css = if (stylePrefs != null) buildCssFromPreferences(stylePrefs) else CARD_CSS
             val backTemplate = buildBackTemplate(
                 stylePrefs?.sectionOrder
-                    ?: com.yomitanmobile.domain.model.CardSection.defaultOrder()
+                    ?: com.yomitanmobile.domain.model.CardSection.defaultOrder(),
+                profile
             )
             val modelId = getOrCreateModel(css, backTemplate)
                 ?: return@withContext Result.failure(IllegalStateException("Failed to create/find note type"))
@@ -1212,7 +1262,7 @@ class AnkiCardCreator(
             addNoteWithRecovery(
                 modelId = modelId,
                 deckId = deckId,
-                fields = card.toFieldArray(),
+                fields = card.toFieldArray(profile),
                 css = css,
                 backTemplate = backTemplate
             )
@@ -1397,7 +1447,8 @@ class AnkiCardCreator(
         val css = if (stylePrefs != null) buildCssFromPreferences(stylePrefs) else CARD_CSS
         val backTemplate = buildBackTemplate(
             stylePrefs?.sectionOrder
-                ?: com.yomitanmobile.domain.model.CardSection.defaultOrder()
+                ?: com.yomitanmobile.domain.model.CardSection.defaultOrder(),
+            profile
         )
         val modelId = getOrCreateModel(css, backTemplate)
             ?: return@withContext Result.failure(IllegalStateException("Failed to create/find note type"))
@@ -1447,7 +1498,7 @@ class AnkiCardCreator(
 
                 val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs)
                     .copy(kanjiBreakdown = buildKanjiBreakdownHtml(entry, kanjiData))
-                fieldsList.add(card.toFieldArray())
+                fieldsList.add(card.toFieldArray(profile))
             }
 
             val tagsList = List(fieldsList.size) { tags }

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
@@ -80,6 +81,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.anki.CardMeaningLanguage
 import com.yomitanmobile.dataStore
+import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -119,6 +121,9 @@ fun SettingsScreen(
     // The user relaunches and Hilt rebuilds the graph against the
     // newly-restored DB file.
     var showRestartRequiredDialog by remember { mutableStateOf(false) }
+    // Study-language switch. Holds the language the user tapped, which is
+    // also what makes the dialog visible; null = no switch pending.
+    var pendingStudyLanguage by remember { mutableStateOf<AppLanguage?>(null) }
     var selectedBackupForRestore by remember { mutableStateOf<File?>(null) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -406,6 +411,54 @@ fun SettingsScreen(
         )
     }
 
+    val pendingLanguageTarget = pendingStudyLanguage
+    if (pendingLanguageTarget != null) {
+        AlertDialog(
+            onDismissRequest = { pendingStudyLanguage = null },
+            title = { Text(tr("Zmienić język nauki?", "Change study language?")) },
+            text = {
+                Text(
+                    tr(
+                        "Aplikacja zostanie CAŁKOWICIE zamknięta i musisz uruchomić ją " +
+                            "ponownie ręcznie.\n\n" +
+                            "Twoje słowniki, fiszki i ustawienia pozostaną nienaruszone — " +
+                            "słowniki drugiego języka po prostu przestaną pojawiać się " +
+                            "w wynikach, dopóki nie wrócisz. Jeśli nie masz jeszcze " +
+                            "słowników dla nowego języka, po restarcie pobierzesz je " +
+                            "w sekcji Słowniki.",
+                        "The app will be shut down COMPLETELY and you will have to " +
+                            "launch it again yourself.\n\n" +
+                            "Your dictionaries, cards and settings are left untouched - " +
+                            "the other language's dictionaries simply stop appearing in " +
+                            "results until you switch back. If you have no dictionaries " +
+                            "for the new language yet, download them under Dictionaries " +
+                            "after the restart."
+                    ),
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    coroutineScope.launch {
+                        viewModel.setStudyLanguage(pendingLanguageTarget)
+                        // Same teardown as the post-restore restart: drop the
+                        // back stack, then end the process so nothing that
+                        // captured the previous language survives.
+                        (context as? Activity)?.finishAffinity()
+                        kotlin.system.exitProcess(0)
+                    }
+                }) {
+                    Text(tr("Zmień i zamknij", "Change and close"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingStudyLanguage = null }) {
+                    Text(tr("Anuluj", "Cancel"))
+                }
+            }
+        )
+    }
+
     if (showRestoreDialog && selectedBackupForRestore != null) {
         val backup = selectedBackupForRestore
         AlertDialog(
@@ -530,6 +583,82 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // ═══════════════════════════════════════
+            // SECTION: Język nauki (Study language)
+            // ═══════════════════════════════════════
+            item {
+                SectionHeader(
+                    icon = Icons.Default.Translate,
+                    title = tr("Język nauki", "Study language")
+                )
+            }
+
+            item {
+                val current = viewModel.studyLanguage
+                SettingsClickableItem(
+                    icon = Icons.Default.Translate,
+                    title = when (current) {
+                        AppLanguage.JAPANESE -> tr("Japoński", "Japanese")
+                        AppLanguage.ENGLISH -> tr("Angielski → polski", "English → Polish")
+                    },
+                    subtitle = tr(
+                        "Dotknij, aby przełączyć. Wymaga restartu aplikacji.",
+                        "Tap to switch. Requires an app restart."
+                    ),
+                    onClick = {
+                        pendingStudyLanguage = when (current) {
+                            AppLanguage.JAPANESE -> AppLanguage.ENGLISH
+                            AppLanguage.ENGLISH -> AppLanguage.JAPANESE
+                        }
+                    }
+                )
+            }
+
+            if (viewModel.studyLanguage == AppLanguage.ENGLISH) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                            Text(
+                                tr(
+                                    "Czego nie ma w trybie angielskim",
+                                    "Not available in English mode"
+                                ),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                tr(
+                                    "• Ranking częstotliwości — dla angielskiego nie ma listy " +
+                                        "w formacie Yomitan, więc słowa nie są sortowane od " +
+                                        "najczęstszych słów.\n" +
+                                        "• Generator talii JLPT, skaner napisów/EPUB i skan kolekcji Anki " +
+                                        "— wyłączone; każde opiera się na czymś, czego angielski " +
+                                        "nie ma (tagi JLPT, kolejność wg częstotliwości, " +
+                                        "rozpoznawanie japońskich pól).\n" +
+                                        "• Akcent tonalny, furigana i rozbiór kanji — zastąpione wymową IPA.\n" +
+                                        "• Formy nieregularne (went, better) trzeba wpisać w bezokoliczniku.",
+                                    "• Frequency ranking - no Yomitan-format list exists for English, " +
+                                        "so results are not ordered by how common a word is.\n" +
+                                        "• The JLPT deck generator, the subtitle/EPUB scanner and the Anki " +
+                                        "collection scan are disabled - each rests on something " +
+                                        "English has no source for (JLPT tags, frequency-based " +
+                                        "study order, recognising Japanese fields).\n" +
+                                        "• Pitch accent, furigana and kanji breakdown - replaced by IPA.\n" +
+                                        "• Irregular forms (went, better) have to be typed as the base word."
+                                ),
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp
+                            )
+                        }
+                    }
+                }
+            }
+
             // SECTION: Słowniki (Dictionaries)
             // ═══════════════════════════════════════
             item {
@@ -830,7 +959,13 @@ fun SettingsScreen(
                 }
             }
 
-            // JLPT deck generator
+            // JLPT deck generator, the text scanner and the collection scan
+            // are Japanese-only. They are hidden rather than shown disabled:
+            // each rests on something English has no source for — JLPT tags,
+            // frequency-ordered study order, a "looks Japanese" filter over
+            // Anki fields — so there would be nothing behind the row. The
+            // card at the top of Settings says as much.
+            if (viewModel.studyLanguage == AppLanguage.JAPANESE) {
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.School,
@@ -868,6 +1003,7 @@ fun SettingsScreen(
                     ),
                     onClick = onNavigateToAnkiScan
                 )
+            }
             }
 
             // ═══════════════════════════════════════

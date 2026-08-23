@@ -97,10 +97,18 @@ class DetailViewModel @Inject constructor(
     private val exportedWordDao: ExportedWordDao,
     private val ankiCollectionStore: AnkiCollectionStore,
     private val monolingualCardResolver: MonolingualCardResolver,
+    languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
     private val favoriteWordDao: FavoriteWordDao,
     private val lookupCountDao: LookupCountDao,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
+
+    /**
+     * The language being studied, so the screen can tell a pitch-accent
+     * pattern from an IPA transcription — both live in the same column and
+     * only the language says which one is in there.
+     */
+    val studyLanguage: com.yomitanmobile.domain.model.AppLanguage = languageSettings.current
 
     private val logTag = "DetailViewModel"
 

@@ -19,9 +19,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAnkiCardCreator(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        languageSettings: com.yomitanmobile.data.settings.LanguageSettings
     ): AnkiCardCreator {
-        return AnkiCardCreator(context)
+        return AnkiCardCreator(context, languageSettings)
     }
 
     @Provides

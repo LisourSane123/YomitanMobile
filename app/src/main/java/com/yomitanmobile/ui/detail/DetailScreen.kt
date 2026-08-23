@@ -370,6 +370,7 @@ fun DetailScreen(
             }
             else -> {
                 WordDetailContent(
+                    studyLanguage = viewModel.studyLanguage,
                     entry = entry!!,
                     isPlaying = isPlaying,
                     ttsReady = ttsReady,
@@ -392,6 +393,7 @@ fun DetailScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WordDetailContent(
+    studyLanguage: com.yomitanmobile.domain.model.AppLanguage,
     entry: MergedWordEntry,
     isPlaying: Boolean,
     ttsReady: Boolean,
@@ -578,13 +580,25 @@ private fun WordDetailContent(
 
         Spacer(Modifier.height(16.dp))
 
-        // Pitch Accent
+        // Pitch accent / pronunciation. The column holds mora drop positions
+        // for Japanese and an IPA string for English; the diagram would try
+        // to split "/ˈwɜːd/" into morae, so English renders it as the text it
+        // is.
         if (entry.pitchAccent.isNotBlank()) {
-            SectionCard(title = tr("Akcent tonalny", "Pitch accent")) {
-                PitchAccentDiagram(
-                    reading = entry.reading.ifBlank { entry.primaryExpression },
-                    pitchPositions = entry.pitchAccent
-                )
+            if (studyLanguage == com.yomitanmobile.domain.model.AppLanguage.ENGLISH) {
+                SectionCard(title = tr("Wymowa", "Pronunciation")) {
+                    Text(
+                        text = entry.pitchAccent,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            } else {
+                SectionCard(title = tr("Akcent tonalny", "Pitch accent")) {
+                    PitchAccentDiagram(
+                        reading = entry.reading.ifBlank { entry.primaryExpression },
+                        pitchPositions = entry.pitchAccent
+                    )
+                }
             }
             Spacer(Modifier.height(12.dp))
         }

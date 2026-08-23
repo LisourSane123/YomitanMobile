@@ -1,5 +1,6 @@
 package com.yomitanmobile.data.anki
 
+import com.yomitanmobile.data.settings.LanguageSettings
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.room.Room
@@ -46,9 +47,10 @@ class MonolingualCardResolverDbTest {
             frequencyDao = db.frequencyDao(),
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
-            database = db
+            database = db,
+            languageSettings = LanguageSettings(context)
         )
-        resolver = MonolingualCardResolver(repo, context)
+        resolver = MonolingualCardResolver(repo, context, LanguageSettings(context))
 
         runBlocking {
             db.dictionaryDao().insertAll(

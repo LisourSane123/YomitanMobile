@@ -1,5 +1,6 @@
 package com.yomitanmobile.data.repository
 
+import com.yomitanmobile.data.settings.LanguageSettings
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.yomitanmobile.data.local.database.AppDatabase
@@ -43,7 +44,8 @@ class FuriganaFallbackDbTest {
             frequencyDao = db.frequencyDao(),
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
-            database = db
+            database = db,
+            languageSettings = LanguageSettings(ApplicationProvider.getApplicationContext())
         )
     }
 

@@ -1,5 +1,6 @@
 package com.yomitanmobile.ui.detail
 
+import com.yomitanmobile.data.settings.LanguageSettings
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.room.Room
@@ -54,7 +55,8 @@ class DetailViewModelFuriganaTest {
             frequencyDao = db.frequencyDao(),
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
-            database = db
+            database = db,
+            languageSettings = LanguageSettings(context)
         )
     }
 
@@ -68,7 +70,7 @@ class DetailViewModelFuriganaTest {
         savedStateHandle = SavedStateHandle(mapOf("entryId" to entryId)),
         getWordDetailUseCase = GetWordDetailUseCase(repo),
         repository = repo,
-        ankiCardCreator = AnkiCardCreator(context),
+        ankiCardCreator = AnkiCardCreator(context, LanguageSettings(context)),
         audioPlayer = AudioPlayer(context),
         sentenceDao = db.sentenceDao(),
         aiSummaryService = AiSummaryService(),
@@ -77,7 +79,8 @@ class DetailViewModelFuriganaTest {
             AnkiCollectionIndex(context),
             db.ankiCollectionWordDao()
         ),
-        monolingualCardResolver = MonolingualCardResolver(repo, context),
+        monolingualCardResolver = MonolingualCardResolver(repo, context, LanguageSettings(context)),
+        languageSettings = LanguageSettings(context),
         favoriteWordDao = db.favoriteWordDao(),
         lookupCountDao = db.lookupCountDao(),
         appContext = context
