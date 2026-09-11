@@ -15,6 +15,42 @@ object JapaneseDeconjugator {
     private const val MAX_DEPTH = 3
     private const val MAX_CANDIDATES = 24
 
+    /**
+     * Auxiliaries that attach to a て / で form. Longest first so ています is
+     * matched before ます.
+     */
+    private val TE_AUXILIARIES = listOf(
+        "いました", "いません", "しまいました", "しまった", "しまう", "います",
+        "おいた", "おきます", "あった", "あります", "いった", "いきます",
+        "きました", "きます", "みました", "みます", "ください", "くれる",
+        "もらう", "いない", "いた", "いて", "いる", "おく", "ある", "いく",
+        "くる", "みる", "ます", "ました", "てる", "たら", "た", "る"
+    )
+
+    /** し-inflections that mark a する verb. Longest first. */
+    private val SURU_SUFFIXES = listOf(
+        "しなかった", "しませんでした", "しなければ", "しません", "しました",
+        "しよう", "しない", "します", "しろ", "した", "して", "する"
+    )
+
+    /** Same for 来る, whose stem changes vowel (き / く / こ). */
+    private val KURU_SUFFIXES = listOf(
+        "きませんでした", "こなかった", "きました", "きません", "きます",
+        "こない", "こよう", "きた", "きて"
+    )
+
+    /** Irregular て / た forms of 行く, in kanji and in kana. */
+    private val IKU_FORMS = listOf(
+        "行った" to "行く", "行って" to "行く",
+        "いった" to "いく", "いって" to "いく"
+    )
+
+    /** Copula tails that say nothing about the word in front of them. */
+    private val COPULA_SUFFIXES = listOf(
+        "ではありません", "じゃありません", "ではなかった", "じゃなかった",
+        "ではない", "じゃない", "でした", "だった", "です", "だ"
+    )
+
     private val iRowToU = mapOf(
         'い' to 'う',
         'き' to 'く',
@@ -37,6 +73,32 @@ object JapaneseDeconjugator {
         'ば' to 'ぶ',
         'ま' to 'む',
         'ら' to 'る'
+    )
+
+    /** え-row → う-row: potential (読める→読む) and conditional (行けば→行く). */
+    private val eRowToU = mapOf(
+        'え' to 'う',
+        'け' to 'く',
+        'げ' to 'ぐ',
+        'せ' to 'す',
+        'て' to 'つ',
+        'ね' to 'ぬ',
+        'べ' to 'ぶ',
+        'め' to 'む',
+        'れ' to 'る'
+    )
+
+    /** お-row → う-row: volitional (行こう→行く). */
+    private val oRowToU = mapOf(
+        'お' to 'う',
+        'こ' to 'く',
+        'ご' to 'ぐ',
+        'そ' to 'す',
+        'と' to 'つ',
+        'の' to 'ぬ',
+        'ぼ' to 'ぶ',
+        'も' to 'む',
+        'ろ' to 'る'
     )
 
     private data class Step(
@@ -117,6 +179,16 @@ object JapaneseDeconjugator {
         addNegativeForms(form, out)
         addCausativePassiveForms(form, out)
         addIAdjectiveForms(form, out)
+        addAuxiliaryChains(form, out)
+        addDesiderativeForms(form, out)
+        addConditionalForms(form, out)
+        addContractedNegatives(form, out)
+        addVolitionalForms(form, out)
+        addPotentialForms(form, out)
+        addSuruForms(form, out)
+        addKuruForms(form, out)
+        addIkuForms(form, out)
+        addCopulaForms(form, out)
 
         return out.distinctBy { it.form }
     }
@@ -367,6 +439,134 @@ object JapaneseDeconjugator {
                 addCandidate(stem + "い", "i-adjective conjunctive", out)
             }
         }
+    }
+
+
+    /**
+     * て-form + auxiliary — the shape most verbs actually take in real text
+     * (食べている, 走っていました, 書いてある, 持っていく, 食べてしまった).
+     *
+     * Only the auxiliary is stripped; what is left is still a て/で form, and
+     * the search walks one more step to reach the dictionary form on its own.
+     * The character before the auxiliary must be て or で, which is what stops
+     * `る` from eating the last mora of every ichidan verb.
+     */
+    private fun addAuxiliaryChains(form: String, out: MutableList<Step>) {
+        for (aux in TE_AUXILIARIES) {
+            if (!form.endsWith(aux)) continue
+            val head = form.dropLast(aux.length)
+            val connector = head.lastOrNull() ?: continue
+            if (connector != 'て' && connector != 'で') continue
+            addCandidate(head, "te-form + auxiliary", out)
+        }
+    }
+
+    /**
+     * ～たい. The stem in front of it is the polite (masu) stem, so the same
+     * ichidan / godan pair as ます: 食べたい → 食べる, 行きたい → 行く.
+     * たかった and たくない reduce to たい through the i-adjective rules first.
+     */
+    private fun addDesiderativeForms(form: String, out: MutableList<Step>) {
+        if (!form.endsWith("たい")) return
+        addFromMasuStem(form.removeSuffix("たい"), "desiderative", out)
+    }
+
+    /**
+     * ～ば. One map does both classes: 行けば → 行く through け→く, and
+     * 食べれば → 食べる through れ→る.
+     */
+    private fun addConditionalForms(form: String, out: MutableList<Step>) {
+        if (!form.endsWith("ば")) return
+        val stem = form.removeSuffix("ば")
+        replaceLastChar(stem, eRowToU)?.let { addCandidate(it, "conditional", out) }
+        if (form.endsWith("なければ")) {
+            addNegativeStemCandidates(form.removeSuffix("なければ"), "negative conditional", out)
+        }
+    }
+
+    /** Spoken contractions of なければ: 食べなきゃ, 行かなくちゃ. */
+    private fun addContractedNegatives(form: String, out: MutableList<Step>) {
+        when {
+            form.endsWith("なきゃ") ->
+                addNegativeStemCandidates(form.removeSuffix("なきゃ"), "negative (spoken)", out)
+
+            form.endsWith("なくちゃ") ->
+                addNegativeStemCandidates(form.removeSuffix("なくちゃ"), "negative (spoken)", out)
+        }
+    }
+
+    /** ～よう / ～おう: 食べよう → 食べる, 行こう → 行く. */
+    private fun addVolitionalForms(form: String, out: MutableList<Step>) {
+        when {
+            form.endsWith("よう") ->
+                addCandidate(form.removeSuffix("よう") + "る", "volitional (ichidan)", out)
+
+            form.endsWith("う") -> {
+                val stem = form.removeSuffix("う")
+                replaceLastChar(stem, oRowToU)?.let {
+                    addCandidate(it, "volitional (godan)", out)
+                }
+            }
+        }
+    }
+
+    /**
+     * Godan potential: 読める → 読む, 話せる → 話す.
+     *
+     * This one is deliberately noisy: 食べる is itself an え-row + る shape, so
+     * every ichidan verb also yields a godan "dictionary form" (食ぶ) that is
+     * usually not a word. A stray candidate costs one indexed lookup and
+     * ranks below the real hit, whereas without the rule the potential form —
+     * which is everywhere in ordinary Japanese — finds nothing at all.
+     */
+    private fun addPotentialForms(form: String, out: MutableList<Step>) {
+        if (!form.endsWith("る") || form.length < 3) return
+        val stem = form.removeSuffix("る")
+        replaceLastChar(stem, eRowToU)?.let { addCandidate(it, "potential (godan)", out) }
+    }
+
+    /**
+     * する verbs. 勉強した → 勉強する AND 勉強: dictionaries list some entries
+     * only as the noun and some only as the suru-verb, so both are offered.
+     * Without this, 勉強した deconjugated to 勉強す — a form that exists in no
+     * dictionary, so the whole class of サ変 verbs found nothing.
+     */
+    private fun addSuruForms(form: String, out: MutableList<Step>) {
+        val suffix = SURU_SUFFIXES.firstOrNull { form.endsWith(it) } ?: return
+        val stem = form.dropLast(suffix.length)
+        addCandidate(stem + "する", "suru verb", out)
+        if (stem.isNotEmpty()) addCandidate(stem, "suru verb (noun)", out)
+    }
+
+    /**
+     * 行く is the one godan verb whose て / た forms break the pattern: 行った
+     * and 行って come from 行く, not from the 行う / 行つ / 行る the ~った rule
+     * offers. Without this, the single most common motion verb in the language
+     * could not be looked up in its past or te-form.
+     */
+    private fun addIkuForms(form: String, out: MutableList<Step>) {
+        for ((suffix, base) in IKU_FORMS) {
+            if (!form.endsWith(suffix)) continue
+            addCandidate(form.dropLast(suffix.length) + base, "iku (irregular)", out)
+        }
+    }
+
+    /** 来る is irregular in kana: きた / きて / こない all lead to くる. */
+    private fun addKuruForms(form: String, out: MutableList<Step>) {
+        val suffix = KURU_SUFFIXES.firstOrNull { form.endsWith(it) } ?: return
+        val stem = form.dropLast(suffix.length)
+        addCandidate(stem + "くる", "kuru verb", out)
+        if (stem.isNotEmpty()) addCandidate(stem + "来る", "kuru verb (kanji)", out)
+    }
+
+    /**
+     * な-adjectives and the copula: 静かだった / 静かじゃない / 元気でした all
+     * describe the plain word in front of them. They used to fall through to
+     * the godan past rules and produce 静かだう, 静かじゃる and similar.
+     */
+    private fun addCopulaForms(form: String, out: MutableList<Step>) {
+        val suffix = COPULA_SUFFIXES.firstOrNull { form.endsWith(it) } ?: return
+        addCandidate(form.dropLast(suffix.length), "copula / na-adjective", out)
     }
 
     private fun addCandidates(stem: String, endings: List<Char>, reason: String, out: MutableList<Step>) {

@@ -239,6 +239,21 @@ fun AnkiScanScreen(
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            if (result.truncated) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    tr(
+                                        "Skan zatrzymał się na limicie bezpieczeństwa i nie objął całej " +
+                                            "kolekcji. Wykrywanie duplikatów może przepuścić słowa, " +
+                                            "które już masz.",
+                                        "The scan stopped at its safety ceiling and did not cover the " +
+                                            "whole collection. Duplicate detection may miss words you " +
+                                            "already have."
+                                    ),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                             if (result.noteCount == 0) {
                                 Spacer(Modifier.height(8.dp))
                                 Text(

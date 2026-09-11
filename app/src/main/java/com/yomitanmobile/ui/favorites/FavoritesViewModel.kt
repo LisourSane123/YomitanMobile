@@ -33,7 +33,7 @@ class FavoritesViewModel @Inject constructor(
 
     fun clearAll() {
         viewModelScope.launch {
-            favoriteWordDao.deleteAll()
+            favoriteWordDao.deleteAll(language)
         }
     }
 }

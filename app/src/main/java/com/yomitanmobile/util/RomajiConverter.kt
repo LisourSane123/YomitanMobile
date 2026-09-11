@@ -11,13 +11,27 @@ object RomajiConverter {
      * Returns the converted hiragana string.
      */
     fun toHiragana(romaji: String): String {
-        val input = romaji.lowercase().trim()
+        val input = expandMacrons(romaji.lowercase().trim())
         if (input.isEmpty()) return ""
 
         val result = StringBuilder()
         var i = 0
 
         while (i < input.length) {
+            // "nn" is ん — but only when nothing that could open a な-mora
+            // follows it. In konnichiwa / annai / sannen the first n closes the
+            // previous mora and the second one opens に / な / ね; consuming
+            // both gave こんいちわ, あんい, さんえん — none of them words, so
+            // romaji search for them found nothing at all.
+            if (input[i] == 'n' && i + 1 < input.length && input[i + 1] == 'n') {
+                val after = input.getOrNull(i + 2)
+                if (after != null && after in "aiueoy") {
+                    result.append('ん')
+                    i++
+                    continue
+                }
+            }
+
             // Handle double consonants (っ)
             if (i + 1 < input.length && input[i] == input[i + 1] && input[i] != 'n' && input[i] != 'a' && input[i] != 'i' && input[i] != 'u' && input[i] != 'e' && input[i] != 'o') {
                 result.append('っ')
@@ -88,8 +102,34 @@ object RomajiConverter {
      * Check if a string looks like romaji (Latin letters only).
      */
     fun isRomaji(text: String): Boolean {
-        return text.all { it.isLetter() && it.code < 128 || it == ' ' || it == '-' }
+        return text.all {
+            it.isLetter() && it.code < 128 || it in MACRONS || it == ' ' || it == '-'
+        }
     }
+
+    /**
+     * Long vowels written with a macron or circumflex, the way textbooks and
+     * dictionaries print them (gakkou as gakkō, tooi as tōi). No phone keyboard
+     * has them, but they are what a user pastes from a page — and untouched
+     * they stayed as Latin letters in the middle of the kana, matching nothing.
+     */
+    private fun expandMacrons(input: String): String {
+        if (input.none { it in MACRONS }) return input
+        return buildString(input.length + 4) {
+            for (ch in input) {
+                when (ch) {
+                    'ā', 'â' -> append("aa")
+                    'ī', 'î' -> append("ii")
+                    'ū', 'û' -> append("uu")
+                    'ē', 'ê' -> append("ee")
+                    'ō', 'ô' -> append("ou")
+                    else -> append(ch)
+                }
+            }
+        }
+    }
+
+    private const val MACRONS = "\u0101\u012B\u016B\u0113\u014D\u00E2\u00EE\u00FB\u00EA\u00F4"
 
     private val ROMAJI_TO_HIRAGANA = mapOf(
         // Vowels

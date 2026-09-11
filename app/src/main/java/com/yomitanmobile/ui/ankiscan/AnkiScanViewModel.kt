@@ -57,6 +57,9 @@ class AnkiScanViewModel @Inject constructor(
     }
 
     fun setQuery(value: String) {
+        // Stored raw, escaped only on the way into the LIKE (see [loadWords]):
+        // escaping here put the backslashes into the text field the user is
+        // typing in, so a typed % turned into a visible \\%.
         _query.value = value
         searchJob?.cancel()
         searchJob = viewModelScope.launch { loadWords() }
@@ -126,7 +129,13 @@ class AnkiScanViewModel @Inject constructor(
 
     private suspend fun loadWords() {
         val q = _query.value.trim()
-        _words.value = if (q.isEmpty()) store.page(PAGE, 0) else store.search(q, PAGE)
+        // Without escaping, typing % listed the whole collection and _ matched
+        // any single character.
+        _words.value = if (q.isEmpty()) {
+            store.page(PAGE, 0)
+        } else {
+            store.search(com.yomitanmobile.util.InputSanitizer.sanitizeLikeQuery(q), PAGE)
+        }
     }
 
     private companion object {

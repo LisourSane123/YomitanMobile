@@ -4,6 +4,7 @@ import com.yomitanmobile.domain.model.JlptDeckFilters
 import com.yomitanmobile.domain.model.JlptDeckPlan
 import com.yomitanmobile.domain.model.JlptSkipReason
 import com.yomitanmobile.domain.model.MergedWordEntry
+import kotlin.random.Random
 
 /**
  * Turns "every word tagged N4" into the list of cards actually worth
@@ -23,7 +24,10 @@ object JlptDeckPlanner {
         isInAnki: (MergedWordEntry) -> Boolean = { false },
         isMined: (MergedWordEntry) -> Boolean = { false },
         ankiScanUnavailable: Boolean = false,
-        scannedNoteCount: Int = 0
+        scannedWordCount: Int = 0,
+        scannedAt: Long = 0L,
+        /** Injectable so the shuffle of unranked words is reproducible in tests. */
+        random: Random = Random.Default
     ): JlptDeckPlan {
         val skipped = linkedMapOf<JlptSkipReason, Int>()
         fun reject(reason: JlptSkipReason) {
@@ -56,7 +60,17 @@ object JlptDeckPlanner {
                 }
                 else -> true
             }
-        }.sortedWith(byUsefulness)
+        }.let { words ->
+            // Ranked words first, commonest first — that is the study order,
+            // because AnkiDroid introduces new cards in the order they were
+            // written. Words no frequency dictionary ranks cannot join that
+            // ordering, so they go last; SHUFFLED rather than alphabetical,
+            // because sorting them by expression puts あ-words on the first
+            // fifty cards and わ-words on the last fifty, which is the one
+            // order a vocabulary deck must not have.
+            val (ranked, unranked) = words.partition { it.frequency > 0 }
+            ranked.sortedWith(byFrequency) + unranked.shuffled(random)
+        }
 
         val selected = if (filters.maxWords > 0 && kept.size > filters.maxWords) {
             skipped[JlptSkipReason.OVER_LIMIT] = kept.size - filters.maxWords
@@ -71,18 +85,18 @@ object JlptDeckPlanner {
             selected = selected,
             skipped = skipped,
             ankiScanUnavailable = ankiScanUnavailable,
-            scannedNoteCount = scannedNoteCount
+            scannedWordCount = scannedWordCount,
+            scannedAt = scannedAt
         )
     }
 
     /**
-     * Most useful first: ranked words ahead of unranked ones, commonest
-     * first. A capped deck then keeps the words worth learning, and the deck
-     * is created in a sensible study order.
+     * Commonest first among the words that carry a rank. The expression is
+     * only a tiebreaker for words that share a rank, so the order stays
+     * stable between two runs of the same analysis.
      */
-    private val byUsefulness = compareBy<MergedWordEntry>(
-        { if (it.frequency > 0) 0 else 1 },
-        { if (it.frequency > 0) it.frequency else Int.MAX_VALUE },
+    private val byFrequency = compareBy<MergedWordEntry>(
+        { it.frequency },
         { it.primaryExpression.ifBlank { it.reading } }
     )
 

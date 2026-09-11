@@ -30,6 +30,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -50,6 +51,8 @@ sealed class TextScanEvent {
     object PermissionRequired : TextScanEvent()
     object AnkiNotInstalled : TextScanEvent()
     object Cancelled : TextScanEvent()
+    /** Audio was requested but the device has no usable TTS voice. */
+    object AudioUnavailable : TextScanEvent()
 }
 
 /**
@@ -99,7 +102,16 @@ class TextScanViewModel @Inject constructor(
     private val _progress = MutableStateFlow<JlptDeckProgress?>(null)
     val progress: StateFlow<JlptDeckProgress?> = _progress.asStateFlow()
 
-    private val _events = MutableSharedFlow<TextScanEvent>()
+    // Buffered, never suspending. A default MutableSharedFlow is a rendezvous
+    // channel: emit() waits for a collector, and the screen's collector only
+    // exists while the screen is composed. Navigating away from a retained
+    // ViewModel mid-operation parked the emitting coroutine forever, so the
+    // finally block that clears the progress / "is exporting" flag never ran
+    // and the screen came back stuck.
+    private val _events = MutableSharedFlow<TextScanEvent>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val events: SharedFlow<TextScanEvent> = _events.asSharedFlow()
 
     /** Cached analysis of the current file set; see the class comment. */
@@ -224,7 +236,14 @@ class TextScanViewModel @Inject constructor(
             entries = resolvedEntries,
             filters = filters,
             totalTokenCount = totalTokens,
-            isInAnki = { ankiIndex.contains(it.primaryExpression, it.reading) },
+            isInAnki = {
+                ankiIndex.containsAny(
+                    listOf(it.primaryExpression) + it.alternativeExpressions,
+                    it.reading,
+                    readingCountsAlone = com.yomitanmobile.domain.usecase.WordFilterRules
+                        .isUsuallyKana(it)
+                )
+            },
             isMined = { matchKey(it.primaryExpression, it.reading) in minedKeys },
             ankiScanUnavailable = filters.skipAlreadyInAnki && ankiScanUnavailable
         )
@@ -307,7 +326,13 @@ class TextScanViewModel @Inject constructor(
                 } else {
                     storedStyle
                 }
-                val tts = if (filters.generateAudio) audioPlayer.getTts() else null
+                // Same reason as the JLPT generator: the engine has to be
+                // started here, otherwise getTts() is null and the audio
+                // switch silently does nothing.
+                val tts = if (filters.generateAudio) audioPlayer.ensureTts() else null
+                if (filters.generateAudio && tts == null) {
+                    _events.emit(TextScanEvent.AudioUnavailable)
+                }
                 val deck = _deckName.value.trim().ifBlank { DEFAULT_DECK }
 
                 val entries = monolingualCardResolver.apply(
@@ -328,6 +353,17 @@ class TextScanViewModel @Inject constructor(
 
                 result.fold(
                     onSuccess = { batch ->
+                        // Same as the JLPT generator: teach the stored scan
+                        // about the cards we just wrote, so a second scan of
+                        // the next volume does not offer them again.
+                        if (batch.added > 0) {
+                            ankiCollectionStore.addWords(
+                                entries.flatMap {
+                                    listOf(it.expression, it.reading)
+                                }.filter { it.isNotBlank() },
+                                source = GENERATED_SOURCE
+                            )
+                        }
                         _events.emit(
                             TextScanEvent.Finished(
                                 JlptDeckResult(
@@ -427,7 +463,7 @@ class TextScanViewModel @Inject constructor(
     private fun matchKey(expression: String, reading: String): String {
         val expr = expression.trim()
         val read = reading.trim().ifEmpty { expr }
-        return expr + " " + read.toHiragana()
+        return expr + "\u0000" + read.toHiragana()
     }
 
     private fun String.toHiragana(): String = buildString(length) {
@@ -438,6 +474,9 @@ class TextScanViewModel @Inject constructor(
 
     companion object {
         const val DEFAULT_DECK = "Yomitan Mobile"
+
+        /** Note-type label the scan screen shows for generated words. */
+        private const val GENERATED_SOURCE = "Yomitan Mobile (skan tekstu)"
 
         const val STAGE_READING = "reading"
         const val STAGE_LEXICON = "lexicon"

@@ -25,6 +25,7 @@ import com.yomitanmobile.util.JlptVocabulary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -41,6 +42,8 @@ sealed class JlptDeckEvent {
     object PermissionRequired : JlptDeckEvent()
     object AnkiNotInstalled : JlptDeckEvent()
     object Cancelled : JlptDeckEvent()
+    /** Audio was requested but the device has no usable TTS voice. */
+    object AudioUnavailable : JlptDeckEvent()
 }
 
 /**
@@ -88,7 +91,16 @@ class JlptDeckViewModel @Inject constructor(
     private val _availableDecks = MutableStateFlow<List<String>>(emptyList())
     val availableDecks: StateFlow<List<String>> = _availableDecks.asStateFlow()
 
-    private val _events = MutableSharedFlow<JlptDeckEvent>()
+    // Buffered, never suspending. A default MutableSharedFlow is a rendezvous
+    // channel: emit() waits for a collector, and the screen's collector only
+    // exists while the screen is composed. Navigating away from a retained
+    // ViewModel mid-operation parked the emitting coroutine forever, so the
+    // finally block that clears the progress / "is exporting" flag never ran
+    // and the screen came back stuck.
+    private val _events = MutableSharedFlow<JlptDeckEvent>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val events: SharedFlow<JlptDeckEvent> = _events.asSharedFlow()
 
     /**
@@ -169,6 +181,7 @@ class JlptDeckViewModel @Inject constructor(
                 } else {
                     AnkiCollectionIndex.Index.EMPTY
                 }
+                val storedScan = ankiCollectionStore.storedScanInfo()
 
                 val minedKeys: Set<String> = if (filters.skipAlreadyMined) {
                     runCatching {
@@ -186,10 +199,21 @@ class JlptDeckViewModel @Inject constructor(
                     level = level,
                     candidates = candidates,
                     filters = filters,
-                    isInAnki = { index.contains(it.primaryExpression, it.reading) },
+                    isInAnki = {
+                        index.containsAny(
+                            // Every spelling the entry knows, not just the
+                            // headword: the deck may hold 持ってくる where
+                            // JMdict's primary form is 持って来る.
+                            listOf(it.primaryExpression) + it.alternativeExpressions,
+                            it.reading,
+                            readingCountsAlone = com.yomitanmobile.domain.usecase.WordFilterRules
+                                .isUsuallyKana(it)
+                        )
+                    },
                     isMined = { matchKey(it.primaryExpression, it.reading) in minedKeys },
                     ankiScanUnavailable = filters.skipAlreadyInAnki && !index.available,
-                    scannedNoteCount = index.noteCount
+                    scannedWordCount = storedScan.wordCount,
+                    scannedAt = storedScan.scannedAt
                 )
             } catch (e: Exception) {
                 Log.e(logTag, "Analyze failed", e)
@@ -210,7 +234,15 @@ class JlptDeckViewModel @Inject constructor(
             _progress.value = JlptDeckProgress(0, plan.selectedCount)
             try {
                 val stylePrefs = readCardStylePreferences(appContext.dataStore.data.first())
-                val tts = if (_filters.value.generateAudio) audioPlayer.getTts() else null
+                // ensureTts, not getTts: nothing on this screen ever started
+                // the engine, so getTts() was null here and every generated
+                // card came out without audio. Null now means the device
+                // genuinely has no usable voice, and the user is told.
+                val wantsAudio = _filters.value.generateAudio
+                val tts = if (wantsAudio) audioPlayer.ensureTts() else null
+                if (wantsAudio && tts == null) {
+                    _events.emit(JlptDeckEvent.AudioUnavailable)
+                }
                 val deck = _deckName.value.trim().ifBlank { defaultDeckName(plan.level) }
 
                 // One batched lookup rewrites the whole deck when the JP-JP
@@ -233,6 +265,20 @@ class JlptDeckViewModel @Inject constructor(
 
                 result.fold(
                     onSuccess = { batch ->
+                        // Those cards are in the collection now. The stored
+                        // scan is the only record of what AnkiDroid holds
+                        // (generated cards stay out of exported_words), so it
+                        // has to learn about them straight away — otherwise
+                        // running the generator again offers the very words it
+                        // just created.
+                        if (batch.added > 0) {
+                            ankiCollectionStore.addWords(
+                                entries.flatMap {
+                                    listOf(it.expression, it.reading)
+                                }.filter { it.isNotBlank() },
+                                source = GENERATED_SOURCE
+                            )
+                        }
                         _events.emit(
                             JlptDeckEvent.Finished(
                                 JlptDeckResult(
@@ -335,6 +381,9 @@ class JlptDeckViewModel @Inject constructor(
         setOf("yomitan-mobile", "jlpt-n$level", "auto-generated")
 
     companion object {
+        /** Note-type label the scan screen shows for generated words. */
+        private const val GENERATED_SOURCE = "Yomitan Mobile (JLPT)"
+
         val LEVELS = listOf(5, 4, 3, 2, 1)
 
         fun defaultDeckName(level: Int): String = "JLPT N$level"

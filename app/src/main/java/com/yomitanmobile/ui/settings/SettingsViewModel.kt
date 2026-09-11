@@ -12,6 +12,7 @@ import com.yomitanmobile.domain.usecase.GetDictionariesUseCase
 import com.yomitanmobile.domain.usecase.ImportDictionaryUseCase
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -125,7 +126,16 @@ class SettingsViewModel @Inject constructor(
     private val _importProgress = MutableStateFlow<ImportProgress?>(null)
     val importProgress: StateFlow<ImportProgress?> = _importProgress.asStateFlow()
 
-    private val _events = MutableSharedFlow<SettingsEvent>()
+    // Buffered, never suspending. A default MutableSharedFlow is a rendezvous
+    // channel: emit() waits for a collector, and the screen's collector only
+    // exists while the screen is composed. Navigating away from a retained
+    // ViewModel mid-operation parked the emitting coroutine forever, so the
+    // finally block that clears the progress / "is exporting" flag never ran
+    // and the screen came back stuck.
+    private val _events = MutableSharedFlow<SettingsEvent>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val events = _events.asSharedFlow()
 
     fun importDictionary(inputStream: InputStream) {

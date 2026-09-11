@@ -61,10 +61,10 @@ class JlptTagApplyDbTest {
     )
 
     private fun levelOf(expression: String): Int = runBlocking {
-        dao.getEntriesByJlptLevel(1).plus(dao.getEntriesByJlptLevel(2))
-            .plus(dao.getEntriesByJlptLevel(3))
-            .plus(dao.getEntriesByJlptLevel(4))
-            .plus(dao.getEntriesByJlptLevel(5))
+        dao.getEntriesByJlptLevel(1, "ja").plus(dao.getEntriesByJlptLevel(2, "ja"))
+            .plus(dao.getEntriesByJlptLevel(3, "ja"))
+            .plus(dao.getEntriesByJlptLevel(4, "ja"))
+            .plus(dao.getEntriesByJlptLevel(5, "ja"))
             .firstOrNull { it.expression == expression }?.jlptLevel ?: 0
     }
 
@@ -79,7 +79,7 @@ class JlptTagApplyDbTest {
         dao.applyJlptLevelsFromTags()
 
         assertEquals(5, levelOf("食べる"))
-        assertEquals(1, dao.getEntriesByJlptLevel(5).size)
+        assertEquals(1, dao.getEntriesByJlptLevel(5, "ja").size)
     }
 
     @Test

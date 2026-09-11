@@ -245,10 +245,27 @@ fun SettingsScreen(
                 is SettingsEvent.ImportSuccess ->
                     Toast.makeText(
                         context,
-                        tr(
-                            "Zaimportowano ${event.result.dictionaryName}: ${event.result.entriesImported} wpisów",
-                            "Imported ${event.result.dictionaryName}: ${event.result.entriesImported} entries"
-                        ),
+                        buildString {
+                            append(
+                                tr(
+                                    "Zaimportowano ${event.result.dictionaryName}: ${event.result.entriesImported} wpisów",
+                                    "Imported ${event.result.dictionaryName}: ${event.result.entriesImported} entries"
+                                )
+                            )
+                            // The index that meaning search reads did not
+                            // rebuild — say so, instead of leaving the user
+                            // with a success message and a search that can't
+                            // see the new dictionary.
+                            if (event.result.warning != null) {
+                                append(" — ")
+                                append(
+                                    tr(
+                                        "uwaga: indeks wyszukiwania po znaczeniu nie odświeżył się, powtórz import",
+                                        "warning: the meaning-search index did not refresh, re-run the import"
+                                    )
+                                )
+                            }
+                        },
                         Toast.LENGTH_LONG
                     ).show()
                 is SettingsEvent.ImportError ->

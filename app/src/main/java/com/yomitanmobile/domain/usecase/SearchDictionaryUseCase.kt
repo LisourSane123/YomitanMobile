@@ -74,12 +74,30 @@ class SearchDictionaryUseCase @Inject constructor(
                 perQuery.map { it.await() } + listOfNotNull(substring?.await())
             }
 
-            val mergedById = LinkedHashMap<Long, WordEntry>()
+            // What the user literally typed comes first, in the order the DAO
+            // ranked it. Everything the deconjugator suggested comes next —
+            // ordered by how common the word is, NOT by the order the rules
+            // happened to produce. The candidate list is sorted by length, so
+            // without this a two-character archaism (食ぶ, offered because
+            // 食べる also looks like the potential form of a godan verb)
+            // outranked the word the user was actually inflecting.
+            val literal = LinkedHashMap<Long, WordEntry>()
+            val alternatives = LinkedHashMap<Long, WordEntry>()
             results.forEachIndexed { idx, entries ->
                 val bounded = if (idx == 0) entries else entries.take(20)
-                bounded.forEach { entry -> mergedById.putIfAbsent(entry.id, entry) }
+                val target = if (idx == 0) literal else alternatives
+                bounded.forEach { entry ->
+                    if (entry.id !in literal) target.putIfAbsent(entry.id, entry)
+                }
             }
-            emit(mergedById.values.toList())
+            val rankedAlternatives = alternatives.values.sortedWith(
+                compareBy(
+                    { if (it.frequency > 0) 0 else 1 },
+                    { if (it.frequency > 0) it.frequency else Int.MAX_VALUE },
+                    { it.expression.length }
+                )
+            )
+            emit(literal.values.toList() + rankedAlternatives)
         }.catch {
             emit(emptyList())
         }

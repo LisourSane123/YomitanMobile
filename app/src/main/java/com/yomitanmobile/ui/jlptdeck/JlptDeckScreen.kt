@@ -117,9 +117,12 @@ fun JlptDeckScreen(
             val message = when (event) {
                 is JlptDeckEvent.Finished -> tr(
                     "Utworzono ${event.result.added} kart w talii „${event.result.deckName}”" +
-                        if (event.result.failed > 0) " (${event.result.failed} odrzucone)" else "",
+                        // Not necessarily errors: AnkiDroid returns fewer ids
+                        // when it skips notes it considers duplicates, and the
+                        // batch cannot tell the two apart.
+                        if (event.result.failed > 0) " (${event.result.failed} pominięte: duplikaty lub błędy)" else "",
                     "Created ${event.result.added} cards in deck “${event.result.deckName}”" +
-                        if (event.result.failed > 0) " (${event.result.failed} rejected)" else ""
+                        if (event.result.failed > 0) " (${event.result.failed} skipped: duplicates or errors)" else ""
                 )
                 is JlptDeckEvent.Error -> tr("Błąd: ${event.message}", "Error: ${event.message}")
                 JlptDeckEvent.PermissionRequired -> {
@@ -129,6 +132,10 @@ fun JlptDeckScreen(
                 }
                 JlptDeckEvent.AnkiNotInstalled -> tr("AnkiDroid nie jest zainstalowany", "AnkiDroid is not installed")
                 JlptDeckEvent.Cancelled -> tr("Przerwano generowanie", "Generation cancelled")
+                JlptDeckEvent.AudioUnavailable -> tr(
+                    "Brak działającego syntezatora mowy — karty powstaną bez audio.",
+                    "No working text-to-speech voice — cards will be created without audio."
+                )
             }
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
@@ -396,15 +403,40 @@ fun JlptDeckScreen(
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        if (currentPlan.scannedNoteCount > 0) {
+                        // Say what the duplicate check actually had to work
+                        // with, and how old it is. Silence here left the user
+                        // unable to tell "nothing of yours is in this level"
+                        // apart from "the check never ran".
+                        if (currentPlan.scannedWordCount > 0) {
+                            val days = ((System.currentTimeMillis() - currentPlan.scannedAt) /
+                                (24L * 60L * 60L * 1000L)).toInt()
+                            val age = when {
+                                currentPlan.scannedAt <= 0L -> ""
+                                days <= 0 -> tr(", skan z dzisiaj", ", scanned today")
+                                days == 1 -> tr(", skan sprzed 1 dnia", ", scanned 1 day ago")
+                                else -> tr(", skan sprzed $days dni", ", scanned $days days ago")
+                            }
                             Text(
                                 tr(
-                                    "Przeskanowano ${currentPlan.scannedNoteCount} notatek w Anki",
-                                    "Scanned ${currentPlan.scannedNoteCount} notes in Anki"
+                                    "Twoja kolekcja Anki: ${currentPlan.scannedWordCount} słów$age",
+                                    "Your Anki collection: ${currentPlan.scannedWordCount} words$age"
                                 ),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            if (days >= 7) {
+                                Text(
+                                    tr(
+                                        "Karty dodane po skanie nie są brane pod uwagę — " +
+                                            "przeskanuj kolekcję ponownie, jeśli od tego czasu " +
+                                            "coś doszło.",
+                                        "Cards added after that scan are not taken into account — " +
+                                            "rescan the collection if anything has been added since."
+                                    ),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                         if (currentPlan.ankiScanUnavailable) {
                             Text(
@@ -451,8 +483,15 @@ fun JlptDeckScreen(
                             Spacer(Modifier.height(8.dp))
                             Divider()
                             Spacer(Modifier.height(8.dp))
+                            // AnkiDroid introduces new cards in the order they
+                            // were written, so the order below IS the order the
+                            // deck will be studied in. Saying so makes the
+                            // guarantee checkable instead of implicit.
                             Text(
-                                tr("Przykładowe słowa:", "Sample words:"),
+                                tr(
+                                    "Pierwsze słowa (talia powstaje od najczęstszych):",
+                                    "First words (the deck is created most-frequent-first):"
+                                ),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -461,6 +500,30 @@ fun JlptDeckScreen(
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+
+                            // Words no installed frequency dictionary ranks
+                            // cannot take part in that ordering — they land at
+                            // the end, shuffled. Without this line a deck that
+                            // is mostly unranked looks like the sorting simply
+                            // did not happen.
+                            val unranked = currentPlan.selected.count { it.frequency <= 0 }
+                            if (unranked > 0) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    tr(
+                                        "$unranked z ${currentPlan.selectedCount} słów nie ma rangi " +
+                                            "częstotliwości — trafią na koniec talii, w losowej " +
+                                            "kolejności. Zainstaluj słownik częstotliwości, żeby " +
+                                            "uporządkować całość.",
+                                        "$unranked of ${currentPlan.selectedCount} words carry no " +
+                                            "frequency rank — they go to the end of the deck, in " +
+                                            "random order. Install a frequency dictionary to order " +
+                                            "the whole deck."
+                                    ),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

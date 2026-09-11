@@ -997,30 +997,11 @@ private fun PitchAccentDiagram(
 }
 
 /**
- * Splits a Japanese reading into morae (syllable units).
- * Small kana (ゃ, ゅ, ょ, ぁ, ぃ, ぅ, ぇ, ぉ, ァ, ィ, ゥ, ェ, ォ, ャ, ュ, ョ) 
- * are attached to the preceding mora.
+ * Morae of a reading, for the pitch diagram. Shared with the exported card so
+ * the two cannot disagree — see [com.yomitanmobile.util.JapaneseMora].
  */
-private fun splitIntoMorae(reading: String): List<String> {
-    val smallKana = setOf(
-        'ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ',
-        'ャ', 'ュ', 'ョ', 'ァ', 'ィ', 'ゥ', 'ェ', 'ォ',
-        'っ', 'ッ', 'ー'
-    )
-    val result = mutableListOf<String>()
-    var i = 0
-    while (i < reading.length) {
-        val sb = StringBuilder()
-        sb.append(reading[i])
-        i++
-        while (i < reading.length && reading[i] in smallKana) {
-            sb.append(reading[i])
-            i++
-        }
-        result.add(sb.toString())
-    }
-    return result
-}
+private fun splitIntoMorae(reading: String): List<String> =
+    com.yomitanmobile.util.JapaneseMora.split(reading)
 
 /**
  * Computes the high(true)/low(false) pattern for each mora.

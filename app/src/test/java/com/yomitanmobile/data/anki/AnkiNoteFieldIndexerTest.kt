@@ -110,6 +110,74 @@ class AnkiNoteFieldIndexerTest {
     }
 
     @Test
+    fun indexesRubyCompoundsSpacedOverThreeKanjiBlocks() {
+        // The old "at most two runs" rule threw these away with the sentences.
+        val keys = AnkiNoteFieldIndexer.keysFromNote(note("落[お]ち 着[つ]き 払[はら]う"))
+
+        assertTrue(keys.toString(), "落ち着き払う" in keys)
+        assertTrue(keys.toString(), "おちつきはらう" in keys)
+    }
+
+    @Test
+    fun indexesMixedSpellingsOfARubyCompound() {
+        // The deck writes 来る with kanji, the dictionary headword the user
+        // mines may not — and the other way round.
+        val keys = AnkiNoteFieldIndexer.keysFromNote(note("持[も]って 来[く]る"))
+
+        assertTrue(keys.toString(), "持って来る" in keys)
+        assertTrue(keys.toString(), "持ってくる" in keys)
+        assertTrue(keys.toString(), "もってくる" in keys)
+    }
+
+    @Test
+    fun indexesEverySpellingListedInOneField() {
+        val keys = AnkiNoteFieldIndexer.keysFromNote(note("持って来る / 持ってくる"))
+
+        assertTrue("持って来る" in keys)
+        assertTrue("持ってくる" in keys)
+    }
+
+    @Test
+    fun blockMarkupSeparatesTwoFieldsWorthOfWords() {
+        val keys = AnkiNoteFieldIndexer.keysFromNote(note("<div>時間</div><div>じかん</div>"))
+
+        assertTrue(keys.toString(), "時間" in keys)
+        assertTrue(keys.toString(), "じかん" in keys)
+        assertFalse("時間じかん" in keys)
+    }
+
+    @Test
+    fun compoundVerbMatchesTheOtherSpelling() {
+        val index = AnkiCollectionIndex.Index(
+            keys = setOf("持ってくる"),
+            noteCount = 1,
+            available = true
+        )
+
+        assertTrue(index.contains("持って来る", "もってくる"))
+        // The reverse (deck keeps the kanji, dictionary headword is kana) has
+        // no reading to fold on the deck's side, so it is the entry's
+        // alternative spellings that close it — see [alternativeSpellingsCount].
+    }
+
+    @Test
+    fun spellingVariantsNeverDegradeIntoAReadingMatch() {
+        val index = AnkiCollectionIndex.Index(setOf("きく"), 1, available = true)
+
+        // 聞く's only variant besides itself IS the reading, which stays
+        // governed by the homophone rule.
+        assertFalse(index.contains("聞く", "きく"))
+    }
+
+    @Test
+    fun alternativeSpellingsCount() {
+        val index = AnkiCollectionIndex.Index(setOf("弁える"), 1, available = true)
+
+        assertFalse(index.contains("辨える", "わきまえる"))
+        assertTrue(index.containsAny(listOf("辨える", "弁える"), "わきまえる"))
+    }
+
+    @Test
     fun unavailableIndexNeverClaimsAMatch() {
         assertFalse(AnkiCollectionIndex.Index.EMPTY.contains("食べる", "たべる"))
     }

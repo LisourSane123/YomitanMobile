@@ -168,6 +168,7 @@ class AnkiCardCreator(
         // hand. Real exports go through buildBackTemplate(sectionOrder).
         const val CARD_BACK_TEMPLATE = """
             <div class="back">
+                {{#Frequency}}<div class="freq">{{Frequency}}</div>{{/Frequency}}
                 <div class="section header-section">
                     <div class="expression">{{Front}}</div>
                     <hr class="word-divider">
@@ -201,6 +202,13 @@ class AnkiCardCreator(
         ): String {
             val sb = StringBuilder()
             sb.append("<div class=\"back\">\n")
+            // Frequency rank, pinned to the top-right corner of the card. The
+            // element is always emitted (empty Frequency renders nothing at
+            // all thanks to the section tag); the "show frequency" preference
+            // decides whether CSS reveals it. It used to be the other way
+            // round — the CSS rule existed but nothing ever produced the
+            // element, so the toggle changed nothing.
+            sb.append("    {{#Frequency}}<div class=\"freq\">{{Frequency}}</div>{{/Frequency}}\n")
             sb.append("    <div class=\"section header-section\">\n")
             // Header order: expression → bold word-divider → reading.
             // The Frequency field is still on the model schema (so cards
@@ -305,10 +313,13 @@ class AnkiCardCreator(
             .pitch {
                 font-size: 16px; color: #ff8a65; margin: 4px 0;
             }
+            .back { position: relative; }
             .freq {
+                position: absolute; top: 0; right: 0;
                 font-size: 11px; color: #aaa;
-                margin: 4px 0 0 0; opacity: 0.85;
+                margin: 0; opacity: 0.85;
                 letter-spacing: 0.02em;
+                display: none;
             }
             .word-divider {
                 border: none; border-top: 1px solid #fff;
@@ -426,9 +437,11 @@ class AnkiCardCreator(
                 font-size: 16px; color: #ff8a65; margin: 4px 0;
                 ${if (!prefs.showPitchAccent) "display: none;" else ""}
             }
+            .back { position: relative; }
             .freq {
+                position: absolute; top: 0; right: 0;
                 font-size: 11px; color: #aaa;
-                margin: 4px 0 0 0; opacity: 0.85;
+                margin: 0; opacity: 0.85;
                 letter-spacing: 0.02em;
                 ${if (!prefs.showFrequency) "display: none;" else ""}
             }
@@ -613,6 +626,7 @@ class AnkiCardCreator(
                 </div>
                 <hr>
                 <div class="back">
+                    <div class="freq">4821</div>
                     <div class="section header-section">
                         <div class="expression">${sample.word}</div>
                         ${if (profile.readingInHeader) {
@@ -811,26 +825,9 @@ class AnkiCardCreator(
             }
         }
 
-        private fun splitIntoMorae(reading: String): List<String> {
-            val smallKana = setOf(
-                'ゃ', 'ゅ', 'ょ', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ',
-                'ャ', 'ュ', 'ョ', 'ァ', 'ィ', 'ゥ', 'ェ', 'ォ',
-                'っ', 'ッ', 'ー'
-            )
-            val result = mutableListOf<String>()
-            var i = 0
-            while (i < reading.length) {
-                val sb = StringBuilder()
-                sb.append(reading[i])
-                i++
-                while (i < reading.length && reading[i] in smallKana) {
-                    sb.append(reading[i])
-                    i++
-                }
-                result.add(sb.toString())
-            }
-            return result
-        }
+        /** See [com.yomitanmobile.util.JapaneseMora] — one rule, two screens. */
+        private fun splitIntoMorae(reading: String): List<String> =
+            com.yomitanmobile.util.JapaneseMora.split(reading)
 
         private fun computePitchPattern(moraCount: Int, dropPos: Int): List<Boolean> {
             if (moraCount == 0) return emptyList()
@@ -1427,9 +1424,14 @@ class AnkiCardCreator(
             )
             // preferredName must NOT have file extension; mimeType must be "audio" or "image"
             val preferredName = fileName.substringBeforeLast(".")
-            val result = ankiApi.addMediaFromUri(uri, preferredName, "audio")
-            context.revokeUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            result ?: ""
+            try {
+                ankiApi.addMediaFromUri(uri, preferredName, "audio") ?: ""
+            } finally {
+                // In a finally block: an exception on the way out used to leave
+                // AnkiDroid holding read access to the app's cache file for the
+                // rest of the process.
+                context.revokeUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
         } catch (_: Exception) {
             ""
         }
@@ -1576,7 +1578,11 @@ class AnkiCardCreator(
             val fieldsList = ArrayList<Array<String>>(chunk.size)
             for (entry in chunk) {
                 currentCoroutineContext().ensureActive()
-                onProgress(added, entries.size, entry.expression.ifBlank { entry.reading })
+                // Count the words prepared so far in this chunk too: with TTS
+                // on, building a chunk takes ~50 s and a bar frozen on the
+                // last committed count reads as a hang. The committed number
+                // is restored at the end of every chunk.
+                onProgress(added + fieldsList.size, entries.size, entry.expression.ifBlank { entry.reading })
 
                 val audioFileName = if (tts != null) {
                     applyRandomVoice(tts, stylePrefs)

@@ -21,6 +21,12 @@ object WordFilterRules {
         "rare", "rarely-used", "dated", "dated term", "ok", "oik"
     )
 
+    /** Marks a word normally written in kana rather than in its kanji form. */
+    private val KANA_TAGS = setOf(
+        "uk", "usually kana", "word usually written using kana alone",
+        "usually written using kana alone"
+    )
+
     /** JMnedict / name-dictionary part-of-speech tags. */
     private val NAME_TAGS = setOf(
         "surname", "place", "unclass", "company", "product", "work",
@@ -86,6 +92,22 @@ object WordFilterRules {
     fun isArchaic(entry: MergedWordEntry): Boolean =
         entry.usageTags.any { it.normalizeTag() in ARCHAIC_TAGS } ||
             entry.posTokens().any { it in ARCHAIC_TAGS }
+
+    /**
+     * The word is normally written in kana, so its kanji spelling is not what
+     * a deck is likely to hold.
+     *
+     * Used by the "already in my collection" check, not as a filter: for these
+     * words (ください, できる, もの, ある…) the dictionary's primary form is the
+     * kanji one while shared decks store the kana, and matching on the written
+     * form alone reported them as missing and made a duplicate card. The kana
+     * reading is a safe identity here in a way it is not for a word normally
+     * written in kanji, where it would collide with every homophone —
+     * 帰る and 変える must not swallow each other.
+     */
+    fun isUsuallyKana(entry: MergedWordEntry): Boolean =
+        entry.usageTags.any { it.normalizeTag() in KANA_TAGS } ||
+            entry.posTokens().any { it in KANA_TAGS }
 
     fun isProperName(entry: MergedWordEntry): Boolean {
         // Name dictionaries tag EVERY sense; a normal word that merely also

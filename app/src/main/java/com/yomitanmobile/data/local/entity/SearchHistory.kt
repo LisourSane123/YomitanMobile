@@ -8,7 +8,9 @@ import java.time.Instant
 
 @Entity(
     tableName = "search_history",
-    indices = [Index(value = ["query"], unique = true)]
+    // Same reason as favorite_words: the query text alone is not an identity
+    // once two languages share an alphabet.
+    indices = [Index(value = ["query", "language"], unique = true)]
 )
 data class SearchHistory(
     @PrimaryKey(autoGenerate = true)

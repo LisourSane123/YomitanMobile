@@ -113,12 +113,17 @@ class JapaneseTokenizerTest {
     @Test
     fun `the copula is kept whole instead of being deconjugated into a lookalike`() {
         // だつ is a real dictionary reading, and the ~った rule offers it for
-        // だった. Without the grammar table the scan proposes that card.
+        // だった. Neither the grammar table nor the deconjugator may propose
+        // that card.
         val lexicon = lexiconOf("だつ", "だる", "元気")
         val tokens = baseForms("元気だった。", lexicon)
 
-        assertEquals(listOf("元気", "だった"), tokens)
+        // 元気だった is one word wearing the copula, and that is how it is
+        // counted — the copula no longer breaks off as its own token now that
+        // the deconjugator strips it.
+        assertEquals(listOf("元気"), tokens)
         assertFalse("だつ" in tokens)
+        assertFalse("だる" in tokens)
     }
 
     @Test

@@ -45,7 +45,7 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         JlptTag::class,
         AnkiCollectionWord::class
     ],
-    version = 19,
+    version = 20,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -67,6 +67,34 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        /**
+         * Makes the language part of the favourites / history identity.
+         *
+         * 18→19 gave both tables a language column but left the unique
+         * indexes on (expression, reading) and (query). Both DAOs insert with
+         * REPLACE, so starring a word that exists in another language's list
+         * DELETED that row: the Spanish "no" quietly took the English one's
+         * place, and the same for every shared spelling. Widening the indexes
+         * cannot fail on existing data — the old constraint was the stricter
+         * one, so no duplicate can already be present.
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP INDEX IF EXISTS `index_favorite_words_expression_reading`")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_favorite_words_expression_reading_language` " +
+                        "ON `favorite_words` (`expression`, `reading`, `language`)"
+                )
+                db.execSQL("DROP INDEX IF EXISTS `index_search_history_query`")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_search_history_query_language` " +
+                        "ON `search_history` (`query`, `language`)"
+                )
+            }
+        }
 
         /**
          * Favorites and search history become per-language.

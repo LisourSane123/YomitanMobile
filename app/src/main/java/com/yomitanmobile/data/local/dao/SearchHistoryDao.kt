@@ -22,9 +22,11 @@ interface SearchHistoryDao {
     @Query("DELETE FROM search_history WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("DELETE FROM search_history")
-    suspend fun deleteAll()
+    // Scoped for the same reason as the favourites table: the history the user
+    // is looking at is one language's, and so is the one they clear.
+    @Query("DELETE FROM search_history WHERE language = :language")
+    suspend fun deleteAll(language: String)
 
-    @Query("SELECT COUNT(*) FROM search_history")
-    suspend fun getCount(): Int
+    @Query("SELECT COUNT(*) FROM search_history WHERE language = :language")
+    suspend fun getCount(language: String): Int
 }

@@ -60,8 +60,14 @@ data class JlptDeckPlan(
     val skipped: Map<JlptSkipReason, Int>,
     /** True when the Anki collection could not be read for the dup check. */
     val ankiScanUnavailable: Boolean = false,
-    /** Notes found in the collection while scanning (0 when not scanned). */
-    val scannedNoteCount: Int = 0
+    /**
+     * Words in the stored collection scan (0 when never scanned). A word
+     * count, not a note count: one note is indexed under both its written
+     * form and its reading.
+     */
+    val scannedWordCount: Int = 0,
+    /** When that scan was taken; 0 when never. */
+    val scannedAt: Long = 0L
 ) {
     val selectedCount: Int get() = selected.size
     val skippedCount: Int get() = skipped.values.sum()

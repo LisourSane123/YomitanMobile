@@ -123,9 +123,12 @@ fun TextScanScreen(
             val message = when (event) {
                 is TextScanEvent.Finished -> tr(
                     "Utworzono ${event.result.added} kart w talii „${event.result.deckName}”" +
-                        if (event.result.failed > 0) " (${event.result.failed} odrzucone)" else "",
+                        // Not necessarily errors: AnkiDroid returns fewer ids
+                        // when it skips notes it considers duplicates, and the
+                        // batch cannot tell the two apart.
+                        if (event.result.failed > 0) " (${event.result.failed} pominięte: duplikaty lub błędy)" else "",
                     "Created ${event.result.added} cards in deck “${event.result.deckName}”" +
-                        if (event.result.failed > 0) " (${event.result.failed} rejected)" else ""
+                        if (event.result.failed > 0) " (${event.result.failed} skipped: duplicates or errors)" else ""
                 )
                 is TextScanEvent.Error -> tr("Błąd: ${event.message}", "Error: ${event.message}")
                 is TextScanEvent.FileTooLarge -> tr(
@@ -148,6 +151,10 @@ fun TextScanScreen(
                 TextScanEvent.AnkiNotInstalled ->
                     tr("AnkiDroid nie jest zainstalowany", "AnkiDroid is not installed")
                 TextScanEvent.Cancelled -> tr("Przerwano tworzenie fiszek", "Card creation cancelled")
+                TextScanEvent.AudioUnavailable -> tr(
+                    "Brak działającego syntezatora mowy — karty powstaną bez audio.",
+                    "No working text-to-speech voice — cards will be created without audio."
+                )
             }
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }

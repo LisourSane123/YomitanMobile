@@ -75,10 +75,16 @@ class StatisticsViewModel @Inject constructor(
     private val dictionaryInfoDao: DictionaryInfoDao,
     private val exportedWordDao: ExportedWordDao,
     private val searchHistoryDao: SearchHistoryDao,
+    languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val logTag = "StatisticsViewModel"
+
+    // Statistics describe the language being studied. Counting the other
+    // language's dictionary rows and searches made the headline numbers wrong
+    // the moment a second dictionary was installed.
+    private val language = languageSettings.current.entryTag
 
     companion object {
         private const val WEEK_IN_MILLIS = 7L * 24L * 60L * 60L * 1000L
@@ -188,10 +194,10 @@ class StatisticsViewModel @Inject constructor(
     private fun loadStatistics() {
         viewModelScope.launch {
             try {
-                val totalEntries = dictionaryDao.getEntryCount()
+                val totalEntries = dictionaryDao.getEntryCountForLanguage(language)
                 val dictionaries = dictionaryInfoDao.getAllDictionaries().first()
                 val exportedCount = exportedWordDao.getExportedCount()
-                val searchCount = searchHistoryDao.getCount()
+                val searchCount = searchHistoryDao.getCount(language)
 
                 // Load daily goal
                 val prefs = context.dataStore.data.first()

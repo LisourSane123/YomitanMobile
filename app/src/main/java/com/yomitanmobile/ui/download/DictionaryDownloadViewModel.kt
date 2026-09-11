@@ -12,6 +12,7 @@ import com.yomitanmobile.data.download.DownloadResult
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.domain.usecase.GetDictionariesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,7 +51,16 @@ class DictionaryDownloadViewModel @Inject constructor(
     private val _selectedCategory = MutableStateFlow<DictionaryCategory?>(null)
     val selectedCategory: StateFlow<DictionaryCategory?> = _selectedCategory.asStateFlow()
 
-    private val _events = MutableSharedFlow<DownloadEvent>()
+    // Buffered, never suspending. A default MutableSharedFlow is a rendezvous
+    // channel: emit() waits for a collector, and the screen's collector only
+    // exists while the screen is composed. Navigating away from a retained
+    // ViewModel mid-operation parked the emitting coroutine forever, so the
+    // finally block that clears the progress / "is exporting" flag never ran
+    // and the screen came back stuck.
+    private val _events = MutableSharedFlow<DownloadEvent>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val events = _events.asSharedFlow()
 
     fun selectCategory(category: DictionaryCategory?) {

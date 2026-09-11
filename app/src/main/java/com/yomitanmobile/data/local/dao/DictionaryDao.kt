@@ -74,23 +74,49 @@ interface DictionaryDao {
     ): List<ExpressionReading>
 
     /**
-     * Two-parameter signature so the equality match (`= :exactQuery`) uses
-     * the user's literal input while the prefix match (`LIKE :likeQuery ||
-     * '%'`) receives a version with SQL LIKE wildcards (`%`, `_`, `\`)
-     * pre-escaped via [com.yomitanmobile.util.InputSanitizer.sanitizeLikeQuery].
-     * Without the escape, a user typing `%` matched everything; `_` matched
-     * any single char. The ESCAPE '\' clause tells SQLite to honour the
-     * backslash-escapes the sanitizer emits.
+     * Prefix + exact search over expression and reading.
+     *
+     * The prefix match is expressed as a RANGE over the indexed column
+     * (`expression >= :prefixStart AND expression < :prefixEnd`) rather than
+     * `LIKE :q || '%'`. That is not a style choice: SQLite applies its LIKE
+     * optimisation only to a literal prefix pattern, and a concatenation —
+     * with an `ESCAPE` clause on top — disqualifies it. The old form planned
+     * as SCAN TABLE and read every row of the dictionary on every keystroke
+     * (measured: 20 ms over 240k rows in memory, worse off disk). The range
+     * form seeks into the expression / reading indexes and costs about 1 ms on
+     * the same data. Wildcards need no escaping any more either: `%` and `_`
+     * are ordinary characters to a range comparison.
+     *
+     * Three ranges per column — the query as typed, lower-cased, and with its
+     * first letter capitalised. Range comparison uses BINARY collation and is
+     * therefore case-sensitive where `LIKE` was not, while a phone keyboard
+     * capitalises the first letter on its own and dictionaries hold both
+     * `dog` and `Dogma`. Those three forms cover what a user actually types;
+     * a shouted `DOG` is the accepted gap. For a Japanese query all three are
+     * the same string and the UNION folds them into one lookup.
      */
     @Query("""
         SELECT * FROM dictionary_entries
-        WHERE language = :language
-          AND (
-               expression = :exactQuery
-            OR reading = :exactQuery
-            OR expression LIKE :likeQuery || '%' ESCAPE '\'
-            OR reading LIKE :likeQuery || '%' ESCAPE '\'
+        WHERE id IN (
+                SELECT id FROM dictionary_entries
+                WHERE expression >= :prefixStart AND expression < :prefixEnd
+            UNION
+                SELECT id FROM dictionary_entries
+                WHERE reading >= :prefixStart AND reading < :prefixEnd
+            UNION
+                SELECT id FROM dictionary_entries
+                WHERE expression >= :lowerPrefixStart AND expression < :lowerPrefixEnd
+            UNION
+                SELECT id FROM dictionary_entries
+                WHERE reading >= :lowerPrefixStart AND reading < :lowerPrefixEnd
+            UNION
+                SELECT id FROM dictionary_entries
+                WHERE expression >= :titlePrefixStart AND expression < :titlePrefixEnd
+            UNION
+                SELECT id FROM dictionary_entries
+                WHERE reading >= :titlePrefixStart AND reading < :titlePrefixEnd
           )
+          AND language = :language
         ORDER BY
             CASE
                 WHEN expression = :exactQuery THEN 0
@@ -104,7 +130,12 @@ interface DictionaryDao {
     """)
     fun searchCombined(
         exactQuery: String,
-        likeQuery: String,
+        prefixStart: String,
+        prefixEnd: String,
+        lowerPrefixStart: String,
+        lowerPrefixEnd: String,
+        titlePrefixStart: String,
+        titlePrefixEnd: String,
         language: String,
         limit: Int = 50
     ): Flow<List<DictionaryEntry>>
@@ -272,10 +303,10 @@ interface DictionaryDao {
      */
     @Query("""
         SELECT * FROM dictionary_entries
-        WHERE jlpt_level = :level
+        WHERE jlpt_level = :level AND language = :language
         ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC
     """)
-    suspend fun getEntriesByJlptLevel(level: Int): List<DictionaryEntry>
+    suspend fun getEntriesByJlptLevel(level: Int, language: String): List<DictionaryEntry>
 
     /**
      * Every written form and every reading in the installed dictionaries.

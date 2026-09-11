@@ -36,7 +36,10 @@ data class CardStylePreferences(
     val furiganaColor: String = "",
     val showPitchAccent: Boolean = true,
     val pitchAccentStyle: PitchAccentStyle = PitchAccentStyle.DOT_LINE,
-    val showFrequency: Boolean = true,
+    // Off by default: the rank sits in the card's top-right corner when this
+    // is on, and turning it on is a deliberate choice rather than something
+    // that silently changes every existing user's cards.
+    val showFrequency: Boolean = false,
     val showSentence: Boolean = true,
     val showFrontContextSentence: Boolean = true,
     val randomFontsEnabled: Boolean = true,

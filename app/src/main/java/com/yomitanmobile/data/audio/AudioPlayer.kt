@@ -6,10 +6,15 @@ import android.speech.tts.TextToSpeech
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 @Singleton
 class AudioPlayer(
@@ -20,6 +25,13 @@ class AudioPlayer(
     private var tts: TextToSpeech? = null
     private var mediaPlayer: MediaPlayer? = null
 
+    /** Language the live engine was configured for, so a re-init is only
+     *  paid for when the studied language actually changed. */
+    private var ttsLanguageTag: String? = null
+
+    /** Serialises [ensureTts] so two bulk jobs can't tear down each other's engine. */
+    private val ttsInitMutex = Mutex()
+
     private val _ttsReady = MutableStateFlow(false)
     val ttsReady: StateFlow<Boolean> = _ttsReady.asStateFlow()
 
@@ -27,16 +39,26 @@ class AudioPlayer(
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     fun initTts(onReady: (TextToSpeech?) -> Unit = {}) {
+        val wantedLanguage = languageSettings.current.ttsLanguageTag
+        // A ready engine for the right language is reused. Re-creating it on
+        // every detail screen used to shut down the instance a running bulk
+        // export was synthesising with.
+        val live = tts
+        if (live != null && _ttsReady.value && ttsLanguageTag == wantedLanguage) {
+            onReady(live)
+            return
+        }
         tts?.shutdown() // Release previous TTS instance to prevent resource leak
+        _ttsReady.value = false
+        ttsLanguageTag = null
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 // The voice has to match what is being studied: a Japanese
                 // engine reading "dog" pronounces it as romaji.
-                val result = tts?.setLanguage(
-                    Locale.forLanguageTag(languageSettings.current.ttsLanguageTag)
-                )
+                val result = tts?.setLanguage(Locale.forLanguageTag(wantedLanguage))
                 _ttsReady.value = result != TextToSpeech.LANG_MISSING_DATA
                         && result != TextToSpeech.LANG_NOT_SUPPORTED
+                ttsLanguageTag = if (_ttsReady.value) wantedLanguage else null
                 if (_ttsReady.value) {
                     onTtsReady()
                     onReady(tts)
@@ -51,6 +73,34 @@ class AudioPlayer(
     }
 
     fun getTts(): TextToSpeech? = if (_ttsReady.value) tts else null
+
+    /**
+     * The engine, initialising it first if nobody has yet — the form every
+     * background caller needs.
+     *
+     * [getTts] returns null until some screen has called [initTts] and the
+     * engine has finished starting up, which is asynchronous. The bulk card
+     * writers (JLPT deck, text scan) run without ever having touched the
+     * detail screen, so asking for [getTts] there returned null and every card
+     * came out silent. Returns null when the device has no usable Japanese
+     * voice or start-up times out, so callers can say so instead of writing
+     * silent cards.
+     */
+    suspend fun ensureTts(timeoutMs: Long = TTS_INIT_TIMEOUT_MS): TextToSpeech? =
+        ttsInitMutex.withLock {
+            getTts()?.let { engine ->
+                if (ttsLanguageTag == languageSettings.current.ttsLanguageTag) {
+                    return@withLock engine
+                }
+            }
+            withTimeoutOrNull(timeoutMs) {
+                suspendCancellableCoroutine { continuation ->
+                    initTts { engine ->
+                        if (!continuation.isCompleted) continuation.resume(engine)
+                    }
+                }
+            }
+        }
 
     fun speakWithTts(text: String) {
         if (!_ttsReady.value) {
@@ -152,6 +202,12 @@ class AudioPlayer(
         stopPlayback()
         tts?.shutdown()
         tts = null
+        ttsLanguageTag = null
         _ttsReady.value = false
+    }
+
+    private companion object {
+        /** Engine start-up is a service bind; a stuck one must not hang a deck. */
+        const val TTS_INIT_TIMEOUT_MS = 10_000L
     }
 }

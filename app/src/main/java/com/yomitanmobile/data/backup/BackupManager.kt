@@ -62,6 +62,12 @@ class BackupManager @Inject constructor(
         // Real settings exports are a few KB; anything past this is a
         // mis-picked file rejected before it can balloon in memory.
         const val MAX_SETTINGS_JSON_BYTES = 1 * 1024 * 1024
+        // The database schema version the backup was taken at. Restoring a
+        // newer schema into an older build is a Room downgrade: a crash on
+        // release, and a silent wipe in debug (destructive fallback). Backups
+        // written before this file existed simply have no version and are
+        // restored as before.
+        const val SCHEMA_VERSION_NAME = "schema_version.txt"
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -106,6 +112,13 @@ class BackupManager @Inject constructor(
                 copySidecarsIfPresent(dbFile, backupFolder)
             }
 
+            // Stamp the schema version so restore can refuse a backup this
+            // build is too old to understand.
+            runCatching {
+                File(backupFolder, SCHEMA_VERSION_NAME)
+                    .writeText(database.openHelper.readableDatabase.version.toString())
+            }.onFailure { Log.w(logTag, "Could not stamp the schema version", it) }
+
             // Optionally export the whitelisted settings (AI key excluded).
             if (includeSettings) {
                 try {
@@ -136,6 +149,23 @@ class BackupManager @Inject constructor(
                 return@withContext Result.failure(Exception("Backup folder not found"))
             }
 
+            // Refuse a backup from a newer schema BEFORE touching anything:
+            // Room cannot migrate downwards, so the restored file would crash
+            // the app on its next open with no way back.
+            val backupSchema = File(backupFolder, SCHEMA_VERSION_NAME)
+                .takeIf { it.exists() }
+                ?.let { runCatching { it.readText().trim().toInt() }.getOrNull() }
+            val currentSchema = runCatching { database.openHelper.readableDatabase.version }
+                .getOrNull()
+            if (backupSchema != null && currentSchema != null && backupSchema > currentSchema) {
+                return@withContext Result.failure(
+                    IllegalStateException(
+                        "Backup was made by a newer version of the app " +
+                            "(database schema $backupSchema, this build understands $currentSchema)"
+                    )
+                )
+            }
+
             // Close database before restoring
             database.close()
 
@@ -148,11 +178,35 @@ class BackupManager @Inject constructor(
                 // the .db. SQLite pairs a .db with whatever -wal/-shm sit next
                 // to it — leaving the old ones behind would replay the old
                 // database's WAL frames into the restored file and corrupt it.
-                deleteSidecars(dbFile)
-                FileInputStream(dbBackupFile).use { input ->
-                    FileOutputStream(dbFile).use { output ->
-                        input.copyTo(output)
+                // Stage first, swap second. Streaming the backup straight over
+                // the live file meant a failure half-way (full disk, I/O
+                // error, process death) destroyed the database the user still
+                // had and left a truncated file in its place, with nothing to
+                // roll back to. The copy goes to a sibling temp file, and only
+                // a complete copy replaces the real one — a rename inside the
+                // same directory, which cannot be observed half-done.
+                val staged = File(dbFile.parentFile, dbFile.name + ".restore-tmp")
+                staged.delete()
+                try {
+                    FileInputStream(dbBackupFile).use { input ->
+                        FileOutputStream(staged).use { output ->
+                            input.copyTo(output)
+                            output.fd.sync()
+                        }
                     }
+                } catch (e: Exception) {
+                    staged.delete()
+                    Log.e(logTag, "Staging the restore copy failed; database left untouched", e)
+                    return@withContext Result.failure(e)
+                }
+                deleteSidecars(dbFile)
+                if (!staged.renameTo(dbFile)) {
+                    // Same filesystem, so this should not happen; fall back to
+                    // a plain copy rather than leaving the user with no file.
+                    FileInputStream(staged).use { input ->
+                        FileOutputStream(dbFile).use { output -> input.copyTo(output) }
+                    }
+                    staged.delete()
                 }
                 // If the backup carried its own sidecars (checkpoint failed at
                 // backup time), restore them so those writes aren't lost.

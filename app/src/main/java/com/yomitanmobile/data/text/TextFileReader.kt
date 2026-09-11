@@ -60,14 +60,26 @@ class TextFileReader @Inject constructor(
         )
     }
 
+    /**
+     * The name shown for the picked document. It comes from another app's
+     * provider and ends up in deck names and Anki tags, so it goes through
+     * [com.yomitanmobile.util.InputSanitizer.sanitizeFileName] first — path
+     * separators and NUL have no business in either.
+     */
     private fun displayName(uri: Uri): String {
         context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (index >= 0 && cursor.moveToFirst()) {
-                cursor.getString(index)?.let { return it }
+                cursor.getString(index)
+                    ?.let { com.yomitanmobile.util.InputSanitizer.sanitizeFileName(it) }
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { return it }
             }
         }
-        return uri.lastPathSegment?.substringAfterLast('/') ?: "document"
+        return uri.lastPathSegment?.substringAfterLast('/')
+            ?.let { com.yomitanmobile.util.InputSanitizer.sanitizeFileName(it) }
+            ?.takeIf { it.isNotBlank() }
+            ?: "document"
     }
 
     /** Reads up to [limit] bytes, failing loudly rather than truncating silently. */

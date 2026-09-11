@@ -9,7 +9,11 @@ import java.time.Instant
 @Entity(
     tableName = "favorite_words",
     indices = [
-        Index(value = ["expression", "reading"], unique = true)
+        // Language is part of the identity, not just a filter column: "no",
+        // "hotel" and "final" are words in more than one of the languages this
+        // app teaches, and with a (expression, reading)-only unique index the
+        // REPLACE insert below silently deleted the other language's row.
+        Index(value = ["expression", "reading", "language"], unique = true)
     ]
 )
 data class FavoriteWord(

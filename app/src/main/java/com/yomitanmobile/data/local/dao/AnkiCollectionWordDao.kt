@@ -41,6 +41,10 @@ interface AnkiCollectionWordDao {
     @Query("SELECT COUNT(*) FROM anki_collection_words")
     suspend fun count(): Int
 
+    /** When the stored scan was taken; 0 when nothing is stored. */
+    @Query("SELECT COALESCE(MAX(scanned_at), 0) FROM anki_collection_words")
+    suspend fun lastScannedAt(): Long
+
     @Query("SELECT COUNT(*) FROM anki_collection_words")
     fun observeCount(): Flow<Int>
 
@@ -50,11 +54,23 @@ interface AnkiCollectionWordDao {
     @Query("SELECT * FROM anki_collection_words ORDER BY source, word LIMIT :limit OFFSET :offset")
     suspend fun getPage(limit: Int, offset: Int): List<AnkiCollectionWord>
 
+    /**
+     * Diagnostic lookup for the scan screen.
+     *
+     * Matches anywhere in the word, not just at the front: the question being
+     * asked is "did the scan pick up 来る?", and a compound like 持って来る is
+     * exactly the case that a prefix match hides. Prefix hits still sort first.
+     *
+     * `ESCAPE` takes a SINGLE character — the two-character `'\\'` that used to
+     * stand here made SQLite reject the statement, and the caller turned the
+     * exception into an empty list, so the search box answered every query with
+     * "nothing found".
+     */
     @Query(
         """
         SELECT * FROM anki_collection_words
-        WHERE word LIKE :query || '%'
-        ORDER BY word
+        WHERE word LIKE '%' || :query || '%' ESCAPE '\'
+        ORDER BY (word LIKE :query || '%' ESCAPE '\') DESC, word
         LIMIT :limit
         """
     )

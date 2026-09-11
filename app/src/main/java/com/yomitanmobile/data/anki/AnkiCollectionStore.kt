@@ -37,7 +37,9 @@ class AnkiCollectionStore @Inject constructor(
         val wordCount: Int,
         val scannedAt: Long,
         /** False when the provider could not be read at all. */
-        val available: Boolean
+        val available: Boolean,
+        /** True when the sweep hit its note ceiling and covered only part. */
+        val truncated: Boolean = false
     ) {
         companion object {
             val UNAVAILABLE = ScanSummary(0, 0, 0L, available = false)
@@ -75,9 +77,56 @@ class AnkiCollectionStore @Inject constructor(
                 noteCount = scan.noteCount,
                 wordCount = rows.size,
                 scannedAt = now,
-                available = true
+                available = true,
+                truncated = scan.truncated
             )
         }
+
+    /**
+     * Records words this app just wrote into AnkiDroid, so the stored scan
+     * stays true without a full rescan.
+     *
+     * The bulk generators deliberately keep their cards out of
+     * `exported_words` (they are not mined, and counting them would swamp the
+     * mining statistics), which left the collection scan as the ONLY thing
+     * that knows those words exist — and it does not, until the user happens
+     * to rescan. Generating a level twice therefore produced a deck full of
+     * cards the user had just created. Appending here closes that window.
+     */
+    suspend fun addWords(words: Collection<String>, source: String) =
+        withContext(Dispatchers.IO) {
+            if (words.isEmpty()) return@withContext
+            // Nothing stored yet means "never scanned", and that is a state
+            // the rest of the code reads as "no duplicate check". Writing a
+            // handful of generated words would turn it into "scanned, and your
+            // collection contains exactly these" — a far worse lie.
+            if (!hasStoredScan()) return@withContext
+            val now = System.currentTimeMillis()
+            val rows = words
+                .map { AnkiNoteFieldIndexer.normalizeKey(it) }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .map { AnkiCollectionWord(word = it, source = source, scannedAt = now) }
+            runCatching { dao.insertAll(rows) }
+                .onFailure { Log.w(TAG, "Recording generated words failed", it) }
+                .onSuccess {
+                    cacheLock.withLock {
+                        cachedWords = cachedWords?.plus(rows.map { row -> row.word })
+                    }
+                }
+        }
+
+    /**
+     * What the stored scan knows, for screens that want to say whether the
+     * duplicate check had anything to work with. Word count, not note count:
+     * one note yields both its written form and its reading.
+     */
+    suspend fun storedScanInfo(): StoredScanInfo = withContext(Dispatchers.IO) {
+        runCatching { StoredScanInfo(dao.count(), dao.lastScannedAt()) }
+            .getOrElse { StoredScanInfo(0, 0L) }
+    }
+
+    data class StoredScanInfo(val wordCount: Int, val scannedAt: Long)
 
     /** True when a scan has been stored at least once. */
     suspend fun hasStoredScan(): Boolean = words().isNotEmpty()
@@ -88,14 +137,26 @@ class AnkiCollectionStore @Inject constructor(
      * and the reading only counts for kana-only words, where there is no kanji
      * form that could belong to a different word.
      */
-    suspend fun contains(expression: String, reading: String): Boolean {
+    suspend fun contains(
+        expression: String,
+        reading: String,
+        readingCountsAlone: Boolean = false
+    ): Boolean = containsAny(listOf(expression), reading, readingCountsAlone)
+
+    /**
+     * Same check across every written form of the word — see
+     * [AnkiCollectionIndex.Index.containsAny]. The primary spelling goes
+     * first.
+     */
+    suspend fun containsAny(
+        expressions: List<String>,
+        reading: String,
+        readingCountsAlone: Boolean = false
+    ): Boolean {
         val words = words()
         if (words.isEmpty()) return false
-        val expr = AnkiNoteFieldIndexer.normalizeKey(expression)
-        if (expr.isNotEmpty() && expr in words) return true
-        val read = AnkiNoteFieldIndexer.normalizeKey(reading)
-        if (read.isEmpty()) return false
-        return (expr.isEmpty() || AnkiNoteFieldIndexer.isKanaOnly(expr)) && read in words
+        return AnkiCollectionIndex.Index(words, 0, available = true)
+            .containsAny(expressions, reading, readingCountsAlone)
     }
 
     /** Non-suspending variant for callers that already loaded the set. */

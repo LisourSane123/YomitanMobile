@@ -1,6 +1,7 @@
 package com.yomitanmobile.data.repository
 
 import android.util.Log
+import androidx.room.withTransaction
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.FrequencyDao
@@ -116,7 +117,7 @@ class DictionaryRepositoryImpl @Inject constructor(
         if (level !in 1..5) return emptyList()
         return withContext(Dispatchers.IO) {
             try {
-                dictionaryDao.getEntriesByJlptLevel(level).map { it.toDomain() }
+                dictionaryDao.getEntriesByJlptLevel(level, language).map { it.toDomain() }
             } catch (e: Exception) {
                 Log.w(TAG, "getEntriesByJlptLevel($level) failed", e)
                 emptyList()
@@ -182,7 +183,7 @@ class DictionaryRepositoryImpl @Inject constructor(
                     }
                     .map { it.toDomain() }
             } catch (e: Exception) {
-                Log.w(TAG, "getEntriesForExpressionsFromDictionary('$dictionaryName') failed", e)
+                Log.w(TAG, "getEntriesForExpressionsFromDictionary failed", e)
                 emptyList()
             }
         }
@@ -194,7 +195,10 @@ class DictionaryRepositoryImpl @Inject constructor(
         return dictionaryDao.searchExact(trimmed, language)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { e ->
-                Log.w(TAG, "searchExact failed for query='$trimmed'", e)
+                // The query text itself stays out of the log: Log.w survives R8
+                // (only v/d/i are stripped), so it would ship a record of what
+                // the user looks up to logcat on release builds.
+                Log.w(TAG, "searchExact failed (${trimmed.length} chars)", e)
                 emit(emptyList())
             }
     }
@@ -202,18 +206,38 @@ class DictionaryRepositoryImpl @Inject constructor(
     override fun searchCombined(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
         val trimmed = query.trim()
-        // Exact equality uses the raw trimmed input; the LIKE-side gets a
-        // copy with SQL wildcards (% _ \) escaped, paired with `ESCAPE '\'`
-        // in the DAO query. Without this, a user typing `%` matched every
-        // entry and `_` matched any single character.
-        val likeQuery = InputSanitizer.sanitizeLikeQuery(trimmed)
-        return dictionaryDao.searchCombined(trimmed, likeQuery, language)
+        // The DAO matches the prefix as index ranges, so it needs bounds
+        // rather than an escaped LIKE pattern. Three case forms, because a
+        // range comparison is case-sensitive and LIKE was not: as typed, all
+        // lower case, and first-letter capitalised (what the keyboard does on
+        // its own). All three collapse to one range for a Japanese query.
+        val lowered = trimmed.lowercase()
+        val titled = lowered.replaceFirstChar { it.uppercaseChar() }
+        return dictionaryDao.searchCombined(
+            exactQuery = trimmed,
+            prefixStart = trimmed,
+            prefixEnd = prefixUpperBound(trimmed),
+            lowerPrefixStart = lowered,
+            lowerPrefixEnd = prefixUpperBound(lowered),
+            titlePrefixStart = titled,
+            titlePrefixEnd = prefixUpperBound(titled),
+            language = language
+        )
             .map { entries -> entries.map { it.toDomain() } }
             .catch { e ->
-                Log.w(TAG, "searchCombined failed for query='$trimmed'", e)
+                Log.w(TAG, "searchCombined failed (${trimmed.length} chars)", e)
                 emit(emptyList())
             }
     }
+
+    /**
+     * Exclusive upper bound of the prefix range for [prefix]: the prefix
+     * followed by the highest code point there is, which sorts after every
+     * string that starts with it under BINARY collation. U+10FFFF rather than
+     * U+FFFF, so an entry whose next character sits outside the BMP (rare
+     * kanji) still falls inside the range.
+     */
+    private fun prefixUpperBound(prefix: String): String = prefix + "\uDBFF\uDFFF"
 
     override fun searchContains(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
@@ -223,7 +247,7 @@ class DictionaryRepositoryImpl @Inject constructor(
         return dictionaryDao.searchContains(likeQuery, language)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { e ->
-                Log.w(TAG, "searchContains failed for query='$trimmed'", e)
+                Log.w(TAG, "searchContains failed (${trimmed.length} chars)", e)
                 emit(emptyList())
             }
     }
@@ -235,7 +259,7 @@ class DictionaryRepositoryImpl @Inject constructor(
         return dictionaryDao.searchByDefinition(ftsQuery, language)
             .map { entries -> entries.map { it.toDomain() } }
             .catch { e ->
-                Log.w(TAG, "searchByDefinition failed for fts='$ftsQuery'", e)
+                Log.w(TAG, "searchByDefinition failed (${ftsQuery.length} chars)", e)
                 emit(emptyList())
             }
     }
@@ -269,6 +293,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             var totalFreqUpdates = 0
             var totalPitchUpdates = 0
             var totalJlptUpdates = 0
+            var ftsWarning: String? = null
 
             // Clear any rows left under the temp name by a previous interrupted
             // import before we start writing this one. Term/kanji rows matter
@@ -356,11 +381,16 @@ class DictionaryRepositoryImpl @Inject constructor(
             // meta banks). Drop any prior import of the same list first so a
             // re-import replaces rather than duplicates.
             if (dictionaryNameFromBatch != tempDictionaryName) {
-                frequencyDao.deleteByDictionary(dictionaryNameFromBatch)
-                frequencyDao.updateDictionaryName(tempDictionaryName, dictionaryNameFromBatch)
-                // Same replace-don't-duplicate rename for the JLPT tag rows.
-                jlptTagDao.deleteByDictionary(dictionaryNameFromBatch)
-                jlptTagDao.updateDictionaryName(tempDictionaryName, dictionaryNameFromBatch)
+                // One transaction: between the delete and the rename the user
+                // owns neither copy of the list, and a crash in that window
+                // used to leave them with nothing.
+                database.withTransaction {
+                    frequencyDao.deleteByDictionary(dictionaryNameFromBatch)
+                    frequencyDao.updateDictionaryName(tempDictionaryName, dictionaryNameFromBatch)
+                    // Same replace-don't-duplicate rename for the JLPT tag rows.
+                    jlptTagDao.deleteByDictionary(dictionaryNameFromBatch)
+                    jlptTagDao.updateDictionaryName(tempDictionaryName, dictionaryNameFromBatch)
+                }
             }
 
             // For meta-only dictionaries (frequency/pitch), we don't insert term entries
@@ -375,10 +405,16 @@ class DictionaryRepositoryImpl @Inject constructor(
                     // only the OLD copy — without this a re-import (e.g. to
                     // backfill furigana with the updated parser) would leave two
                     // full copies of every entry in the table.
-                    dictionaryDao.deleteByDictionary(dictionaryNameFromBatch)
-                    kanjiDao.deleteByDictionary(dictionaryNameFromBatch)
-                    dictionaryDao.updateDictionaryName("temp", dictionaryNameFromBatch)
-                    kanjiDao.updateDictionaryName("temp", dictionaryNameFromBatch)
+                    // Delete-then-rename must be atomic. Interrupted between
+                    // the two statements it destroyed the installed copy and
+                    // left the new rows under the temp name, which the next
+                    // import then cleared: the dictionary was simply gone.
+                    database.withTransaction {
+                        dictionaryDao.deleteByDictionary(dictionaryNameFromBatch)
+                        kanjiDao.deleteByDictionary(dictionaryNameFromBatch)
+                        dictionaryDao.updateDictionaryName("temp", dictionaryNameFromBatch)
+                        kanjiDao.updateDictionaryName("temp", dictionaryNameFromBatch)
+                    }
                 }
 
                 // index.json wins over the language that was active when the
@@ -393,9 +429,16 @@ class DictionaryRepositoryImpl @Inject constructor(
                     )
                 }
 
+                // A failed rebuild is not cosmetic: definition (meaning)
+                // search reads the FTS table, so it would keep answering with
+                // the PREVIOUS dictionary's contents — or nothing — while the
+                // import reported success. Report it instead of swallowing it.
                 try {
                     dictionaryDao.rebuildFtsIndex()
-                } catch (_: Exception) { /* FTS rebuild error */ }
+                } catch (e: Exception) {
+                    Log.w(TAG, "FTS rebuild after import failed", e)
+                    ftsWarning = "FTS"
+                }
             }
 
             // Roll the stored meta tables back down onto the term rows. Needed
@@ -434,7 +477,8 @@ class DictionaryRepositoryImpl @Inject constructor(
             ImportResult(
                 success = true,
                 dictionaryName = dictionaryNameFromBatch,
-                entriesImported = entryCount
+                entriesImported = entryCount,
+                warning = ftsWarning
             )
         } catch (e: Exception) {
             // Remove the partial rows this failed import wrote under the temp
@@ -491,7 +535,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             frequencyDao.getForWord(expression, reading.trim())
                 .map { WordFrequencyInfo(it.dictionary, it.rank, it.displayValue) }
         } catch (e: Exception) {
-            Log.w(TAG, "getFrequencies('$expression') failed", e)
+            Log.w(TAG, "getFrequencies failed", e)
             emptyList()
         }
     }
@@ -505,7 +549,11 @@ class DictionaryRepositoryImpl @Inject constructor(
             dictionaryInfoDao.deleteByName(dictionaryName)
             try {
                 dictionaryDao.rebuildFtsIndex()
-            } catch (_: Exception) { /* FTS rebuild error */ }
+            } catch (e: Exception) {
+                // Same as on import: without the rebuild the deleted
+                // dictionary's terms keep coming back from meaning search.
+                Log.w(TAG, "FTS rebuild after delete failed", e)
+            }
         }
     }
 

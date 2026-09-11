@@ -93,4 +93,27 @@ class AnkiCollectionStoreDbTest {
         assertFalse(store.contains("旧い単語", ""))
         assertTrue(store.contains("新しい単語", ""))
     }
+
+    @Test
+    fun compoundVerbMatchesTheSpellingTheDeckChose() = runBlocking {
+        // The deck writes the auxiliary in kana, JMdict's headword does not.
+        store("持ってくる")
+        assertTrue(store.contains("持って来る", "もってくる"))
+        // And the other way round, through the entry's alternative spellings.
+        assertTrue(store.containsAny(listOf("持って来る", "持ってくる"), "もってくる"))
+    }
+
+    @Test
+    fun searchMatchesAnywhereAndHonoursTheEscapeCharacter() = runBlocking {
+        store("持って来る", "食べる")
+        // A two-character ESCAPE made SQLite reject this statement outright,
+        // and the store turned the exception into an empty list — the scan
+        // screen's search box answered every query with "nothing found".
+        assertTrue(store.search("来る").any { it.word == "持って来る" })
+        assertTrue(store.search("食べる").any { it.word == "食べる" })
+        // A literal % must stay literal instead of listing the collection.
+        assertTrue(
+            store.search(com.yomitanmobile.util.InputSanitizer.sanitizeLikeQuery("%")).isEmpty()
+        )
+    }
 }

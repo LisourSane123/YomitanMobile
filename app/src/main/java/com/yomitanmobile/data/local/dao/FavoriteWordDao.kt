@@ -46,8 +46,11 @@ interface FavoriteWordDao {
     @Query("DELETE FROM favorite_words WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("DELETE FROM favorite_words")
-    suspend fun deleteAll()
+    // Language-scoped, like every other statement here: the screen that calls
+    // it shows one language's list, so "clear all" must not reach into the
+    // other language's favourites.
+    @Query("DELETE FROM favorite_words WHERE language = :language")
+    suspend fun deleteAll(language: String)
 
     @Query("SELECT COUNT(*) FROM favorite_words WHERE language = :language")
     suspend fun getCount(language: String): Int

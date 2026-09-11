@@ -43,15 +43,65 @@ class AnkiCollectionIndex @Inject constructor(
         val noteCount: Int,
         val available: Boolean
     ) {
-        fun contains(expression: String, reading: String): Boolean {
+        /**
+         * @param readingCountsAlone the word is normally written in kana (see
+         * [com.yomitanmobile.domain.usecase.WordFilterRules.isUsuallyKana]), so
+         * its reading identifies it even though the candidate carries a kanji
+         * spelling. Without this, 下さい looked missing to a collection holding
+         * ください and the generator made a card the user already had.
+         */
+        fun contains(
+            expression: String,
+            reading: String,
+            readingCountsAlone: Boolean = false
+        ): Boolean = containsAny(listOf(expression), reading, readingCountsAlone)
+
+        /**
+         * Same question for a word that has several written forms.
+         *
+         * One dictionary entry carries every spelling of the word (JMdict
+         * lists 持って来る, 持ってくる and もって来る together) while the deck
+         * holds whichever one its author happened to type. Comparing only the
+         * primary headword therefore reported "not in your collection" for
+         * compound verbs the user had been studying for months — the mixed
+         * kanji/kana spellings are exactly where decks disagree.
+         *
+         * @param expressions the word's written forms, the primary one FIRST:
+         * it is the one that decides whether a bare reading match is allowed.
+         */
+        fun containsAny(
+            expressions: List<String>,
+            reading: String,
+            readingCountsAlone: Boolean = false
+        ): Boolean {
             if (!available) return false
-            val expr = AnkiNoteFieldIndexer.normalizeKey(expression)
-            if (expr.isNotEmpty() && expr in keys) return true
             val read = AnkiNoteFieldIndexer.normalizeKey(reading)
-            if (read.isEmpty()) return false
-            // Only fall back to the reading when there is no kanji form that
-            // could belong to a different word.
-            return (expr.isEmpty() || AnkiNoteFieldIndexer.isKanaOnly(expr)) && read in keys
+            val spellings = expressions
+                .map { AnkiNoteFieldIndexer.normalizeKey(it) }
+                .filter { it.isNotEmpty() }
+
+            for (expr in spellings) {
+                if (expr in keys) return true
+                if (read.isEmpty()) continue
+                // Mixed spellings of the SAME word, derived from the reading:
+                // 持って来る + もってくる also means 持ってくる and もって来る.
+                // They still carry a kanji block, so they identify the word as
+                // precisely as the headword does — unlike the bare reading,
+                // which stays subject to the homophone rule below.
+                for (variant in KanaSpellingVariants.of(expr, read)) {
+                    if (variant != read && variant in keys) return true
+                }
+            }
+
+            if (read.isEmpty() || read !in keys) return false
+            // Otherwise the reading only counts when no kanji form could point
+            // at a different word: a kana-only headword, or a word the
+            // dictionary says is normally written in kana anyway.
+            val primary = spellings.firstOrNull().orEmpty()
+            val kanjiFormIsDecisive = primary.isNotEmpty() &&
+                !AnkiNoteFieldIndexer.isKanaOnly(primary) &&
+                !readingCountsAlone
+            return !kanjiFormIsDecisive
         }
 
         companion object {
@@ -114,7 +164,14 @@ class AnkiCollectionIndex @Inject constructor(
     class Scan(
         val index: Index,
         val wordSources: Map<String, String>,
-        val noteCount: Int
+        val noteCount: Int,
+        /**
+         * The safety valve cut the sweep short, so the index describes only
+         * part of the collection. Silence here turns into false "you don't
+         * have this word yet" answers on a very large collection, which is the
+         * one thing the duplicate check must never say.
+         */
+        val truncated: Boolean = false
     ) {
         val wordCount: Int get() = wordSources.size
 
@@ -167,7 +224,16 @@ class AnkiCollectionIndex @Inject constructor(
                     for (key in perNote) sources.putIfAbsent(key, noteType)
                 }
             }
-            Scan(Index(sources.keys.toSet(), notes, available = true), sources, notes)
+            val truncated = notes >= maxNotes
+            if (truncated) {
+                Log.w(TAG, "Collection scan stopped at the $maxNotes-note ceiling")
+            }
+            Scan(
+                Index(sources.keys.toSet(), notes, available = true),
+                sources,
+                notes,
+                truncated
+            )
         } catch (e: Exception) {
             // Older AnkiDroid builds, a revoked permission or a locked
             // collection all land here. The generator degrades to "no

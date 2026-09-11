@@ -124,7 +124,8 @@ class MigrationFrom16DbTest {
             .addMigrations(
                 AppDatabase.MIGRATION_16_17,
                 AppDatabase.MIGRATION_17_18,
-                AppDatabase.MIGRATION_18_19
+                AppDatabase.MIGRATION_18_19,
+                AppDatabase.MIGRATION_19_20
             )
             .allowMainThreadQueries()
             .build()
@@ -158,6 +159,27 @@ class MigrationFrom16DbTest {
             )
             // …and are invisible from another language.
             assertTrue(db.favoriteWordDao().getAllFavorites("en").first().isEmpty())
+
+            // 19→20 widened both unique indexes to include the language. The
+            // upgraded user's Japanese favourite must survive starring the
+            // same spelling in another language rather than being replaced.
+            db.favoriteWordDao().insert(
+                com.yomitanmobile.data.local.entity.FavoriteWord(
+                    expression = "学校",
+                    reading = "がっこう",
+                    language = "en"
+                )
+            )
+            db.searchHistoryDao().insert(
+                com.yomitanmobile.data.local.entity.SearchHistory(
+                    query = "学校",
+                    language = "en"
+                )
+            )
+            assertEquals(1, db.favoriteWordDao().getCount("ja"))
+            assertEquals(1, db.favoriteWordDao().getCount("en"))
+            assertEquals(1, db.searchHistoryDao().getCount("ja"))
+            assertEquals(1, db.searchHistoryDao().getCount("en"))
         } finally {
             db.close()
         }

@@ -260,7 +260,9 @@ class SearchViewModel @Inject constructor(
                 }
                 searchFlow
                     .catch { e ->
-                        Log.w(TAG, "search failed for query='$q' mode=$mode", e)
+                        // No query text in a release-surviving log line; the mode and
+                        // the length are enough to reproduce a failure.
+                        Log.w(TAG, "search failed (mode=$mode, ${q.length} chars)", e)
                         _isSearching.value = false
                         emit(emptyList())
                     }
@@ -481,7 +483,7 @@ class SearchViewModel @Inject constructor(
 
     fun clearHistory() {
         viewModelScope.launch {
-            searchHistoryDao.deleteAll()
+            searchHistoryDao.deleteAll(appLanguage.entryTag)
         }
     }
 }

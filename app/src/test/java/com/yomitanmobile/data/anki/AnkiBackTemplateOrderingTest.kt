@@ -1,6 +1,7 @@
 package com.yomitanmobile.data.anki
 
 import com.yomitanmobile.domain.model.CardSection
+import com.yomitanmobile.domain.model.CardStylePreferences
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,14 +75,34 @@ class AnkiBackTemplateOrderingTest {
     }
 
     @Test
-    fun buildBackTemplate_doesNotRenderFrequencyInHeader() {
-        // Frequency was removed from the header on user request — it
-        // should no longer appear as a mustache block in the rendered
-        // template, even though the field is still part of FIELD_NAMES.
+    fun buildBackTemplate_rendersFrequencyAsCornerElement() {
+        // Frequency is not part of the header block — it is a corner element
+        // the "show frequency" preference reveals through CSS. Before this it
+        // was emitted nowhere at all, which made that preference a switch
+        // wired to nothing.
         val html = AnkiCardCreator.buildBackTemplate(CardSection.defaultOrder())
         assertTrue(
-            "Frequency mustache should be gone from header",
-            !html.contains("{{#Frequency}}") && !html.contains("{{/Frequency}}")
+            "Frequency block should be emitted",
+            html.contains("{{#Frequency}}") && html.contains("{{/Frequency}}")
         )
+        assertTrue(
+            "Frequency should sit outside (above) the header block",
+            html.indexOf("{{#Frequency}}") < html.indexOf("header-section")
+        )
+    }
+
+    @Test
+    fun css_hidesFrequencyUnlessTheUserAsksForIt() {
+        val hidden = AnkiCardCreator.buildCssFromPreferences(
+            CardStylePreferences(showFrequency = false)
+        )
+        val shown = AnkiCardCreator.buildCssFromPreferences(
+            CardStylePreferences(showFrequency = true)
+        )
+        val hiddenRule = hidden.substringAfter(".freq {").substringBefore("}")
+        val shownRule = shown.substringAfter(".freq {").substringBefore("}")
+        assertTrue("frequency should be hidden by default", hiddenRule.contains("display: none"))
+        assertTrue("frequency should be visible when enabled", !shownRule.contains("display: none"))
+        assertTrue("frequency belongs in the corner", shownRule.contains("position: absolute"))
     }
 }

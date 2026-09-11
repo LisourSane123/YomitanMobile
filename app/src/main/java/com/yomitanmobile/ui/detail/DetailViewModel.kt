@@ -37,6 +37,7 @@ import com.yomitanmobile.util.SentenceContextHighlighter
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -112,6 +113,9 @@ class DetailViewModel @Inject constructor(
 
     private val logTag = "DetailViewModel"
 
+    /** The in-flight export, so a second tap can be ignored rather than run. */
+    private var exportJob: kotlinx.coroutines.Job? = null
+
     private val entryId: Long = savedStateHandle.get<Long>("entryId") ?: 0L
 
     private val _entry = MutableStateFlow<MergedWordEntry?>(null)
@@ -123,7 +127,16 @@ class DetailViewModel @Inject constructor(
     private val _isExporting = MutableStateFlow(false)
     val isExporting: StateFlow<Boolean> = _isExporting.asStateFlow()
 
-    private val _events = MutableSharedFlow<DetailEvent>()
+    // Buffered, never suspending. A default MutableSharedFlow is a rendezvous
+    // channel: emit() waits for a collector, and the screen's collector only
+    // exists while the screen is composed. Navigating away from a retained
+    // ViewModel mid-operation parked the emitting coroutine forever, so the
+    // finally block that clears the progress / "is exporting" flag never ran
+    // and the screen came back stuck.
+    private val _events = MutableSharedFlow<DetailEvent>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     val events: SharedFlow<DetailEvent> = _events.asSharedFlow()
 
     val isPlaying: StateFlow<Boolean> = audioPlayer.isPlaying
@@ -505,9 +518,15 @@ class DetailViewModel @Inject constructor(
     }
 
     fun exportToAnki(includeAiSummary: Boolean = false) {
+        // One export at a time. _isExporting is only raised inside
+        // performExport — after the duplicate checks — so a double tap used to
+        // send two coroutines through those checks together, both concluding
+        // "not a duplicate", and the word landed in Anki twice.
+        if (exportJob?.isActive == true) return
+
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
-        viewModelScope.launch {
+        exportJob = viewModelScope.launch {
             try {
                 if (!ankiCardCreator.isAnkiInstalled()) {
                     _events.emit(DetailEvent.AnkiNotInstalled)
@@ -563,9 +582,15 @@ class DetailViewModel @Inject constructor(
     }
 
     fun forceExport(includeAiSummary: Boolean = false) {
+        // One export at a time. _isExporting is only raised inside
+        // performExport — after the duplicate checks — so a double tap used to
+        // send two coroutines through those checks together, both concluding
+        // "not a duplicate", and the word landed in Anki twice.
+        if (exportJob?.isActive == true) return
+
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
-        viewModelScope.launch {
+        exportJob = viewModelScope.launch {
             try {
                 val savedDeckRaw = appContext.dataStore.data
                     .map { it[MainActivity.ANKI_DECK_NAME] }
@@ -580,10 +605,16 @@ class DetailViewModel @Inject constructor(
     }
 
     fun exportToAnkiWithDeck(deckName: String, includeAiSummary: Boolean = false) {
+        // One export at a time. _isExporting is only raised inside
+        // performExport — after the duplicate checks — so a double tap used to
+        // send two coroutines through those checks together, both concluding
+        // "not a duplicate", and the word landed in Anki twice.
+        if (exportJob?.isActive == true) return
+
         val merged = _entry.value ?: return
         val word = merged.toWordEntry()
         val sanitizedDeck = InputSanitizer.sanitizeDeckName(deckName)
-        viewModelScope.launch {
+        exportJob = viewModelScope.launch {
             try {
                 appContext.dataStore.edit { prefs ->
                     prefs[MainActivity.ANKI_DECK_NAME] = sanitizedDeck
@@ -630,7 +661,20 @@ class DetailViewModel @Inject constructor(
     }
 
     private suspend fun isInScannedCollection(expression: String, reading: String): Boolean =
-        runCatching { ankiCollectionStore.contains(expression, reading) }
+        runCatching {
+            // Same rule as the bulk generators: for a word normally written in
+            // kana the reading identifies it, because that is the form a deck
+            // holds. The user can still force the export from the dialog.
+            val entry = _entry.value
+            val usuallyKana = entry?.let {
+                com.yomitanmobile.domain.usecase.WordFilterRules.isUsuallyKana(it)
+            } ?: false
+            // All of the entry's written forms: a deck that spells the word
+            // 持ってくる holds the card the user would otherwise mine again as
+            // 持って来る.
+            val spellings = listOf(expression) + entry?.alternativeExpressions.orEmpty()
+            ankiCollectionStore.containsAny(spellings, reading, usuallyKana)
+        }
             .getOrElse {
                 Log.w(logTag, "Collection duplicate check failed; allowing the export", it)
                 false
