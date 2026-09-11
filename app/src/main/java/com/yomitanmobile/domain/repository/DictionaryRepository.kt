@@ -67,6 +67,14 @@ interface DictionaryRepository {
     suspend fun getCommonSurfaces(maxRank: Int): Map<String, Int>
 
     /**
+     * Re-computes the frequency stamped on every entry — the number that goes
+     * on a card, orders search results and drives the rarity filters. Called
+     * after an import and whenever the user changes which frequency list
+     * leads.
+     */
+    suspend fun reapplyFrequencies()
+
+    /**
      * Batch reading lookup, chunked like [getEntriesForExpressions]. Resolves
      * the words a text spells in kana only (みる, ある) to dictionary entries.
      */

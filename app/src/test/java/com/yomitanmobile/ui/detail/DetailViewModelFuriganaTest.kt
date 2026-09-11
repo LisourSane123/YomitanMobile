@@ -33,6 +33,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLooper
+import com.yomitanmobile.data.settings.FrequencySettings
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -56,7 +57,8 @@ class DetailViewModelFuriganaTest {
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
             database = db,
-            languageSettings = LanguageSettings(context)
+            languageSettings = LanguageSettings(context),
+            frequencySettings = FrequencySettings(context)
         )
     }
 

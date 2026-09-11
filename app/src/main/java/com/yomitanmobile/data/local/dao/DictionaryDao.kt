@@ -458,12 +458,28 @@ interface DictionaryDao {
      */
     @Query(
         """
-        UPDATE dictionary_entries SET frequency = COALESCE((
-            SELECT MIN(f.rank) FROM word_frequencies f
-            WHERE f.expression = dictionary_entries.expression
-              AND (f.reading = dictionary_entries.reading OR f.reading = '')
-              AND f.rank > 0
-        ), frequency)
+        UPDATE dictionary_entries SET frequency = COALESCE(
+            (
+                -- The leading list first, when the user named one and it knows
+                -- the word. Several lists disagree by design — a word common in
+                -- conversation is rare in print — so "best rank anywhere" made
+                -- one generous list speak for all of them, on the card, in the
+                -- search order and in the rarity filters.
+                SELECT MIN(f.rank) FROM word_frequencies f
+                WHERE :leadingDictionary != ''
+                  AND f.dictionary = :leadingDictionary
+                  AND f.expression = dictionary_entries.expression
+                  AND (f.reading = dictionary_entries.reading OR f.reading = '')
+                  AND f.rank > 0
+            ),
+            (
+                SELECT MIN(f.rank) FROM word_frequencies f
+                WHERE f.expression = dictionary_entries.expression
+                  AND (f.reading = dictionary_entries.reading OR f.reading = '')
+                  AND f.rank > 0
+            ),
+            frequency
+        )
         WHERE EXISTS (
             SELECT 1 FROM word_frequencies f
             WHERE f.expression = dictionary_entries.expression
@@ -472,5 +488,5 @@ interface DictionaryDao {
         )
         """
     )
-    suspend fun applyFrequenciesFromTable()
+    suspend fun applyFrequenciesFromTable(leadingDictionary: String)
 }

@@ -34,6 +34,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.ui.common.rememberTr
 import com.yomitanmobile.ui.common.LocalIsEnglish
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import com.yomitanmobile.domain.model.FrequencyCorpus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +51,7 @@ fun FrequencyDisplayScreen(
 
     val order by viewModel.order.collectAsState()
     val showAll by viewModel.showAll.collectAsState()
+    val isReapplying by viewModel.isReapplying.collectAsState()
 
     Scaffold(
         topBar = {
@@ -100,12 +106,28 @@ fun FrequencyDisplayScreen(
             Spacer(Modifier.height(4.dp))
             Text(
                 tr(
-                    "Listy wyżej mają pierwszeństwo. Górna lista jest pokazywana, gdy „Pokaż wszystkie” jest wyłączone.",
-                    "Lists higher up take priority. The top list is the one shown when “Show all” is off."
+                    "Pierwsza lista jest główna: to jej ranking trafia na fiszkę, ustawia kolejność " +
+                        "wyników wyszukiwania i decyduje, co generatory uznają za zbyt rzadkie. " +
+                        "Pozostałe listy są używane dla słów, których główna nie zna.",
+                    "The first list leads: its rank is what goes on a card, orders search results and " +
+                        "decides what the deck generators call too rare. The rest fill in the words the " +
+                        "leading list does not know."
                 ),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (isReapplying) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        tr("Przeliczanie rankingów…", "Recomputing ranks…"),
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Spacer(Modifier.height(8.dp))
 
             if (order.isEmpty()) {
@@ -125,11 +147,32 @@ fun FrequencyDisplayScreen(
                             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                "${index + 1}. $name",
-                                modifier = Modifier.weight(1f).padding(vertical = 14.dp),
-                                fontSize = 15.sp
-                            )
+                            Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
+                                Text("${index + 1}. $name", fontSize = 15.sp)
+                                // What the list actually counted. The installed
+                                // name ("JPDBv2", "CEJC-LUW") says who made it
+                                // and nothing about what is in it.
+                                FrequencyCorpus.labelFor(name)?.let { label ->
+                                    Text(
+                                        if (isEnglish) label.en else label.pl,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (index == 0) {
+                                    Text(
+                                        tr("główna — jej ranking trafia na fiszkę", "leading — its rank goes on the card"),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            if (index > 0) {
+                                TextButton(onClick = { viewModel.makeLeading(name) }) {
+                                    Text(tr("Ustaw główną", "Make leading"), fontSize = 12.sp)
+                                }
+                            }
                             IconButton(
                                 onClick = { viewModel.moveUp(name) },
                                 enabled = index > 0

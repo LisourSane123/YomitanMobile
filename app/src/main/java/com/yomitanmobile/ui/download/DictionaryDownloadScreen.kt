@@ -70,6 +70,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.filled.Close
 import com.yomitanmobile.ui.common.tr
+import com.yomitanmobile.domain.model.FrequencyCorpus
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -542,14 +543,26 @@ private fun DictionaryDownloadCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        info.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Text(
+                            info.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        // What a frequency list counted, in one phrase. The
+                        // name says who published it; "anime and visual novels"
+                        // versus "everyday conversation" is what decides
+                        // whether it is the list you want leading.
+                        FrequencyCorpus.labelFor(info.name)?.let { label ->
+                            Text(
+                                if (isEnglish) label.en else label.pl,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     if (isInstalled) {
                         Spacer(Modifier.width(8.dp))
                         Icon(

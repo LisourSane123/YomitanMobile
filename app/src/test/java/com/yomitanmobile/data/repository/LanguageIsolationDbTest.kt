@@ -17,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.yomitanmobile.data.settings.FrequencySettings
 
 /**
  * The guarantee that makes one database safe for two languages: a search
@@ -64,7 +65,8 @@ class LanguageIsolationDbTest {
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
             database = db,
-            languageSettings = settings
+            languageSettings = settings,
+            frequencySettings = FrequencySettings(ApplicationProvider.getApplicationContext())
         )
     }
 

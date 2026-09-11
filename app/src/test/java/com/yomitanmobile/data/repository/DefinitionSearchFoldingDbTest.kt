@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.yomitanmobile.data.settings.FrequencySettings
 
 /**
  * Meaning-search has to fold case and diacritics, not just ASCII.
@@ -74,7 +75,8 @@ class DefinitionSearchFoldingDbTest {
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
             database = db,
-            languageSettings = settings
+            languageSettings = settings,
+            frequencySettings = FrequencySettings(ApplicationProvider.getApplicationContext())
         ).searchByDefinition(query).first().map { it.expression }
     }
 

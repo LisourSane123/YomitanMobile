@@ -18,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.yomitanmobile.data.settings.FrequencySettings
 
 /**
  * The whole Japanese lookup path, the way the search screen drives it:
@@ -81,7 +82,8 @@ class InflectedSearchDbTest {
                 jlptTagDao = db.jlptTagDao(),
                 parser = YomitanDictionaryParser(),
                 database = db,
-                languageSettings = settings
+                languageSettings = settings,
+                frequencySettings = FrequencySettings(ApplicationProvider.getApplicationContext())
             )
         )
     }

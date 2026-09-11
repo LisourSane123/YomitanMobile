@@ -18,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.yomitanmobile.data.settings.FrequencySettings
 
 /**
  * Substring search against a real (in-memory Room) dictionary.
@@ -49,7 +50,8 @@ class SubstringSearchDbTest {
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
             database = db,
-            languageSettings = LanguageSettings(ApplicationProvider.getApplicationContext())
+            languageSettings = LanguageSettings(ApplicationProvider.getApplicationContext()),
+            frequencySettings = FrequencySettings(ApplicationProvider.getApplicationContext())
         )
         useCase = SearchDictionaryUseCase(repo)
 

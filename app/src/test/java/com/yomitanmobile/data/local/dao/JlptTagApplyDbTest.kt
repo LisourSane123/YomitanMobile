@@ -138,9 +138,52 @@ class JlptTagApplyDbTest {
         )
         // Rows a term (re-)import just wrote: no frequency of their own.
         dao.insertAll(listOf(entry("学校", "がっこう", frequency = 0)))
-        dao.applyFrequenciesFromTable()
+        dao.applyFrequenciesFromTable(leadingDictionary = "")
 
         val best = dao.getEntriesByExpressions(listOf("学校"), "ja").single().frequency
         assertEquals(812, best)
+    }
+
+    @Test
+    fun `the leading list decides the rank, the others fill in its gaps`() = runBlocking {
+        // Two lists that disagree, which is the normal case: a word common in
+        // conversation is rarer in print, and the number on the card should be
+        // the one from the list the user put first.
+        dao.insertAll(
+            listOf(
+                entry("喋る", "しゃべる"),
+                entry("朕", "ちん")
+            )
+        )
+        db.frequencyDao().insertAll(
+            listOf(
+                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400"),
+                WordFrequency("喋る", "しゃべる", "BCCWJ", 9000, "9000"),
+                // Only the print corpus knows this one.
+                WordFrequency("朕", "ちん", "BCCWJ", 21000, "21000")
+            )
+        )
+
+        dao.applyFrequenciesFromTable(leadingDictionary = "CEJC-LUW")
+
+        assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
+        // The leading list has nothing to say here, so the other one is used
+        // rather than leaving the word unranked.
+        assertEquals(21000, dao.getEntriesByExpressions(listOf("朕"), "ja").single().frequency)
+    }
+
+    @Test
+    fun `with no leading list chosen the best rank anywhere wins`() = runBlocking {
+        dao.insertAll(listOf(entry("喋る", "しゃべる")))
+        db.frequencyDao().insertAll(
+            listOf(
+                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400"),
+                WordFrequency("喋る", "しゃべる", "BCCWJ", 9000, "9000")
+            )
+        )
+
+        dao.applyFrequenciesFromTable(leadingDictionary = "")
+
+        assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
     }
 }

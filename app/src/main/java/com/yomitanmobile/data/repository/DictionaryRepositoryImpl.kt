@@ -15,6 +15,7 @@ import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.WordFrequency
 import com.yomitanmobile.data.mapper.toDomain
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
+import com.yomitanmobile.data.settings.FrequencySettings
 import com.yomitanmobile.data.settings.LanguageSettings
 import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.domain.model.ImportProgress
@@ -42,7 +43,8 @@ class DictionaryRepositoryImpl @Inject constructor(
     private val jlptTagDao: JlptTagDao,
     private val parser: YomitanDictionaryParser,
     private val database: AppDatabase,
-    private val languageSettings: LanguageSettings
+    private val languageSettings: LanguageSettings,
+    private val frequencySettings: FrequencySettings
 ) : DictionaryRepository {
 
     // Every read below is scoped to the language being studied. Reading it
@@ -544,10 +546,27 @@ class DictionaryRepositoryImpl @Inject constructor(
             Log.w(TAG, "Re-applying stored JLPT levels failed", e)
         }
         try {
-            dictionaryDao.applyFrequenciesFromTable()
+            dictionaryDao.applyFrequenciesFromTable(leadingFrequencyDictionary())
         } catch (e: Exception) {
             Log.w(TAG, "Re-applying stored frequencies failed", e)
         }
+    }
+
+    /**
+     * The list the user put first in the frequency-priority order, or "" when
+     * they have not chosen one — in which case the rollup falls back to the
+     * best rank across every installed list.
+     */
+    private suspend fun leadingFrequencyDictionary(): String =
+        frequencySettings.leadingDictionary()
+
+    /**
+     * Re-rolls `dictionary_entries.frequency` after the user changes which
+     * list leads. One statement over the whole table, so it runs off the main
+     * thread and reports when it is done rather than blocking the screen.
+     */
+    override suspend fun reapplyFrequencies() = withContext(Dispatchers.IO) {
+        dictionaryDao.applyFrequenciesFromTable(leadingFrequencyDictionary())
     }
 
     override suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo> {

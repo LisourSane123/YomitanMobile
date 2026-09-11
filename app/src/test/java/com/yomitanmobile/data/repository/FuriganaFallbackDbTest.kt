@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.yomitanmobile.data.settings.FrequencySettings
 
 /**
  * End-to-end check of the synthesized-furigana fallback against a real (in-memory
@@ -45,7 +46,8 @@ class FuriganaFallbackDbTest {
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
             database = db,
-            languageSettings = LanguageSettings(ApplicationProvider.getApplicationContext())
+            languageSettings = LanguageSettings(ApplicationProvider.getApplicationContext()),
+            frequencySettings = FrequencySettings(ApplicationProvider.getApplicationContext())
         )
     }
 

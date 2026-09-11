@@ -21,6 +21,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.yomitanmobile.data.settings.FrequencySettings
 
 /**
  * The JP-JP card engine against a real (in-memory) dictionary: the setting is
@@ -48,7 +49,8 @@ class MonolingualCardResolverDbTest {
             jlptTagDao = db.jlptTagDao(),
             parser = YomitanDictionaryParser(),
             database = db,
-            languageSettings = LanguageSettings(context)
+            languageSettings = LanguageSettings(context),
+            frequencySettings = FrequencySettings(context)
         )
         resolver = MonolingualCardResolver(repo, context, LanguageSettings(context))
 
