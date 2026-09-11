@@ -42,8 +42,21 @@ object JapaneseTokenizer {
          * shows up in chapter 1 is worth learning before one that shows up in
          * the last volume" half of the card ordering.
          */
-        val firstOffset: Int = 0
+        val firstOffset: Int = 0,
+        /**
+         * How often the word was followed by an honorific suffix — 池くん,
+         * 平田さん. In a novel that is what a person's name looks like, and
+         * it is the only signal there is for a name the dictionary also lists
+         * as an ordinary word.
+         */
+        val honorificHits: Int = 0
     )
+
+    /**
+     * Suffixes that mark what precedes them as a person. 様 and 殿 are absent
+     * on purpose: they attach to roles and objects too (神様, お客様).
+     */
+    private val HONORIFIC_SUFFIXES = listOf("くん", "君", "さん", "ちゃん", "先輩", "先生", "氏")
 
     /** The word list token boundaries are tested against. */
     fun interface Lexicon {
@@ -180,7 +193,8 @@ object JapaneseTokenizer {
                 count = value.count,
                 wasInflected = value.wasInflected,
                 sentence = value.sentence,
-                firstOffset = value.firstOffset
+                firstOffset = value.firstOffset,
+                honorificHits = value.honorificHits
             )
         }
 
@@ -251,6 +265,9 @@ object JapaneseTokenizer {
                         MutableToken(surface, base != surface, sentenceOffset + i)
                     }
                     entry.count++
+                    if (followedByHonorific(sentence, i + matchedLength)) {
+                        entry.honorificHits++
+                    }
                     // A word first met in a too-long or too-short sentence still
                     // deserves a usable one, so the first suitable sentence wins
                     // even if it is not the first occurrence.
@@ -296,6 +313,9 @@ object JapaneseTokenizer {
         return true
     }
 
+    private fun followedByHonorific(sentence: String, at: Int): Boolean =
+        HONORIFIC_SUFFIXES.any { sentence.startsWith(it, at) }
+
     private class MutableToken(
         val surface: String,
         val wasInflected: Boolean,
@@ -303,6 +323,7 @@ object JapaneseTokenizer {
     ) {
         var count: Int = 0
         var sentence: String = ""
+        var honorificHits: Int = 0
     }
 
     /**
@@ -349,15 +370,25 @@ object JapaneseTokenizer {
         }
         if (surface.length < 2) return null
         if (!isKana(surface.last())) return null
+        // Among the deconjugations that are words, the common one wins.
+        // 続けている offers 続けて (an adverb JMdict lists, ranked nowhere) one
+        // step before 続ける (ranked 196), and taking the first hit spent ten
+        // occurrences of the verb on the adverb. A rare candidate is still
+        // used when nothing common matches.
+        var fallback: String? = null
         for (candidate in JapaneseDeconjugator.candidateForms(surface)) {
-            if (candidate != surface && lexicon.contains(candidate)) return candidate
+            if (candidate == surface || !lexicon.contains(candidate)) continue
+            if (lexicon.isCommon(candidate)) return candidate
+            if (fallback == null) fallback = candidate
         }
-        return null
+        return fallback
     }
 
     /** The first deconjugation of [surface] that the frequency lists call common. */
     private fun commonDeconjugation(surface: String, lexicon: Lexicon): String? {
-        if (surface.length < 3 || !isKana(surface.last())) return null
+        // Two characters is enough: 来た is a JMdict entry of its own and was
+        // taking 50 occurrences off 来る in one novel.
+        if (surface.length < 2 || !isKana(surface.last())) return null
         for (candidate in JapaneseDeconjugator.candidateForms(surface)) {
             if (candidate == surface) continue
             if (lexicon.contains(candidate) && lexicon.isCommon(candidate)) return candidate
@@ -372,9 +403,12 @@ object JapaneseTokenizer {
      * is then read on its own (and dropped, being a single kana).
      */
     private fun isWordPlusParticle(candidate: String, lexicon: Lexicon): Boolean {
-        if (candidate.length < 3) return false
+        if (candidate.length < 2) return false
         if (candidate.last() !in CASE_PARTICLES) return false
         val withoutParticle = candidate.dropLast(1)
+        // A one-character remainder only counts when it is a kanji: 何を is 何
+        // plus を, but なに must not come apart into な and に.
+        if (withoutParticle.length == 1 && !isKanji(withoutParticle[0])) return false
         return lexicon.contains(withoutParticle)
     }
 

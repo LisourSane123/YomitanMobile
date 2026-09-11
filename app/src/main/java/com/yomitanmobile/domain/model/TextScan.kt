@@ -93,7 +93,12 @@ data class ScanToken(
     val occurrences: Int,
     /** Sentence it was first met in, for the card front. May be empty. */
     val sentence: String = "",
-    val earliness: Float = 1f
+    val earliness: Float = 1f,
+    /**
+     * How often the text put an honorific suffix after this word (池くん,
+     * 平田さん) — see [com.yomitanmobile.util.JapaneseTokenizer.Token].
+     */
+    val honorificHits: Int = 0
 )
 
 /**

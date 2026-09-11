@@ -73,7 +73,15 @@ object WordFilterRules {
         "v1", "v1-s", "v5u", "v5u-s", "v5k", "v5k-s", "v5g", "v5s", "v5t",
         "v5n", "v5b", "v5m", "v5r", "v5r-i", "v5aru", "v4r", "vk", "vs",
         "vs-i", "vs-s", "vs-c", "vz", "vn", "vr", "vt", "vi",
-        "adj-i", "adj-ix", "adj-na", "adj-no", "adj-t", "adj-f", "uk"
+        "adj-i", "adj-ix", "adj-na", "adj-no", "adj-t", "adj-f", "uk",
+        // Register, not grammar. They say who says a word and how, never what
+        // it is, and while they counted as content tags the "every tag is
+        // grammar" test could not pass for 様な (`adj-pn uk, exp uk col abbr`)
+        // or んじゃ — both of them pure scaffolding.
+        "col", "abbr", "fam", "male", "fem", "hon", "hum", "pol", "sl", "vulg",
+        "derog", "joc", "poet", "rare", "obs", "ksb", "osb", "kyb", "ktb",
+        "tsb", "thb", "tsug", "kyu", "rkb", "nab", "hob", "on-mim", "serv",
+        "chn", "form", "arch", "gikun", "ateji", "iK", "ik", "oK", "ok", "rK", "sK"
     )
 
     /**

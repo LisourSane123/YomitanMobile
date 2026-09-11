@@ -186,7 +186,8 @@ class TextScanViewModel @Inject constructor(
                             sentence = token.sentence,
                             // 1.0 at the start of the first file, 0.0 at the
                             // end of the last one.
-                            earliness = 1f - token.firstOffset.toFloat() / totalLength
+                            earliness = 1f - token.firstOffset.toFloat() / totalLength,
+                            honorificHits = token.honorificHits
                         )
                     }
                 }

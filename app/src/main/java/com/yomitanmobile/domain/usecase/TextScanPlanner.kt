@@ -54,6 +54,12 @@ object TextScanPlanner {
         "ここ", "そこ", "あそこ", "どこ", "こう", "そう", "ああ", "どう",
         "こんな", "そんな", "あんな", "どんな", "わたし", "私", "あなた", "君",
         "僕", "俺", "彼", "彼女", "誰", "何", "なに", "なん",
+        // The kana spellings of the same pronouns. A narrator who writes
+        // himself オレ rather than 俺 was getting a card seen 509 times in one
+        // novel; katakana is folded to hiragana before the lookup, so one
+        // hiragana entry covers both.
+        "おれ", "ぼく", "あたし", "きみ", "おまえ", "あいつ", "こいつ", "そいつ",
+        "どいつ", "だれ", "われ", "うぬ",
         // high-frequency connectives and fillers
         "そして", "でも", "しかし", "だから", "また", "まだ", "もう", "とても",
         "ちょっと", "はい", "ええ", "うん", "いや", "あの", "その", "えっと",
@@ -105,6 +111,21 @@ object TextScanPlanner {
     const val GRAMMAR_UNRANKED_OCCURRENCES = 4
 
     /**
+     * The same idea for grammar the lists DO rank, only further out: 様な at
+     * rank 9 634 is still grammar, and twenty uses in one book means the
+     * reader meets it constantly.
+     */
+    const val GRAMMAR_RARE_OCCURRENCES = 20
+
+    /**
+     * How many times a word has to be followed by an honorific before the
+     * text is taken to be naming somebody with it. Three is enough to rule out
+     * a coincidence (「お兄ちゃん」 after a noun) and low enough to catch a
+     * side character.
+     */
+    const val NAME_HONORIFIC_HITS = 3
+
+    /**
      * A one- or two-kana "word" that no frequency list ranks at all.
      *
      * Longest-match segmentation reaches for the longest dictionary entry at
@@ -134,7 +155,53 @@ object TextScanPlanner {
         // inflection (知らない, 食べられる) is. How often THIS text uses it is
         // then the only signal left, and a blend used four times is
         // scaffolding while a construction met twice may well be new.
-        return entry.frequency == 0 && occurrences >= GRAMMAR_UNRANKED_OCCURRENCES
+        if (entry.frequency == 0) return occurrences >= GRAMMAR_UNRANKED_OCCURRENCES
+        // Ranked, but past the everyday band: 様な (ような written with the
+        // kanji) sits at 9 634 and was used 75 times in one novel. A
+        // construction the reader has genuinely not met does not come up
+        // twenty times in one book — とはいえ, ranked far worse at 248 980,
+        // appeared twelve.
+        return occurrences >= GRAMMAR_RARE_OCCURRENCES
+    }
+
+    /**
+     * A word this text uses as somebody's NAME and that is not a word
+     * anywhere else.
+     *
+     * Novels are full of both kinds. 池 is a classmate in one book and a pond
+     * in the language — the frequency lists rank it 3 770, the reader will
+     * meet that word outside this novel, and the card stays. 平田 is a
+     * classmate and nothing else: no list ranks it, and it exists here only as
+     * a person. The honorific is what tells them apart from ordinary
+     * vocabulary, since both are dictionary entries.
+     *
+     * Deliberately NOT "unranked and frequent": 指導室 and 敷地内 are unranked
+     * compounds used ten times each in the same book and are perfectly good
+     * cards.
+     */
+    private fun isNameOnly(token: ScanToken, entry: MergedWordEntry): Boolean =
+        token.honorificHits >= NAME_HONORIFIC_HITS && entry.frequency <= 0
+
+    /**
+     * Whether the stoplist covers this word — the WORD, not the spelling it
+     * happens to wear here.
+     *
+     * 俺 is on the list and オレ was not, so a novel whose narrator writes
+     * himself in katakana produced a card seen 509 times. Katakana is folded
+     * to hiragana and the entry's other written forms are checked too, which
+     * also covers ワタシ, ボク and キミ.
+     */
+    private fun isStoplisted(word: String, entry: MergedWordEntry?): Boolean {
+        if (word in FUNCTION_WORDS || word.katakanaToHiragana() in FUNCTION_WORDS) return true
+        if (entry == null) return false
+        if (entry.primaryExpression in FUNCTION_WORDS) return true
+        return entry.alternativeExpressions.any { it in FUNCTION_WORDS }
+    }
+
+    private fun String.katakanaToHiragana(): String = buildString(length) {
+        for (ch in this@katakanaToHiragana) {
+            append(if (ch in 'ァ'..'ヶ') ch - 0x60 else ch)
+        }
     }
 
     /**
@@ -156,7 +223,7 @@ object TextScanPlanner {
         @Suppress("NAME_SHADOWING")
         val rank = entry?.frequency ?: 0
         val source = when {
-            word in FUNCTION_WORDS -> GrammarSource.STOPLIST
+            isStoplisted(word, entry) -> GrammarSource.STOPLIST
             entry == null -> return
             !WordFilterRules.isFunctionWord(entry) -> return
             isEverydayGrammar(entry, occurrences) -> GrammarSource.TAG_RULE
@@ -220,7 +287,8 @@ object TextScanPlanner {
                 baseForm = winner.baseForm,
                 occurrences = tokens.sumOf { it.occurrences },
                 sentence = earliest.sentence.ifBlank { winner.sentence },
-                earliness = earliest.earliness
+                earliness = earliest.earliness,
+                honorificHits = tokens.sumOf { it.honorificHits }
             )
             outEntries[winner.baseForm] = entry.copy(primaryExpression = winner.baseForm)
         }
@@ -272,7 +340,7 @@ object TextScanPlanner {
             // or not the user has the grammar filter switched on.
             recordGrammar(grammar, word, occurrences, entry)
             when {
-                filters.skipFunctionWords && word in FUNCTION_WORDS ->
+                filters.skipFunctionWords && isStoplisted(word, entry) ->
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
                 entry == null ->
                     reject(TextScanSkipReason.NOT_IN_DICTIONARY, occurrences)
@@ -288,7 +356,8 @@ object TextScanPlanner {
                     reject(TextScanSkipReason.TOO_FEW_OCCURRENCES, occurrences)
                 entry.definitions.none { it.isNotBlank() } ->
                     reject(TextScanSkipReason.NO_DEFINITION, occurrences)
-                filters.skipProperNames && WordFilterRules.isProperName(entry) ->
+                filters.skipProperNames &&
+                    (WordFilterRules.isProperName(entry) || isNameOnly(token, entry)) ->
                     reject(TextScanSkipReason.PROPER_NAME, occurrences)
                 entry.frequency <= 0 && !filters.includeUnranked ->
                     reject(TextScanSkipReason.UNRANKED, occurrences)

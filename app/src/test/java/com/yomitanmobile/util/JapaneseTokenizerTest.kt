@@ -235,4 +235,45 @@ class JapaneseTokenizerTest {
         assertTrue(bases.toString(), "つまらない" in bases)
         assertFalse(bases.toString(), "詰まる" in bases)
     }
+
+    @Test
+    fun `a two-character frozen form gives way to the verb`() {
+        // 来た is a JMdict entry (an interjection) and was taking 50
+        // occurrences off 来る in one novel.
+        val lexicon = rankedLexicon(all = setOf("来た", "来る"), common = setOf("来る"))
+        assertEquals(listOf("来る"), JapaneseTokenizer.tokenize("来た。", lexicon).map { it.baseForm })
+    }
+
+    @Test
+    fun `the common deconjugation wins over the first one offered`() {
+        // 続けている offers 続けて — an adverb JMdict lists, ranked nowhere —
+        // one step before 続ける, ranked 196. Taking the first hit spent the
+        // verb's occurrences on the adverb.
+        val lexicon = rankedLexicon(
+            all = setOf("続けて", "続ける", "いる"),
+            common = setOf("続ける", "いる")
+        )
+        val bases = JapaneseTokenizer.tokenize("続けている。", lexicon).map { it.baseForm }
+
+        assertTrue(bases.toString(), "続ける" in bases)
+        assertFalse(bases.toString(), "続けて" in bases)
+    }
+
+    @Test
+    fun `a two-character blend splits only when the word carries kanji`() {
+        val lexicon = lexiconOf("何", "何を", "を", "なに", "な", "に", "話す")
+        assertFalse("何を" in baseForms("何を話す。", lexicon))
+        assertTrue("何" in baseForms("何を話す。", lexicon))
+        // なに must not come apart into な and に.
+        assertTrue("なに" in baseForms("なにを話す。", lexicon))
+    }
+
+    @Test
+    fun `an honorific after a word is counted as evidence of a name`() {
+        val lexicon = lexiconOf("池", "さん", "くん", "は", "笑う")
+        val tokens = JapaneseTokenizer.tokenize("池くんと池さんは笑った。", lexicon)
+        val ike = tokens.first { it.baseForm == "池" }
+
+        assertEquals(2, ike.honorificHits)
+    }
 }

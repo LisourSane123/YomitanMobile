@@ -431,4 +431,53 @@ class TextScanPlannerTest {
         assertFalse(byForm.getValue("今日は").becameCard)
         assertTrue(byForm.getValue("くせに").becameCard)
     }
+
+    @Test
+    fun `the stoplist matches the word, not the spelling it wears`() {
+        // A narrator who writes himself オレ instead of 俺 was getting a card
+        // seen 509 times in one novel.
+        val katakana = entry("オレ", reading = "おれ", frequency = 8192, partsOfSpeech = listOf("pn male"))
+        val result = plan(tokens("オレ" to 509), mapOf("オレ" to katakana))
+
+        assertEquals(1, result.skipped[TextScanSkipReason.FUNCTION_WORD])
+        assertTrue(result.selected.isEmpty())
+    }
+
+    @Test
+    fun `ranked grammar used over and over is scaffolding too`() {
+        // 様な is ような written with the kanji: ranked 9 634, so past the
+        // everyday band, and used 75 times in one book.
+        val everyday = entry("様な", frequency = 9634, partsOfSpeech = listOf("1 adj-pn uk", "2 exp uk col abbr"))
+        val rare = entry("とはいえ", frequency = 248980, partsOfSpeech = listOf("conj"))
+        val result = plan(
+            tokens("様な" to 75, "とはいえ" to 12),
+            mapOf("様な" to everyday, "とはいえ" to rare),
+            filters = TextScanFilters(tier = FrequencyTier.ALL)
+        )
+
+        assertEquals(1, result.skipped[TextScanSkipReason.FUNCTION_WORD])
+        assertEquals(listOf("とはいえ"), result.selected.map { it.entry.primaryExpression })
+    }
+
+    @Test
+    fun `a name that is also a word keeps its card, one that is not does not`() {
+        // Both are classmates in the same novel. 池 is also a pond, ranked
+        // 3 770 — the reader will meet that word outside this book. 平田 is a
+        // person and nothing else.
+        val alsoAWord = entry("池", frequency = 3770)
+        val nameOnly = entry("平田", frequency = 0)
+        val result = TextScanPlanner.plan(
+            sources = listOf(source),
+            words = listOf(
+                ScanToken("池", 156, honorificHits = 8),
+                ScanToken("平田", 126, honorificHits = 11)
+            ),
+            entries = mapOf("池" to alsoAWord, "平田" to nameOnly),
+            filters = TextScanFilters(),
+            totalTokenCount = 300
+        )
+
+        assertEquals(listOf("池"), result.selected.map { it.entry.primaryExpression })
+        assertEquals(1, result.skipped[TextScanSkipReason.PROPER_NAME])
+    }
 }

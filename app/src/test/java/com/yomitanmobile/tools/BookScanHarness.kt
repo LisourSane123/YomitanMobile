@@ -131,7 +131,8 @@ class BookScanHarness {
                 baseForm = token.baseForm,
                 occurrences = token.count,
                 sentence = token.sentence,
-                earliness = 1f - token.firstOffset.toFloat() / totalLength
+                earliness = 1f - token.firstOffset.toFloat() / totalLength,
+                honorificHits = token.honorificHits
             )
         }
         val totalTokenCount = tokens.sumOf { it.occurrences }
