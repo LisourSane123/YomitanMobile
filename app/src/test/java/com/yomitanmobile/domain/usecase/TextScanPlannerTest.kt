@@ -8,6 +8,7 @@ import com.yomitanmobile.domain.model.TextScanFilters
 import com.yomitanmobile.domain.model.TextScanSkipReason
 import com.yomitanmobile.domain.model.TextScanSource
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -394,5 +395,40 @@ class TextScanPlannerTest {
         assertEquals(198, byForm.getValue("こと").occurrences)
         // Vocabulary is not grammar and stays out of the counter.
         assertTrue("学校" !in byForm)
+    }
+
+    @Test
+    fun `an unranked blend is scaffolding while an unranked construction met twice is not`() {
+        // これは is a JMdict entry that no frequency list ranks, because it is
+        // これ plus は — and the text used it 21 times. くせに is equally
+        // unranked and was met twice, which is the shape of grammar the reader
+        // has not learned yet.
+        val blend = entry("これは", frequency = 0, partsOfSpeech = listOf("1 exp uk", "2 int"))
+        val construction = entry("くせに", frequency = 0, partsOfSpeech = listOf("conj"))
+        val result = plan(
+            tokens("これは" to 21, "くせに" to 2),
+            mapOf("これは" to blend, "くせに" to construction)
+        )
+
+        assertEquals(1, result.skipped[TextScanSkipReason.FUNCTION_WORD])
+        assertEquals(listOf("くせに"), result.selected.map { it.entry.primaryExpression })
+    }
+
+    @Test
+    fun `the counter says which structures actually became cards`() {
+        // KEPT means the grammar rules let it through, not that a card came
+        // out: 今日は passes them and is then dropped for being ranked 296 050.
+        val rare = entry("今日は", frequency = 296050, partsOfSpeech = listOf("int"))
+        val kept = entry("くせに", frequency = 0, partsOfSpeech = listOf("conj"))
+        val result = plan(
+            tokens("今日は" to 2, "くせに" to 2),
+            mapOf("今日は" to rare, "くせに" to kept),
+            filters = TextScanFilters(tier = FrequencyTier.TOP_20K)
+        )
+
+        val byForm = result.grammarUses.associateBy { it.form }
+        assertEquals(GrammarSource.KEPT, byForm.getValue("今日は").source)
+        assertFalse(byForm.getValue("今日は").becameCard)
+        assertTrue(byForm.getValue("くせに").becameCard)
     }
 }

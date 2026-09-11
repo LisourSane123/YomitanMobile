@@ -125,7 +125,13 @@ data class GrammarUse(
     val occurrences: Int,
     /** Global frequency rank, 0 when no installed list ranks it. */
     val rank: Int,
-    val source: GrammarSource
+    val source: GrammarSource,
+    /**
+     * Whether it ended up in the deck. [GrammarSource.KEPT] only says the
+     * grammar rules let it through — a later rule (too rare, over the limit)
+     * may still have dropped it.
+     */
+    val becameCard: Boolean = false
 )
 
 /** A word kept by the scan, with how often the text used it. */

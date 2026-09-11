@@ -88,23 +88,8 @@ class BookScanHarness {
         )
         log("lexicon: ${lexicon.size} surfaces")
 
-        // ---- 3. tokenise all books as ONE body of text ---------------------
-        val words = JapaneseTokenizer.Lexicon { it in lexicon }
-        val accumulator = JapaneseTokenizer.Accumulator()
-        for ((_, document) in documents) accumulator.add(document.text, words)
-        val totalLength = accumulator.totalLength.coerceAtLeast(1)
-        val tokens = accumulator.tokens().map { token ->
-            ScanToken(
-                baseForm = token.baseForm,
-                occurrences = token.count,
-                sentence = token.sentence,
-                earliness = 1f - token.firstOffset.toFloat() / totalLength
-            )
-        }
-        val totalTokenCount = tokens.sumOf { it.occurrences }
-        log("tokens: ${tokens.size} distinct, $totalTokenCount running")
-
-        // ---- 4. frequency ranks -------------------------------------------
+        // ---- 3. frequency ranks (needed before tokenising: the segmenter
+        // prefers a common reading of an ambiguous stretch) -------------------------------------------
         // Mirrors applyFrequenciesFromTable(): best (lowest) rank wins, and a
         // rank stored without a reading matches the expression alone.
         val ranks = HashMap<String, MutableList<Pair<String, Int>>>(1 shl 18)
@@ -127,6 +112,30 @@ class BookScanHarness {
             ranks[expression].orEmpty()
                 .filter { it.first.isEmpty() || it.first == reading }
                 .minOfOrNull { it.second } ?: 0
+
+        // ---- 4. tokenise all books as ONE body of text ---------------------
+        // Same two sets the app builds: everything written, plus what the
+        // frequency list ranks as common (see DictionaryRepository).
+        val common = ranks.entries
+            .filter { entry -> entry.value.any { it.second in 1..JapaneseTokenizer.COMMON_RANK } }
+            .mapTo(HashSet()) { it.key }
+        val words = object : JapaneseTokenizer.Lexicon {
+            override fun contains(surface: String) = surface in lexicon
+            override fun isCommon(surface: String) = common.isEmpty() || surface in common
+        }
+        val accumulator = JapaneseTokenizer.Accumulator()
+        for ((_, document) in documents) accumulator.add(document.text, words)
+        val totalLength = accumulator.totalLength.coerceAtLeast(1)
+        val tokens = accumulator.tokens().map { token ->
+            ScanToken(
+                baseForm = token.baseForm,
+                occurrences = token.count,
+                sentence = token.sentence,
+                earliness = 1f - token.firstOffset.toFloat() / totalLength
+            )
+        }
+        val totalTokenCount = tokens.sumOf { it.occurrences }
+        log("tokens: ${tokens.size} distinct, $totalTokenCount running")
 
         // ---- 5. entries for the words the text actually used ---------------
         val needed = tokens.mapTo(HashSet()) { it.baseForm }
@@ -217,10 +226,11 @@ class BookScanHarness {
             appendLine()
             appendLine("## grammar counter")
             appendLine("(every structure the text used: form, bucket, global rank, occurrences)")
-            appendLine("form\tbucket\trank\toccurrences")
+            appendLine("form\tbucket\tcard\trank\toccurrences")
             for (use in plan.grammarUses) {
                 appendLine(
-                    "${use.form}\t${use.source}\t${if (use.rank > 0) use.rank else ""}\t${use.occurrences}"
+                    "${use.form}\t${use.source}\t${if (use.becameCard) "CARD" else ""}\t" +
+                        "${if (use.rank > 0) use.rank else ""}\t${use.occurrences}"
                 )
             }
             appendLine()

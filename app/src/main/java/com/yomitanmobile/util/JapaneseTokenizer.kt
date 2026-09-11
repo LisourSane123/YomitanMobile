@@ -48,7 +48,37 @@ object JapaneseTokenizer {
     /** The word list token boundaries are tested against. */
     fun interface Lexicon {
         fun contains(surface: String): Boolean
+
+        /**
+         * Whether a frequency list ranks this surface as a form people
+         * actually use.
+         *
+         * The default says yes to everything, which turns the preference off
+         * for callers that have no frequency data — including every test that
+         * builds a lexicon out of a bare set.
+         */
+        fun isCommon(surface: String): Boolean = true
     }
+
+    /**
+     * Case particles that end a "word + particle" entry.
+     *
+     * JMdict lists これは, それを, 今日は (the greeting) and dozens more as
+     * entries, and longest match takes them over the word plus its particle —
+     * so 今日 lost 14 of its 27 occurrences in one novel to こんにちは, and
+     * これは became a card. Splitting is right whenever what precedes the
+     * particle is a word in its own right; こんにちは survives because こんにち
+     * is not a spelling anything is filed under.
+     */
+    private const val CASE_PARTICLES = "はをがもへに"
+
+    /**
+     * Rank at which a form counts as one people use. Everything JPDB-class
+     * lists reach past this — 今日は at 296 050, 急いで at 81 833 — is a
+     * spelling the corpus barely sees, and loses to a common reading of the
+     * same characters.
+     */
+    const val COMMON_RANK = 30_000
 
     /**
      * Longest match tried at a position. Long enough for compounds and set
@@ -198,6 +228,7 @@ object JapaneseTokenizer {
                     for (len in maxLength downTo 1) {
                         if (!isSelfContained(sentence, i, len, runEnd)) continue
                         val candidate = sentence.substring(i, i + len)
+                        if (isWordPlusParticle(candidate, lexicon)) continue
                         val hit = resolved.getOrPut(candidate) { resolve(candidate, lexicon) }
                         if (hit != null) {
                             matchedLength = len
@@ -305,13 +336,46 @@ object JapaneseTokenizer {
      * orders of magnitude more expensive than a hash lookup.
      */
     private fun resolve(surface: String, lexicon: Lexicon): String? {
-        if (lexicon.contains(surface)) return surface
+        if (lexicon.contains(surface)) {
+            // A dictionary entry that is really a frozen inflection — 急いで,
+            // 頑張って, 知らない, 食べられる are all JMdict entries — swallows
+            // the verb it was built from. When the corpus says the entry is
+            // rare and the verb behind it is common, the verb is what the
+            // text meant: err towards the form people actually use.
+            if (!lexicon.isCommon(surface)) {
+                commonDeconjugation(surface, lexicon)?.let { return it }
+            }
+            return surface
+        }
         if (surface.length < 2) return null
         if (!isKana(surface.last())) return null
         for (candidate in JapaneseDeconjugator.candidateForms(surface)) {
             if (candidate != surface && lexicon.contains(candidate)) return candidate
         }
         return null
+    }
+
+    /** The first deconjugation of [surface] that the frequency lists call common. */
+    private fun commonDeconjugation(surface: String, lexicon: Lexicon): String? {
+        if (surface.length < 3 || !isKana(surface.last())) return null
+        for (candidate in JapaneseDeconjugator.candidateForms(surface)) {
+            if (candidate == surface) continue
+            if (lexicon.contains(candidate) && lexicon.isCommon(candidate)) return candidate
+        }
+        return null
+    }
+
+    /**
+     * True when [candidate] is a word with a case particle stuck to it and the
+     * word alone is in the dictionary — see [CASE_PARTICLES]. Such a match is
+     * skipped so the loop falls through to the word itself, and the particle
+     * is then read on its own (and dropped, being a single kana).
+     */
+    private fun isWordPlusParticle(candidate: String, lexicon: Lexicon): Boolean {
+        if (candidate.length < 3) return false
+        if (candidate.last() !in CASE_PARTICLES) return false
+        val withoutParticle = candidate.dropLast(1)
+        return lexicon.contains(withoutParticle)
     }
 
     /**

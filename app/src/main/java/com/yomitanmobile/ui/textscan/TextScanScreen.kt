@@ -745,9 +745,9 @@ private fun GrammarCounter(uses: List<GrammarUse>, isEnglish: Boolean) {
     Text(
         tr(
             "lista = pominięte jako podstawy · tagi = pominięte na podstawie tagów słownika · " +
-                "karta = na tyle rzadkie, że powstała fiszka",
+                "przeszło = reguły gramatyczne przepuściły; ✓ oznacza, że powstała z tego fiszka",
             "list = dropped as basics · tags = dropped by the dictionary's tags · " +
-                "card = rare enough to become a card"
+                "passed = the grammar rules let it through; ✓ marks the ones that became a card"
         ),
         fontSize = 11.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -761,6 +761,12 @@ private fun GrammarCounter(uses: List<GrammarUse>, isEnglish: Boolean) {
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp)
+            )
+            Text(
+                if (use.becameCard) "✓" else " ",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 4.dp)
             )
             Text(
                 if (use.rank > 0) "#${use.rank}" else "—",
@@ -789,7 +795,7 @@ private const val GRAMMAR_COUNTER_LIMIT = 60
 private fun grammarSourceLabel(source: GrammarSource, isEnglish: Boolean): String = when (source) {
     GrammarSource.STOPLIST -> if (isEnglish) "list" else "lista"
     GrammarSource.TAG_RULE -> if (isEnglish) "tags" else "tagi"
-    GrammarSource.KEPT -> if (isEnglish) "card" else "karta"
+    GrammarSource.KEPT -> if (isEnglish) "passed" else "przeszło"
 }
 
 private fun skipReasonLabel(reason: TextScanSkipReason, isEnglish: Boolean): String = when (reason) {

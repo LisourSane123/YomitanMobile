@@ -181,4 +181,58 @@ class JapaneseTokenizerTest {
         assertFalse(bases.toString(), "シ" in bases)
         assertFalse(bases.toString(), "セ" in bases)
     }
+
+    /** A lexicon that also knows which surfaces a frequency list ranks. */
+    private fun rankedLexicon(all: Set<String>, common: Set<String>) =
+        object : JapaneseTokenizer.Lexicon {
+            override fun contains(surface: String) = surface in all
+            override fun isCommon(surface: String) = surface in common
+        }
+
+    @Test
+    fun `a word with a case particle stuck to it is split`() {
+        // JMdict lists 今日は — it is こんにちは, the greeting — and longest
+        // match took it over 今日 + は, so 今日 lost half its occurrences.
+        val lexicon = lexiconOf("今日", "今日は", "は", "暑い")
+        val bases = baseForms("今日は暑い。", lexicon)
+
+        assertTrue(bases.toString(), "今日" in bases)
+        assertFalse(bases.toString(), "今日は" in bases)
+    }
+
+    @Test
+    fun `a word that only looks like word plus particle is left alone`() {
+        // こんにち is not a spelling of anything, so こんにちは stays whole.
+        val lexicon = lexiconOf("こんにちは", "言う")
+        assertTrue("こんにちは" in baseForms("こんにちはと言った。", lexicon))
+    }
+
+    @Test
+    fun `a rare frozen inflection loses to the common verb behind it`() {
+        // 急いで is a JMdict entry ranked 81 833; 急ぐ is ranked 1 800. The
+        // text means the verb.
+        val lexicon = rankedLexicon(
+            all = setOf("急いで", "急ぐ", "帰る"),
+            common = setOf("急ぐ", "帰る")
+        )
+        val bases = JapaneseTokenizer.tokenize("急いで帰った。", lexicon).map { it.baseForm }
+
+        assertTrue(bases.toString(), "急ぐ" in bases)
+        assertFalse(bases.toString(), "急いで" in bases)
+    }
+
+    @Test
+    fun `a common entry keeps its own reading even if it could be deconjugated`() {
+        // つまらない is the trap: it looks like the negative of 詰まる and is a
+        // word in its own right. The frequency list says it is common, so it
+        // is never re-read as something else.
+        val lexicon = rankedLexicon(
+            all = setOf("つまらない", "詰まる", "話"),
+            common = setOf("つまらない", "詰まる", "話")
+        )
+        val bases = JapaneseTokenizer.tokenize("つまらない話。", lexicon).map { it.baseForm }
+
+        assertTrue(bases.toString(), "つまらない" in bases)
+        assertFalse(bases.toString(), "詰まる" in bases)
+    }
 }

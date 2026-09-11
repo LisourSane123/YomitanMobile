@@ -162,9 +162,18 @@ class TextScanViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Ranks decide between two readings of the same characters
+                // (今日は the greeting vs 今日 + は). Empty when no frequency
+                // dictionary is installed, which turns the preference off.
+                val common = repository.getCommonSurfaces(JapaneseTokenizer.COMMON_RANK)
+
                 _analysisStage.value = STAGE_TOKENIZING
                 val tokens = withContext(Dispatchers.Default) {
-                    val words = JapaneseTokenizer.Lexicon { it in lexicon }
+                    val words = object : JapaneseTokenizer.Lexicon {
+                        override fun contains(surface: String) = surface in lexicon
+                        override fun isCommon(surface: String) =
+                            common.isEmpty() || surface in common
+                    }
                     val accumulator = JapaneseTokenizer.Accumulator()
                     for (document in documents) {
                         accumulator.add(document.text, words)

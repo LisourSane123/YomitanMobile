@@ -97,6 +97,14 @@ object TextScanPlanner {
     const val GRAMMAR_KNOWN_RANK = 3000
 
     /**
+     * How often an UNRANKED grammar word has to appear before it counts as
+     * scaffolding — see [isEverydayGrammar]. Low on purpose: a blend like
+     * これは shows up twenty times a book, while a construction the reader has
+     * genuinely never met shows up once or twice.
+     */
+    const val GRAMMAR_UNRANKED_OCCURRENCES = 4
+
+    /**
      * A one- or two-kana "word" that no frequency list ranks at all.
      *
      * Longest-match segmentation reaches for the longest dictionary entry at
@@ -116,8 +124,18 @@ object TextScanPlanner {
      * word AND ranked inside [GRAMMAR_KNOWN_RANK]. Unranked or rarer grammar
      * becomes a card.
      */
-    private fun isEverydayGrammar(entry: MergedWordEntry): Boolean =
-        WordFilterRules.isFunctionWord(entry) && entry.frequency in 1..GRAMMAR_KNOWN_RANK
+    private fun isEverydayGrammar(entry: MergedWordEntry, occurrences: Int): Boolean {
+        if (!WordFilterRules.isFunctionWord(entry)) return false
+        if (entry.frequency in 1..GRAMMAR_KNOWN_RANK) return true
+        // An unranked grammar word is NOT a rare one. The lists rank とはいえ at
+        // 248 980 and 〜ごとく at 4 750 — real constructions, however uncommon,
+        // do get ranked. Rank 0 means the corpus has no such word at all,
+        // which is what a word-plus-particle blend (これは, それを) or a frozen
+        // inflection (知らない, 食べられる) is. How often THIS text uses it is
+        // then the only signal left, and a blend used four times is
+        // scaffolding while a construction met twice may well be new.
+        return entry.frequency == 0 && occurrences >= GRAMMAR_UNRANKED_OCCURRENCES
+    }
 
     /**
      * Adds a word to the grammar counter if it is grammar at all.
@@ -135,12 +153,13 @@ object TextScanPlanner {
         occurrences: Int,
         entry: MergedWordEntry?
     ) {
+        @Suppress("NAME_SHADOWING")
         val rank = entry?.frequency ?: 0
         val source = when {
             word in FUNCTION_WORDS -> GrammarSource.STOPLIST
             entry == null -> return
             !WordFilterRules.isFunctionWord(entry) -> return
-            isEverydayGrammar(entry) -> GrammarSource.TAG_RULE
+            isEverydayGrammar(entry, occurrences) -> GrammarSource.TAG_RULE
             else -> GrammarSource.KEPT
         }
         out += GrammarUse(word, occurrences, rank, source)
@@ -263,7 +282,7 @@ object TextScanPlanner {
                 // part-of-speech tags. Runs right after the lookup so a word
                 // rejected as grammar is counted as grammar and not as, say,
                 // "too few occurrences".
-                filters.skipFunctionWords && isEverydayGrammar(entry) ->
+                filters.skipFunctionWords && isEverydayGrammar(entry, occurrences) ->
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
                 occurrences < filters.minOccurrences ->
                     reject(TextScanSkipReason.TOO_FEW_OCCURRENCES, occurrences)
@@ -307,6 +326,8 @@ object TextScanPlanner {
             kept
         }
 
+        val selectedForms = selected.mapTo(HashSet()) { it.entry.primaryExpression }
+
         return TextScanPlan(
             sources = sources,
             distinctWordCount = mergedWords.size,
@@ -315,9 +336,13 @@ object TextScanPlanner {
             skipped = skipped,
             knownTokenCount = knownTokens,
             ankiScanUnavailable = ankiScanUnavailable,
-            grammarUses = grammar.sortedWith(
-                compareByDescending<GrammarUse> { it.occurrences }.thenBy { it.form }
-            )
+            // Whether a structure ended up in the deck is decided by the
+            // whole rule chain, not by the grammar rules alone: 今日は passes
+            // them and is then dropped for being ranked 296 050. Saying so
+            // here keeps the counter from reading worse than it is.
+            grammarUses = grammar
+                .map { it.copy(becameCard = it.form in selectedForms) }
+                .sortedWith(compareByDescending<GrammarUse> { it.occurrences }.thenBy { it.form })
         )
     }
 

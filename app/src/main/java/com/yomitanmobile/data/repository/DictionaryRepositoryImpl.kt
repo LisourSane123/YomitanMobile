@@ -172,6 +172,20 @@ class DictionaryRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getCommonSurfaces(maxRank: Int): Set<String> = withContext(Dispatchers.IO) {
+        try {
+            val expressions = frequencyDao.getCommonExpressions(maxRank)
+            val readings = frequencyDao.getCommonReadings(maxRank)
+            HashSet<String>(expressions.size + readings.size).apply {
+                addAll(expressions)
+                addAll(readings)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "getCommonSurfaces failed", e)
+            emptySet()
+        }
+    }
+
     override suspend fun getEntriesForExpressionsFromDictionary(
         expressions: List<String>,
         dictionaryName: String

@@ -30,6 +30,32 @@ interface FrequencyDao {
     )
     suspend fun getForWord(expression: String, reading: String): List<WordFrequency>
 
+    /**
+     * Every spelling and reading the installed frequency lists rank inside
+     * [maxRank] — the "this is a form people actually use" set.
+     *
+     * The text scanner needs it to choose between two readings of the same
+     * stretch of text: JMdict lists 今日は (the greeting こんにちは) and 急いで
+     * as entries of their own, and longest match took them over 今日 + は and
+     * 急ぐ. Ranked at 296 050 and 81 833 against 122 and 1 800, so the corpus
+     * settles it — but only if the segmenter can see the ranks.
+     */
+    @Query(
+        """
+        SELECT DISTINCT expression FROM word_frequencies
+        WHERE rank > 0 AND rank <= :maxRank AND expression != ''
+        """
+    )
+    suspend fun getCommonExpressions(maxRank: Int): List<String>
+
+    @Query(
+        """
+        SELECT DISTINCT reading FROM word_frequencies
+        WHERE rank > 0 AND rank <= :maxRank AND reading != ''
+        """
+    )
+    suspend fun getCommonReadings(maxRank: Int): List<String>
+
     @Query("DELETE FROM word_frequencies WHERE dictionary = :dictionary")
     suspend fun deleteByDictionary(dictionary: String)
 
