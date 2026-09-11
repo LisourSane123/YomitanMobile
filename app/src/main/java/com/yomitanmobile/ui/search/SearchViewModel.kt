@@ -18,6 +18,7 @@ import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.util.EnglishLemmatizer
 import com.yomitanmobile.util.JapaneseDeconjugator
 import com.yomitanmobile.util.JlptVocabulary
+import com.yomitanmobile.util.KanaScript
 import com.yomitanmobile.util.RomajiConverter
 import com.yomitanmobile.util.WordCategoryClassifier
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -398,19 +399,7 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private fun toKatakana(input: String): String {
-        if (input.isBlank()) return input
-        val sb = StringBuilder(input.length)
-        for (ch in input) {
-            val code = ch.code
-            if (code in 0x3041..0x3096) {
-                sb.append((code + 0x60).toChar())
-            } else {
-                sb.append(ch)
-            }
-        }
-        return sb.toString()
-    }
+    private fun toKatakana(input: String): String = KanaScript.toKatakana(input)
 
     companion object {
         private const val TAG = "SearchViewModel"

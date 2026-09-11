@@ -51,7 +51,12 @@ class InflectedSearchDbTest {
             Triple("勉強する", "べんきょうする", 401),
             Triple("静か", "しずか", 1500),
             Triple("高い", "たかい", 300),
-            Triple("来る", "くる", 200)
+            Triple("来る", "くる", 200),
+            // Katakana headwords: the script the phone was in decides nothing
+            // about which of these the user meant.
+            Triple("コーヒー", "コーヒー", 3243),
+            Triple("ラーメン", "ラーメン", 4100),
+            Triple("ベッド", "ベッド", 1347)
         )
         db.dictionaryDao().insertAll(
             words.map { (expr, reading, freq) ->
@@ -119,5 +124,24 @@ class InflectedSearchDbTest {
         // must never be offered ahead of the word the user was inflecting.
         val results = search("食べています")
         assertEquals("食べる", results.first())
+    }
+
+    @Test
+    fun `a hiragana query finds the katakana word`() {
+        // The reason this exists: typing こーひー used to find nothing, and the
+        // reader had to convert the text to katakana by hand before the app
+        // would show them コーヒー.
+        assertEquals("コーヒー", search("こーひー").first())
+        assertEquals("ベッド", search("べっど").first())
+        // The romaji path gets here too: "koohii" converts to こおひい.
+        assertEquals("コーヒー", search("こおひい").first())
+        assertEquals("ラーメン", search("らあめん").first())
+    }
+
+    @Test
+    fun `a katakana query still finds a hiragana-written word`() {
+        assertEquals("コーヒー", search("コーヒー").first())
+        // And a partial query keeps matching by prefix in either script.
+        assertEquals("ラーメン", search("らー").first())
     }
 }

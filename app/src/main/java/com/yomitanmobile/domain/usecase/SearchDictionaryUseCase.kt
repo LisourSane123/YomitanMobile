@@ -4,6 +4,7 @@ import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.util.JapaneseTokenizer
+import com.yomitanmobile.util.KanaScript
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,11 @@ class SearchDictionaryUseCase @Inject constructor(
      * match there would surface unrelated longer words that merely share
      * the base-form prefix (e.g. 見る → 見るに値する).
      *
+     * The query is also searched in the other kana script (こーひー finds
+     * コーヒー), which ranks with the literal query rather than behind the
+     * deconjugations: it is the same word the user typed, only spelled the way
+     * the dictionary files it.
+     *
      * A substring pass ([DictionaryRepository.searchContains]) runs in the
      * same parallel batch and is appended LAST, so 欲 lists 欲しい/欲望 before
      * 食欲/意欲 — the word itself and what it starts still outrank the
@@ -58,6 +64,11 @@ class SearchDictionaryUseCase @Inject constructor(
         }.toList()
         val withSubstring = shouldSearchSubstring(normalized)
 
+        // The same query in the other kana script. It is the user's own text,
+        // not a guess about it, so it searches by prefix like the literal
+        // query does and ranks with it — see [KanaScript.spellingVariants].
+        val spellings = KanaScript.spellingVariants(normalized)
+
         return flow {
             val results = coroutineScope {
                 val perQuery = orderedQueries.mapIndexed { idx, q ->
@@ -66,13 +77,19 @@ class SearchDictionaryUseCase @Inject constructor(
                         else repository.searchExact(q).first()
                     }
                 }
+                val perSpelling = spellings.map { async { repository.searchCombined(it).first() } }
                 val substring = if (withSubstring) {
                     async { repository.searchContains(normalized).first() }
                 } else {
                     null
                 }
-                perQuery.map { it.await() } + listOfNotNull(substring?.await())
+                val literalAndSpellings = listOf(perQuery.first().await()) +
+                    perSpelling.map { it.await() }
+                literalAndSpellings +
+                    perQuery.drop(1).map { it.await() } +
+                    listOfNotNull(substring?.await())
             }
+            val literalCount = 1 + spellings.size
 
             // What the user literally typed comes first, in the order the DAO
             // ranked it. Everything the deconjugator suggested comes next —
@@ -84,8 +101,9 @@ class SearchDictionaryUseCase @Inject constructor(
             val literal = LinkedHashMap<Long, WordEntry>()
             val alternatives = LinkedHashMap<Long, WordEntry>()
             results.forEachIndexed { idx, entries ->
-                val bounded = if (idx == 0) entries else entries.take(20)
-                val target = if (idx == 0) literal else alternatives
+                val isLiteral = idx < literalCount
+                val bounded = if (isLiteral) entries else entries.take(20)
+                val target = if (isLiteral) literal else alternatives
                 bounded.forEach { entry ->
                     if (entry.id !in literal) target.putIfAbsent(entry.id, entry)
                 }
