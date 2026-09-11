@@ -136,7 +136,33 @@ object WordFilterRules {
     fun MergedWordEntry.posTokens(): List<String> =
         partsOfSpeech.flatMap { it.split(',', ';', ' ', '\t', '\n') }
             .map { it.normalizeTag() }
-            .filter { it.isNotBlank() }
+            .filter { it.isNotBlank() && !it.isBadge() }
+
+    /**
+     * Not a part of speech: the sense number the tag string opens with, and
+     * the corpus-priority badges JMdict ships alongside the real tags
+     * ("1 prt, ⭐ spec", "2 v5u vt, v5, ⭐ ichi news1k").
+     *
+     * They were the reason [isFunctionWord] and [isProperName] never fired on
+     * a JMdict import: both ask whether EVERY content tag is of one kind, and
+     * "1", "⭐", "spec" and "news1k" are of no kind at all, so the answer was
+     * always no. こと (tagged nothing but `prt`) sailed into the deck as card
+     * number one.
+     */
+    private fun String.isBadge(): Boolean =
+        all { it.isDigit() } ||
+            this == "⭐" || this == "★" || this == "forms" ||
+            this in PRIORITY_TAGS ||
+            NEWS_RANK.matches(this) ||
+            NF_RANK.matches(this)
+
+    private val PRIORITY_TAGS = setOf(
+        "ichi", "ichi1", "ichi2", "news", "spec", "spec1", "spec2", "gai", "gai1", "gai2"
+    )
+
+    /** JMdict's corpus bands: news1k … news25k, nf01 … nf48. */
+    private val NEWS_RANK = Regex("news\\d+k?")
+    private val NF_RANK = Regex("nf\\d+")
 
     private fun String.normalizeTag(): String = trim().lowercase()
 }

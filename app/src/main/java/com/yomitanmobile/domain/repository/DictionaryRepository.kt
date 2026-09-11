@@ -46,10 +46,13 @@ interface DictionaryRepository {
     suspend fun getEntriesForExpressions(expressions: List<String>): List<WordEntry>
 
     /**
-     * Every written form and reading in the installed dictionaries, as one
-     * set. This is the lexicon the text scanner segments Japanese text
-     * against — see `DictionaryDao.getAllExpressions` for why it has to be
-     * held in memory rather than queried per candidate.
+     * The forms a word is actually WRITTEN in: every expression, plus the
+     * readings of words the dictionary says are written in kana. This is the
+     * lexicon the text scanner segments Japanese text against — see
+     * `DictionaryDao.getAllExpressions` for why it has to be held in memory
+     * rather than queried per candidate, and
+     * `DictionaryDao.getKanaWrittenReadings` for why plain readings are not in
+     * it.
      */
     suspend fun getSurfaceLexicon(): Set<String>
 

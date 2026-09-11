@@ -300,4 +300,47 @@ class TextScanPlannerTest {
         assertEquals(0, strict.selectedCount)
         assertEquals(1, strict.skipped[TextScanSkipReason.UNRANKED])
     }
+
+    @Test
+    fun `common grammar is dropped but rare grammar becomes a card`() {
+        // The reason the tag rule is gated on frequency: a particle ranked 15
+        // is met on every page, a construction ranked 8000 twice a book — and
+        // the second is exactly the one the reader does not know yet.
+        val everyday = entry("には", frequency = 22, partsOfSpeech = listOf("1 exp prt, ⭐ spec"))
+        val rare = entry("ものを", frequency = 8000, partsOfSpeech = listOf("prt"))
+        val result = plan(
+            tokens("には" to 90, "ものを" to 2),
+            mapOf("には" to everyday, "ものを" to rare)
+        )
+
+        assertEquals(1, result.skipped[TextScanSkipReason.FUNCTION_WORD])
+        assertEquals(listOf("ものを"), result.selected.map { it.entry.primaryExpression })
+    }
+
+    @Test
+    fun `priority badges in the tag string do not save a function word`() {
+        // JMdict ships "1 prt, ⭐ spec": a sense number and a corpus badge. They
+        // used to count as content tags, so the "every tag is grammar" test
+        // never fired and こと was card number one of every deck.
+        val entry = entry("こと", frequency = 15, partsOfSpeech = listOf("1 prt", "2 prt fem, ⭐ spec"))
+        val result = plan(tokens("こと" to 198), mapOf("こと" to entry))
+
+        assertEquals(1, result.skipped[TextScanSkipReason.FUNCTION_WORD])
+        assertTrue(result.selected.isEmpty())
+    }
+
+    @Test
+    fun `a tiny unranked kana word is treated as segmentation noise`() {
+        // があ is a real JMdict entry ("see ガー") and longest match ate the が
+        // of 必要がある with it 65 times in one novel.
+        val noise = entry("があ", frequency = 0, partsOfSpeech = listOf("n"))
+        val real = entry("学校", frequency = 616, partsOfSpeech = listOf("n"))
+        val result = plan(
+            tokens("があ" to 65, "学校" to 10),
+            mapOf("があ" to noise, "学校" to real)
+        )
+
+        assertEquals(1, result.skipped[TextScanSkipReason.UNRANKED])
+        assertEquals(listOf("学校"), result.selected.map { it.entry.primaryExpression })
+    }
 }

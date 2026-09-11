@@ -158,7 +158,10 @@ class DictionaryRepositoryImpl @Inject constructor(
     override suspend fun getSurfaceLexicon(): Set<String> = withContext(Dispatchers.IO) {
         try {
             val expressions = dictionaryDao.getAllExpressions(language)
-            val readings = dictionaryDao.getAllReadings(language)
+            // Only the readings that double as a spelling — see
+            // [DictionaryDao.getKanaWrittenReadings]; taking every reading is
+            // what let kana fragments of one word match another word entirely.
+            val readings = dictionaryDao.getKanaWrittenReadings(language)
             HashSet<String>(expressions.size + readings.size).apply {
                 addAll(expressions)
                 addAll(readings)

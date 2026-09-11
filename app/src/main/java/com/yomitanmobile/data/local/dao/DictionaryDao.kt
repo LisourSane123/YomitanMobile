@@ -309,20 +309,44 @@ interface DictionaryDao {
     suspend fun getEntriesByJlptLevel(level: Int, language: String): List<DictionaryEntry>
 
     /**
-     * Every written form and every reading in the installed dictionaries.
+     * Every written form in the installed dictionaries.
      *
      * The text scanner needs the whole word list in memory at once: Japanese
      * has no spaces, so segmenting a subtitle file means testing every
      * substring of every sentence against the dictionary — hundreds of
      * thousands of lookups that cannot go through SQLite one at a time.
-     * Both columns are needed because a text writes 見る with kanji and
-     * みる without, and either spelling must resolve to the same word.
      */
     @Query("SELECT DISTINCT expression FROM dictionary_entries WHERE expression != '' AND language = :language")
     suspend fun getAllExpressions(language: String): List<String>
 
-    @Query("SELECT DISTINCT reading FROM dictionary_entries WHERE reading != '' AND language = :language")
-    suspend fun getAllReadings(language: String): List<String>
+    /**
+     * Readings that are also a way the word is actually WRITTEN: kana-only
+     * headwords, and entries the dictionary marks "usually kana".
+     *
+     * Every reading used to go into the lexicon, on the reasoning that a text
+     * writes 見る with kanji and みる without. What that really did was let any
+     * stretch of kana match the reading of some kanji word: 俺の**こと** became
+     * 鋸 (のこ, "saw"), で**はな**く became 出鼻, そう**にな**った became 担う —
+     * dozens of cards per novel for words that never appear in it. A reading is
+     * only a segmentation candidate when the dictionary itself says the word is
+     * written that way.
+     *
+     * `uk` is JMdict's tag and lands in `parts_of_speech`; Jitendex writes the
+     * same fact as a "(usually kana)" prefix on the gloss, which is still in
+     * the stored definition text at this point.
+     */
+    @Query(
+        """
+        SELECT DISTINCT reading FROM dictionary_entries
+        WHERE reading != '' AND language = :language
+          AND (
+            reading = expression
+            OR (',' || REPLACE(parts_of_speech, ' ', '') || ',') LIKE '%,uk,%'
+            OR definition LIKE '%usually kana%'
+          )
+        """
+    )
+    suspend fun getKanaWrittenReadings(language: String): List<String>
 
     /**
      * Exact-expression batch lookup. Callers MUST chunk the list well below

@@ -120,4 +120,24 @@ class JapaneseDeconjugatorTest {
         assertReaches("食べる", "食べなきゃ")
         assertReaches("行く", "行かなくちゃ")
     }
+
+    @Test
+    fun `adverbial ku reaches the i-adjective`() {
+        assertTrue("優しい" in JapaneseDeconjugator.candidateForms("優しく"))
+        assertTrue("早い" in JapaneseDeconjugator.candidateForms("早く"))
+        // くない / かった / くて keep working alongside it.
+        assertTrue("楽しい" in JapaneseDeconjugator.candidateForms("楽しくない"))
+    }
+
+    @Test
+    fun `suru passive reaches する and not the godan lookalike`() {
+        // Reaching する at all is the point; the candidate list is returned in
+        // a fixed sorted order, so which of さる / する the SCAN picks is
+        // settled by JapaneseTokenizer.GRAMMAR_FORMS, not here.
+        val forms = JapaneseDeconjugator.candidateForms("される")
+        assertTrue(forms.toString(), "する" in forms)
+        assertTrue("勉強する" in JapaneseDeconjugator.candidateForms("勉強された"))
+        // A godan verb in す still resolves through its own rule.
+        assertTrue("話す" in JapaneseDeconjugator.candidateForms("話される"))
+    }
 }

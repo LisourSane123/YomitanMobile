@@ -33,6 +33,21 @@ object JapaneseDeconjugator {
         "しよう", "しない", "します", "しろ", "した", "して", "する"
     )
 
+    /**
+     * さ-stem inflections of する: the passive and causative the し-forms in
+     * [SURU_SUFFIXES] do not cover. Longest first.
+     *
+     * A godan verb in す builds its passive the same way (話す → 話される), so
+     * the noun+する candidate offered here is simply not in any dictionary for
+     * those (話する) and the godan rule's 話す wins a step later. For the する
+     * verbs themselves it is the only rule that reaches the base form.
+     */
+    private val SURU_VOICE_SUFFIXES = listOf(
+        "させられる", "させません", "させました", "させます", "させない",
+        "されません", "されました", "されます", "されない",
+        "させて", "させた", "させる", "されて", "された", "される"
+    )
+
     /** Same for 来る, whose stem changes vowel (き / く / こ). */
     private val KURU_SUFFIXES = listOf(
         "きませんでした", "こなかった", "きました", "きません", "きます",
@@ -177,6 +192,9 @@ object JapaneseDeconjugator {
         addPastForms(form, out)
         addTeForms(form, out)
         addNegativeForms(form, out)
+        // Before the godan rule: it turns される into さ+る and a novel's every
+        // される ("…されています") became 62 cards for 去る, "to leave".
+        addSuruVoiceForms(form, out)
         addCausativePassiveForms(form, out)
         addIAdjectiveForms(form, out)
         addAuxiliaryChains(form, out)
@@ -438,6 +456,18 @@ object JapaneseDeconjugator {
                 val stem = form.removeSuffix("くて")
                 addCandidate(stem + "い", "i-adjective conjunctive", out)
             }
+
+            // The bare adverbial く — 優しく, 早く, 楽しく. Its absence was not a
+            // missing nicety: the text scanner segments by longest match, so
+            // 優しく failed to resolve, fell back to the single kanji 優, and
+            // left しく to be matched as 敷く "to spread out". Every adverb in a
+            // novel produced a card for whatever word its kana tail happened to
+            // spell. Verbs ending in く (歩く) pass through here too and offer
+            // 歩い, which no dictionary lists, so the caller simply drops it.
+            form.endsWith("く") -> {
+                val stem = form.removeSuffix("く")
+                addCandidate(stem + "い", "i-adjective adverbial", out)
+            }
         }
     }
 
@@ -536,6 +566,14 @@ object JapaneseDeconjugator {
         val stem = form.dropLast(suffix.length)
         addCandidate(stem + "する", "suru verb", out)
         if (stem.isNotEmpty()) addCandidate(stem, "suru verb (noun)", out)
+    }
+
+    /** 愛される → 愛する, 勉強させる → 勉強する, bare される → する. */
+    private fun addSuruVoiceForms(form: String, out: MutableList<Step>) {
+        val suffix = SURU_VOICE_SUFFIXES.firstOrNull { form.endsWith(it) } ?: return
+        val stem = form.dropLast(suffix.length)
+        addCandidate(stem + "する", "suru passive/causative", out)
+        if (stem.isNotEmpty()) addCandidate(stem, "suru passive/causative (noun)", out)
     }
 
     /**

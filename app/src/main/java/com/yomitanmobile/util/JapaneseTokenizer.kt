@@ -80,7 +80,14 @@ object JapaneseTokenizer {
         "じゃない", "じゃなかった", "ではない", "ではなかった", "じゃなくて",
         "ました", "ません", "ませんでした", "なかった", "なければ", "なくて",
         "かもしれない", "かもしれません", "ということ", "というのは", "だけど",
-        "ですが", "ますが", "しれない"
+        "ですが", "ますが", "しれない",
+        // The さ-stem of する. The deconjugator does reach する from される, but
+        // it returns its candidates sorted, and さる ("to leave", offered by the
+        // potential rule) sorts first and is a real dictionary word — so every
+        // "…されています" in a novel became a card for 去る, 62 of them in one
+        // book. Consumed whole here, exactly like だった.
+        "される", "されて", "された", "されない", "されます", "されました",
+        "されません", "させる", "させて", "させた", "させない", "させます"
     )
 
     private val MAX_GRAMMAR_LENGTH = GRAMMAR_FORMS.maxOf { it.length }
@@ -182,7 +189,14 @@ object JapaneseTokenizer {
                     base = grammar
                     surface = grammar
                 } else {
-                    for (len in maxLength downTo 1) {
+                    // A lone kanji sitting against another kanji is the tail of
+                    // something the dictionary does not have — a name, a rare
+                    // compound — not a word of its own. Without this, 朱音 (a
+                    // character's name, 698 occurrences in one novel) becomes
+                    // 698 cards for 朱 "unit of weight" and 708 for 音 "sound",
+                    // the two commonest "words" in the deck.
+                    val minLength = if (isGlued(sentence, i, runEnd)) 2 else 1
+                    for (len in maxLength downTo minLength) {
                         val candidate = sentence.substring(i, i + len)
                         val hit = resolved.getOrPut(candidate) { resolve(candidate, lexicon) }
                         if (hit != null) {
@@ -216,6 +230,19 @@ object JapaneseTokenizer {
                 i += matchedLength
             }
         }
+    }
+
+    /**
+     * True when the single character at [start] is a kanji with a kanji
+     * neighbour inside the same Japanese run — the shape of a compound or a
+     * name, where a one-character match is segmentation debris rather than a
+     * word. Kanji standing between kana (人を, 本が) are unaffected.
+     */
+    private fun isGlued(sentence: String, start: Int, runEnd: Int): Boolean {
+        if (!isKanji(sentence[start])) return false
+        val previousIsKanji = start > 0 && isKanji(sentence[start - 1])
+        val nextIsKanji = start + 1 < runEnd && isKanji(sentence[start + 1])
+        return previousIsKanji || nextIsKanji
     }
 
     private class MutableToken(
@@ -274,7 +301,10 @@ object JapaneseTokenizer {
      */
     private fun isWorthCounting(base: String, surface: String): Boolean {
         if (base.isBlank()) return false
-        if (base.length == 1 && isHiragana(base[0])) return false
+        // One kana is never a word worth a card — not in hiragana (は, が) and
+        // not in katakana either, where the debris comes from names and
+        // abbreviations chopped by longest match (シ, セ out of シセ).
+        if (base.length == 1 && isKana(base[0])) return false
         if (base.length == 1 && base[0] in "ーヽヾゝゞ々〆") return false
         return surface.isNotBlank()
     }
@@ -284,6 +314,10 @@ object JapaneseTokenizer {
             c in '一'..'鿿' || // CJK unified ideographs
             c in '㐀'..'䶿' || // CJK extension A
             c == '々' || c == '〆' || c == '〻'
+
+    /** Kanji, plus the iteration mark that stands in for one (人々). */
+    fun isKanji(c: Char): Boolean =
+        c in '一'..'鿿' || c in '㐀'..'䶿' || c == '々'
 
     fun isKana(c: Char): Boolean =
         isHiragana(c) ||

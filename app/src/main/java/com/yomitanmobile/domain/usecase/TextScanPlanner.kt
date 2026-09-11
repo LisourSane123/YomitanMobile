@@ -54,8 +54,68 @@ object TextScanPlanner {
         "僕", "俺", "彼", "彼女", "誰", "何", "なに", "なん",
         // high-frequency connectives and fillers
         "そして", "でも", "しかし", "だから", "また", "まだ", "もう", "とても",
-        "ちょっと", "はい", "ええ", "うん", "いや", "あの", "その", "えっと"
+        "ちょっと", "はい", "ええ", "うん", "いや", "あの", "その", "えっと",
+        // Nominalisers, sentence-enders and suffixes that the tag rule cannot
+        // reach, because each of them also has an ordinary noun sense in the
+        // same entry (こと/事, もの/物, ため/為, とき/時, よう/様) or mixes a
+        // content tag into the grammar one (なんて is `prt adv`). Every item
+        // below is essential grammar in Tae Kim's sense — the first pages of
+        // any grammar guide — and every one of them was sitting in the first
+        // hundred cards of a real novel scan.
+        "こと", "もの", "とき", "ため", "よう", "ところ", "うち", "はず", "つもり",
+        "のか", "んだ", "なんだ", "なの", "なのだ", "なんて", "にも", "とも",
+        "として", "とする", "について", "によって", "における",
+        "くらい", "ぐらい", "だって", "でしょ", "まま", "ほうがいい",
+        "いけない", "ならない", "なんで", "んです", "のです", "お前",
+        // Third pass over the same scan: what was left in the first two
+        // hundred cards once the rules above had run. All of it is N5-N4
+        // grammar in BunPro's ordering — common enough that meeting it twice a
+        // page is the norm, which is the opposite of the rare construction
+        // this filter is meant to let through.
+        "ないか", "よりも", "しかない", "ように", "様に", "でもない", "なんか",
+        "んで", "をして", "気がする", "という", "と言う", "じゃ", "としても",
+        "ことになる", "事になる", "かしら",
+        // Honorific and pluralising suffixes: grammar attached to a name, and
+        // a card for "Mr" helps nobody.
+        "さん", "ちゃん", "くん", "様", "さま", "たち", "達", "ら"
     ) + JapaneseTokenizer.GRAMMAR_FORMS // the copula/auxiliary chains the tokeniser keeps whole
+
+    /**
+     * Rank at which a grammar word stops being scaffolding and starts being
+     * something worth a card.
+     *
+     * Dropping everything the tags call grammar is wrong in one direction: a
+     * particle ranked 15 is met on every page and needs no card, but a
+     * construction ranked 8000 is met twice a book, which is exactly the
+     * situation in which the reader does NOT know it. Frequency is the only
+     * thing that separates the two, so the tag rule is gated on it and the
+     * literal [FUNCTION_WORDS] list stays as the override for basics the
+     * frequency lists do not rank at all.
+     */
+    const val GRAMMAR_KNOWN_RANK = 3000
+
+    /**
+     * A one- or two-kana "word" that no frequency list ranks at all.
+     *
+     * Longest-match segmentation reaches for the longest dictionary entry at
+     * each position, and JMdict contains short kana entries that are really
+     * redirects or interjections — があ ("⟶ガー") swallowed the が of 必要がある
+     * 65 times in one novel. Every genuinely useful two-kana word (こと, もの,
+     * いい, やる) is ranked in the top few thousand, so "kana, tiny, and
+     * unranked" is noise with no counterexamples.
+     */
+    private fun isSegmentationNoise(word: String, entry: MergedWordEntry): Boolean =
+        word.length <= 2 &&
+            word.none { JapaneseTokenizer.isKanji(it) } &&
+            entry.frequency <= 0
+
+    /**
+     * Grammar the reader necessarily already lives with: tagged as a function
+     * word AND ranked inside [GRAMMAR_KNOWN_RANK]. Unranked or rarer grammar
+     * becomes a card.
+     */
+    private fun isEverydayGrammar(entry: MergedWordEntry): Boolean =
+        WordFilterRules.isFunctionWord(entry) && entry.frequency in 1..GRAMMAR_KNOWN_RANK
 
     /**
      * @param words distinct words found in the text, in any order
@@ -98,11 +158,13 @@ object TextScanPlanner {
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
                 entry == null ->
                     reject(TextScanSkipReason.NOT_IN_DICTIONARY, occurrences)
+                isSegmentationNoise(word, entry) ->
+                    reject(TextScanSkipReason.UNRANKED, occurrences)
                 // Same reason, second source of truth: the dictionary's own
                 // part-of-speech tags. Runs right after the lookup so a word
                 // rejected as grammar is counted as grammar and not as, say,
                 // "too few occurrences".
-                filters.skipFunctionWords && WordFilterRules.isFunctionWord(entry) ->
+                filters.skipFunctionWords && isEverydayGrammar(entry) ->
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
                 occurrences < filters.minOccurrences ->
                     reject(TextScanSkipReason.TOO_FEW_OCCURRENCES, occurrences)

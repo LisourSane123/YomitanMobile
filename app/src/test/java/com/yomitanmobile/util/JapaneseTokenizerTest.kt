@@ -16,6 +16,37 @@ class JapaneseTokenizerTest {
         JapaneseTokenizer.tokenize(text, lexicon).map { it.baseForm }
 
     @Test
+    fun `a name is not chopped into the single kanji it is made of`() {
+        // 朱音 is a character's name: no dictionary has it, but both halves are
+        // entries of their own. Counting them turned a novel's heroine into 700
+        // cards for 朱 "unit of weight" and 700 for 音 "sound".
+        val lexicon = lexiconOf("朱", "音", "は", "笑う")
+        val bases = baseForms("朱音は笑った。", lexicon)
+
+        assertFalse(bases.toString(), "朱" in bases)
+        assertFalse(bases.toString(), "音" in bases)
+        assertTrue(bases.toString(), "笑う" in bases)
+    }
+
+    @Test
+    fun `a single kanji standing between kana is still a word`() {
+        val lexicon = lexiconOf("人", "を", "見る")
+        assertTrue("人" in baseForms("人を見る。", lexicon))
+    }
+
+    @Test
+    fun `adverbial ku resolves instead of leaving a kana tail behind`() {
+        // 優しく used to fail, fall back to the single kanji 優, and leave しく
+        // to be matched as 敷く — a card for "to spread out" in every novel
+        // containing a kind character.
+        val lexicon = lexiconOf("優しい", "敷く", "語りかける", "が", "千代")
+        val bases = baseForms("千代が優しく語りかける。", lexicon)
+
+        assertTrue(bases.toString(), "優しい" in bases)
+        assertFalse(bases.toString(), "敷く" in bases)
+    }
+
+    @Test
     fun `longest match wins over shorter words inside it`() {
         val lexicon = lexiconOf("東京", "都", "東京都", "行く")
         assertEquals(listOf("東京都"), baseForms("東京都", lexicon))
@@ -137,5 +168,17 @@ class JapaneseTokenizerTest {
     @Test
     fun `empty text yields nothing`() {
         assertTrue(JapaneseTokenizer.tokenize("", lexiconOf("猫")).isEmpty())
+    }
+
+    @Test
+    fun `a single katakana is not a word`() {
+        // シ and セ are dictionary entries (musical notes, league abbreviations)
+        // and longest match reaches them whenever a katakana name it does not
+        // know is cut short.
+        val lexicon = lexiconOf("シ", "セ", "は", "笑う")
+        val bases = baseForms("シセは笑った。", lexicon)
+
+        assertFalse(bases.toString(), "シ" in bases)
+        assertFalse(bases.toString(), "セ" in bases)
     }
 }

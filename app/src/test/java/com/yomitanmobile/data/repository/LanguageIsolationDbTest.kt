@@ -40,7 +40,9 @@ class LanguageIsolationDbTest {
             AppDatabase::class.java
         ).allowMainThreadQueries().build()
 
-        insert("欲しい", "ほしい", "ja", frequency = 300)
+        // uk: the dictionary says this one is usually written in kana, which
+        // is what puts its reading in the scanner's lexicon.
+        insert("欲しい", "ほしい", "ja", frequency = 300, partsOfSpeech = "adj-i, uk")
         insert("学校", "がっこう", "ja", frequency = 100)
         insert("school", "school", "en", frequency = 100)
         insert("want", "want", "en", frequency = 300)
@@ -66,21 +68,27 @@ class LanguageIsolationDbTest {
         )
     }
 
-    private fun insert(expression: String, reading: String, language: String, frequency: Int) =
-        runBlocking {
-            db.dictionaryDao().insertAll(
-                listOf(
-                    DictionaryEntry(
-                        expression = expression,
-                        reading = reading,
-                        definition = "[]",
-                        frequency = frequency,
-                        dictionaryName = "Test",
-                        language = language
-                    )
+    private fun insert(
+        expression: String,
+        reading: String,
+        language: String,
+        frequency: Int,
+        partsOfSpeech: String = ""
+    ) = runBlocking {
+        db.dictionaryDao().insertAll(
+            listOf(
+                DictionaryEntry(
+                    expression = expression,
+                    reading = reading,
+                    definition = "[]",
+                    frequency = frequency,
+                    partsOfSpeech = partsOfSpeech,
+                    dictionaryName = "Test",
+                    language = language
                 )
             )
-        }
+        )
+    }
 
     @Test
     fun `japanese search returns japanese rows and nothing else`() = runBlocking {
@@ -123,7 +131,10 @@ class LanguageIsolationDbTest {
     fun `the scanner lexicon is scoped to the active language too`() = runBlocking {
         // getSurfaceLexicon feeds segmentation; an unscoped one would make a
         // Japanese scan match English words and vice versa.
-        assertEquals(setOf("欲しい", "ほしい", "学校", "がっこう"), repoFor(AppLanguage.JAPANESE).getSurfaceLexicon())
+        // 欲しい is tagged uk in the fixture, so its reading is a spelling and
+        // belongs in the lexicon; がっこう is only how 学校 is pronounced and
+        // must stay out — see DictionaryDao.getKanaWrittenReadings.
+        assertEquals(setOf("欲しい", "ほしい", "学校"), repoFor(AppLanguage.JAPANESE).getSurfaceLexicon())
         assertEquals(setOf("school", "want"), repoFor(AppLanguage.ENGLISH).getSurfaceLexicon())
         assertEquals(setOf("escuela", "hablar"), repoFor(AppLanguage.SPANISH).getSurfaceLexicon())
     }

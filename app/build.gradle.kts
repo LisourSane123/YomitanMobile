@@ -87,6 +87,20 @@ android {
             // Robolectric-backed Compose UI tests need real Android resources
             // on the JVM classpath.
             isIncludeAndroidResources = true
+            all {
+                // The offline harnesses (BookScanHarness) hold a whole Yomitan
+                // dictionary in memory; the 512 MB default cannot.
+                it.maxHeapSize = "6g"
+                // Gradle's -D lands on the Gradle JVM, not on the test worker.
+                // Forward the handful the harnesses read, so they can be
+                // pointed at files without editing code.
+                for (key in listOf(
+                    "book.paths", "dict.zip", "freq.zip", "out.dir",
+                    "tier", "minOccurrences", "assumeKnownTopRank", "maxWords"
+                )) {
+                    System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
+                }
+            }
         }
     }
     packaging {
