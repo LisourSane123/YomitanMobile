@@ -118,6 +118,69 @@ object TextScanPlanner {
         WordFilterRules.isFunctionWord(entry) && entry.frequency in 1..GRAMMAR_KNOWN_RANK
 
     /**
+     * One word, one card — spelled the way the book spells it.
+     *
+     * Two tokens can resolve to the same dictionary entry: the text writes
+     * both 去る and さる, or both 持って来る and 持ってくる, and each reaches the
+     * same headword. Left alone that is two cards for one word, and the deck
+     * teaches the same thing twice.
+     *
+     * The surviving spelling is the one the TEXT used most, not the
+     * dictionary's headword: the reader will meet the word again on the next
+     * page in the book's spelling, and a card front they never see in the wild
+     * is a card they will not recognise. The entry keeps everything else —
+     * reading, senses, frequency — so only the front changes.
+     *
+     * Counts add up; the sentence and the earliness come from whichever
+     * spelling appeared first.
+     */
+    private fun mergeByEntry(
+        words: List<ScanToken>,
+        entries: Map<String, MergedWordEntry>
+    ): Pair<List<ScanToken>, Map<String, MergedWordEntry>> {
+        val groups = LinkedHashMap<String, MutableList<ScanToken>>()
+        val entryOf = HashMap<String, MergedWordEntry>()
+        val unresolved = mutableListOf<ScanToken>()
+        for (token in words) {
+            val entry = entries[token.baseForm]
+            if (entry == null) {
+                unresolved += token
+                continue
+            }
+            val key = entry.primaryExpression + "\u0000" + entry.reading
+            groups.getOrPut(key) { mutableListOf() }.add(token)
+            entryOf[key] = entry
+        }
+
+        val outWords = ArrayList<ScanToken>(groups.size + unresolved.size)
+        val outEntries = HashMap<String, MergedWordEntry>(groups.size)
+        for ((key, tokens) in groups) {
+            val entry = entryOf.getValue(key)
+            if (tokens.size == 1) {
+                outWords += tokens[0]
+                outEntries[tokens[0].baseForm] = entry
+                continue
+            }
+            // The book's own spelling: most occurrences wins, ties go to the
+            // form carrying kanji, so 去る beats さる at 3 occurrences each.
+            val winner = tokens.maxWith(
+                compareBy<ScanToken> { it.occurrences }
+                    .thenBy { token -> token.baseForm.count { JapaneseTokenizer.isKanji(it) } }
+            )
+            val earliest = tokens.maxByOrNull { it.earliness } ?: winner
+            outWords += ScanToken(
+                baseForm = winner.baseForm,
+                occurrences = tokens.sumOf { it.occurrences },
+                sentence = earliest.sentence.ifBlank { winner.sentence },
+                earliness = earliest.earliness
+            )
+            outEntries[winner.baseForm] = entry.copy(primaryExpression = winner.baseForm)
+        }
+        outWords += unresolved
+        return outWords to outEntries
+    }
+
+    /**
      * @param words distinct words found in the text, in any order
      * @param entries dictionary entries resolved for those words, keyed by the
      *   base form the tokeniser produced. A missing key means the word is not
@@ -146,13 +209,16 @@ object TextScanPlanner {
             }
         }
 
-        val maxOccurrences = words.maxOfOrNull { it.occurrences } ?: 1
+        val merged = mergeByEntry(words, entries)
+        val maxOccurrences = merged.first.maxOfOrNull { it.occurrences } ?: 1
+        val mergedWords = merged.first
+        val mergedEntries = merged.second
 
         val kept = mutableListOf<ScannedWord>()
-        for (token in words) {
+        for (token in mergedWords) {
             val word = token.baseForm
             val occurrences = token.occurrences
-            val entry = entries[word]
+            val entry = mergedEntries[word]
             when {
                 filters.skipFunctionWords && word in FUNCTION_WORDS ->
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
@@ -210,7 +276,7 @@ object TextScanPlanner {
 
         return TextScanPlan(
             sources = sources,
-            distinctWordCount = words.size,
+            distinctWordCount = mergedWords.size,
             totalTokenCount = totalTokenCount,
             selected = selected,
             skipped = skipped,

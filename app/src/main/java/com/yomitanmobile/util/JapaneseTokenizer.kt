@@ -195,8 +195,8 @@ object JapaneseTokenizer {
                     // character's name, 698 occurrences in one novel) becomes
                     // 698 cards for 朱 "unit of weight" and 708 for 音 "sound",
                     // the two commonest "words" in the deck.
-                    val minLength = if (isGlued(sentence, i, runEnd)) 2 else 1
-                    for (len in maxLength downTo minLength) {
+                    for (len in maxLength downTo 1) {
+                        if (!isSelfContained(sentence, i, len, runEnd)) continue
                         val candidate = sentence.substring(i, i + len)
                         val hit = resolved.getOrPut(candidate) { resolve(candidate, lexicon) }
                         if (hit != null) {
@@ -233,16 +233,36 @@ object JapaneseTokenizer {
     }
 
     /**
-     * True when the single character at [start] is a kanji with a kanji
-     * neighbour inside the same Japanese run — the shape of a compound or a
-     * name, where a one-character match is segmentation debris rather than a
-     * word. Kanji standing between kana (人を, 本が) are unaffected.
+     * Whether a match of [length] characters at [start] is a word in its own
+     * right, rather than a piece broken off something longer.
+     *
+     * Two shapes are rejected, both of them "the dictionary did not have the
+     * long thing, so longest match settled for a fragment of it":
+     *
+     * - a lone KANJI with a kanji neighbour. 朱音, a name JMdict does not
+     *   list, otherwise became 699 cards for 朱 and 708 for 音.
+     * - one or two KATAKANA with a katakana neighbour. アイツ is written in
+     *   katakana for emphasis and is filed under あいつ, so the scan took アイ
+     *   ("love") eleven times.
+     *
+     * A longer katakana match is left alone: ゲーム out of ゲームセンター is
+     * still the word the reader needs, while アイ out of アイツ is not.
      */
-    private fun isGlued(sentence: String, start: Int, runEnd: Int): Boolean {
-        if (!isKanji(sentence[start])) return false
-        val previousIsKanji = start > 0 && isKanji(sentence[start - 1])
-        val nextIsKanji = start + 1 < runEnd && isKanji(sentence[start + 1])
-        return previousIsKanji || nextIsKanji
+    private fun isSelfContained(sentence: String, start: Int, length: Int, runEnd: Int): Boolean {
+        val end = start + length
+        val previous = sentence.getOrNull(start - 1)
+        val next = if (end < runEnd) sentence[end] else null
+        if (length == 1 && isKanji(sentence[start])) {
+            val gluedToKanji = (previous != null && isKanji(previous)) ||
+                (next != null && isKanji(next))
+            if (gluedToKanji) return false
+        }
+        if (length <= 2 && (start until end).all { isKatakana(sentence[it]) }) {
+            val gluedToKatakana = (previous != null && isKatakana(previous)) ||
+                (next != null && isKatakana(next))
+            if (gluedToKatakana) return false
+        }
+        return true
     }
 
     private class MutableToken(
@@ -318,6 +338,10 @@ object JapaneseTokenizer {
     /** Kanji, plus the iteration mark that stands in for one (人々). */
     fun isKanji(c: Char): Boolean =
         c in '一'..'鿿' || c in '㐀'..'䶿' || c == '々'
+
+    /** Katakana, including the prolonged-sound mark and its iteration marks. */
+    fun isKatakana(c: Char): Boolean =
+        c in 'ァ'..'ヺ' || c == 'ー' || c == 'ヽ' || c == 'ヾ'
 
     fun isKana(c: Char): Boolean =
         isHiragana(c) ||

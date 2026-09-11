@@ -343,4 +343,32 @@ class TextScanPlannerTest {
         assertEquals(1, result.skipped[TextScanSkipReason.UNRANKED])
         assertEquals(listOf("学校"), result.selected.map { it.entry.primaryExpression })
     }
+
+    @Test
+    fun `two spellings of one word make one card, spelled the way the book spells it`() {
+        // The text writes 持ってくる eight times and 持って来る twice; both
+        // resolve to the same entry. One card, and the front is the spelling
+        // the reader will meet again on the next page.
+        val dictionary = entry("持って来る", reading = "もってくる", frequency = 900)
+        val result = plan(
+            tokens("持ってくる" to 8, "持って来る" to 2),
+            mapOf("持ってくる" to dictionary, "持って来る" to dictionary)
+        )
+
+        assertEquals(1, result.selected.size)
+        assertEquals("持ってくる", result.selected.single().entry.primaryExpression)
+        assertEquals(10, result.selected.single().occurrences)
+        assertEquals(1, result.distinctWordCount)
+    }
+
+    @Test
+    fun `a tie between spellings goes to the one with kanji`() {
+        val dictionary = entry("去る", reading = "さる", frequency = 1055)
+        val result = plan(
+            tokens("さる" to 3, "去る" to 3),
+            mapOf("さる" to dictionary, "去る" to dictionary)
+        )
+
+        assertEquals(listOf("去る"), result.selected.map { it.entry.primaryExpression })
+    }
 }
