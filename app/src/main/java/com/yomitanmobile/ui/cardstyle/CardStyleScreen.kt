@@ -65,7 +65,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
@@ -88,6 +87,8 @@ import com.yomitanmobile.domain.model.PitchAccentStyle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -96,8 +97,8 @@ fun CardStyleScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
 
     // Single source of truth for the shipped defaults — mirrors what the
     // export path (DetailViewModel.loadCardStylePreferences) falls back to, so
@@ -1173,8 +1174,8 @@ private fun ColorPickerRow(
     presetColors: List<String>,
     onColorSelected: (String) -> Unit
 ) {
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
     var showCustomPicker by remember { mutableStateOf(false) }
     var customR by remember { mutableFloatStateOf(128f) }
     var customG by remember { mutableFloatStateOf(128f) }

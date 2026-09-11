@@ -1,6 +1,7 @@
 package com.yomitanmobile.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -13,10 +14,12 @@ import com.yomitanmobile.ui.download.DictionaryDownloadScreen
 import com.yomitanmobile.ui.favorites.FavoritesScreen
 import com.yomitanmobile.ui.language.LanguageSelectScreen
 import com.yomitanmobile.ui.search.SearchScreen
+import com.yomitanmobile.ui.settings.BackupScreen
 import com.yomitanmobile.ui.settings.FrequencyDisplayScreen
 import com.yomitanmobile.ui.settings.SettingsScreen
 import com.yomitanmobile.ui.setup.SetupScreen
 import com.yomitanmobile.ui.statistics.StatisticsScreen
+import com.yomitanmobile.ui.tools.ToolsScreen
 
 @Composable
 fun AppNavHost(
@@ -24,11 +27,13 @@ fun AppNavHost(
     startDestination: String = Screen.Search.route,
     focusSearch: Boolean = false,
     sharedSearchQuery: String? = null,
-    sharedSearchNonce: Int = 0
+    sharedSearchNonce: Int = 0,
+    modifier: Modifier = Modifier
 ) {
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = startDestination,
+        modifier = modifier
     ) {
         composable(Screen.LanguageSelect.route) {
             LanguageSelectScreen(
@@ -47,6 +52,21 @@ fun AppNavHost(
                         popUpTo(Screen.Setup.route) { inclusive = true }
                     }
                 }
+            )
+        }
+
+        composable(Screen.Backup.route) {
+            BackupScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Tools.route) {
+            ToolsScreen(
+                onNavigateToJlptDeck = { navController.navigate(Screen.JlptDeck.route) },
+                onNavigateToTextScan = { navController.navigate(Screen.TextScan.route) },
+                onNavigateToAnkiScan = { navController.navigate(Screen.AnkiScan.route) },
+                onNavigateToDictionaries = { navController.navigate(Screen.Dictionaries.route) },
+                onNavigateToDownload = { navController.navigate(Screen.DictionaryDownload.route) },
+                onNavigateToFavorites = { navController.navigate(Screen.Favorites.route) }
             )
         }
 
@@ -87,6 +107,9 @@ fun AppNavHost(
                 },
                 onNavigateToStatistics = {
                     navController.navigate(Screen.Statistics.route)
+                },
+                onNavigateToBackup = {
+                    navController.navigate(Screen.Backup.route)
                 },
                 onNavigateToCardStyle = {
                     navController.navigate(Screen.CardStyle.route)

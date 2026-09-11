@@ -54,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -75,6 +74,8 @@ import com.yomitanmobile.util.WordCategoryClassifier
 import com.yomitanmobile.util.JlptLevelUtil
 import com.yomitanmobile.util.PartsOfSpeechFormatter
 import kotlinx.coroutines.delay
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
@@ -97,8 +98,8 @@ fun SearchScreen(
     val importedWordsCount by viewModel.importedWordsCount.collectAsState()
     val categoryStats by viewModel.categoryStats.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
 
     // Quick stats icon navigates to Statistics screen
     val focusRequester = remember { FocusRequester() }
@@ -139,14 +140,11 @@ fun SearchScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
+                    // Statistics and settings moved to the bottom bar; only
+                    // favourites stays here, being a list of words and so part
+                    // of searching rather than a place of its own.
                     IconButton(onClick = onFavoritesClick) {
                         Icon(Icons.Default.Favorite, contentDescription = tr("Ulubione", "Favorites"))
-                    }
-                    IconButton(onClick = onNavigateToStatistics) {
-                        Icon(Icons.Default.BarChart, contentDescription = tr("Statystyki", "Statistics"))
-                    }
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = tr("Ustawienia", "Settings"))
                     }
                 }
             )
@@ -261,7 +259,7 @@ private fun DeconjugationHintsCard(
     onCandidateClick: (String) -> Unit,
     isEnglish: Boolean
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     val shown = candidates.take(4)
     if (shown.isEmpty()) return
 
@@ -316,7 +314,7 @@ private fun DeconjugationHintsCard(
 
 @Composable
 private fun DailyGoalBanner(dailyGoal: DailyGoalState, isEnglish: Boolean) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     val containerColor = if (dailyGoal.isCompleted) {
         MaterialTheme.colorScheme.tertiaryContainer
     } else {
@@ -387,7 +385,7 @@ private fun SearchHistorySection(
     onClearHistory: () -> Unit,
     isEnglish: Boolean
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -471,7 +469,7 @@ private fun MergedWordEntryCard(
     isEnglish: Boolean,
     onClick: () -> Unit
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -589,7 +587,7 @@ private fun EmptySearchState(
     appLanguage: AppLanguage,
     isEnglish: Boolean
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
@@ -708,7 +706,7 @@ private fun NoResultsState(
     appLanguage: AppLanguage,
     isEnglish: Boolean
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(tr("Brak wyników dla:", "No results for:"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

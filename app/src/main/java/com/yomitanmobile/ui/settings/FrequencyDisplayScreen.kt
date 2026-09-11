@@ -28,12 +28,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.yomitanmobile.util.LocaleHelper
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,8 +41,8 @@ fun FrequencyDisplayScreen(
     onNavigateBack: () -> Unit,
     viewModel: FrequencySettingsViewModel = hiltViewModel()
 ) {
-    val isEnglish = LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String) = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
 
     val order by viewModel.order.collectAsState()
     val showAll by viewModel.showAll.collectAsState()
@@ -53,7 +53,7 @@ fun FrequencyDisplayScreen(
                 title = { Text(tr("Wyświetlanie częstotliwości", "Frequency display")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wstecz", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 }
             )

@@ -1,12 +1,22 @@
 package com.yomitanmobile.data.download
 
 import android.content.Context
+import android.util.Log
 import com.yomitanmobile.domain.repository.DictionaryRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
 import java.io.File
@@ -41,12 +51,37 @@ sealed class DownloadResult {
     data class Error(val dictionaryName: String, val message: String) : DownloadResult()
 }
 
+/** Where a queued dictionary is in its life. */
+enum class QueueState { WAITING, RUNNING, DONE, FAILED, CANCELLED }
+
+/**
+ * One dictionary in the install queue.
+ *
+ * The queue outlives the screen that filled it: installing a dictionary takes
+ * minutes, and nobody wants to sit on the download screen watching a bar when
+ * they could be mining cards.
+ */
+data class QueuedDownload(
+    val info: DictionaryDownloadInfo,
+    val state: QueueState = QueueState.WAITING,
+    /** Entries imported, once it is [QueueState.DONE]. */
+    val entriesImported: Int = 0,
+    val error: String? = null
+)
+
 @Singleton
 class DictionaryDownloadManager(
     private val context: Context,
-    private val repository: DictionaryRepository
+    private val repository: DictionaryRepository,
+    /**
+     * Application-scoped: an install must survive the screen that started it.
+     * Downloads took minutes and died the moment the user navigated away,
+     * because the work ran in the download screen's ViewModel scope.
+     */
+    private val scope: CoroutineScope
 ) {
     companion object {
+        private const val TAG = "DictionaryDownload"
         private const val BUFFER_SIZE = 64 * 1024
         private const val MAX_REDIRECTS = 5
         private const val MAX_DOWNLOAD_BYTES = 2L * 1024L * 1024L * 1024L
@@ -77,7 +112,109 @@ class DictionaryDownloadManager(
     private val _isDownloading = MutableStateFlow(false)
     val isDownloading: StateFlow<Boolean> = _isDownloading.asStateFlow()
 
+    /**
+     * Everything asked for, in the order it was asked for: what is installing
+     * now, what is waiting, and what finished.
+     */
+    private val _queue = MutableStateFlow<List<QueuedDownload>>(emptyList())
+    val queue: StateFlow<List<QueuedDownload>> = _queue.asStateFlow()
+
+    /**
+     * Outcomes, for whatever screen happens to be open. Buffered and
+     * drop-oldest: a rendezvous flow would park the worker forever whenever
+     * nobody is looking at the download screen, which is the normal case now
+     * that the queue runs in the background.
+     */
+    private val _results = MutableSharedFlow<DownloadResult>(
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val results: SharedFlow<DownloadResult> = _results.asSharedFlow()
+
     private val downloadMutex = Mutex()
+    private val queueMutex = Mutex()
+    private var worker: Job? = null
+
+    /**
+     * How one queued dictionary is installed. A property rather than a direct
+     * call so the queue's own behaviour — order, de-duplication, cancelling,
+     * what happens after a failure — can be tested without a network.
+     */
+    internal var installer: suspend (DictionaryDownloadInfo) -> DownloadResult =
+        { downloadAndImport(it) }
+
+    /**
+     * Adds dictionaries to the install queue and starts working through it if
+     * nothing is running.
+     *
+     * Returns immediately: the work happens on [scope], which belongs to the
+     * application rather than to any screen, so leaving the download screen —
+     * or the whole settings tree — no longer cancels an install halfway
+     * through. Anything already queued or installing is not queued twice.
+     */
+    fun enqueue(dictionaries: List<DictionaryDownloadInfo>) {
+        if (dictionaries.isEmpty()) return
+        scope.launch {
+            queueMutex.withLock {
+                val pending = _queue.value.filter { it.state == QueueState.WAITING || it.state == QueueState.RUNNING }
+                    .mapTo(HashSet()) { it.info.id }
+                val added = dictionaries.filterNot { it.id in pending }.map { QueuedDownload(it) }
+                if (added.isEmpty()) return@withLock
+                _queue.value = _queue.value + added
+                if (worker?.isActive != true) worker = scope.launch { drainQueue() }
+            }
+        }
+    }
+
+    fun enqueue(info: DictionaryDownloadInfo) = enqueue(listOf(info))
+
+    /**
+     * Drops a dictionary from the queue. The one currently installing keeps
+     * going — a half-imported dictionary is worse than a finished one, and the
+     * import is the long part anyway.
+     */
+    fun cancelQueued(id: String) {
+        _queue.value = _queue.value.map {
+            if (it.info.id == id && it.state == QueueState.WAITING) it.copy(state = QueueState.CANCELLED) else it
+        }
+    }
+
+    /** Clears everything that is no longer going to change. */
+    fun clearFinished() {
+        _queue.value = _queue.value.filter {
+            it.state == QueueState.WAITING || it.state == QueueState.RUNNING
+        }
+    }
+
+    /** Installs queued dictionaries one at a time until none are waiting. */
+    private suspend fun drainQueue() {
+        while (true) {
+            val next = _queue.value.firstOrNull { it.state == QueueState.WAITING } ?: return
+            setState(next.info.id) { it.copy(state = QueueState.RUNNING) }
+            val result = try {
+                installer(next.info)
+            } catch (t: Throwable) {
+                // Throwable, not Exception: the import path allocates in
+                // megabytes and an OutOfMemoryError here would otherwise reach
+                // the uncaught handler and take the app down mid-queue.
+                Log.w(TAG, "Install of ${next.info.name} failed", t)
+                DownloadResult.Error(next.info.name, "${t.javaClass.simpleName}: ${t.message ?: "no message"}")
+            }
+            when (result) {
+                is DownloadResult.Success -> setState(next.info.id) {
+                    it.copy(state = QueueState.DONE, entriesImported = result.entriesImported)
+                }
+                is DownloadResult.Error -> setState(next.info.id) {
+                    it.copy(state = QueueState.FAILED, error = result.message)
+                }
+            }
+            _results.emit(result)
+        }
+    }
+
+    private fun setState(id: String, transform: (QueuedDownload) -> QueuedDownload) {
+        _queue.value = _queue.value.map { if (it.info.id == id) transform(it) else it }
+    }
 
     suspend fun downloadAndImport(info: DictionaryDownloadInfo): DownloadResult {
         if (!downloadMutex.tryLock()) {

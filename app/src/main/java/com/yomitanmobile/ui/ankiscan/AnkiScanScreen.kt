@@ -43,7 +43,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -51,10 +50,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.yomitanmobile.util.LocaleHelper
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
+import com.yomitanmobile.ui.common.rememberAnkiPermissionGate
 
 /**
  * Scans the AnkiDroid collection and shows what it found.
@@ -72,41 +73,14 @@ fun AnkiScanScreen(
     onNavigateBack: () -> Unit,
     viewModel: AnkiScanViewModel = hiltViewModel()
 ) {
-    val isEnglish = LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String) = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
-    var pendingScan by remember { mutableStateOf(false) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        val wanted = pendingScan
-        pendingScan = false
-        if (granted && wanted) {
-            viewModel.scan()
-        } else if (!granted) {
-            Toast.makeText(
-                context,
-                tr(
-                    "Bez uprawnienia do AnkiDroida nie da się przeczytać kolekcji.",
-                    "Without AnkiDroid permission the collection can't be read."
-                ),
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-    fun startScan() {
-        val granted = ContextCompat.checkSelfPermission(context, ANKI_PERMISSION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            viewModel.scan()
-        } else {
-            pendingScan = true
-            permissionLauncher.launch(ANKI_PERMISSION)
-        }
-    }
+    val withAnkiPermission = rememberAnkiPermissionGate()
+    fun startScan() = withAnkiPermission { viewModel.scan() }
 
     val isScanning by viewModel.isScanning.collectAsState()
     val summary by viewModel.summary.collectAsState()
@@ -122,7 +96,7 @@ fun AnkiScanScreen(
                 title = { Text(tr("Skan kolekcji Anki", "Anki collection scan")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wstecz", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 }
             )

@@ -9,6 +9,7 @@ import com.yomitanmobile.data.download.DictionaryDownloadManager
 import com.yomitanmobile.data.download.DownloadPhase
 import com.yomitanmobile.data.download.DownloadProgress
 import com.yomitanmobile.data.download.DownloadResult
+import com.yomitanmobile.data.download.QueuedDownload
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.domain.usecase.GetDictionariesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,6 +49,9 @@ class DictionaryDownloadViewModel @Inject constructor(
 
     val isDownloading: StateFlow<Boolean> = downloadManager.isDownloading
 
+    /** What is installing and what is waiting — see [DictionaryDownloadManager.queue]. */
+    val queue: StateFlow<List<QueuedDownload>> = downloadManager.queue
+
     private val _selectedCategory = MutableStateFlow<DictionaryCategory?>(null)
     val selectedCategory: StateFlow<DictionaryCategory?> = _selectedCategory.asStateFlow()
 
@@ -62,6 +66,23 @@ class DictionaryDownloadViewModel @Inject constructor(
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val events = _events.asSharedFlow()
+
+    init {
+        // Outcomes come from the queue, which outlives this ViewModel; the
+        // screen may not even have existed when the install started.
+        viewModelScope.launch {
+            downloadManager.results.collect { result ->
+                _events.emit(
+                    when (result) {
+                        is DownloadResult.Success ->
+                            DownloadEvent.Success(result.dictionaryName, result.entriesImported)
+                        is DownloadResult.Error ->
+                            DownloadEvent.Error(result.dictionaryName, result.message)
+                    }
+                )
+            }
+        }
+    }
 
     fun selectCategory(category: DictionaryCategory?) {
         _selectedCategory.value = category
@@ -86,34 +107,16 @@ class DictionaryDownloadViewModel @Inject constructor(
         }
     }
 
-    fun downloadDictionary(info: DictionaryDownloadInfo) {
-        viewModelScope.launch {
-            // Catch Throwable (not just Exception) — kotlinx.coroutines
-            // turns OutOfMemoryError into a propagating throw, and the
-            // dictionary import path allocates several MB at a time. We
-            // surface those as DownloadEvent.Error rather than letting
-            // them reach the uncaught-exception handler, which would
-            // crash the app on the user with no diagnostic.
-            try {
-                val result = downloadManager.downloadAndImport(info)
-                when (result) {
-                    is DownloadResult.Success -> {
-                        _events.emit(DownloadEvent.Success(result.dictionaryName, result.entriesImported))
-                    }
-                    is DownloadResult.Error -> {
-                        _events.emit(DownloadEvent.Error(result.dictionaryName, result.message))
-                    }
-                }
-            } catch (t: Throwable) {
-                _events.emit(
-                    DownloadEvent.Error(
-                        info.name,
-                        "${t.javaClass.simpleName}: ${t.message ?: "no message"}"
-                    )
-                )
-            }
-        }
-    }
+    /**
+     * Queues a dictionary and returns at once. The install runs in the
+     * application scope, so the user can leave this screen, mine cards or
+     * change settings while it works — and queue more on the way.
+     */
+    fun downloadDictionary(info: DictionaryDownloadInfo) = downloadManager.enqueue(info)
+
+    fun cancelQueued(id: String) = downloadManager.cancelQueued(id)
+
+    fun clearFinished() = downloadManager.clearFinished()
 
     fun downloadJmdict() {
         downloadDictionary(
@@ -125,30 +128,11 @@ class DictionaryDownloadViewModel @Inject constructor(
         )
     }
 
+    /** Everything recommended that is not installed yet, in one go. */
     fun downloadAllRecommended() {
-        viewModelScope.launch {
-            for (dict in AvailableDictionaries.recommendedFor(languageSettings.current)) {
-                if (!isDictionaryInstalled(dict)) {
-                    try {
-                        val result = downloadManager.downloadAndImport(dict)
-                        when (result) {
-                            is DownloadResult.Success -> {
-                                _events.emit(DownloadEvent.Success(result.dictionaryName, result.entriesImported))
-                            }
-                            is DownloadResult.Error -> {
-                                _events.emit(DownloadEvent.Error(result.dictionaryName, result.message))
-                            }
-                        }
-                    } catch (t: Throwable) {
-                        _events.emit(
-                            DownloadEvent.Error(
-                                dict.name,
-                                "${t.javaClass.simpleName}: ${t.message ?: "no message"}"
-                            )
-                        )
-                    }
-                }
-            }
-        }
+        downloadManager.enqueue(
+            AvailableDictionaries.recommendedFor(languageSettings.current)
+                .filterNot { isDictionaryInstalled(it) }
+        )
     }
 }

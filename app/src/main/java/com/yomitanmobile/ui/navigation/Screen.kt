@@ -18,4 +18,7 @@ sealed class Screen(val route: String) {
     data object JlptDeck : Screen("jlpt_deck")
     data object AnkiScan : Screen("anki_scan")
     data object TextScan : Screen("text_scan")
+    /** The hub the bottom bar opens: everything that builds cards in bulk. */
+    data object Tools : Screen("tools")
+    data object Backup : Screen("backup")
 }

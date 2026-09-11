@@ -53,7 +53,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,7 +61,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.data.download.DictionaryCategory
 import com.yomitanmobile.data.download.DictionaryDownloadInfo
 import com.yomitanmobile.data.download.DownloadPhase
+import com.yomitanmobile.data.download.QueueState
+import com.yomitanmobile.data.download.QueuedDownload
 import com.yomitanmobile.data.download.localizedDescription
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Close
+import com.yomitanmobile.ui.common.tr
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -74,8 +81,8 @@ fun DictionaryDownloadScreen(
     val isDownloading by viewModel.isDownloading.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val installedDictionaries by viewModel.installedDictionaries.collectAsState()
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -101,7 +108,7 @@ fun DictionaryDownloadScreen(
                 title = { Text(tr("Pobierz słowniki", "Download dictionaries")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wstecz", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 }
             )
@@ -122,6 +129,17 @@ fun DictionaryDownloadScreen(
                 downloadProgress?.let { progress ->
                     DownloadProgressBanner(progress, isEnglish)
                 }
+            }
+
+            // What is queued, above the catalogue: the user just tapped these
+            // and needs to see that the taps landed.
+            val queue by viewModel.queue.collectAsState()
+            if (queue.isNotEmpty()) {
+                QueueCard(
+                    queue = queue,
+                    onCancel = viewModel::cancelQueued,
+                    onClearFinished = viewModel::clearFinished
+                )
             }
 
             // Category filter chips
@@ -275,9 +293,100 @@ fun DictionaryDownloadScreen(
     }
 }
 
+/**
+ * The install queue: what is running, what is waiting, what finished.
+ *
+ * Queueing is the point — the user picks five dictionaries in one sitting
+ * instead of babysitting one at a time — so the list has to make it obvious
+ * that a tap was registered even though nothing seems to happen yet.
+ */
+@Composable
+private fun QueueCard(
+    queue: List<QueuedDownload>,
+    onCancel: (String) -> Unit,
+    onClearFinished: () -> Unit
+) {
+    val finished = queue.count { it.state == QueueState.DONE || it.state == QueueState.FAILED }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    tr("Kolejka instalacji", "Install queue"),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+                if (finished > 0) {
+                    TextButton(onClick = onClearFinished) {
+                        Text(tr("Wyczyść", "Clear"))
+                    }
+                }
+            }
+            for (item in queue) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        queueStateLabel(item.state),
+                        fontSize = 12.sp,
+                        color = when (item.state) {
+                            QueueState.FAILED -> MaterialTheme.colorScheme.error
+                            QueueState.DONE -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.width(96.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(item.info.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        item.error?.let {
+                            Text(
+                                it,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    if (item.state == QueueState.WAITING) {
+                        IconButton(onClick = { onCancel(item.info.id) }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = tr("Usuń z kolejki", "Remove from queue")
+                            )
+                        }
+                    }
+                }
+            }
+            Text(
+                tr(
+                    "Instalacja idzie dalej, gdy wyjdziesz z tego ekranu.",
+                    "The install keeps going when you leave this screen."
+                ),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun queueStateLabel(state: QueueState): String = when (state) {
+    QueueState.WAITING -> tr("w kolejce", "queued")
+    QueueState.RUNNING -> tr("instaluję…", "installing…")
+    QueueState.DONE -> tr("gotowe", "done")
+    QueueState.FAILED -> tr("błąd", "failed")
+    QueueState.CANCELLED -> tr("anulowane", "cancelled")
+}
+
 @Composable
 private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.DownloadProgress, isEnglish: Boolean) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -403,7 +512,7 @@ private fun DictionaryDownloadCard(
     allowReimport: Boolean = false,
     isEnglish: Boolean
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(

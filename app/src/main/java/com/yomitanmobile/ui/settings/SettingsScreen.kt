@@ -72,7 +72,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,6 +87,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.datastore.preferences.core.edit
 import java.io.File
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,6 +96,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToDownload: () -> Unit = {},
     onNavigateToStatistics: () -> Unit = {},
+    onNavigateToBackup: () -> Unit = {},
     onNavigateToCardStyle: () -> Unit = {},
     onNavigateToDictionaries: () -> Unit = {},
     onNavigateToFrequencyDisplay: () -> Unit = {},
@@ -104,8 +106,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
     val isImporting by viewModel.isImporting.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
     val backups by viewModel.backups.collectAsState()
@@ -1040,52 +1042,9 @@ fun SettingsScreen(
             }
             }
 
-            // JLPT deck generator, the text scanner and the collection scan
-            // are Japanese-only. They are hidden rather than shown disabled:
-            // each rests on something English has no source for — JLPT tags,
-            // frequency-ordered study order, a "looks Japanese" filter over
-            // Anki fields — so there would be nothing behind the row. The
-            // card at the top of Settings says as much.
-            if (viewModel.studyLanguage.hasJapaneseFeatures) {
-            item {
-                SettingsClickableItem(
-                    icon = Icons.Default.School,
-                    title = tr("Generator talii JLPT", "JLPT deck generator"),
-                    subtitle = tr(
-                        "Cała lista słów z poziomu jako gotowe fiszki, bez kopania",
-                        "A whole JLPT level as ready-made cards, no mining"
-                    ),
-                    onClick = onNavigateToJlptDeck
-                )
-            }
-
-            // Text scan: subtitles / EPUB in, cards for the unknown words out.
-            item {
-                SettingsClickableItem(
-                    icon = Icons.Default.Subtitles,
-                    title = tr("Fiszki z napisów lub książki", "Cards from subtitles or a book"),
-                    subtitle = tr(
-                        "Wczytaj .srt/.ass/.epub — aplikacja zrobi fiszki z nieznanych słów",
-                        "Load .srt/.ass/.epub — the app makes cards from the unknown words"
-                    ),
-                    onClick = onNavigateToTextScan
-                )
-            }
-
-            // Anki collection scan — the duplicate guard both mining and the
-            // JLPT generator read from.
-            item {
-                SettingsClickableItem(
-                    icon = Icons.Default.Search,
-                    title = tr("Skan kolekcji Anki", "Anki collection scan"),
-                    subtitle = tr(
-                        "Wykrywa słowa, które już masz (Core, Kaishi, własne) i blokuje duplikaty",
-                        "Detects words you already have (Core, Kaishi, your own) and blocks duplicates"
-                    ),
-                    onClick = onNavigateToAnkiScan
-                )
-            }
-            }
+            // The JLPT generator, the text scanner and the collection scan
+            // used to be three rows here. They are the work, not settings, and
+            // now live in the Tools tab of the bottom bar.
 
             // ═══════════════════════════════════════
             // SECTION: Statystyki i cele (Stats & goals)
@@ -1161,15 +1120,6 @@ fun SettingsScreen(
                         )
                     }
                 }
-            }
-
-            item {
-                SettingsClickableItem(
-                    icon = Icons.Default.BarChart,
-                    title = tr("Statystyki", "Statistics"),
-                    subtitle = tr("Przegląd aktywności, streak, wykres fiszek", "Activity overview, streak, card chart"),
-                    onClick = onNavigateToStatistics
-                )
             }
 
             // Reclassify pass. Walks every ExportedWord row and re-runs
@@ -1280,139 +1230,15 @@ fun SettingsScreen(
             }
 
             item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = !isBackingUp && !isRestoring) {
-                            includeSettingsInBackup = !includeSettingsInBackup
-                        }
-                ) {
-                    Checkbox(
-                        checked = includeSettingsInBackup,
-                        onCheckedChange = { includeSettingsInBackup = it },
-                        enabled = !isBackingUp && !isRestoring
-                    )
-                    Text(
-                        tr(
-                            "Dołącz ustawienia (bez klucza AI)",
-                            "Include settings (without AI key)"
-                        ),
-                        fontSize = 14.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            item {
-                Button(
-                    onClick = {
-                        if (!isBackingUp) {
-                            viewModel.createBackup(includeSettingsInBackup)
-                        }
-                    },
-                    enabled = !isBackingUp && !isRestoring,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (isBackingUp) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 1.dp)
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(tr("Utwórz kopię zapasową", "Create backup"))
-                }
-            }
-
-            item {
-                OutlinedButton(
-                    onClick = {
-                        settingsPickerLauncher.launch(
-                            arrayOf("application/json", "application/octet-stream", "text/plain")
-                        )
-                    },
-                    enabled = !isBackingUp && !isRestoring,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(tr("Importuj ustawienia z pliku", "Import settings from file"))
-                }
-                Text(
-                    tr(
-                        "Wybierz settings.json z folderu kopii zapasowej. Baza danych nie jest zmieniana; klucz AI nigdy nie jest przenoszony.",
-                        "Pick a settings.json from a backup folder. The database is untouched; the AI key is never carried over."
+                SettingsClickableItem(
+                    icon = Icons.Default.CloudDownload,
+                    title = tr("Kopie zapasowe", "Backups"),
+                    subtitle = tr(
+                        "Utwórz, przywróć lub zaimportuj ustawienia z pliku",
+                        "Create, restore, or import settings from a file"
                     ),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 4.dp)
+                    onClick = onNavigateToBackup
                 )
-            }
-
-            if (backups.isNotEmpty()) {
-                item {
-                    Text(
-                        tr("Dostępne kopie (${backups.size}):", "Available backups (${backups.size}):"),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                items(backups.size) { index ->
-                    val backup = backups[index]
-                    val timestamp = backup.name.replace("backup_", "")
-                    
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    timestamp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
-                                )
-                                Text(
-                                    backup.absolutePath,
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                )
-                            }
-                            
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                OutlinedButton(
-                                    onClick = {
-                                        selectedBackupForRestore = backup
-                                        showRestoreDialog = true
-                                    },
-                                    enabled = !isRestoring,
-                                    modifier = Modifier.height(36.dp)
-                                ) {
-                                    if (isRestoring && selectedBackupForRestore == backup) {
-                                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.dp)
-                                    } else {
-                                        Text(tr("Przywróć", "Restore"), fontSize = 11.sp)
-                                    }
-                                }
-                                
-                                OutlinedButton(
-                                    onClick = { viewModel.deleteBackup(backup) },
-                                    modifier = Modifier.height(36.dp)
-                                ) {
-                                    Text(tr("Usuń", "Delete"), fontSize = 11.sp)
-                                }
-                            }
-                        }
-                    }
-                }
             }
 
             // ═══════════════════════════════════════

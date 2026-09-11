@@ -47,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,8 +57,12 @@ import com.yomitanmobile.domain.model.FrequencyTier
 import com.yomitanmobile.domain.model.GrammarSource
 import com.yomitanmobile.domain.model.GrammarUse
 import com.yomitanmobile.domain.model.TextScanSkipReason
-import com.yomitanmobile.util.LocaleHelper
 import kotlin.math.roundToInt
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
+import com.yomitanmobile.ui.common.rememberAnkiPermissionGate
+import com.yomitanmobile.ui.common.SectionTitle
+import com.yomitanmobile.ui.common.ToggleRow
 
 /**
  * "Make cards from what I actually watched or read": the user picks a subtitle
@@ -76,37 +79,11 @@ fun TextScanScreen(
     onNavigateBack: () -> Unit,
     viewModel: TextScanViewModel = hiltViewModel()
 ) {
-    val isEnglish = LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String) = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
     val context = LocalContext.current
 
-    var pendingAnkiAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    val ankiPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        val action = pendingAnkiAction
-        pendingAnkiAction = null
-        if (isGranted) {
-            action?.invoke()
-        } else {
-            Toast.makeText(
-                context,
-                tr(
-                    "Odrzucono uprawnienie do AnkiDroida — bez niego nie da się utworzyć fiszek.",
-                    "AnkiDroid permission denied — no cards can be created without it."
-                ),
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-    fun withAnkiPermission(action: () -> Unit) {
-        val granted = ContextCompat.checkSelfPermission(context, ANKI_PERMISSION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) action() else {
-            pendingAnkiAction = action
-            ankiPermissionLauncher.launch(ANKI_PERMISSION)
-        }
-    }
+    val withAnkiPermission = rememberAnkiPermissionGate()
 
     // Multiple documents on purpose: a season of subtitles or a series of
     // volumes is one body of text, and scanning it in one go is what makes the
@@ -148,8 +125,7 @@ fun TextScanScreen(
                     "No dictionary installed — without one the text cannot be split into words."
                 )
                 TextScanEvent.PermissionRequired -> {
-                    pendingAnkiAction = { viewModel.generate() }
-                    ankiPermissionLauncher.launch(ANKI_PERMISSION)
+                    withAnkiPermission { viewModel.generate() }
                     tr("Potrzebne uprawnienie do AnkiDroida", "AnkiDroid permission needed")
                 }
                 TextScanEvent.AnkiNotInstalled ->
@@ -170,7 +146,7 @@ fun TextScanScreen(
                 title = { Text(tr("Skan tekstu", "Text scan")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wstecz", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 }
             )
@@ -659,32 +635,6 @@ fun TextScanScreen(
     }
 }
 
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-    Spacer(Modifier.height(4.dp))
-}
-
-@Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
 
 /** AnkiDroid's read/write permission, mirrored from AnkiCardCreator. */
 private const val ANKI_PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
@@ -721,7 +671,7 @@ private val ASSUME_KNOWN_RANKS = listOf(0, 1_000, 2_000, 3_000, 5_000)
  */
 @Composable
 private fun GrammarCounter(uses: List<GrammarUse>, isEnglish: Boolean) {
-    fun tr(pl: String, en: String) = if (isEnglish) en else pl
+    val tr = rememberTr()
     var expanded by remember { mutableStateOf(false) }
     val totalOccurrences = uses.sumOf { it.occurrences }
 

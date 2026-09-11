@@ -44,15 +44,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.JlptSkipReason
-import com.yomitanmobile.util.LocaleHelper
 import kotlin.math.roundToInt
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
+import com.yomitanmobile.ui.common.rememberAnkiPermissionGate
+import com.yomitanmobile.ui.common.SectionTitle
+import com.yomitanmobile.ui.common.ToggleRow
 
 /**
  * Bulk deck generator: turns a whole JLPT level into cards styled exactly like
@@ -66,43 +69,15 @@ fun JlptDeckScreen(
     onNavigateBack: () -> Unit,
     viewModel: JlptDeckViewModel = hiltViewModel()
 ) {
-    val isEnglish = LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String) = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
     val context = LocalContext.current
 
     // Both the dry run (it scans the collection for duplicates) and the write
     // need AnkiDroid's read/write permission. Asking here, at the moment the
     // user presses the button, beats the old advice of "export one card
     // manually first to grant it".
-    var pendingAnkiAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    val ankiPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        val action = pendingAnkiAction
-        pendingAnkiAction = null
-        if (isGranted) {
-            action?.invoke()
-        } else {
-            Toast.makeText(
-                context,
-                tr(
-                    "Odrzucono uprawnienie do AnkiDroida — bez niego nie da się sprawdzić duplikatów ani utworzyć talii.",
-                    "AnkiDroid permission denied — without it duplicates can't be checked and no deck can be created."
-                ),
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-    fun withAnkiPermission(action: () -> Unit) {
-        val granted = ContextCompat.checkSelfPermission(context, ANKI_PERMISSION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            action()
-        } else {
-            pendingAnkiAction = action
-            ankiPermissionLauncher.launch(ANKI_PERMISSION)
-        }
-    }
+    val withAnkiPermission = rememberAnkiPermissionGate()
 
     val level by viewModel.level.collectAsState()
     val filters by viewModel.filters.collectAsState()
@@ -126,8 +101,7 @@ fun JlptDeckScreen(
                 )
                 is JlptDeckEvent.Error -> tr("Błąd: ${event.message}", "Error: ${event.message}")
                 JlptDeckEvent.PermissionRequired -> {
-                    pendingAnkiAction = { viewModel.generate() }
-                    ankiPermissionLauncher.launch(ANKI_PERMISSION)
+                    withAnkiPermission { viewModel.generate() }
                     tr("Potrzebne uprawnienie do AnkiDroida", "AnkiDroid permission needed")
                 }
                 JlptDeckEvent.AnkiNotInstalled -> tr("AnkiDroid nie jest zainstalowany", "AnkiDroid is not installed")
@@ -147,7 +121,7 @@ fun JlptDeckScreen(
                 title = { Text(tr("Talia JLPT", "JLPT deck")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wstecz", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
                     }
                 }
             )
@@ -597,36 +571,6 @@ fun JlptDeckScreen(
     }
 }
 
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-    Spacer(Modifier.height(8.dp))
-}
-
-@Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text(
-                subtitle,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
 
 /** AnkiDroid's read/write permission, mirrored from AnkiCardCreator. */
 private const val ANKI_PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"

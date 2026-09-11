@@ -61,7 +61,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -74,6 +73,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.util.JlptLevelUtil
 import com.yomitanmobile.util.PartsOfSpeechFormatter
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
+import com.yomitanmobile.ui.common.rememberAnkiPermissionGate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,8 +93,8 @@ fun DetailScreen(
     val kanjiInfo by viewModel.kanjiInfo.collectAsState()
     val frequencies by viewModel.frequencies.collectAsState()
     val generatedFurigana by viewModel.generatedFurigana.collectAsState()
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -111,15 +113,7 @@ fun DetailScreen(
     // the provider's error message shown verbatim in the dialog.
     var aiFailureMessage by remember { mutableStateOf<String?>(null) }
 
-    val ankiPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.exportToAnki(pendingIncludeAi)
-        } else {
-            Toast.makeText(context, tr("Uprawnienia do AnkiDroid zostały odrzucone.", "AnkiDroid permissions were denied."), Toast.LENGTH_LONG).show()
-        }
-    }
+    val withAnkiPermission = rememberAnkiPermissionGate()
 
     // Deck selection dialog
     if (showDeckDialog) {
@@ -199,7 +193,7 @@ fun DetailScreen(
                 is DetailEvent.AnkiExportError ->
                     snackbarHostState.showSnackbar(tr("Błąd: ${event.message}", "Error: ${event.message}"))
                 is DetailEvent.AnkiPermissionRequired ->
-                    ankiPermissionLauncher.launch("com.ichi2.anki.permission.READ_WRITE_DATABASE")
+                    withAnkiPermission { viewModel.exportToAnki(pendingIncludeAi) }
                 is DetailEvent.AnkiNotInstalled ->
                     Toast.makeText(context, tr("AnkiDroid nie jest zainstalowany!", "AnkiDroid is not installed!"), Toast.LENGTH_LONG).show()
                 is DetailEvent.AnkiDeckSelectionRequired -> {
@@ -408,7 +402,7 @@ private fun WordDetailContent(
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -1031,8 +1025,8 @@ private fun DeckSelectionDialog(
     onDismiss: () -> Unit
 ) {
     var newDeckName by remember { mutableStateOf("") }
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
 
     AlertDialog(
         onDismissRequest = onDismiss,

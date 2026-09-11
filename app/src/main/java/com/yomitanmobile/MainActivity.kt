@@ -35,7 +35,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.navigation.compose.rememberNavController
-import com.yomitanmobile.ui.navigation.AppNavHost
+import com.yomitanmobile.ui.navigation.AppScaffold
 import com.yomitanmobile.ui.navigation.Screen
 import com.yomitanmobile.ui.theme.YomitanMobileTheme
 import com.yomitanmobile.widget.QuickSearchWidgetProvider
@@ -209,7 +209,7 @@ class MainActivity : ComponentActivity() {
                     }
                     startRoute?.let { route ->
                         val navController = rememberNavController()
-                        AppNavHost(
+                        AppScaffold(
                             navController = navController,
                             startDestination = route,
                             focusSearch = shouldFocusSearch,

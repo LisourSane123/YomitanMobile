@@ -31,7 +31,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.data.download.DownloadPhase
 import com.yomitanmobile.domain.model.AppLanguage
+import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.LocalIsEnglish
 
 @Composable
 fun SetupScreen(
@@ -48,7 +49,7 @@ fun SetupScreen(
     val setupState by viewModel.setupState.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
+    val isEnglish = LocalIsEnglish.current
 
     Surface(modifier = Modifier.fillMaxSize()) {
         AnimatedContent(
@@ -97,7 +98,7 @@ private fun WelcomeContent(
     onDownloadPrimary: () -> Unit,
     onSkip: () -> Unit
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -238,7 +239,7 @@ private fun WelcomeContent(
 private fun DownloadingContent(
     progress: com.yomitanmobile.data.download.DownloadProgress?
 ) {
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
+    val isEnglish = LocalIsEnglish.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -299,7 +300,7 @@ private fun DownloadingContent(
 
 @Composable
 private fun CompletedContent(onContinue: () -> Unit) {
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
+    val isEnglish = LocalIsEnglish.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -359,7 +360,7 @@ private fun ErrorContent(
     onRetry: () -> Unit,
     onSkip: () -> Unit
 ) {
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
+    val isEnglish = LocalIsEnglish.current
     Column(
         modifier = Modifier
             .fillMaxSize()

@@ -44,7 +44,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -53,7 +52,6 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -61,7 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.util.WordCategoryClassifier
+import com.yomitanmobile.ui.common.rememberTr
 import java.util.Locale
+import com.yomitanmobile.ui.common.LocalIsEnglish
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,8 +70,8 @@ fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val isEnglish = LocalIsEnglish.current
+    val tr = rememberTr()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val weeklyWordsForCopy = remember(state.weeklyLearnedWords) {
@@ -229,7 +229,7 @@ private fun CategoryDistributionCard(
     categoryStats: List<CategoryActivity>,
     isEnglish: Boolean
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     val colorByCode = remember(categoryStats) {
         categoryStats.mapIndexed { index, stat ->
             stat.categoryCode to CategoryChartColors[index % CategoryChartColors.size]
@@ -365,7 +365,7 @@ private fun HourlyImmersionCard(
     hourlyActivity: List<HourlyActivity>,
     isEnglish: Boolean = false
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     val topHours = hourlyActivity
         .filter { it.count > 0 }
         .sortedByDescending { it.count }
@@ -428,7 +428,7 @@ private fun StreakCard(
     todayCount: Int
 ) {
     val goalMet = todayCount >= dailyGoal
-    val isEnglish = com.yomitanmobile.util.LocaleHelper.isEnglish(LocalConfiguration.current)
+    val isEnglish = LocalIsEnglish.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -491,7 +491,7 @@ private fun WeeklyLearnedWordsCard(
     isEnglish: Boolean,
     onCopyClick: () -> Unit
 ) {
-    fun tr(pl: String, en: String): String = if (isEnglish) en else pl
+    val tr = rememberTr()
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),

@@ -10,6 +10,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import javax.inject.Singleton
 
 @Module
@@ -34,12 +37,23 @@ object AppModule {
         return AudioPlayer(context, languageSettings)
     }
 
+    /**
+     * The scope background work lives in: it belongs to the application, so a
+     * dictionary install is not cancelled by leaving the screen that started
+     * it. SupervisorJob keeps one failed install from taking the rest down.
+     */
+    @Provides
+    @Singleton
+    fun provideApplicationScope(): CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     @Provides
     @Singleton
     fun provideDictionaryDownloadManager(
         @ApplicationContext context: Context,
-        repository: DictionaryRepository
+        repository: DictionaryRepository,
+        applicationScope: CoroutineScope
     ): DictionaryDownloadManager {
-        return DictionaryDownloadManager(context, repository)
+        return DictionaryDownloadManager(context, repository, applicationScope)
     }
 }
