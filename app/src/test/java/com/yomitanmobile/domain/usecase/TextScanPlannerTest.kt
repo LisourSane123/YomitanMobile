@@ -223,15 +223,15 @@ class TextScanPlannerTest {
         // stoplist reaches them — only their JMdict tags do. 事 is the control:
         // an ordinary noun that must survive.
         val result = plan(
-            words = tokens("それでも" to 12, "ということ" to 9, "事" to 5),
+            words = tokens("それでも" to 12, "ということ" to 9, "学校" to 5),
             entries = mapOf(
                 "それでも" to entry("それでも", partsOfSpeech = listOf("conj")),
                 "ということ" to entry("ということ", partsOfSpeech = listOf("exp, prt")),
-                "事" to entry("事", partsOfSpeech = listOf("n"))
+                "学校" to entry("学校", partsOfSpeech = listOf("n"))
             )
         )
 
-        assertEquals(listOf("事"), result.selected.map { it.entry.primaryExpression })
+        assertEquals(listOf("学校"), result.selected.map { it.entry.primaryExpression })
         assertEquals(2, result.skipped[TextScanSkipReason.FUNCTION_WORD])
     }
 

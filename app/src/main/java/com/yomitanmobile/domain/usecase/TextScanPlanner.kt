@@ -82,6 +82,11 @@ object TextScanPlanner {
         // any grammar guide — and every one of them was sitting in the first
         // hundred cards of a real novel scan.
         "こと", "もの", "とき", "ため", "よう", "ところ", "うち", "はず", "つもり",
+        // The same nominalisers written with the kanji. One novel writes こと
+        // as 事 throughout — 768 times, 25 in kana — and 事 was its fifth card.
+        // 時 / 所 / 者 are deliberately absent: written in kanji those are
+        // ordinary vocabulary.
+        "事", "為", "訳", "筈",
         "のか", "んだ", "なんだ", "なの", "なのだ", "なんて", "にも", "とも",
         "として", "とする", "について", "によって", "における",
         "くらい", "ぐらい", "だって", "でしょ", "まま", "ほうがいい",
@@ -216,6 +221,18 @@ object TextScanPlanner {
     }
 
     /**
+     * The entry as the text spells it, when the text's spelling is one the
+     * entry actually has. Anything else — a reading the dictionary files the
+     * word under, say — leaves the headword alone.
+     */
+    private fun MergedWordEntry.withKnownSpelling(spelling: String): MergedWordEntry = when {
+        spelling == primaryExpression -> this
+        spelling == reading || spelling in alternativeExpressions ->
+            copy(primaryExpression = spelling)
+        else -> this
+    }
+
+    /**
      * Adds a word to the grammar counter if it is grammar at all.
      *
      * Three sources, kept apart on purpose: the literal stoplist, the tag rule,
@@ -283,8 +300,11 @@ object TextScanPlanner {
         for ((key, tokens) in groups) {
             val entry = entryOf.getValue(key)
             if (tokens.size == 1) {
+                // Even alone, the card is fronted with the spelling the text
+                // used: a merged entry can name itself Ｈ while the book (and
+                // every other book) writes エッチ.
                 outWords += tokens[0]
-                outEntries[tokens[0].baseForm] = entry
+                outEntries[tokens[0].baseForm] = entry.withKnownSpelling(tokens[0].baseForm)
                 continue
             }
             // The book's own spelling: most occurrences wins, ties go to the
@@ -301,6 +321,8 @@ object TextScanPlanner {
                 earliness = earliest.earliness,
                 honorificHits = tokens.sumOf { it.honorificHits }
             )
+            // Several tokens reached this entry, so every one of them is a
+            // spelling of it; the text's favourite goes on the card.
             outEntries[winner.baseForm] = entry.copy(primaryExpression = winner.baseForm)
         }
         outWords += unresolved

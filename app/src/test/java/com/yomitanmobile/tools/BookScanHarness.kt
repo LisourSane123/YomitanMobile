@@ -18,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assume
 import org.junit.Test
 import java.io.File
+import java.text.Normalizer
 
 /**
  * Runs the REAL text-scan pipeline on a desktop JVM, over files on this
@@ -60,7 +61,7 @@ class BookScanHarness {
         // ---- 1. read the books exactly as TextFileReader would -------------
         // Files are sorted by name so a series is read in publication order,
         // which is what makes the "earliness" term mean anything.
-        val documents = bookPaths.map { File(it) }.sortedBy { it.name.lowercase() }.map { file ->
+        val documents = bookPaths.map { resolveBook(it) }.sortedBy { it.name.lowercase() }.map { file ->
             val bytes = file.readBytes()
             val format = TextFileFormat.fromFileName(file.name) ?: TextExtraction.sniff(bytes)
             val extracted = TextExtraction.extract(bytes, format)
@@ -298,6 +299,22 @@ class BookScanHarness {
         file.writeText(report)
         log("report written to ${file.absolutePath}")
         log(report.lineSequence().take(40).joinToString("\n"))
+    }
+
+    /**
+     * A path pasted from a file manager can differ from the one on disk by
+     * Unicode normalisation alone — "Tōkyō" with a precomposed ō against o
+     * plus a combining macron. Same name, different bytes, and File.exists()
+     * says no.
+     */
+    private fun resolveBook(path: String): File {
+        val direct = File(path)
+        if (direct.exists()) return direct
+        val wanted = Normalizer.normalize(direct.name, Normalizer.Form.NFC)
+        val match = direct.parentFile?.listFiles()?.firstOrNull {
+            Normalizer.normalize(it.name, Normalizer.Form.NFC) == wanted
+        }
+        return match ?: direct
     }
 
     private fun log(message: String) = println("[book-scan] $message")

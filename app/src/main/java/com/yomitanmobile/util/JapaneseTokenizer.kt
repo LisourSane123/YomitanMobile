@@ -445,7 +445,11 @@ object JapaneseTokenizer {
      */
     private fun commonDeconjugation(surface: String, lexicon: Lexicon): String? {
         if (surface.length < 2 || !isKana(surface.last())) return null
-        return bestDeconjugation(surface, lexicon)?.takeIf { lexicon.isCommon(it) }
+        bestDeconjugation(surface, lexicon)?.takeIf { lexicon.isCommon(it) }?.let { return it }
+        // A bare 連用形 the dictionary happens to list as a noun — 出し (出汁),
+        // 置き — is the verb in running text.
+        return JapaneseDeconjugator.bareStemBases(surface)
+            .firstOrNull { lexicon.contains(it) && lexicon.isCommon(it) }
     }
 
     /**
@@ -481,14 +485,29 @@ object JapaneseTokenizer {
      * is then read on its own (and dropped, being a single kana).
      */
     private fun isWordPlusParticle(candidate: String, lexicon: Lexicon): Boolean {
-        if (candidate.length < 2) return false
-        if (candidate.last() !in CASE_PARTICLES) return false
-        val withoutParticle = candidate.dropLast(1)
-        // A one-character remainder only counts when it is a kanji: 何を is 何
-        // plus を, but なに must not come apart into な and に.
-        if (withoutParticle.length == 1 && !isKanji(withoutParticle[0])) return false
-        return lexicon.contains(withoutParticle)
+        if (candidate.last() in CASE_PARTICLES && candidate.length >= 2) {
+            val withoutParticle = candidate.dropLast(1)
+            // A one-character remainder only counts when it is a kanji: 何を is
+            // 何 plus を, but なに must not come apart into な and に.
+            val usable = withoutParticle.length > 1 || isKanji(withoutParticle[0])
+            if (usable && lexicon.contains(withoutParticle)) return true
+        }
+        // Particles of more than one character — 上から, 家まで. Only when the
+        // blend is one the frequency lists do not know: これから is ranked 249
+        // and is a word of its own, while 上から is ranked nowhere.
+        if (lexicon.rank(candidate) > 0) return false
+        for (particle in LONG_PARTICLES) {
+            if (!candidate.endsWith(particle) || candidate.length <= particle.length) continue
+            val stem = candidate.dropLast(particle.length)
+            if (stem.length > 1 || isKanji(stem[0])) {
+                if (lexicon.contains(stem)) return true
+            }
+        }
+        return false
     }
+
+    /** Particles that trail a noun and are longer than one character. */
+    private val LONG_PARTICLES = listOf("から", "まで", "より", "など", "だけ", "ほど", "ばかり")
 
     /**
      * Drops the segmentation noise a card deck never wants: single hiragana

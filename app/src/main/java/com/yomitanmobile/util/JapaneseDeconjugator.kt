@@ -701,6 +701,22 @@ object JapaneseDeconjugator {
     }
 
     /**
+     * The verbs a bare 連用形 could have come from: 出し → 出す, 置き → 置く.
+     *
+     * NOT part of [oneStep], and so not part of an ordinary lookup: 食べ is
+     * the stem of 食べる and also the first half of 食べ物, and the search
+     * screen and the sentence highlighter must not treat one as the other.
+     * The text scanner asks for it explicitly, and only about an entry the
+     * frequency lists call rare — so 祭り and 光 keep their own reading.
+     */
+    fun bareStemBases(form: String): List<String> {
+        if (form.length < 2 || !JapaneseTokenizer.isKana(form.last())) return emptyList()
+        val out = mutableListOf<Step>()
+        addFromMasuStem(form, "bare stem", out)
+        return out.map { it.form }.filter { it != form }
+    }
+
+    /**
      * Endings that attach to the ます-stem and are words in their own right:
      * 書きながら, 食べすぎる, 行きそう, 読みなさい, 食べたがる.
      *
