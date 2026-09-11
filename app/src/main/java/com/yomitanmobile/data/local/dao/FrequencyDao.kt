@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.Flow
  * Access to the per-source [WordFrequency] table. See the entity for the
  * temp→real dictionary-name rename pattern used during import.
  */
+/** One spelling or reading with the best rank any installed list gives it. */
+data class SurfaceRank(val surface: String, val rank: Int)
+
 @Dao
 interface FrequencyDao {
 
@@ -42,19 +45,16 @@ interface FrequencyDao {
      */
     @Query(
         """
-        SELECT DISTINCT expression FROM word_frequencies
+        SELECT expression AS surface, MIN(rank) AS rank FROM word_frequencies
         WHERE rank > 0 AND rank <= :maxRank AND expression != ''
-        """
-    )
-    suspend fun getCommonExpressions(maxRank: Int): List<String>
-
-    @Query(
-        """
-        SELECT DISTINCT reading FROM word_frequencies
+        GROUP BY expression
+        UNION ALL
+        SELECT reading AS surface, MIN(rank) AS rank FROM word_frequencies
         WHERE rank > 0 AND rank <= :maxRank AND reading != ''
+        GROUP BY reading
         """
     )
-    suspend fun getCommonReadings(maxRank: Int): List<String>
+    suspend fun getCommonSurfaceRanks(maxRank: Int): List<SurfaceRank>
 
     @Query("DELETE FROM word_frequencies WHERE dictionary = :dictionary")
     suspend fun deleteByDictionary(dictionary: String)

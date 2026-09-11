@@ -172,19 +172,23 @@ class DictionaryRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getCommonSurfaces(maxRank: Int): Set<String> = withContext(Dispatchers.IO) {
-        try {
-            val expressions = frequencyDao.getCommonExpressions(maxRank)
-            val readings = frequencyDao.getCommonReadings(maxRank)
-            HashSet<String>(expressions.size + readings.size).apply {
-                addAll(expressions)
-                addAll(readings)
+    override suspend fun getCommonSurfaces(maxRank: Int): Map<String, Int> =
+        withContext(Dispatchers.IO) {
+            try {
+                val ranked = frequencyDao.getCommonSurfaceRanks(maxRank)
+                // Best rank wins when several lists (or both columns) name the
+                // same surface, the same rule as applyFrequenciesFromTable().
+                HashMap<String, Int>(ranked.size).apply {
+                    for (row in ranked) {
+                        val existing = this[row.surface]
+                        if (existing == null || row.rank < existing) this[row.surface] = row.rank
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "getCommonSurfaces failed", e)
+                emptyMap()
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "getCommonSurfaces failed", e)
-            emptySet()
         }
-    }
 
     override suspend fun getEntriesForExpressionsFromDictionary(
         expressions: List<String>,

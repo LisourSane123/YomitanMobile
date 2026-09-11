@@ -63,14 +63,19 @@ object JapaneseTokenizer {
         fun contains(surface: String): Boolean
 
         /**
-         * Whether a frequency list ranks this surface as a form people
-         * actually use.
+         * Where the frequency lists put this surface; 0 when they do not rank
+         * it at all.
          *
-         * The default says yes to everything, which turns the preference off
-         * for callers that have no frequency data — including every test that
-         * builds a lexicon out of a bare set.
+         * A rank, not a yes/no: 「〜があった」 offers あう (172), あつ and ある
+         * (15) at the same derivation depth, all three real words, and only
+         * the numbers say the text meant ある. The default of 0 means "no
+         * frequency data", which turns every preference below off — including
+         * for tests that build a lexicon out of a bare set.
          */
-        fun isCommon(surface: String): Boolean = true
+        fun rank(surface: String): Int = 0
+
+        /** Ranked, and inside the band of forms people actually use. */
+        fun isCommon(surface: String): Boolean = rank(surface) in 1..COMMON_RANK
     }
 
     /**
@@ -82,8 +87,12 @@ object JapaneseTokenizer {
      * これは became a card. Splitting is right whenever what precedes the
      * particle is a word in its own right; こんにちは survives because こんにち
      * is not a spelling anything is filed under.
+     *
+     * ね and よ are here for the same reason one step further: いいよ is a
+     * JMdict entry and took 17 occurrences off いい. か is deliberately absent,
+     * since it would take なにか apart into なに and か.
      */
-    private const val CASE_PARTICLES = "はをがもへに"
+    private const val CASE_PARTICLES = "はをがもへにねよ"
 
     /**
      * Rank at which a form counts as one people use. Everything JPDB-class
@@ -92,6 +101,18 @@ object JapaneseTokenizer {
      * same characters.
      */
     const val COMMON_RANK = 30_000
+
+    /**
+     * The verbs that carry the language. Their kana forms collide with rarer
+     * words at every turn — 「〜があった」 deconjugates to あう (会う, ranked
+     * 172), あつ and ある, and the frequency lists cannot settle it because
+     * they rank the KANJI spellings (在る at 4 553) while the text writes the
+     * kana. Whenever one of these is among the readings, it is the reading.
+     */
+    private val CORE_VERBS = setOf(
+        "ある", "いる", "する", "くる", "いく", "いう", "なる", "みる", "くれる",
+        "おる", "しまう", "もらう", "あげる"
+    )
 
     /**
      * Longest match tried at a position. Long enough for compounds and set
@@ -130,7 +151,11 @@ object JapaneseTokenizer {
         // "…されています" in a novel became a card for 去る, 62 of them in one
         // book. Consumed whole here, exactly like だった.
         "される", "されて", "された", "されない", "されます", "されました",
-        "されません", "させる", "させて", "させた", "させない", "させます"
+        "されません", "させる", "させて", "させた", "させない", "させます",
+        // は + する: 「反対はしない」, 「そんな気はしなかった」. Read as words
+        // this is the particle は followed by 端 ("the end of a street"), which
+        // is what one novel got 16 cards for.
+        "はしない", "はしなかった", "はします", "はしません", "はしても"
     )
 
     private val MAX_GRAMMAR_LENGTH = GRAMMAR_FORMS.maxOf { it.length }
@@ -243,6 +268,7 @@ object JapaneseTokenizer {
                         if (!isSelfContained(sentence, i, len, runEnd)) continue
                         val candidate = sentence.substring(i, i + len)
                         if (isWordPlusParticle(candidate, lexicon)) continue
+                        if (losesToParticleSplit(sentence, i, len, runEnd, lexicon)) continue
                         val hit = resolved.getOrPut(candidate) { resolve(candidate, lexicon) }
                         if (hit != null) {
                             matchedLength = len
@@ -375,25 +401,77 @@ object JapaneseTokenizer {
         // step before 続ける (ranked 196), and taking the first hit spent ten
         // occurrences of the verb on the adverb. A rare candidate is still
         // used when nothing common matches.
-        var fallback: String? = null
-        for (candidate in JapaneseDeconjugator.candidateForms(surface)) {
-            if (candidate == surface || !lexicon.contains(candidate)) continue
-            if (lexicon.isCommon(candidate)) return candidate
-            if (fallback == null) fallback = candidate
-        }
-        return fallback
+        return bestDeconjugation(surface, lexicon)
     }
 
-    /** The first deconjugation of [surface] that the frequency lists call common. */
-    private fun commonDeconjugation(surface: String, lexicon: Lexicon): String? {
-        // Two characters is enough: 来た is a JMdict entry of its own and was
-        // taking 50 occurrences off 来る in one novel.
-        if (surface.length < 2 || !isKana(surface.last())) return null
-        for (candidate in JapaneseDeconjugator.candidateForms(surface)) {
-            if (candidate == surface) continue
-            if (lexicon.contains(candidate) && lexicon.isCommon(candidate)) return candidate
+    /**
+     * The likeliest word [surface] is an inflection of.
+     *
+     * Ranked candidates beat unranked ones, because a form the corpus has
+     * never seen is rarely what a sentence meant. Among ranked candidates the
+     * shallowest derivation wins — 続けている reaches 続ける in two steps and
+     * 続く in three, and it is the verb that was inflected — and at equal depth
+     * the commonest one does: あった offers あう (172) and ある (15).
+     */
+    private fun bestDeconjugation(surface: String, lexicon: Lexicon): String? {
+        var bestForm: String? = null
+        var bestDepth = Int.MAX_VALUE
+        var bestRank = Int.MAX_VALUE
+        var fallback: String? = null
+        for (candidate in JapaneseDeconjugator.analyze(surface)) {
+            val form = candidate.baseForm
+            if (form == surface || !lexicon.contains(form)) continue
+            if (form in CORE_VERBS) return form
+            val rank = lexicon.rank(form)
+            if (rank <= 0) {
+                if (fallback == null) fallback = form
+                continue
+            }
+            val better = candidate.depth < bestDepth ||
+                (candidate.depth == bestDepth && rank < bestRank)
+            if (better) {
+                bestForm = form
+                bestDepth = candidate.depth
+                bestRank = rank
+            }
         }
-        return null
+        return bestForm ?: fallback
+    }
+
+    /**
+     * The deconjugation to prefer over a rare entry of the same spelling. Two
+     * characters is enough: 来た is a JMdict entry of its own and was taking 50
+     * occurrences off 来る in one novel.
+     */
+    private fun commonDeconjugation(surface: String, lexicon: Lexicon): String? {
+        if (surface.length < 2 || !isKana(surface.last())) return null
+        return bestDeconjugation(surface, lexicon)?.takeIf { lexicon.isCommon(it) }
+    }
+
+    /**
+     * True when a short match that STARTS with a case particle is beaten by
+     * reading that particle on its own.
+     *
+     * 「これはしっかり」 matches はし (端, "the end of a street", ranked 2 039)
+     * before it ever sees しっかり, and 「先輩はしなやか」, 「それはしんどい」,
+     * 「反対はしない」 do the same — ten cards for 端 in one novel. Dropping the
+     * particle and finding a LONGER word behind it settles it. はなし is safe:
+     * it is three characters, so the rule never looks at it.
+     */
+    private fun losesToParticleSplit(
+        sentence: String,
+        start: Int,
+        length: Int,
+        runEnd: Int,
+        lexicon: Lexicon
+    ): Boolean {
+        if (length > 2 || sentence[start] !in CASE_PARTICLES) return false
+        val next = start + 1
+        val maxLength = minOf(MAX_TOKEN_LENGTH, runEnd - next)
+        for (len in maxLength downTo length + 1) {
+            if (resolve(sentence.substring(next, next + len), lexicon) != null) return true
+        }
+        return false
     }
 
     /**

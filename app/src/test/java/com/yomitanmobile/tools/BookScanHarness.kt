@@ -114,14 +114,27 @@ class BookScanHarness {
                 .minOfOrNull { it.second } ?: 0
 
         // ---- 4. tokenise all books as ONE body of text ---------------------
-        // Same two sets the app builds: everything written, plus what the
-        // frequency list ranks as common (see DictionaryRepository).
-        val common = ranks.entries
-            .filter { entry -> entry.value.any { it.second in 1..JapaneseTokenizer.COMMON_RANK } }
-            .mapTo(HashSet()) { it.key }
+        // The same two structures the app builds: everything written, plus
+        // where the frequency lists put each surface (see
+        // DictionaryRepository.getCommonSurfaces). BOTH columns, exactly like
+        // FrequencyDao.getCommonSurfaceRanks — the lists rank 会う and 在る,
+        // not あう and ある, so without the readings every kana spelling looks
+        // unranked.
+        val common = HashMap<String, Int>(1 shl 16)
+        fun offer(surface: String, rank: Int) {
+            if (surface.isEmpty() || rank !in 1..JapaneseTokenizer.COMMON_RANK) return
+            val existing = common[surface]
+            if (existing == null || rank < existing) common[surface] = rank
+        }
+        for ((surface, entries) in ranks) {
+            for ((reading, rank) in entries) {
+                offer(surface, rank)
+                offer(reading, rank)
+            }
+        }
         val words = object : JapaneseTokenizer.Lexicon {
             override fun contains(surface: String) = surface in lexicon
-            override fun isCommon(surface: String) = common.isEmpty() || surface in common
+            override fun rank(surface: String) = common[surface] ?: 0
         }
         val accumulator = JapaneseTokenizer.Accumulator()
         for ((_, document) in documents) accumulator.add(document.text, words)

@@ -57,13 +57,14 @@ interface DictionaryRepository {
     suspend fun getSurfaceLexicon(): Set<String>
 
     /**
-     * The subset of [getSurfaceLexicon] that the installed frequency lists
-     * rank as common. The scanner prefers a common reading of an ambiguous
-     * stretch over a rare one — see `FrequencyDao.getCommonExpressions`.
-     * Empty when no frequency dictionary is installed, which simply turns the
-     * preference off.
+     * The surfaces the installed frequency lists rank inside [maxRank], each
+     * with its rank. The scanner prefers a common reading of an ambiguous
+     * stretch over a rare one, and where two readings are both common the
+     * numbers decide — あった is ある (15), not あう (172). Empty when no
+     * frequency dictionary is installed, which simply turns the preference
+     * off.
      */
-    suspend fun getCommonSurfaces(maxRank: Int): Set<String>
+    suspend fun getCommonSurfaces(maxRank: Int): Map<String, Int>
 
     /**
      * Batch reading lookup, chunked like [getEntriesForExpressions]. Resolves

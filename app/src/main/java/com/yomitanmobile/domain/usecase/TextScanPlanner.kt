@@ -63,6 +63,17 @@ object TextScanPlanner {
         // high-frequency connectives and fillers
         "そして", "でも", "しかし", "だから", "また", "まだ", "もう", "とても",
         "ちょっと", "はい", "ええ", "うん", "いや", "あの", "その", "えっと",
+        // Fillers and noises of dialogue. Not grammar by any tag — まあ is
+        // `adv` and ranked 467 — but a card for "well…" or for laughter
+        // teaches nothing, and four novels put まあ (74), あはは, ふふふ and
+        // はぁ straight into the deck. A closed list, gathered from the
+        // grammar counter rather than invented.
+        "まあ", "まぁ", "さあ", "さぁ", "なあ", "なぁ", "ねえ", "ねぇ", "ねー",
+        "ほら", "おい", "おーい", "うわ", "わっ", "へえ", "へー", "ほう", "ほほう",
+        "ふう", "ふーん", "ふん", "ふふ", "ふふふ", "ふふん", "うふふ", "あはは",
+        "はは", "ははは", "へへ", "えへへ", "きゃっ", "くっ", "くそっ", "はぁ",
+        "はあ", "あーあ", "あら", "あらあら", "おお", "おー", "よし", "ほい",
+        "ほれ", "あん", "いやー", "さー", "あっそ", "あのー", "んっ", "うっ",
         // Nominalisers, sentence-enders and suffixes that the tag rule cannot
         // reach, because each of them also has an ordinary noun sense in the
         // same entry (こと/事, もの/物, ため/為, とき/時, よう/様) or mixes a

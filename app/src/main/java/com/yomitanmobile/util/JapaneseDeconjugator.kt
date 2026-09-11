@@ -8,7 +8,13 @@ package com.yomitanmobile.util
  */
 data class DeconjugationCandidate(
     val baseForm: String,
-    val reason: String
+    val reason: String,
+    /**
+     * How many rules it took to get here. One step is a likelier reading than
+     * three, and [com.yomitanmobile.util.JapaneseTokenizer] uses it to choose
+     * between candidates that are all real words.
+     */
+    val depth: Int = 1
 )
 
 object JapaneseDeconjugator {
@@ -189,7 +195,8 @@ object JapaneseDeconjugator {
             .map { (form, reasons) ->
                 DeconjugationCandidate(
                     baseForm = form,
-                    reason = reasons.firstOrNull().orEmpty().ifBlank { "deconjugated" }
+                    reason = reasons.firstOrNull().orEmpty().ifBlank { "deconjugated" },
+                    depth = depths[form] ?: 1
                 )
             }
             .sortedWith(
@@ -356,8 +363,13 @@ object JapaneseDeconjugator {
     private fun addNegativeStemCandidates(stem: String, reason: String, out: MutableList<Step>) {
         if (stem.isBlank()) return
 
-        // Ichidan stem + る
-        addCandidate(stem + "る", "$reason (ichidan)", out)
+        // Ichidan stem + る — but not from a single kana. 「つもりはない」 ends
+        // in は + ない, and reading that as the negative of はる (a Kansai
+        // honorific auxiliary, which JMdict lists) gave one novel 37 cards for
+        // it. A real one-character ichidan stem is a kanji: 見ない, 出ない.
+        if (stem.length >= 2 || JapaneseTokenizer.isKanji(stem[0])) {
+            addCandidate(stem + "る", "$reason (ichidan)", out)
+        }
 
         // Godan a-row stem -> dictionary form
         val converted = replaceLastChar(stem, aRowToU)
@@ -675,19 +687,16 @@ object JapaneseDeconjugator {
             addCandidate(it, "imperative (irregular)", out)
             return
         }
+        // Both branches need the same guard: two kana ending in ろ / よ / an
+        // e-row character are a fragment far more often than an imperative.
+        // 「事態はより複雑」 was handing はよ to the ichidan rule, which offered
+        // はる — a Kansai auxiliary JMdict lists — a dozen times per novel. A
+        // real imperative carries its kanji (見ろ) or is longer (食べろ).
+        if (form.length < 3 && form.none { JapaneseTokenizer.isKanji(it) }) return
         when (form.last()) {
             'ろ', 'よ' -> addCandidate(form.dropLast(1) + "る", "imperative (ichidan)", out)
-            else -> {
-                // Only for something that looks like a word: two kana ending in
-                // an e-row character are far more often a 連用形 fragment than
-                // an imperative — され (the stem of される, left dangling before
-                // a comma) turned into さる, "to leave", 17 times in one novel.
-                // A real imperative in prose carries its kanji (待て, 行け).
-                if (form.length >= 3 || form.any { JapaneseTokenizer.isKanji(it) }) {
-                    replaceLastChar(form, eRowToU)
-                        ?.let { addCandidate(it, "imperative (godan)", out) }
-                }
-            }
+            else -> replaceLastChar(form, eRowToU)
+                ?.let { addCandidate(it, "imperative (godan)", out) }
         }
     }
 

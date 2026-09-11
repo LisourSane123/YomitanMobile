@@ -182,11 +182,14 @@ class JapaneseTokenizerTest {
         assertFalse(bases.toString(), "セ" in bases)
     }
 
-    /** A lexicon that also knows which surfaces a frequency list ranks. */
+    /** A lexicon that also knows where a frequency list puts each surface. */
     private fun rankedLexicon(all: Set<String>, common: Set<String>) =
+        rankedLexicon(all, common.associateWith { 100 })
+
+    private fun rankedLexicon(all: Set<String>, ranks: Map<String, Int>) =
         object : JapaneseTokenizer.Lexicon {
             override fun contains(surface: String) = surface in all
-            override fun isCommon(surface: String) = surface in common
+            override fun rank(surface: String) = ranks[surface] ?: 0
         }
 
     @Test
@@ -275,5 +278,64 @@ class JapaneseTokenizerTest {
         val ike = tokens.first { it.baseForm == "池" }
 
         assertEquals(2, ike.honorificHits)
+    }
+
+    @Test
+    fun `between two common readings the commoner one wins`() {
+        // あった offers あう (ranked 172), あつ and ある (15) — all three real
+        // words, all one step away. Only the numbers say the text meant ある.
+        val lexicon = rankedLexicon(
+            all = setOf("あう", "あつ", "ある", "話"),
+            ranks = mapOf("あう" to 172, "あつ" to 9000, "ある" to 15, "話" to 95)
+        )
+        val bases = JapaneseTokenizer.tokenize("話があった。", lexicon).map { it.baseForm }
+
+        assertTrue(bases.toString(), "ある" in bases)
+        assertFalse(bases.toString(), "あう" in bases)
+    }
+
+    @Test
+    fun `は plus ない is not the negative of a one-kana verb`() {
+        // 「つもりはない」 was being read as the negative of はる, a Kansai
+        // honorific auxiliary JMdict lists — 37 cards for it in one novel.
+        val lexicon = lexiconOf("はる", "つもり", "は", "ない")
+        val bases = baseForms("そんなつもりはない。", lexicon)
+
+        assertFalse(bases.toString(), "はる" in bases)
+        assertTrue(bases.toString(), "つもり" in bases)
+    }
+
+    @Test
+    fun `はしない is grammar, not the noun 端`() {
+        val lexicon = lexiconOf("はし", "反対", "する")
+        val bases = baseForms("反対はしなかった。", lexicon)
+
+        assertFalse(bases.toString(), "はし" in bases)
+        assertTrue(bases.toString(), "反対" in bases)
+    }
+
+    @Test
+    fun `a particle glued to the front loses to the word behind it`() {
+        // 「これはしっかり」 was matching はし, 端 — ten times in one novel.
+        val lexicon = lexiconOf("はし", "しっかり", "これ", "は", "確認")
+        val bases = baseForms("これはしっかり確認する。", lexicon)
+
+        assertFalse(bases.toString(), "はし" in bases)
+        assertTrue(bases.toString(), "しっかり" in bases)
+    }
+
+    @Test
+    fun `a three-character word starting with a particle is left alone`() {
+        // はなし is 話: the rule only ever looks at one- and two-character
+        // matches, so it cannot come apart into は and なし.
+        val lexicon = lexiconOf("はなし", "なし", "は", "聞く")
+        assertTrue("はなし" in baseForms("はなしを聞いた。", lexicon))
+    }
+
+    @Test
+    fun `a sentence-final particle is split off like a case particle`() {
+        val lexicon = lexiconOf("いい", "いいよ", "よ", "そう")
+        assertFalse("いいよ" in baseForms("それでいいよ。", lexicon))
+        assertTrue("いい" in baseForms("それでいいよ。", lexicon))
     }
 }
