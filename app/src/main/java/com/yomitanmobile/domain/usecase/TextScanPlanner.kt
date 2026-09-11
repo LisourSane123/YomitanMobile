@@ -1,5 +1,7 @@
 package com.yomitanmobile.domain.usecase
 
+import com.yomitanmobile.domain.model.GrammarSource
+import com.yomitanmobile.domain.model.GrammarUse
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.ScanToken
 import com.yomitanmobile.domain.model.ScannedWord
@@ -118,6 +120,33 @@ object TextScanPlanner {
         WordFilterRules.isFunctionWord(entry) && entry.frequency in 1..GRAMMAR_KNOWN_RANK
 
     /**
+     * Adds a word to the grammar counter if it is grammar at all.
+     *
+     * Three sources, kept apart on purpose: the literal stoplist, the tag rule,
+     * and the grammar that survived because it is rare. Seeing which bucket a
+     * structure landed in is the whole point — a construction in the third
+     * bucket with 80 occurrences means [GRAMMAR_KNOWN_RANK] is drawn too low
+     * for this reader, and one in the first with two occurrences means the
+     * stoplist is eating something worth learning.
+     */
+    private fun recordGrammar(
+        out: MutableList<GrammarUse>,
+        word: String,
+        occurrences: Int,
+        entry: MergedWordEntry?
+    ) {
+        val rank = entry?.frequency ?: 0
+        val source = when {
+            word in FUNCTION_WORDS -> GrammarSource.STOPLIST
+            entry == null -> return
+            !WordFilterRules.isFunctionWord(entry) -> return
+            isEverydayGrammar(entry) -> GrammarSource.TAG_RULE
+            else -> GrammarSource.KEPT
+        }
+        out += GrammarUse(word, occurrences, rank, source)
+    }
+
+    /**
      * One word, one card — spelled the way the book spells it.
      *
      * Two tokens can resolve to the same dictionary entry: the text writes
@@ -215,10 +244,14 @@ object TextScanPlanner {
         val mergedEntries = merged.second
 
         val kept = mutableListOf<ScannedWord>()
+        val grammar = mutableListOf<GrammarUse>()
         for (token in mergedWords) {
             val word = token.baseForm
             val occurrences = token.occurrences
             val entry = mergedEntries[word]
+            // Counted before the filters run, so the tally is the same whether
+            // or not the user has the grammar filter switched on.
+            recordGrammar(grammar, word, occurrences, entry)
             when {
                 filters.skipFunctionWords && word in FUNCTION_WORDS ->
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
@@ -281,7 +314,10 @@ object TextScanPlanner {
             selected = selected,
             skipped = skipped,
             knownTokenCount = knownTokens,
-            ankiScanUnavailable = ankiScanUnavailable
+            ankiScanUnavailable = ankiScanUnavailable,
+            grammarUses = grammar.sortedWith(
+                compareByDescending<GrammarUse> { it.occurrences }.thenBy { it.form }
+            )
         )
     }
 

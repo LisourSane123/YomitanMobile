@@ -1,6 +1,7 @@
 package com.yomitanmobile.domain.usecase
 
 import com.yomitanmobile.domain.model.FrequencyTier
+import com.yomitanmobile.domain.model.GrammarSource
 import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.ScanToken
 import com.yomitanmobile.domain.model.TextScanFilters
@@ -370,5 +371,28 @@ class TextScanPlannerTest {
         )
 
         assertEquals(listOf("去る"), result.selected.map { it.entry.primaryExpression })
+    }
+
+    @Test
+    fun `the grammar counter reports every structure and which rule judged it`() {
+        val stoplisted = entry("こと", frequency = 15, partsOfSpeech = listOf("n"))
+        val tagged = entry("には", frequency = 22, partsOfSpeech = listOf("1 exp prt, ⭐ spec"))
+        val rare = entry("ものを", frequency = 8000, partsOfSpeech = listOf("prt"))
+        val vocabulary = entry("学校", frequency = 616, partsOfSpeech = listOf("n"))
+        val result = plan(
+            tokens("こと" to 198, "には" to 93, "ものを" to 2, "学校" to 30),
+            mapOf("こと" to stoplisted, "には" to tagged, "ものを" to rare, "学校" to vocabulary)
+        )
+
+        val byForm = result.grammarUses.associateBy { it.form }
+        assertEquals(listOf("こと", "には", "ものを"), result.grammarUses.map { it.form })
+        assertEquals(GrammarSource.STOPLIST, byForm.getValue("こと").source)
+        assertEquals(GrammarSource.TAG_RULE, byForm.getValue("には").source)
+        // Rare grammar became a card, and the counter says so rather than
+        // pretending it was filtered.
+        assertEquals(GrammarSource.KEPT, byForm.getValue("ものを").source)
+        assertEquals(198, byForm.getValue("こと").occurrences)
+        // Vocabulary is not grammar and stays out of the counter.
+        assertTrue("学校" !in byForm)
     }
 }

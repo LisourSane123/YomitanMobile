@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +55,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.domain.model.FrequencyTier
+import com.yomitanmobile.domain.model.GrammarSource
+import com.yomitanmobile.domain.model.GrammarUse
 import com.yomitanmobile.domain.model.TextScanSkipReason
 import com.yomitanmobile.util.LocaleHelper
 import kotlin.math.roundToInt
@@ -562,6 +566,12 @@ fun TextScanScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+
+                        if (currentPlan.grammarUses.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Divider()
+                            GrammarCounter(currentPlan.grammarUses, isEnglish)
+                        }
                     }
                 }
 
@@ -699,6 +709,88 @@ private fun stageLabel(stage: String, isEnglish: Boolean): String = when (stage)
  * the scan to hand them only what that deck did not cover.
  */
 private val ASSUME_KNOWN_RANKS = listOf(0, 1_000, 2_000, 3_000, 5_000)
+
+/**
+ * How often the text used each grammatical structure.
+ *
+ * A diagnostic, collapsed by default: it is the only way to see where the
+ * grammar filter drew its line on THIS text — what it dropped as scaffolding,
+ * what it kept because the construction is rare, and how often the book
+ * actually uses each one. When a deck comes out full of grammar, or missing a
+ * construction the reader wanted, this list says which rule did it.
+ */
+@Composable
+private fun GrammarCounter(uses: List<GrammarUse>, isEnglish: Boolean) {
+    fun tr(pl: String, en: String) = if (isEnglish) en else pl
+    var expanded by remember { mutableStateOf(false) }
+    val totalOccurrences = uses.sumOf { it.occurrences }
+
+    TextButton(
+        onClick = { expanded = !expanded },
+        contentPadding = PaddingValues(vertical = 4.dp, horizontal = 0.dp)
+    ) {
+        Text(
+            tr(
+                "Gramatyka w tekście: ${uses.size} struktur, $totalOccurrences użyć" +
+                    (if (expanded) " ▲" else " ▼"),
+                "Grammar in this text: ${uses.size} structures, $totalOccurrences uses" +
+                    (if (expanded) " ▲" else " ▼")
+            ),
+            fontSize = 13.sp
+        )
+    }
+
+    if (!expanded) return
+
+    Text(
+        tr(
+            "lista = pominięte jako podstawy · tagi = pominięte na podstawie tagów słownika · " +
+                "karta = na tyle rzadkie, że powstała fiszka",
+            "list = dropped as basics · tags = dropped by the dictionary's tags · " +
+                "card = rare enough to become a card"
+        ),
+        fontSize = 11.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(Modifier.height(4.dp))
+    for (use in uses.take(GRAMMAR_COUNTER_LIMIT)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+            Text(use.form, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(
+                grammarSourceLabel(use.source, isEnglish),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text(
+                if (use.rank > 0) "#${use.rank}" else "—",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text("${use.occurrences}×", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+    if (uses.size > GRAMMAR_COUNTER_LIMIT) {
+        Text(
+            tr(
+                "…i ${uses.size - GRAMMAR_COUNTER_LIMIT} rzadszych",
+                "…and ${uses.size - GRAMMAR_COUNTER_LIMIT} rarer ones"
+            ),
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** Long enough to see the shape of the text, short enough to scroll past. */
+private const val GRAMMAR_COUNTER_LIMIT = 60
+
+private fun grammarSourceLabel(source: GrammarSource, isEnglish: Boolean): String = when (source) {
+    GrammarSource.STOPLIST -> if (isEnglish) "list" else "lista"
+    GrammarSource.TAG_RULE -> if (isEnglish) "tags" else "tagi"
+    GrammarSource.KEPT -> if (isEnglish) "card" else "karta"
+}
 
 private fun skipReasonLabel(reason: TextScanSkipReason, isEnglish: Boolean): String = when (reason) {
     TextScanSkipReason.NOT_IN_DICTIONARY ->

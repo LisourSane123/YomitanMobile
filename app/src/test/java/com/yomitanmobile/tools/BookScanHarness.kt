@@ -215,6 +215,23 @@ class BookScanHarness {
                 appendLine("- $reason: $count")
             }
             appendLine()
+            appendLine("## grammar counter")
+            appendLine("(every structure the text used: form, bucket, global rank, occurrences)")
+            appendLine("form\tbucket\trank\toccurrences")
+            for (use in plan.grammarUses) {
+                appendLine(
+                    "${use.form}\t${use.source}\t${if (use.rank > 0) use.rank else ""}\t${use.occurrences}"
+                )
+            }
+            appendLine()
+            appendLine(
+                "grammar totals: ${plan.grammarUses.size} structures, " +
+                    "${plan.grammarUses.sumOf { it.occurrences }} uses, " +
+                    plan.grammarUses.groupBy { it.source }
+                        .entries.sortedBy { it.key.name }
+                        .joinToString(", ") { (source, list) -> "$source=${list.size}" }
+            )
+            appendLine()
             // Problem 4 lives here: what the grammar filter did NOT catch.
             // Nothing is dropped on this evidence — it is a list to read before
             // deciding what to add to the stoplist or the tag rules.

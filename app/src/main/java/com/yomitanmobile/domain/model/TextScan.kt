@@ -96,6 +96,38 @@ data class ScanToken(
     val earliness: Float = 1f
 )
 
+/**
+ * How a grammar word was classified. The counter exists to make that call
+ * visible: the filter's job is to drop the scaffolding a reader already lives
+ * with and to keep the construction they have not met yet, and only the counts
+ * show whether it is drawing that line in the right place.
+ */
+enum class GrammarSource {
+    /** Matched the literal [com.yomitanmobile.domain.usecase.TextScanPlanner.FUNCTION_WORDS] list. */
+    STOPLIST,
+
+    /** Dropped by the dictionary's own tags, being common enough to be known. */
+    TAG_RULE,
+
+    /** Tagged as grammar but rare enough that it became a card. */
+    KEPT
+}
+
+/**
+ * One grammatical structure and how often the scanned text used it.
+ *
+ * A developer-facing counter, not a user feature: it answers "how often does
+ * this book actually use ～ておく?" and, when a deck comes out wrong, which
+ * rule swallowed what.
+ */
+data class GrammarUse(
+    val form: String,
+    val occurrences: Int,
+    /** Global frequency rank, 0 when no installed list ranks it. */
+    val rank: Int,
+    val source: GrammarSource
+)
+
 /** A word kept by the scan, with how often the text used it. */
 data class ScannedWord(
     val entry: MergedWordEntry,
@@ -145,7 +177,12 @@ data class TextScanPlan(
      */
     val knownTokenCount: Int = 0,
     /** True when the Anki collection has never been scanned. */
-    val ankiScanUnavailable: Boolean = false
+    val ankiScanUnavailable: Boolean = false,
+    /**
+     * Every grammatical structure the text used, most frequent first — see
+     * [GrammarUse]. Diagnostic only; nothing downstream reads it.
+     */
+    val grammarUses: List<GrammarUse> = emptyList()
 ) {
     val selectedCount: Int get() = selected.size
     val skippedCount: Int get() = skipped.values.sum()
