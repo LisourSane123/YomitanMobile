@@ -556,10 +556,32 @@ private fun MergedWordEntryCard(
                     )
                 }
             }
-            val freqLabel = entry.frequencyLabel()
-            if (freqLabel.isNotBlank()) {
+            // The leading list's own number, named — this is the rank that
+            // will be stamped on the card, so it is the one worth reading
+            // here. Words that list does not know fall back to the tier
+            // label, which is visibly a different kind of statement.
+            val leading = entry.leadingFrequency
+            if (leading != null) {
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = freqLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = leading.value(),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = leading.shortDictionary(),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                val freqLabel = entry.frequencyLabel()
+                if (freqLabel.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = freqLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                }
             }
             val jlptLevel = JlptLevelUtil.fromDbValue(entry.jlptLevel)
             if (jlptLevel != null) {

@@ -472,6 +472,12 @@ interface DictionaryDao {
                   AND (f.reading = dictionary_entries.reading OR f.reading = '')
                   AND f.rank > 0
             ),
+            -- Strict: the leading list is the only source, so a word it does
+            -- not know is unranked rather than borrowing another list's
+            -- number. One scale on every card is what an Anki reorder addon
+            -- needs — ranks from two lists interleaved sort into an order
+            -- neither of them meant.
+            CASE WHEN :strict = 1 AND :leadingDictionary != '' THEN 0 ELSE NULL END,
             (
                 SELECT MIN(f.rank) FROM word_frequencies f
                 WHERE f.expression = dictionary_entries.expression
@@ -488,5 +494,5 @@ interface DictionaryDao {
         )
         """
     )
-    suspend fun applyFrequenciesFromTable(leadingDictionary: String)
+    suspend fun applyFrequenciesFromTable(leadingDictionary: String, strict: Int)
 }

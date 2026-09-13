@@ -10,6 +10,7 @@ import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.database.AppDatabase
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.DictionaryInfo
+import com.yomitanmobile.data.local.entity.FrequencyListSetting
 import com.yomitanmobile.data.local.entity.JlptTag
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.WordFrequency
@@ -18,6 +19,7 @@ import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.data.settings.FrequencySettings
 import com.yomitanmobile.data.settings.LanguageSettings
 import com.yomitanmobile.domain.model.AppLanguage
+import com.yomitanmobile.domain.model.FrequencyDirection
 import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
 import com.yomitanmobile.domain.model.WordEntry
@@ -27,6 +29,7 @@ import com.yomitanmobile.util.InputSanitizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -473,6 +476,17 @@ class DictionaryRepositoryImpl @Inject constructor(
             //    describes, so its per-row updates matched nothing.
             // Without this the JLPT deck generator silently drops to zero
             // candidates depending only on install order.
+            // Before the rollup: a list of occurrence counts has to become a
+            // list of ranks first, or every consumer of the frequency column
+            // reads its commonest words as its rarest.
+            if (totalFreqUpdates > 0) {
+                try {
+                    classifyFrequencyList(dictionaryNameFromBatch)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Classifying the imported frequency list failed", e)
+                }
+            }
+
             reapplyStoredMeta()
 
             // Clean up any previous DictionaryInfo for this dictionary (both meta and regular)
@@ -546,9 +560,142 @@ class DictionaryRepositoryImpl @Inject constructor(
             Log.w(TAG, "Re-applying stored JLPT levels failed", e)
         }
         try {
-            dictionaryDao.applyFrequenciesFromTable(leadingFrequencyDictionary())
+            dictionaryDao.applyFrequenciesFromTable(
+                leadingDictionary = leadingFrequencyDictionary(),
+                strict = if (frequencySettings.strictLeading()) 1 else 0
+            )
         } catch (e: Exception) {
             Log.w(TAG, "Re-applying stored frequencies failed", e)
+        }
+    }
+
+    /**
+     * Decides what a freshly imported list's numbers mean and, when they are
+     * occurrence counts, turns them into ranks in place. See
+     * [FrequencyDirection] for why the format cannot say which it is, and
+     * [FrequencyListSetting] for where the original numbers survive.
+     *
+     * A direction the user has set by hand is never overwritten by the
+     * detector — a re-import of the same list keeps their answer.
+     */
+    private suspend fun classifyFrequencyList(dictionary: String) {
+        if (dictionary.isBlank() || dictionary == tempDictionaryName) return
+        val stats = frequencyDao.statsFor(dictionary) ?: return
+        if (stats.rowCount == 0) return
+        val existing = frequencyDao.getListSetting(dictionary)
+        val userChosen = existing != null && !existing.autoDetected
+        val higherIsBetter = if (userChosen && existing != null) {
+            existing.higherIsBetter
+        } else {
+            FrequencyDirection.isCountBased(
+                dictionaryName = dictionary,
+                rowCount = stats.rowCount,
+                distinctValues = stats.distinctValues,
+                maxValue = stats.maxValue
+            )
+        }
+        frequencyDao.upsertListSetting(
+            FrequencyListSetting(
+                dictionary = dictionary,
+                higherIsBetter = higherIsBetter,
+                autoDetected = !userChosen
+            )
+        )
+        normalizeRanks(dictionary, higherIsBetter)
+    }
+
+    /**
+     * Classifies every installed list that has never been looked at — the
+     * lists already on disk when this shipped. Their `rank` column still holds
+     * the raw imported numbers, which is exactly what the detector reads.
+     */
+    override suspend fun classifyUnknownFrequencyLists() = withContext(Dispatchers.IO) {
+        val known = frequencyDao.getListSettings().map { it.dictionary }.toSet()
+        val installed = frequencyDao.observeDictionaries().first()
+        val unknown = installed.filter { it !in known }
+        if (unknown.isEmpty()) return@withContext
+        unknown.forEach { classifyFrequencyList(it) }
+        reapplyFrequencies()
+    }
+
+    override suspend fun setFrequencyListDirection(
+        dictionary: String,
+        higherIsBetter: Boolean
+    ) = withContext(Dispatchers.IO) {
+        frequencyDao.upsertListSetting(
+            FrequencyListSetting(
+                dictionary = dictionary,
+                higherIsBetter = higherIsBetter,
+                autoDetected = false
+            )
+        )
+        normalizeRanks(dictionary, higherIsBetter)
+        reapplyFrequencies()
+    }
+
+    override fun observeFrequencyLists(): Flow<List<FrequencyListSetting>> =
+        frequencyDao.observeListSettings()
+
+    /**
+     * Rewrites one list's `rank` column so that lower always means commoner,
+     * whichever way its source numbers ran.
+     *
+     * Both directions are computed from `display_value`, which holds the
+     * number the list actually shipped, so this is lossless and can be run
+     * again — and in the other direction — as often as the user likes:
+     *
+     *  • ranked: `rank` is the shipped number,
+     *  • counted: `rank` is the position of the shipped number among the
+     *    list's distinct counts, commonest first, so the most-used word in a
+     *    300 000-word corpus becomes rank 1 rather than rank 5 000 000.
+     *
+     * The positions come out of a temporary table because SQLite on API 26 has
+     * no window functions, and the obvious correlated-subquery version is a
+     * full scan per row over a list with hundreds of thousands of them. Rows
+     * whose display value is not a number (a list shipping "Top 10k" style
+     * labels) are left exactly as they were.
+     */
+    private suspend fun normalizeRanks(dictionary: String, higherIsBetter: Boolean) {
+        val db = database.openHelper.writableDatabase
+        val numeric = "display_value GLOB '[0-9]*' AND CAST(display_value AS INTEGER) > 0"
+        database.withTransaction {
+            if (!higherIsBetter) {
+                db.execSQL(
+                    """
+                    UPDATE word_frequencies SET rank = CAST(display_value AS INTEGER)
+                    WHERE dictionary = ? AND $numeric
+                    """,
+                    arrayOf(dictionary)
+                )
+                return@withTransaction
+            }
+            db.execSQL("DROP TABLE IF EXISTS temp.freq_rank_map")
+            // rowid (the INTEGER PRIMARY KEY) numbers the rows 1, 2, 3… in the
+            // order the SELECT hands them over, which is the ordering we want
+            // the position to be read from.
+            db.execSQL(
+                "CREATE TEMP TABLE freq_rank_map (position INTEGER PRIMARY KEY, value INTEGER UNIQUE)"
+            )
+            db.execSQL(
+                """
+                INSERT INTO temp.freq_rank_map (value)
+                SELECT DISTINCT CAST(display_value AS INTEGER) AS v FROM word_frequencies
+                WHERE dictionary = ? AND $numeric
+                ORDER BY v DESC
+                """,
+                arrayOf(dictionary)
+            )
+            db.execSQL(
+                """
+                UPDATE word_frequencies SET rank = COALESCE((
+                    SELECT position FROM temp.freq_rank_map
+                    WHERE value = CAST(word_frequencies.display_value AS INTEGER)
+                ), rank)
+                WHERE dictionary = ? AND $numeric
+                """,
+                arrayOf(dictionary)
+            )
+            db.execSQL("DROP TABLE IF EXISTS temp.freq_rank_map")
         }
     }
 
@@ -566,14 +713,31 @@ class DictionaryRepositoryImpl @Inject constructor(
      * thread and reports when it is done rather than blocking the screen.
      */
     override suspend fun reapplyFrequencies() = withContext(Dispatchers.IO) {
-        dictionaryDao.applyFrequenciesFromTable(leadingFrequencyDictionary())
+        dictionaryDao.applyFrequenciesFromTable(
+            leadingDictionary = leadingFrequencyDictionary(),
+            strict = if (frequencySettings.strictLeading()) 1 else 0
+        )
     }
 
     override suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo> {
         if (expression.isBlank()) return emptyList()
         return try {
+            val counted = frequencyDao.getListSettings()
+                .filter { it.higherIsBetter }
+                .map { it.dictionary }
+                .toSet()
             frequencyDao.getForWord(expression, reading.trim())
-                .map { WordFrequencyInfo(it.dictionary, it.rank, it.displayValue) }
+                .map {
+                    WordFrequencyInfo(
+                        dictionary = it.dictionary,
+                        rank = it.rank,
+                        displayValue = it.displayValue,
+                        // A counted list's chip has to say so: "12 345×" is a
+                        // number that goes the other way from "#12 345", and
+                        // shown as a rank it reads as a word nobody uses.
+                        higherIsBetter = it.dictionary in counted
+                    )
+                }
         } catch (e: Exception) {
             Log.w(TAG, "getFrequencies failed", e)
             emptyList()
@@ -585,6 +749,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             dictionaryDao.deleteByDictionary(dictionaryName)
             kanjiDao.deleteByDictionary(dictionaryName)
             frequencyDao.deleteByDictionary(dictionaryName)
+            frequencyDao.deleteListSetting(dictionaryName)
             jlptTagDao.deleteByDictionary(dictionaryName)
             dictionaryInfoDao.deleteByName(dictionaryName)
             try {

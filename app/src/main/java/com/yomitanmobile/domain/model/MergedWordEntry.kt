@@ -28,7 +28,16 @@ data class MergedWordEntry(
     // Cross-references and notes ("see also …", "cf. …", "Note: …") merged
     // from the grouped entries' WordEntry.notes. Rendered as a separate
     // card at the bottom of the detail screen.
-    val notes: List<String> = emptyList()
+    val notes: List<String> = emptyList(),
+    /**
+     * The leading frequency list's own number for this word, when that list
+     * knows it. The result list shows this rather than a tier label, so the
+     * list the user made leading is what they read before opening anything —
+     * and the same number is what the card will carry. Null means the leading
+     * list has no entry for the word (or none was chosen), and the tier label
+     * takes over.
+     */
+    val leadingFrequency: WordFrequencyInfo? = null
 ) {
     fun displayText(): String = primaryExpression.ifBlank { reading }
 

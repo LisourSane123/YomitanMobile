@@ -48,7 +48,31 @@ class FrequencySettingsViewModel @Inject constructor(
     private val _showAll = MutableStateFlow(true)
     val showAll: StateFlow<Boolean> = _showAll.asStateFlow()
 
+    /** "Only the leading list counts" — see [FrequencySettings.strictLeading]. */
+    private val _strictLeading = MutableStateFlow(false)
+    val strictLeading: StateFlow<Boolean> = _strictLeading.asStateFlow()
+
+    /**
+     * Lists whose numbers are occurrence counts rather than ranks (higher =
+     * commoner). Detected at import and overridable here, because a list the
+     * detector reads backwards would quietly invert everything the app does
+     * with frequency.
+     */
+    private val _countBased = MutableStateFlow<Set<String>>(emptySet())
+    val countBased: StateFlow<Set<String>> = _countBased.asStateFlow()
+
     init {
+        viewModelScope.launch {
+            _strictLeading.value = frequencySettings.strictLeading()
+            // Lists installed before the app knew a list could be counted
+            // rather than ranked still have no answer stored; this is where
+            // they get one.
+            runCatching { repository.classifyUnknownFrequencyLists() }
+            repository.observeFrequencyLists().collect { settings ->
+                _countBased.value = settings.filter { it.higherIsBetter }
+                    .map { it.dictionary }.toSet()
+            }
+        }
         viewModelScope.launch {
             val prefs = appContext.dataStore.data.first()
             _showAll.value = prefs[MainActivity.FREQUENCY_SHOW_ALL] ?: true
@@ -88,6 +112,37 @@ class FrequencySettingsViewModel @Inject constructor(
         list[index] = list[target].also { list[target] = list[index] }
         _order.value = list
         persistOrder()
+    }
+
+    /**
+     * Flips what one list's numbers mean. The stored ranks are rewritten from
+     * the original values and the whole rollup runs again — the same pass
+     * changing the leading list triggers, for the same reason.
+     */
+    fun setCountBased(name: String, countBased: Boolean) {
+        viewModelScope.launch {
+            _isReapplying.value = true
+            try {
+                repository.setFrequencyListDirection(name, countBased)
+            } finally {
+                _isReapplying.value = false
+            }
+        }
+    }
+
+    fun setStrictLeading(value: Boolean) {
+        _strictLeading.value = value
+        viewModelScope.launch {
+            frequencySettings.setStrictLeading(value)
+            // Strictness decides what the stored column contains, not how it
+            // is drawn, so it re-runs the rollup exactly like the order does.
+            _isReapplying.value = true
+            try {
+                repository.reapplyFrequencies()
+            } finally {
+                _isReapplying.value = false
+            }
+        }
     }
 
     fun setShowAll(value: Boolean) {

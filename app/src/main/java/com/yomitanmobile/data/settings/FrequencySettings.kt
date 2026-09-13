@@ -36,6 +36,26 @@ class FrequencySettings @Inject constructor(
      */
     suspend fun leadingDictionary(): String = order().firstOrNull().orEmpty()
 
+    /**
+     * True when the leading list is the ONLY source of the stored rank.
+     *
+     * Off (the default), a word the leading list does not know keeps the best
+     * rank another installed list gives it — more words carry a number, at the
+     * cost of the number meaning different things on different cards. On, the
+     * column holds one list's scale and nothing else, which is what an Anki
+     * reorder addon sorts new cards by: two lists interleaved put a word the
+     * leading list calls rare ahead of one it calls common.
+     */
+    suspend fun strictLeading(): Boolean = try {
+        context.dataStore.data.first()[MainActivity.FREQUENCY_STRICT_LEADING] ?: false
+    } catch (_: Exception) {
+        false
+    }
+
+    suspend fun setStrictLeading(value: Boolean) {
+        context.dataStore.edit { it[MainActivity.FREQUENCY_STRICT_LEADING] = value }
+    }
+
     suspend fun setOrder(order: List<String>) {
         context.dataStore.edit {
             it[MainActivity.FREQUENCY_DISPLAY_ORDER] = order.joinToString(",")

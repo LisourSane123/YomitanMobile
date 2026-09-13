@@ -125,7 +125,8 @@ class MigrationFrom16DbTest {
                 AppDatabase.MIGRATION_16_17,
                 AppDatabase.MIGRATION_17_18,
                 AppDatabase.MIGRATION_18_19,
-                AppDatabase.MIGRATION_19_20
+                AppDatabase.MIGRATION_19_20,
+                AppDatabase.MIGRATION_20_21
             )
             .allowMainThreadQueries()
             .build()
@@ -180,6 +181,17 @@ class MigrationFrom16DbTest {
             assertEquals(1, db.favoriteWordDao().getCount("en"))
             assertEquals(1, db.searchHistoryDao().getCount("ja"))
             assertEquals(1, db.searchHistoryDao().getCount("en"))
+
+            // 20→21 added the table saying which way each frequency list's
+            // numbers run. Writing and reading one is the assertion that the
+            // migrated table matches the entity Room expects.
+            db.frequencyDao().upsertListSetting(
+                com.yomitanmobile.data.local.entity.FrequencyListSetting(
+                    dictionary = "JPDBv2",
+                    higherIsBetter = false
+                )
+            )
+            assertEquals(1, db.frequencyDao().getListSettings().size)
         } finally {
             db.close()
         }

@@ -1,6 +1,7 @@
 package com.yomitanmobile.domain.repository
 
 import com.yomitanmobile.data.local.entity.DictionaryInfo
+import com.yomitanmobile.data.local.entity.FrequencyListSetting
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
@@ -73,6 +74,25 @@ interface DictionaryRepository {
      * leads.
      */
     suspend fun reapplyFrequencies()
+
+    /**
+     * What each installed frequency list's numbers mean — a rank, or the raw
+     * occurrence count it was built from. See [FrequencyListSetting].
+     */
+    fun observeFrequencyLists(): Flow<List<FrequencyListSetting>>
+
+    /**
+     * Overrides what the detector decided about one list and converts its
+     * stored numbers to match, then re-runs the rollup. The user's answer
+     * sticks across re-imports of the same list.
+     */
+    suspend fun setFrequencyListDirection(dictionary: String, higherIsBetter: Boolean)
+
+    /**
+     * Classifies lists installed before this app knew a list could run the
+     * other way. No-op once every installed list has an answer.
+     */
+    suspend fun classifyUnknownFrequencyLists()
 
     /**
      * Batch reading lookup, chunked like [getEntriesForExpressions]. Resolves

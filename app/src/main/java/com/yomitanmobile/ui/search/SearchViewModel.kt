@@ -11,6 +11,7 @@ import com.yomitanmobile.data.local.dao.SearchHistoryDao
 import com.yomitanmobile.data.local.entity.SearchHistory
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.domain.model.WordFrequencyInfo
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import com.yomitanmobile.util.DeconjugationCandidate
@@ -71,6 +72,8 @@ class SearchViewModel @Inject constructor(
     private val dictionaryDao: DictionaryDao,
     private val searchHistoryDao: SearchHistoryDao,
     private val exportedWordDao: ExportedWordDao,
+    private val frequencyDao: com.yomitanmobile.data.local.dao.FrequencyDao,
+    private val frequencySettings: com.yomitanmobile.data.settings.FrequencySettings,
     @ApplicationContext private val appContext: Context,
     languageSettings: com.yomitanmobile.data.settings.LanguageSettings
 ) : ViewModel() {
@@ -297,6 +300,7 @@ class SearchViewModel @Inject constructor(
                         }
                     }
                     .map { results -> results.map(::enrichWithJlptFallback) }
+                    .map { results -> withLeadingFrequency(results) }
             }
         }
         .catch { e ->
@@ -309,6 +313,54 @@ class SearchViewModel @Inject constructor(
      * Fill in JLPT level from the built-in vocabulary when the dictionary's own
      * tags didn't supply one. Dictionary-supplied levels always take precedence.
      */
+    /**
+     * Stamps each result with the leading list's own number for that word.
+     *
+     * The result list used to show a tier label ("★★ Top 5K") computed from
+     * the rolled-up frequency column, which says nothing about WHICH list it
+     * came from. Now the list the user made leading is named and quoted
+     * verbatim before they tap anything — and it is the same number the card
+     * will carry. Words the leading list does not know keep the tier label, so
+     * the difference stays visible rather than being papered over with another
+     * list's rank.
+     *
+     * One extra query per search over an indexed table, chunked below SQLite's
+     * 999-variable limit; failures leave the results untouched.
+     */
+    private suspend fun withLeadingFrequency(
+        entries: List<MergedWordEntry>
+    ): List<MergedWordEntry> {
+        if (entries.isEmpty()) return entries
+        return runCatching {
+            val leading = frequencySettings.leadingDictionary()
+            if (leading.isBlank()) return entries
+            val higherIsBetter = frequencyDao.getListSetting(leading)?.higherIsBetter ?: false
+            val expressions = entries.map { it.primaryExpression }.filter { it.isNotBlank() }.distinct()
+            val rows = expressions.chunked(900)
+                .flatMap { frequencyDao.getForDictionary(leading, it) }
+                .groupBy { it.expression }
+            entries.map { entry ->
+                // A list that shipped no readings matches on the spelling
+                // alone — the same fallback the per-word lookup uses.
+                val row = rows[entry.primaryExpression]?.let { candidates ->
+                    candidates.firstOrNull { it.reading == entry.reading }
+                        ?: candidates.firstOrNull { it.reading.isBlank() }
+                } ?: return@map entry
+                entry.copy(
+                    leadingFrequency = WordFrequencyInfo(
+                        dictionary = row.dictionary,
+                        rank = row.rank,
+                        displayValue = row.displayValue,
+                        higherIsBetter = higherIsBetter
+                    )
+                )
+            }
+        }.getOrElse { e ->
+            Log.w(TAG, "leading frequency lookup failed", e)
+            entries
+        }
+    }
+
     private fun enrichWithJlptFallback(entry: MergedWordEntry): MergedWordEntry {
         if (entry.jlptLevel > 0) return entry
         val level = JlptVocabulary.getLevel(entry.primaryExpression, entry.reading)

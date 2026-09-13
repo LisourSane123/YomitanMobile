@@ -38,6 +38,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 import com.yomitanmobile.domain.model.FrequencyCorpus
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +52,8 @@ fun FrequencyDisplayScreen(
 
     val order by viewModel.order.collectAsState()
     val showAll by viewModel.showAll.collectAsState()
+    val strictLeading by viewModel.strictLeading.collectAsState()
+    val countBased by viewModel.countBased.collectAsState()
     val isReapplying by viewModel.isReapplying.collectAsState()
 
     Scaffold(
@@ -85,14 +88,51 @@ fun FrequencyDisplayScreen(
                         )
                         Text(
                             tr(
-                                "Włączone: każda zainstalowana lista pokazuje swój ranking. Wyłączone: tylko lista o najwyższym priorytecie.",
-                                "On: every installed list shows its rank. Off: only the top-priority list."
+                                "Dotyczy ekranu słowa. Na liście wyników zawsze widać tylko listę główną; " +
+                                    "po wejściu w słowo — wszystkie zainstalowane listy. Wyłączone: także tam tylko główna.",
+                                "Applies to the word screen. The result list always shows the leading list alone; " +
+                                    "opening a word shows every installed list. Off: that screen shows only the leading one too."
                             ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Switch(checked = showAll, onCheckedChange = { viewModel.setShowAll(it) })
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            tr("Trzymaj się tylko głównej listy", "Stick to the leading list only"),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            tr(
+                                "Włączone: słowo, którego główna lista nie zna, zostaje bez rankingu — " +
+                                    "każda liczba w aplikacji i na fiszce pochodzi z jednej skali, więc dodatki " +
+                                    "sortujące w Anki (np. AutoReorder) układają nowe karty poprawnie. " +
+                                    "Wyłączone: takie słowo dostaje ranking z innej listy.",
+                                "On: a word the leading list does not know is left unranked — every number in the app " +
+                                    "and on a card comes from one scale, so an Anki sorting addon (AutoReorder and " +
+                                    "friends) orders new cards the way that list meant. Off: such a word borrows " +
+                                    "another list's rank."
+                            ),
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = strictLeading,
+                        onCheckedChange = { viewModel.setStrictLeading(it) }
+                    )
                 }
             }
 
@@ -165,6 +205,41 @@ fun FrequencyDisplayScreen(
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                // What the numbers in this list MEAN. A list
+                                // of occurrence counts runs the other way, and
+                                // read as ranks it calls the commonest words
+                                // the rarest — so it is converted on import
+                                // and the conversion is said out loud here,
+                                // with a way to correct it.
+                                val isCounted = name in countBased
+                                Text(
+                                    if (isCounted) {
+                                        tr(
+                                            "liczby wystąpień (większa = częstsze) — przeliczone na ranking",
+                                            "occurrence counts (higher = commoner) — converted to ranks"
+                                        )
+                                    } else {
+                                        tr(
+                                            "ranking (mniejszy numer = częstsze)",
+                                            "ranks (lower number = commoner)"
+                                        )
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                TextButton(
+                                    onClick = { viewModel.setCountBased(name, !isCounted) },
+                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                                ) {
+                                    Text(
+                                        if (isCounted) {
+                                            tr("To jednak ranking", "These are ranks after all")
+                                        } else {
+                                            tr("To liczby wystąpień", "These are occurrence counts")
+                                        },
+                                        fontSize = 12.sp
                                     )
                                 }
                             }

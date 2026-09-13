@@ -131,6 +131,11 @@ class MainActivity : ComponentActivity() {
         val FREQUENCY_DISPLAY_ORDER = stringPreferencesKey("frequency_display_order")
         val FREQUENCY_SHOW_ALL = booleanPreferencesKey("frequency_show_all")
 
+        // "Only the leading list counts." On: a word the leading list does not
+        // know is left unranked instead of borrowing another list's number, so
+        // every rank the app stores — and stamps on a card — is on one scale.
+        val FREQUENCY_STRICT_LEADING = booleanPreferencesKey("frequency_strict_leading")
+
         // Language (stored in SharedPreferences for sync read in attachBaseContext)
         const val LANG_PREFS_NAME = "lang_prefs"
         const val LANG_PREFS_KEY = "app_language" // "system" | "pl" | "en"

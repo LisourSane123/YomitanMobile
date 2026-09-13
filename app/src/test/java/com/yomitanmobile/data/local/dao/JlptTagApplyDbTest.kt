@@ -138,7 +138,7 @@ class JlptTagApplyDbTest {
         )
         // Rows a term (re-)import just wrote: no frequency of their own.
         dao.insertAll(listOf(entry("学校", "がっこう", frequency = 0)))
-        dao.applyFrequenciesFromTable(leadingDictionary = "")
+        dao.applyFrequenciesFromTable(leadingDictionary = "", strict = 0)
 
         val best = dao.getEntriesByExpressions(listOf("学校"), "ja").single().frequency
         assertEquals(812, best)
@@ -164,12 +164,35 @@ class JlptTagApplyDbTest {
             )
         )
 
-        dao.applyFrequenciesFromTable(leadingDictionary = "CEJC-LUW")
+        dao.applyFrequenciesFromTable(leadingDictionary = "CEJC-LUW", strict = 0)
 
         assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
         // The leading list has nothing to say here, so the other one is used
         // rather than leaving the word unranked.
         assertEquals(21000, dao.getEntriesByExpressions(listOf("朕"), "ja").single().frequency)
+    }
+
+    @Test
+    fun `strict mode leaves a word the leading list does not know unranked`() = runBlocking {
+        // One scale or none: a rank borrowed from another list sorts new cards
+        // in Anki against the order the leading list meant.
+        dao.insertAll(
+            listOf(
+                entry("喋る", "しゃべる"),
+                entry("朕", "ちん", frequency = 0)
+            )
+        )
+        db.frequencyDao().insertAll(
+            listOf(
+                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400"),
+                WordFrequency("朕", "ちん", "BCCWJ", 21000, "21000")
+            )
+        )
+
+        dao.applyFrequenciesFromTable(leadingDictionary = "CEJC-LUW", strict = 1)
+
+        assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
+        assertEquals(0, dao.getEntriesByExpressions(listOf("朕"), "ja").single().frequency)
     }
 
     @Test
@@ -182,7 +205,7 @@ class JlptTagApplyDbTest {
             )
         )
 
-        dao.applyFrequenciesFromTable(leadingDictionary = "")
+        dao.applyFrequenciesFromTable(leadingDictionary = "", strict = 0)
 
         assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
     }

@@ -10,13 +10,33 @@ package com.yomitanmobile.domain.model
 data class WordFrequencyInfo(
     val dictionary: String,
     val rank: Int,
-    val displayValue: String
+    val displayValue: String,
+    /**
+     * True when this list shipped occurrence counts rather than ranks, so its
+     * own number runs the other way (see [FrequencyDirection]). [rank] is the
+     * position derived from it and is comparable with every other list's;
+     * [displayValue] is still the count, and has to be rendered as one.
+     */
+    val higherIsBetter: Boolean = false
 ) {
-    /** e.g. "BCCWJ #980". Falls back to the raw rank when displayValue is blank. */
-    fun label(): String {
+    /** e.g. "BCCWJ #980", or "Innocent 12345×" for a counted list. */
+    fun label(): String = "$dictionary ${value()}"
+
+    /** The number alone, marked for the direction its list runs in. */
+    fun value(): String {
         val value = displayValue.ifBlank { rank.toString() }
-        val shown = if (value.firstOrNull()?.isDigit() == true) "#$value" else value
-        return "$dictionary $shown"
+        if (value.firstOrNull()?.isDigit() != true) return value
+        return if (higherIsBetter) "${value}×" else "#$value"
+    }
+
+    /**
+     * The list's name cut down to what fits beside a word in a result list:
+     * "BCCWJ_SUW_LUW_combined" is the publisher's file name, and the first
+     * word of it is the part anyone reads.
+     */
+    fun shortDictionary(): String {
+        val head = dictionary.split('_', '-', ' ', '(').firstOrNull().orEmpty().ifBlank { dictionary }
+        return if (head.length > 10) head.take(10) else head
     }
 
     companion object {

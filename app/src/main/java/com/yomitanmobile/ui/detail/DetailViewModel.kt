@@ -176,6 +176,14 @@ class DetailViewModel @Inject constructor(
     val frequencies: StateFlow<List<WordFrequencyInfo>> = _frequencies.asStateFlow()
 
     /**
+     * Which of those chips is the leading list — the one whose number the
+     * search list showed and the card will carry. Blank when the user has not
+     * chosen one, in which case no chip is singled out.
+     */
+    private val _leadingDictionary = MutableStateFlow("")
+    val leadingDictionary: StateFlow<String> = _leadingDictionary.asStateFlow()
+
+    /**
      * Synthesised furigana for example sentences that arrived without ruby
      * data (plain-JMDict examples, seeded sentences, or Jitendex imported
      * before the parser preserved readings). Keyed by the sentence's plain JP
@@ -393,6 +401,7 @@ class DetailViewModel @Inject constructor(
                 val priority = (prefs[MainActivity.FREQUENCY_DISPLAY_ORDER] ?: "")
                     .split(',').map { it.trim() }.filter { it.isNotBlank() }
                 val showAll = prefs[MainActivity.FREQUENCY_SHOW_ALL] ?: true
+                _leadingDictionary.value = priority.firstOrNull().orEmpty()
                 WordFrequencyInfo.order(raw, priority, showAll)
             }.onSuccess { _frequencies.value = it }
                 .onFailure { exception ->

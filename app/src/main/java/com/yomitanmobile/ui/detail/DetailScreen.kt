@@ -92,6 +92,7 @@ fun DetailScreen(
     val lookupCount by viewModel.lookupCount.collectAsState()
     val kanjiInfo by viewModel.kanjiInfo.collectAsState()
     val frequencies by viewModel.frequencies.collectAsState()
+    val leadingDictionary by viewModel.leadingDictionary.collectAsState()
     val generatedFurigana by viewModel.generatedFurigana.collectAsState()
     val isEnglish = LocalIsEnglish.current
     val tr = rememberTr()
@@ -375,6 +376,7 @@ fun DetailScreen(
                     isFavorite = isFavorite,
                     kanjiInfo = kanjiInfo,
                     frequencies = frequencies,
+                    leadingDictionary = leadingDictionary,
                     generatedFurigana = generatedFurigana,
                     onToggleFavorite = { viewModel.toggleFavorite() },
                     modifier = Modifier.padding(paddingValues)
@@ -398,6 +400,7 @@ private fun WordDetailContent(
     isFavorite: Boolean,
     kanjiInfo: List<com.yomitanmobile.domain.model.KanjiInfo>,
     frequencies: List<com.yomitanmobile.domain.model.WordFrequencyInfo>,
+    leadingDictionary: String,
     generatedFurigana: Map<String, List<com.yomitanmobile.domain.model.FuriganaSegment>> = emptyMap(),
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
@@ -454,15 +457,28 @@ private fun WordDetailContent(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         frequencies.forEach { freq ->
+                            // The leading list is the one the search list
+                            // showed and the one the card will carry, so it
+                            // stays recognisable among the others rather than
+                            // being just the first chip.
+                            val isLeading = freq.dictionary == leadingDictionary
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer
+                                color = if (isLeading) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.tertiaryContainer
+                                }
                             ) {
                                 Text(
-                                    text = freq.label(),
+                                    text = if (isLeading) "★ ${freq.label()}" else freq.label(),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    color = if (isLeading) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onTertiaryContainer
+                                    },
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }

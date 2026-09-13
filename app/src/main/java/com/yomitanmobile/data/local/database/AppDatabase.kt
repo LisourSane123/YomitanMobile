@@ -20,6 +20,7 @@ import com.yomitanmobile.data.local.dao.SentenceDao
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.DictionaryEntryFts
 import com.yomitanmobile.data.local.entity.DictionaryInfo
+import com.yomitanmobile.data.local.entity.FrequencyListSetting
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
 import com.yomitanmobile.data.local.entity.AnkiCollectionWord
@@ -42,10 +43,11 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         Sentence::class,
         LookupCount::class,
         WordFrequency::class,
+        FrequencyListSetting::class,
         JlptTag::class,
         AnkiCollectionWord::class
     ],
-    version = 20,
+    version = 21,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -67,6 +69,32 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        /**
+         * Records what each frequency list's numbers mean.
+         *
+         * Every list until now was read as "lower is better", because that is
+         * what a rank list ships. The lists built from raw occurrence counts
+         * (Innocent Corpus and friends) run the other way, and were silently
+         * telling the app that the commonest word in Japanese is the rarest
+         * one. The new table holds one row per list; an install that has none
+         * yet is classified the first time a list is imported or the frequency
+         * screen is opened.
+         *
+         * The CREATE statement must match what Room generates for
+         * [FrequencyListSetting] verbatim, or the identity check fails on open.
+         */
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `frequency_lists` (" +
+                        "`dictionary` TEXT NOT NULL, " +
+                        "`higher_is_better` INTEGER NOT NULL, " +
+                        "`auto_detected` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`dictionary`))"
+                )
+            }
+        }
 
         /**
          * Makes the language part of the favourites / history identity.
