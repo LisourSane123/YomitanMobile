@@ -5,7 +5,6 @@ import android.util.Log
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -132,8 +131,17 @@ class DictionaryDownloadManager(
     val results: SharedFlow<DownloadResult> = _results.asSharedFlow()
 
     private val downloadMutex = Mutex()
+
+    /**
+     * Guards [_queue] AND [draining] together. Both have to move under one
+     * lock: the worker deciding "nothing left to do" and a tap adding work are
+     * the two halves of the same decision, and taking them separately is what
+     * let a queue go to sleep with items still in it.
+     */
     private val queueMutex = Mutex()
-    private var worker: Job? = null
+
+    /** True while a worker is walking the queue. Only read/written under [queueMutex]. */
+    private var draining = false
 
     /**
      * How one queued dictionary is installed. A property rather than a direct
@@ -155,14 +163,22 @@ class DictionaryDownloadManager(
     fun enqueue(dictionaries: List<DictionaryDownloadInfo>) {
         if (dictionaries.isEmpty()) return
         scope.launch {
-            queueMutex.withLock {
+            val startWorker = queueMutex.withLock {
                 val pending = _queue.value.filter { it.state == QueueState.WAITING || it.state == QueueState.RUNNING }
                     .mapTo(HashSet()) { it.info.id }
                 val added = dictionaries.filterNot { it.id in pending }.map { QueuedDownload(it) }
-                if (added.isEmpty()) return@withLock
+                if (added.isEmpty()) return@withLock false
                 _queue.value = _queue.value + added
-                if (worker?.isActive != true) worker = scope.launch { drainQueue() }
+                // Claim the worker slot under the same lock that added the
+                // work. Asking a Job whether it is still active could not
+                // answer this: a worker that has just found the queue empty is
+                // active for a moment longer, and an item added in that moment
+                // waited forever for a worker that was on its way out. Short
+                // installs — a 1-2 MB frequency list — land in that window far
+                // more often than a dictionary that takes minutes.
+                if (draining) false else { draining = true; true }
             }
+            if (startWorker) drainQueue()
         }
     }
 
@@ -174,23 +190,48 @@ class DictionaryDownloadManager(
      * import is the long part anyway.
      */
     fun cancelQueued(id: String) {
-        _queue.value = _queue.value.map {
-            if (it.info.id == id && it.state == QueueState.WAITING) it.copy(state = QueueState.CANCELLED) else it
+        scope.launch {
+            queueMutex.withLock {
+                _queue.value = _queue.value.map {
+                    if (it.info.id == id && it.state == QueueState.WAITING) {
+                        it.copy(state = QueueState.CANCELLED)
+                    } else {
+                        it
+                    }
+                }
+            }
         }
     }
 
     /** Clears everything that is no longer going to change. */
     fun clearFinished() {
-        _queue.value = _queue.value.filter {
-            it.state == QueueState.WAITING || it.state == QueueState.RUNNING
+        scope.launch {
+            queueMutex.withLock {
+                _queue.value = _queue.value.filter {
+                    it.state == QueueState.WAITING || it.state == QueueState.RUNNING
+                }
+            }
         }
     }
 
-    /** Installs queued dictionaries one at a time until none are waiting. */
+    /**
+     * Installs queued dictionaries one at a time until none are waiting.
+     *
+     * Picking the next item and standing down are both done under
+     * [queueMutex], so "the queue is empty, I am finished" and "here is
+     * another one" can never be decided at the same time.
+     */
     private suspend fun drainQueue() {
         while (true) {
-            val next = _queue.value.firstOrNull { it.state == QueueState.WAITING } ?: return
-            setState(next.info.id) { it.copy(state = QueueState.RUNNING) }
+            val next = queueMutex.withLock {
+                val waiting = _queue.value.firstOrNull { it.state == QueueState.WAITING }
+                if (waiting == null) {
+                    draining = false
+                } else {
+                    setStateLocked(waiting.info.id) { it.copy(state = QueueState.RUNNING) }
+                }
+                waiting
+            } ?: return
             val result = try {
                 installer(next.info)
             } catch (t: Throwable) {
@@ -200,19 +241,22 @@ class DictionaryDownloadManager(
                 Log.w(TAG, "Install of ${next.info.name} failed", t)
                 DownloadResult.Error(next.info.name, "${t.javaClass.simpleName}: ${t.message ?: "no message"}")
             }
-            when (result) {
-                is DownloadResult.Success -> setState(next.info.id) {
-                    it.copy(state = QueueState.DONE, entriesImported = result.entriesImported)
-                }
-                is DownloadResult.Error -> setState(next.info.id) {
-                    it.copy(state = QueueState.FAILED, error = result.message)
+            queueMutex.withLock {
+                when (result) {
+                    is DownloadResult.Success -> setStateLocked(next.info.id) {
+                        it.copy(state = QueueState.DONE, entriesImported = result.entriesImported)
+                    }
+                    is DownloadResult.Error -> setStateLocked(next.info.id) {
+                        it.copy(state = QueueState.FAILED, error = result.message)
+                    }
                 }
             }
             _results.emit(result)
         }
     }
 
-    private fun setState(id: String, transform: (QueuedDownload) -> QueuedDownload) {
+    /** Call sites hold [queueMutex]; every write to [_queue] goes through it. */
+    private fun setStateLocked(id: String, transform: (QueuedDownload) -> QueuedDownload) {
         _queue.value = _queue.value.map { if (it.info.id == id) transform(it) else it }
     }
 
@@ -275,14 +319,18 @@ class DictionaryDownloadManager(
                 } finally {
                     tempFile.delete()
                     _isDownloading.value = false
-                    // Clear progress after a delay so UI can show final state
-                    try {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                            kotlinx.coroutines.delay(2000)
-                            _currentDownload.value = null
-                        }
-                    } catch (_: Exception) {
-                        _currentDownload.value = null
+                    // The final state stays on screen for two seconds — but
+                    // off to the side, not while holding downloadMutex and not
+                    // in front of the next item in the queue. Waiting here made
+                    // every queued dictionary pay two seconds of nothing, and a
+                    // second caller asking to download during them was told
+                    // another download was in progress when none was.
+                    val finished = _currentDownload.value
+                    scope.launch(NonCancellable) {
+                        kotlinx.coroutines.delay(2000)
+                        // Only clear our own banner: the next install may have
+                        // already put its own progress there.
+                        if (_currentDownload.value === finished) _currentDownload.value = null
                     }
                 }
             }

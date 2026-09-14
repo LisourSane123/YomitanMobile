@@ -79,7 +79,6 @@ fun DictionaryDownloadScreen(
     viewModel: DictionaryDownloadViewModel = hiltViewModel()
 ) {
     val downloadProgress by viewModel.downloadProgress.collectAsState()
-    val isDownloading by viewModel.isDownloading.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val installedDictionaries by viewModel.installedDictionaries.collectAsState()
     val isEnglish = LocalIsEnglish.current
@@ -121,6 +120,8 @@ fun DictionaryDownloadScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            val queue by viewModel.queue.collectAsState()
+
             // Download progress banner
             AnimatedVisibility(
                 visible = downloadProgress != null,
@@ -134,7 +135,6 @@ fun DictionaryDownloadScreen(
 
             // What is queued, above the catalogue: the user just tapped these
             // and needs to see that the taps landed.
-            val queue by viewModel.queue.collectAsState()
             if (queue.isNotEmpty()) {
                 QueueCard(
                     queue = queue,
@@ -210,10 +210,10 @@ fun DictionaryDownloadScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // Download all recommended button
+            // Download all recommended button. Always enabled: it adds to the
+            // queue, and the queue de-duplicates whatever is already in it.
             Button(
                 onClick = { viewModel.downloadAllRecommended() },
-                enabled = !isDownloading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -245,13 +245,25 @@ fun DictionaryDownloadScreen(
                     val isMetaDict = dictInfo.category == DictionaryCategory.FREQUENCY ||
                             dictInfo.category == DictionaryCategory.PITCH_ACCENT
                     val isCurrentlyDownloading = downloadProgress?.dictionaryId == dictInfo.id
+                    // Already asked for: waiting its turn, or installing now.
+                    // This — and nothing else — is what disables the button.
+                    // Disabling every button while ANY install ran made the
+                    // queue unusable: you could add a second dictionary only
+                    // after the first had finished, which is the one moment a
+                    // queue is not needed. It bit hardest on the frequency
+                    // lists, which is exactly what people pick four of.
+                    val queued = queue.any {
+                        it.info.id == dictInfo.id &&
+                            (it.state == QueueState.WAITING || it.state == QueueState.RUNNING)
+                    }
 
                     DictionaryDownloadCard(
                         info = dictInfo,
                         isInstalled = isInstalled,
                         isDownloading = isCurrentlyDownloading,
+                        isQueued = queued,
                         onDownload = { viewModel.downloadDictionary(dictInfo) },
-                        enabled = !isDownloading,
+                        enabled = !queued,
                         allowReimport = isMetaDict,
                         isEnglish = isEnglish
                     )
@@ -511,7 +523,9 @@ private fun DictionaryDownloadCard(
     onDownload: () -> Unit,
     enabled: Boolean,
     allowReimport: Boolean = false,
-    isEnglish: Boolean
+    isEnglish: Boolean,
+    /** Waiting its turn in the install queue (but not installing yet). */
+    isQueued: Boolean = false
 ) {
     val tr = rememberTr()
     Card(
@@ -605,13 +619,14 @@ private fun DictionaryDownloadCard(
                             enabled = enabled && (!isInstalled || allowReimport)
                         ) {
                             Icon(
-                                if (isInstalled) Icons.Default.CheckCircle else Icons.Default.Download,
+                                if (isInstalled || isQueued) Icons.Default.CheckCircle else Icons.Default.Download,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 when {
+                                    isQueued -> tr("W kolejce", "Queued")
                                     isInstalled && allowReimport -> tr("Zaktualizuj", "Update")
                                     isInstalled -> tr("Zainstalowany", "Installed")
                                     else -> tr("Pobierz", "Download")

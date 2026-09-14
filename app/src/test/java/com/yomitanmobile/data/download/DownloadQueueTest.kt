@@ -130,7 +130,10 @@ class DownloadQueueTest {
 
         manager.enqueue(listOf(info("a"), info("b")))
         awaitQueue(manager) { q -> q.size == 2 }
+        // Cancelling and clearing go through the queue's own lock, so they
+        // land a moment after the call rather than inside it.
         manager.cancelQueued("b")
+        awaitQueue(manager) { q -> q.any { it.state == QueueState.CANCELLED } }
         gate.complete(Unit)
         awaitQueue(manager) { q -> q.none { it.state == QueueState.RUNNING } }
 
@@ -138,6 +141,59 @@ class DownloadQueueTest {
         assertEquals(listOf("a"), installed)
         // …and clearing leaves nothing behind, since neither is pending.
         manager.clearFinished()
+        awaitQueue(manager) { q -> q.isEmpty() }
         assertTrue(manager.queue.value.isEmpty())
+    }
+
+    @Test
+    fun `a queue that has drained can always be filled again`() = runBlocking {
+        // The bug this pins: the worker decided "nothing left, I am done" and
+        // a tap arriving in the moment before that coroutine actually finished
+        // saw a worker that was still "active" and started no new one. The
+        // dictionary then sat at "w kolejce" forever. Short installs — a 1-2 MB
+        // frequency list — hit that window often, which is why queueing four
+        // frequency lists one tap at a time was the way to see it.
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val installed = mutableListOf<String>()
+        val manager = manager(scope) { info ->
+            synchronized(installed) { installed += info.id }
+            DownloadResult.Success(info.name, 1)
+        }
+
+        repeat(30) { i ->
+            manager.enqueue(info("d$i"))
+            awaitQueue(manager) { q -> q.any { it.info.id == "d$i" && it.state == QueueState.DONE } }
+        }
+
+        assertEquals((0 until 30).map { "d$it" }, synchronized(installed) { installed.toList() })
+    }
+
+    @Test
+    fun `more can be queued while one is installing`() = runBlocking {
+        // The screen used to disable every download button for as long as any
+        // install was running, so the queue could only ever be filled before
+        // the first one started. The manager side of that promise: an item
+        // added mid-install is picked up as soon as the current one ends.
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val gate = CompletableDeferred<Unit>()
+        val installed = mutableListOf<String>()
+        val manager = manager(scope) { info ->
+            synchronized(installed) { installed += info.id }
+            if (info.id == "a") gate.await()
+            DownloadResult.Success(info.name, 1)
+        }
+
+        manager.enqueue(info("a"))
+        awaitQueue(manager) { q -> q.any { it.info.id == "a" && it.state == QueueState.RUNNING } }
+
+        manager.enqueue(info("b"))
+        manager.enqueue(info("c"))
+        awaitQueue(manager) { q -> q.count { it.state == QueueState.WAITING } == 2 }
+
+        gate.complete(Unit)
+        awaitQueue(manager) { q ->
+            q.size == 3 && q.all { it.state == QueueState.DONE }
+        }
+        assertEquals(listOf("a", "b", "c"), synchronized(installed) { installed.toList() })
     }
 }
