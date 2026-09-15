@@ -76,6 +76,36 @@ class DownloadQueueTest {
         assertEquals(listOf("a", "b", "c"), installed)
     }
 
+    /**
+     * The background service stops itself the moment it sees an idle queue,
+     * so it has to be started AFTER the work is in the queue — and a request
+     * that adds nothing must not start it at all.
+     */
+    @Test
+    fun `the background service is started once the work is already queued`() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val gate = CompletableDeferred<Unit>()
+        val queueAtStart = mutableListOf<List<QueuedDownload>>()
+        lateinit var manager: DictionaryDownloadManager
+        manager = DictionaryDownloadManager(
+            ApplicationProvider.getApplicationContext(),
+            repository,
+            scope,
+            com.yomitanmobile.data.repository.BackgroundWorkStarter { queueAtStart += manager.queue.value }
+        ).also { it.installer = { info -> gate.await(); DownloadResult.Success(info.name, 1) } }
+
+        manager.enqueue(info("a"))
+        awaitQueue(manager) { q -> q.size == 1 }
+        manager.enqueue(info("a"))
+        delay(50)
+
+        assertEquals(1, queueAtStart.size)
+        assertEquals(listOf("a"), queueAtStart.single().map { it.info.id })
+        gate.complete(Unit)
+        awaitQueue(manager) { q -> q.all { it.state == QueueState.DONE } }
+        Unit
+    }
+
     @Test
     fun `a dictionary already queued is not queued twice`() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

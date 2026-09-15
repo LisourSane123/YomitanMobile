@@ -1,5 +1,6 @@
 package com.yomitanmobile.ui.download
 
+import com.yomitanmobile.ui.common.rememberNotificationPermissionAsk
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -83,6 +84,7 @@ fun DictionaryDownloadScreen(
     val installedDictionaries by viewModel.installedDictionaries.collectAsState()
     val isEnglish = LocalIsEnglish.current
     val tr = rememberTr()
+    val withNotifications = rememberNotificationPermissionAsk()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -213,7 +215,7 @@ fun DictionaryDownloadScreen(
             // Download all recommended button. Always enabled: it adds to the
             // queue, and the queue de-duplicates whatever is already in it.
             Button(
-                onClick = { viewModel.downloadAllRecommended() },
+                onClick = { withNotifications { viewModel.downloadAllRecommended() } },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -262,7 +264,7 @@ fun DictionaryDownloadScreen(
                         isInstalled = isInstalled,
                         isDownloading = isCurrentlyDownloading,
                         isQueued = queued,
-                        onDownload = { viewModel.downloadDictionary(dictInfo) },
+                        onDownload = { withNotifications { viewModel.downloadDictionary(dictInfo) } },
                         enabled = !queued,
                         allowReimport = isMetaDict,
                         isEnglish = isEnglish

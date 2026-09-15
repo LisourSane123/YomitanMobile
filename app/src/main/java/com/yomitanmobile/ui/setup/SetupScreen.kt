@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.data.download.DownloadPhase
 import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.ui.common.rememberTr
+import com.yomitanmobile.ui.common.rememberNotificationPermissionAsk
 import com.yomitanmobile.ui.common.LocalIsEnglish
 
 @Composable
@@ -50,6 +51,7 @@ fun SetupScreen(
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val isEnglish = LocalIsEnglish.current
+    val withNotifications = rememberNotificationPermissionAsk()
 
     Surface(modifier = Modifier.fillMaxSize()) {
         AnimatedContent(
@@ -61,8 +63,8 @@ fun SetupScreen(
                 SetupState.WELCOME -> WelcomeContent(
                     language = viewModel.language,
                     isEnglish = isEnglish,
-                    onDownloadRecommended = { viewModel.startRecommendedDownload() },
-                    onDownloadPrimary = { viewModel.startPrimaryDownload() },
+                    onDownloadRecommended = { withNotifications { viewModel.startRecommendedDownload() } },
+                    onDownloadPrimary = { withNotifications { viewModel.startPrimaryDownload() } },
                     onSkip = {
                         viewModel.skip()
                         onSetupComplete()

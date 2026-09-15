@@ -4,6 +4,8 @@ import android.content.Context
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.download.DictionaryDownloadManager
+import com.yomitanmobile.data.repository.BackgroundWorkStarter
+import com.yomitanmobile.service.BackgroundWorkService
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import dagger.Module
 import dagger.Provides
@@ -47,13 +49,21 @@ object AppModule {
     fun provideApplicationScope(): CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Keeps the process alive while long work runs with the app minimised. */
+    @Provides
+    @Singleton
+    fun provideBackgroundWorkStarter(
+        @ApplicationContext context: Context
+    ): BackgroundWorkStarter = BackgroundWorkStarter { BackgroundWorkService.start(context) }
+
     @Provides
     @Singleton
     fun provideDictionaryDownloadManager(
         @ApplicationContext context: Context,
         repository: DictionaryRepository,
-        applicationScope: CoroutineScope
+        applicationScope: CoroutineScope,
+        backgroundWork: BackgroundWorkStarter
     ): DictionaryDownloadManager {
-        return DictionaryDownloadManager(context, repository, applicationScope)
+        return DictionaryDownloadManager(context, repository, applicationScope, backgroundWork)
     }
 }

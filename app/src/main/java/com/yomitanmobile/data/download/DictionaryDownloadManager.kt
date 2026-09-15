@@ -2,6 +2,7 @@ package com.yomitanmobile.data.download
 
 import android.content.Context
 import android.util.Log
+import com.yomitanmobile.data.repository.BackgroundWorkStarter
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,7 +78,13 @@ class DictionaryDownloadManager(
      * Downloads took minutes and died the moment the user navigated away,
      * because the work ran in the download screen's ViewModel scope.
      */
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    /**
+     * Started whenever work is queued. The application scope survives a
+     * screen, not a minimised app — Android freezes or kills a process with
+     * nothing in the foreground, and a dictionary import takes minutes.
+     */
+    private val backgroundWork: BackgroundWorkStarter = BackgroundWorkStarter {}
 ) {
     companion object {
         private const val TAG = "DictionaryDownload"
@@ -163,12 +170,14 @@ class DictionaryDownloadManager(
     fun enqueue(dictionaries: List<DictionaryDownloadInfo>) {
         if (dictionaries.isEmpty()) return
         scope.launch {
+            var added = false
             val startWorker = queueMutex.withLock {
                 val pending = _queue.value.filter { it.state == QueueState.WAITING || it.state == QueueState.RUNNING }
                     .mapTo(HashSet()) { it.info.id }
-                val added = dictionaries.filterNot { it.id in pending }.map { QueuedDownload(it) }
-                if (added.isEmpty()) return@withLock false
-                _queue.value = _queue.value + added
+                val newItems = dictionaries.filterNot { it.id in pending }.map { QueuedDownload(it) }
+                if (newItems.isEmpty()) return@withLock false
+                _queue.value = _queue.value + newItems
+                added = true
                 // Claim the worker slot under the same lock that added the
                 // work. Asking a Job whether it is still active could not
                 // answer this: a worker that has just found the queue empty is
@@ -178,6 +187,9 @@ class DictionaryDownloadManager(
                 // more often than a dictionary that takes minutes.
                 if (draining) false else { draining = true; true }
             }
+            // After the items are in the queue, so the service's first look
+            // at it already finds work instead of stopping straight away.
+            if (added) backgroundWork.start()
             if (startWorker) drainQueue()
         }
     }

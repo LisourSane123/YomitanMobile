@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.dao.FrequencyDao
+import com.yomitanmobile.data.repository.FrequencyRecomputer
 import com.yomitanmobile.data.settings.FrequencySettings
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.dataStore
@@ -29,6 +30,7 @@ class FrequencySettingsViewModel @Inject constructor(
     frequencyDao: FrequencyDao,
     private val frequencySettings: FrequencySettings,
     private val repository: DictionaryRepository,
+    private val recomputer: FrequencyRecomputer,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -39,8 +41,7 @@ class FrequencySettingsViewModel @Inject constructor(
      * search results and decides what counts as rare — so it is not a display
      * preference, it is a pass over the whole dictionary table.
      */
-    private val _isReapplying = MutableStateFlow(false)
-    val isReapplying: StateFlow<Boolean> = _isReapplying.asStateFlow()
+    val isReapplying: StateFlow<Boolean> = recomputer.isRunning
 
     private val _order = MutableStateFlow<List<String>>(emptyList())
     val order: StateFlow<List<String>> = _order.asStateFlow()
@@ -67,7 +68,13 @@ class FrequencySettingsViewModel @Inject constructor(
             // Lists installed before the app knew a list could be counted
             // rather than ranked still have no answer stored; this is where
             // they get one.
-            runCatching { repository.classifyUnknownFrequencyLists() }
+            // Through the recomputer, and next to the collection below rather
+            // than before it: on a first visit this pass takes seconds, and
+            // while it ran every list was drawn as "ranks" with the flip button
+            // pointing the wrong way.
+            recomputer.classifyUnknownLists()
+        }
+        viewModelScope.launch {
             repository.observeFrequencyLists().collect { settings ->
                 _countBased.value = settings.filter { it.higherIsBetter }
                     .map { it.dictionary }.toSet()
@@ -120,14 +127,9 @@ class FrequencySettingsViewModel @Inject constructor(
      * changing the leading list triggers, for the same reason.
      */
     fun setCountBased(name: String, countBased: Boolean) {
-        viewModelScope.launch {
-            _isReapplying.value = true
-            try {
-                repository.setFrequencyListDirection(name, countBased)
-            } finally {
-                _isReapplying.value = false
-            }
-        }
+        // Shown flipped at once; the stored flag follows within a moment.
+        _countBased.value = if (countBased) _countBased.value + name else _countBased.value - name
+        recomputer.setDirection(name, countBased)
     }
 
     fun setStrictLeading(value: Boolean) {
@@ -136,12 +138,7 @@ class FrequencySettingsViewModel @Inject constructor(
             frequencySettings.setStrictLeading(value)
             // Strictness decides what the stored column contains, not how it
             // is drawn, so it re-runs the rollup exactly like the order does.
-            _isReapplying.value = true
-            try {
-                repository.reapplyFrequencies()
-            } finally {
-                _isReapplying.value = false
-            }
+            recomputer.reapply()
         }
     }
 
@@ -159,12 +156,7 @@ class FrequencySettingsViewModel @Inject constructor(
             // The order decides which rank wins, so the rollup has to run
             // again; otherwise the change would show on the detail screen and
             // nowhere else — least of all on the next card.
-            _isReapplying.value = true
-            try {
-                repository.reapplyFrequencies()
-            } finally {
-                _isReapplying.value = false
-            }
+            recomputer.reapply()
         }
     }
 }

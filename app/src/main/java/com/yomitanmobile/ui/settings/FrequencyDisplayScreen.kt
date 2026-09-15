@@ -1,6 +1,12 @@
 package com.yomitanmobile.ui.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -68,10 +74,10 @@ fun FrequencyDisplayScreen(
             )
         }
     ) { padding ->
+      Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
@@ -156,18 +162,6 @@ fun FrequencyDisplayScreen(
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (isReapplying) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        tr("Przeliczanie rankingów…", "Recomputing ranks…"),
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
             Spacer(Modifier.height(8.dp))
 
             if (order.isEmpty()) {
@@ -269,6 +263,58 @@ fun FrequencyDisplayScreen(
                         }
                     }
                 }
+            }
+        }
+        if (isReapplying) RecomputingOverlay()
+      }
+    }
+}
+
+/**
+ * Covers the screen while ranks are recomputed. Each change here is a pass
+ * over the whole dictionary that takes seconds, and the only sign of it used
+ * to be one grey line at the top — invisible from a list scrolled down to the
+ * button that was tapped, so the tap looked like it did nothing and got
+ * tapped again. The overlay also swallows touches: a second flip queued behind
+ * the first is exactly the confusion it is there to prevent. Leaving the
+ * screen is still allowed — the pass runs on the application scope.
+ */
+@Composable
+private fun RecomputingOverlay() {
+    val tr = rememberTr()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(modifier = Modifier.padding(32.dp)) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    tr("Przeliczanie rankingów…", "Recomputing ranks…"),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    tr(
+                        "Może to potrwać kilka–kilkanaście sekund. Możesz wyjść z ekranu lub zminimalizować aplikację — przeliczanie dokończy się w tle.",
+                        "This can take several seconds. You can leave the screen or minimise the app — it will finish in the background."
+                    ),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
