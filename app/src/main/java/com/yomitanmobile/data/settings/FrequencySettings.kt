@@ -31,10 +31,18 @@ class FrequencySettings @Inject constructor(
     }
 
     /**
-     * The list whose rank wins when several rank the same word. Empty means
-     * "no preference", and the rollup falls back to the best rank anywhere.
+     * The leading list among those actually [installed]: the first saved one
+     * still installed, else the first installed list. This is the order the
+     * frequency screen draws, so the list it shows on top is the list that
+     * leads — before the user has ever reordered anything, and after the
+     * saved leader has been uninstalled.
      */
-    suspend fun leadingDictionary(): String = order().firstOrNull().orEmpty()
+    suspend fun leadingDictionary(installed: List<String>): String =
+        resolveOrder(order(), installed).firstOrNull().orEmpty()
+
+    /** Saved priority for still-installed lists, then any new ones. */
+    fun resolveOrder(saved: List<String>, installed: List<String>): List<String> =
+        saved.filter { it in installed } + installed.filter { it !in saved }
 
     /**
      * True when the leading list is the ONLY source of the stored rank.

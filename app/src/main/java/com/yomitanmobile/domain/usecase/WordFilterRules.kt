@@ -114,7 +114,9 @@ object WordFilterRules {
      * 帰る and 変える must not swallow each other.
      */
     fun isUsuallyKana(entry: MergedWordEntry): Boolean =
-        entry.usageTags.any { it.normalizeTag() in KANA_TAGS } ||
+        // A usage chip can carry several hints at once — "usually kana, food"
+        // — so each one is compared on its own.
+        entry.usageTags.any { chip -> chip.split(',', ';').any { it.normalizeTag() in KANA_TAGS } } ||
             entry.posTokens().any { it in KANA_TAGS }
 
     fun isProperName(entry: MergedWordEntry): Boolean {

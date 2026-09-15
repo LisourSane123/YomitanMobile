@@ -38,13 +38,21 @@ data class WordFrequency(
     @ColumnInfo(name = "dictionary")
     val dictionary: String,
 
-    // Numeric rank used for ordering / "best frequency" rollup. Lower = more
-    // frequent.
+    // The number the list shipped, exactly as it shipped it. Which way it runs
+    // depends on the list (frequency_lists.higher_is_better): a rank list says
+    // 1 for its commonest word, a count list says 5 000 000. Never rewritten.
     @ColumnInfo(name = "rank")
     val rank: Int,
 
     // The label to render. Usually the rank as a string, but rank-based lists
     // can ship a custom displayValue (e.g. a bucketed "Top 10k").
     @ColumnInfo(name = "display_value")
-    val displayValue: String
+    val displayValue: String,
+
+    // Where the word stands in this list, 1 = commonest; 0 = not computed or
+    // unranked. Derived from [rank] and the list's direction by
+    // FrequencyPositions — only for ordering, "Top 3K" and rarity cuts, never
+    // shown as the list's number.
+    @ColumnInfo(name = "position", defaultValue = "0")
+    val position: Int = 0
 )

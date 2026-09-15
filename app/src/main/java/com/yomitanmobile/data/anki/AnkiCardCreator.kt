@@ -1183,12 +1183,13 @@ class AnkiCardCreator(
             )
         }
         val readingText = if (isEnglishProfile) entry.pitchAccent else entry.reading
-        // The Frequency field carries the RAW rank (e.g. "4821"), not the
-        // starred tier label the search/detail screens show. The field is no
-        // longer rendered on either template, so its only consumer is Anki
-        // itself — addons like AutoReorder sort new cards by it and need a
-        // plain number. Empty when no frequency dictionary ranks the word.
-        val freqText = if (entry.frequency > 0) entry.frequency.toString() else ""
+        // The Frequency field carries the LEADING list's own number exactly
+        // as the list shipped it (e.g. "4821", or "120000" for a list of
+        // occurrence counts), not the starred tier label and not a position
+        // derived from it. Anki reorder addons sort new cards by it — ascending
+        // for a rank list, descending for a count list, which the frequency
+        // screen says. Empty when the leading list does not know the word.
+        val freqText = entry.frequencyValue.trim().takeWhile { it.isDigit() }
         
         val frontWord = entry.expression.ifBlank { entry.reading }
         val frontExpression = InputSanitizer.escapeHtml(frontWord)

@@ -27,6 +27,9 @@ import com.yomitanmobile.domain.model.MergedWordEntry
 import com.yomitanmobile.domain.model.PitchAccentStyle
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.model.WordFrequencyInfo
+import com.yomitanmobile.data.local.dao.FrequencyDao
+import com.yomitanmobile.data.repository.FrequencyRecomputer
+import com.yomitanmobile.data.settings.FrequencySettings
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.GetWordDetailUseCase
 import com.yomitanmobile.util.FuriganaGenerator
@@ -101,6 +104,9 @@ class DetailViewModel @Inject constructor(
     languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
     private val favoriteWordDao: FavoriteWordDao,
     private val lookupCountDao: LookupCountDao,
+    private val frequencySettings: FrequencySettings,
+    private val frequencyDao: FrequencyDao,
+    private val frequencyRecomputer: FrequencyRecomputer,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -398,16 +404,47 @@ class DetailViewModel @Inject constructor(
             runCatching {
                 val raw = repository.getFrequencies(expression, reading)
                 val prefs = appContext.dataStore.data.first()
-                val priority = (prefs[MainActivity.FREQUENCY_DISPLAY_ORDER] ?: "")
-                    .split(',').map { it.trim() }.filter { it.isNotBlank() }
+                val priority = frequencySettings.resolveOrder(
+                    frequencySettings.order(),
+                    frequencyDao.observeDictionaries().first()
+                )
                 val showAll = prefs[MainActivity.FREQUENCY_SHOW_ALL] ?: true
-                _leadingDictionary.value = priority.firstOrNull().orEmpty()
+                val leading = priority.firstOrNull().orEmpty()
+                _leadingDictionary.value = leading
+                // The card carries the leading list's number: take it from the
+                // same rows the chips show, so what is exported is what the
+                // screen says even right after the leading list was changed.
+                val leadingValue = raw.firstOrNull { it.dictionary == leading }
+                    ?.let { it.displayValue.ifBlank { it.rank.toString() } }
+                    .orEmpty()
+                _entry.value = _entry.value?.let { current ->
+                    if (current.primaryId == merged.primaryId) current.copy(frequencyValue = leadingValue) else current
+                }
                 WordFrequencyInfo.order(raw, priority, showAll)
             }.onSuccess { _frequencies.value = it }
                 .onFailure { exception ->
                     _frequencies.value = emptyList()
                     Log.w(logTag, "Frequency load failed", exception)
                 }
+        }
+    }
+
+    /** True while a frequency rollup runs (after [makeLeading]). */
+    val isRecomputingFrequencies: StateFlow<Boolean> = frequencyRecomputer.isRunning
+
+    /**
+     * Makes [dictionary] the leading frequency list, straight from its chip —
+     * the place where the user is looking at the lists disagree. Same effect
+     * as doing it on the frequency screen: saved order, then the rollup.
+     */
+    fun makeLeading(dictionary: String) {
+        viewModelScope.launch {
+            val installed = frequencyDao.observeDictionaries().first()
+            val current = frequencySettings.resolveOrder(frequencySettings.order(), installed)
+            if (current.firstOrNull() == dictionary || dictionary !in installed) return@launch
+            frequencySettings.setOrder(listOf(dictionary) + current.filter { it != dictionary })
+            frequencyRecomputer.reapply()
+            loadFrequencies()
         }
     }
 

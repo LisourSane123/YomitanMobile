@@ -76,17 +76,10 @@ interface DictionaryRepository {
     suspend fun reapplyFrequencies()
 
     /**
-     * What each installed frequency list's numbers mean — a rank, or the raw
-     * occurrence count it was built from. See [FrequencyListSetting].
+     * Which way each installed frequency list's numbers run — ranks (lower =
+     * commoner) or occurrence counts (higher = commoner). See [FrequencyListSetting].
      */
     fun observeFrequencyLists(): Flow<List<FrequencyListSetting>>
-
-    /**
-     * Overrides what the detector decided about one list and converts its
-     * stored numbers to match, then re-runs the rollup. The user's answer
-     * sticks across re-imports of the same list.
-     */
-    suspend fun setFrequencyListDirection(dictionary: String, higherIsBetter: Boolean)
 
     /**
      * Classifies lists installed before this app knew a list could run the

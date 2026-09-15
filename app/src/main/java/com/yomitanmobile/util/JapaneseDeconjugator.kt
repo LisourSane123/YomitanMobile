@@ -130,6 +130,13 @@ object JapaneseDeconjugator {
         val reason: String
     )
 
+    private const val ADVERBIAL_REASON = "i-adjective adverbial"
+
+    private const val ICHIDAN_STEM_KANA = "えけげせぜてでねへべぺめれいきぎしじちぢにひびぴみり"
+
+    /** Longest first, so ずに is not read as ず plus に. */
+    private val CLASSICAL_NEGATIVES = listOf("ずに", "ず", "ぬ", "ん")
+
     private data class Node(
         val form: String,
         val reasons: List<String>,
@@ -172,6 +179,12 @@ object JapaneseDeconjugator {
             for (step in steps) {
                 if (step.form.isBlank() || step.form == node.form) continue
                 if (step.form.length < 2) continue
+                // The bare adverbial く is a reading of what was WRITTEN, never
+                // of a form another rule produced: a verb reached by
+                // deconjugation that ends in く is a verb. Chained, it turned
+                // 「しないといけない」 into といける → といく → といい, a card for
+                // といい in every novel.
+                if (node.depth > 0 && step.reason == ADVERBIAL_REASON) continue
 
                 val chain = (node.reasons + step.reason).takeLast(3)
                 val chainText = chain.joinToString(" -> ")
@@ -493,6 +506,14 @@ object JapaneseDeconjugator {
                 addCandidate(stem + "い", "i-adjective past", out)
             }
 
+            // 高ければ used to reach 高い only as 高く (the ば-form of a godan
+            // verb 高く) and then the adverbial rule — a chain that rule no
+            // longer allows, because it also made といく into といい.
+            form.endsWith("ければ") && form.length >= 4 -> {
+                val stem = form.removeSuffix("ければ")
+                addCandidate(stem + "い", "i-adjective conditional", out)
+            }
+
             form.endsWith("くて") -> {
                 val stem = form.removeSuffix("くて")
                 addCandidate(stem + "い", "i-adjective conjunctive", out)
@@ -510,7 +531,7 @@ object JapaneseDeconjugator {
             // 歩い, which no dictionary lists, so the caller simply drops it.
             form.endsWith("く") -> {
                 val stem = form.removeSuffix("く")
-                addCandidate(stem + "い", "i-adjective adverbial", out)
+                addCandidate(stem + "い", ADVERBIAL_REASON, out)
             }
         }
 
@@ -571,6 +592,26 @@ object JapaneseDeconjugator {
 
     /** Spoken contractions of なければ: 食べなきゃ, 行かなくちゃ. */
     private fun addContractedNegatives(form: String, out: MutableList<Step>) {
+        // The written negative ず / ずに / ぬ and the spoken ん: 呼ばず,
+        // 知らずに, 変わらぬ, 思わん, 知らん. A novel's narration is full of the
+        // first and its dialogue of the last; without them 呼ばず fell apart
+        // into 呼ば + ず and 思わん into 思 + わん ("woof").
+        for (ending in CLASSICAL_NEGATIVES) {
+            if (form.length > ending.length && form.endsWith(ending)) {
+                val stem = form.removeSuffix(ending)
+                if (stem == "せ") addCandidate("する", "negative ($ending)", out)
+                else if (stem.endsWith("せ")) addCandidate(stem.dropLast(1) + "する", "negative ($ending)", out)
+                // Stricter than ない about the ichidan reading: these endings
+                // are short enough to sit inside ordinary words, and 「大嫌いな
+                // はずなのに」 offered なは + ず as the negative of "なはる".
+                val last = stem.last()
+                if (JapaneseTokenizer.isKanji(last) || last in ICHIDAN_STEM_KANA && stem.length >= 2) {
+                    addCandidate(stem + "る", "negative ($ending) (ichidan)", out)
+                }
+                replaceLastChar(stem, aRowToU)?.let { addCandidate(it, "negative ($ending) (godan)", out) }
+                break
+            }
+        }
         when {
             form.endsWith("なきゃ") ->
                 addNegativeStemCandidates(form.removeSuffix("なきゃ"), "negative (spoken)", out)
@@ -724,7 +765,10 @@ object JapaneseDeconjugator {
      * 書きそう resolved to そう, the adverb.
      */
     private val STEM_SUFFIXES = listOf(
-        "ながら", "すぎる", "すぎた", "すぎて", "なさい", "たがる", "がち", "そう"
+        "ながら", "すぎる", "すぎた", "すぎて", "なさい", "たがる", "がち", "そう",
+        // 切なげ, 寂しげ: げ on the adjective stem. 切なげ fell back to 切.
+        // さ makes the noun of an adjective — 優しさ fell back to 優.
+        "げ", "さ"
     )
 
     private fun addStemSuffixForms(form: String, out: MutableList<Step>) {

@@ -132,8 +132,8 @@ class JlptTagApplyDbTest {
     fun frequenciesAreRestoredOntoFreshlyImportedRows() = runBlocking {
         db.frequencyDao().insertAll(
             listOf(
-                WordFrequency("学校", "がっこう", "JPDB", 812, "812"),
-                WordFrequency("学校", "がっこう", "BCCWJ", 1500, "1500")
+                WordFrequency("学校", "がっこう", "JPDB", 812, "812", position = 812),
+                WordFrequency("学校", "がっこう", "BCCWJ", 1500, "1500", position = 1500)
             )
         )
         // Rows a term (re-)import just wrote: no frequency of their own.
@@ -157,19 +157,22 @@ class JlptTagApplyDbTest {
         )
         db.frequencyDao().insertAll(
             listOf(
-                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400"),
-                WordFrequency("喋る", "しゃべる", "BCCWJ", 9000, "9000"),
+                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400", position = 400),
+                WordFrequency("喋る", "しゃべる", "BCCWJ", 9000, "9000", position = 9000),
                 // Only the print corpus knows this one.
-                WordFrequency("朕", "ちん", "BCCWJ", 21000, "21000")
+                WordFrequency("朕", "ちん", "BCCWJ", 21000, "21000", position = 21000)
             )
         )
 
         dao.applyFrequenciesFromTable(leadingDictionary = "CEJC-LUW", strict = 0)
 
         assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
-        // The leading list has nothing to say here, so the other one is used
-        // rather than leaving the word unranked.
+        assertEquals("400", dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequencyValue)
+        // The leading list has nothing to say here, so the other one orders
+        // it rather than leaving the word unranked — but the card number (and
+        // with it the tier) stays the leading list's, which has none.
         assertEquals(21000, dao.getEntriesByExpressions(listOf("朕"), "ja").single().frequency)
+        assertEquals("", dao.getEntriesByExpressions(listOf("朕"), "ja").single().frequencyValue)
     }
 
     @Test
@@ -184,8 +187,8 @@ class JlptTagApplyDbTest {
         )
         db.frequencyDao().insertAll(
             listOf(
-                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400"),
-                WordFrequency("朕", "ちん", "BCCWJ", 21000, "21000")
+                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400", position = 400),
+                WordFrequency("朕", "ちん", "BCCWJ", 21000, "21000", position = 21000)
             )
         )
 
@@ -200,8 +203,8 @@ class JlptTagApplyDbTest {
         dao.insertAll(listOf(entry("喋る", "しゃべる")))
         db.frequencyDao().insertAll(
             listOf(
-                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400"),
-                WordFrequency("喋る", "しゃべる", "BCCWJ", 9000, "9000")
+                WordFrequency("喋る", "しゃべる", "CEJC-LUW", 400, "400", position = 400),
+                WordFrequency("喋る", "しゃべる", "BCCWJ", 9000, "9000", position = 9000)
             )
         )
 

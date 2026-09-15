@@ -1,21 +1,22 @@
 package com.yomitanmobile.domain.model
 
 /**
- * UI-facing frequency entry: one installed list's rank for a word.
+ * UI-facing frequency entry: one installed list's number for a word.
  *
- * [displayValue] is what to render (usually the rank, sometimes a bucketed
- * label the source list shipped). [rank] is the numeric value used for the
- * "best frequency" rollup and tie-breaking.
+ * [rank] and [displayValue] are the list's own number exactly as it shipped
+ * (usually the same digits; [displayValue] may carry a bucketed label).
+ * [position] is where the word stands in that list, 1 = commonest — derived,
+ * never rendered as the list's number, and the only thing a tier is read from.
  */
 data class WordFrequencyInfo(
     val dictionary: String,
     val rank: Int,
     val displayValue: String,
+    val position: Int = 0,
     /**
-     * True when this list shipped occurrence counts rather than ranks, so its
-     * own number runs the other way (see [FrequencyDirection]). [rank] is the
-     * position derived from it and is comparable with every other list's;
-     * [displayValue] is still the count, and has to be rendered as one.
+     * True when this list ships occurrence counts rather than ranks, so its
+     * number runs the other way (see [FrequencyDirection]): "12345×", where a
+     * rank list says "#12345".
      */
     val higherIsBetter: Boolean = false
 ) {

@@ -755,6 +755,8 @@ private fun skipReasonLabel(reason: TextScanSkipReason, isEnglish: Boolean): Str
         if (isEnglish) "Too few occurrences" else "Za mało wystąpień"
     TextScanSkipReason.FUNCTION_WORD ->
         if (isEnglish) "Grammar / function words" else "Słowa gramatyczne"
+    TextScanSkipReason.NOISE ->
+        if (isEnglish) "Noise (sounds, word fragments)" else "Szum (odgłosy, fragmenty słów)"
     TextScanSkipReason.NO_DEFINITION ->
         if (isEnglish) "No definition in the dictionary" else "Brak definicji w słowniku"
     TextScanSkipReason.TOO_RARE ->

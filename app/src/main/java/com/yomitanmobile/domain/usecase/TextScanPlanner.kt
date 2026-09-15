@@ -142,6 +142,32 @@ object TextScanPlanner {
     const val NAME_HONORIFIC_HITS = 3
 
     /**
+     * An expression that is a word the reader has plus a particle: 自分で,
+     * 今から, 静かに, 誰にも, 中でも. JMdict lists them as entries of their
+     * own, so they reached the deck even when 自分, 今 and 静か were all in
+     * the collection — cards whose whole content is the particle. Treated as
+     * already known when the word before the particle is.
+     */
+    private fun isKnownBlend(entry: MergedWordEntry, isInAnki: (MergedWordEntry) -> Boolean): Boolean {
+        val expression = entry.primaryExpression
+        val suffix = BLEND_PARTICLES.firstOrNull { expression.length > it.length && expression.endsWith(it) }
+            ?: return false
+        val stem = expression.dropLast(suffix.length)
+        // One kana before the particle is not a word to have: そうで, もう.
+        if (stem.length == 1 && !JapaneseTokenizer.isKanji(stem[0])) return false
+        val stemReading = entry.reading.takeIf { it.endsWith(suffix) }?.dropLast(suffix.length).orEmpty()
+        val probe = entry.copy(
+            primaryExpression = stem,
+            reading = stemReading.ifEmpty { stem },
+            alternativeExpressions = emptyList()
+        )
+        return isInAnki(probe)
+    }
+
+    /** Longest first, so 中には is 中 + には rather than 中に + は. */
+    private val BLEND_PARTICLES = listOf("には", "にも", "でも", "から", "まで", "とは", "で", "に", "と", "も")
+
+    /**
      * A one- or two-kana "word" that no frequency list ranks at all.
      *
      * Longest-match segmentation reaches for the longest dictionary entry at
@@ -227,9 +253,22 @@ object TextScanPlanner {
      */
     private fun MergedWordEntry.withKnownSpelling(spelling: String): MergedWordEntry = when {
         spelling == primaryExpression -> this
-        spelling == reading || spelling in alternativeExpressions ->
-            copy(primaryExpression = spelling)
+        spelling == reading || spelling in alternativeExpressions -> frontedWith(spelling)
         else -> this
+    }
+
+    /**
+     * The entry with [spelling] on the front and the headword it replaces kept
+     * among the other spellings. Replacing it outright lost the kanji form:
+     * a book that writes おり made the entry forget 折 — so the Anki check
+     * compared kana alone and the noise rules could not see a kanji word.
+     */
+    private fun MergedWordEntry.frontedWith(spelling: String): MergedWordEntry {
+        if (spelling == primaryExpression) return this
+        val others = (listOf(primaryExpression) + alternativeExpressions)
+            .filter { it.isNotBlank() && it != spelling }
+            .distinct()
+        return copy(primaryExpression = spelling, alternativeExpressions = others)
     }
 
     /**
@@ -323,7 +362,7 @@ object TextScanPlanner {
             )
             // Several tokens reached this entry, so every one of them is a
             // spelling of it; the text's favourite goes on the card.
-            outEntries[winner.baseForm] = entry.copy(primaryExpression = winner.baseForm)
+            outEntries[winner.baseForm] = entry.frontedWith(winner.baseForm)
         }
         outWords += unresolved
         return outWords to outEntries
@@ -375,8 +414,16 @@ object TextScanPlanner {
             when {
                 filters.skipFunctionWords && isStoplisted(word, entry) ->
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
+                // Noise is not a filter the user can switch off: nobody wants
+                // a card for ああああ. See NoiseRules.
+                NoiseRules.isBlacklisted(word, entry) ||
+                    NoiseRules.isBareNumber(word) ||
+                    NoiseRules.isEmphaticNoise(word) { it in FUNCTION_WORDS } ->
+                    reject(TextScanSkipReason.NOISE, occurrences)
                 entry == null ->
                     reject(TextScanSkipReason.NOT_IN_DICTIONARY, occurrences)
+                NoiseRules.isKanaFragment(word, entry) ->
+                    reject(TextScanSkipReason.NOISE, occurrences)
                 isSegmentationNoise(word, entry) ->
                     reject(TextScanSkipReason.UNRANKED, occurrences)
                 // Same reason, second source of truth: the dictionary's own
@@ -400,7 +447,7 @@ object TextScanPlanner {
                     reject(TextScanSkipReason.TOO_RARE, occurrences)
                 filters.skipArchaic && WordFilterRules.isArchaic(entry) ->
                     reject(TextScanSkipReason.ARCHAIC, occurrences)
-                filters.skipAlreadyInAnki && isInAnki(entry) ->
+                filters.skipAlreadyInAnki && (isInAnki(entry) || isKnownBlend(entry, isInAnki)) ->
                     reject(TextScanSkipReason.ALREADY_IN_ANKI, occurrences)
                 filters.skipAlreadyMined && isMined(entry) ->
                     reject(TextScanSkipReason.ALREADY_MINED, occurrences)

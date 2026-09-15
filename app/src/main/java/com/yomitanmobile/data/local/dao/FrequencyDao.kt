@@ -40,7 +40,7 @@ interface FrequencyDao {
         """
         SELECT * FROM word_frequencies
         WHERE expression = :expression AND (reading = :reading OR reading = '')
-        ORDER BY rank ASC
+        ORDER BY position ASC
         """
     )
     suspend fun getForWord(expression: String, reading: String): List<WordFrequency>
@@ -57,12 +57,12 @@ interface FrequencyDao {
      */
     @Query(
         """
-        SELECT expression AS surface, MIN(rank) AS rank FROM word_frequencies
-        WHERE rank > 0 AND rank <= :maxRank AND expression != ''
+        SELECT expression AS surface, MIN(position) AS rank FROM word_frequencies
+        WHERE position > 0 AND position <= :maxRank AND expression != ''
         GROUP BY expression
         UNION ALL
-        SELECT reading AS surface, MIN(rank) AS rank FROM word_frequencies
-        WHERE rank > 0 AND rank <= :maxRank AND reading != ''
+        SELECT reading AS surface, MIN(position) AS rank FROM word_frequencies
+        WHERE position > 0 AND position <= :maxRank AND reading != ''
         GROUP BY reading
         """
     )
@@ -87,7 +87,7 @@ interface FrequencyDao {
 
     /**
      * How one list's numbers are distributed, for [FrequencyListStats].
-     * Computed over the raw imported values, before any conversion.
+     * `rank` holds the numbers as shipped, so this is the list's real shape.
      */
     @Query(
         """

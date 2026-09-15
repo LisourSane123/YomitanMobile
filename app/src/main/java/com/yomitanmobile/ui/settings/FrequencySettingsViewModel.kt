@@ -55,9 +55,8 @@ class FrequencySettingsViewModel @Inject constructor(
 
     /**
      * Lists whose numbers are occurrence counts rather than ranks (higher =
-     * commoner). Detected at import and overridable here, because a list the
-     * detector reads backwards would quietly invert everything the app does
-     * with frequency.
+     * commoner). Detected at import from the shape of the numbers and shown
+     * here; the numbers themselves are never converted.
      */
     private val _countBased = MutableStateFlow<Set<String>>(emptySet())
     val countBased: StateFlow<Set<String>> = _countBased.asStateFlow()
@@ -89,9 +88,7 @@ class FrequencySettingsViewModel @Inject constructor(
             frequencyDao.observeDictionaries().collect { installed ->
                 // Keep saved priority for still-installed lists; append any new
                 // list at the end; drop lists that are no longer installed.
-                val current = _order.value.ifEmpty { saved }
-                _order.value = current.filter { it in installed } +
-                    installed.filter { it !in current }
+                _order.value = frequencySettings.resolveOrder(_order.value.ifEmpty { saved }, installed)
             }
         }
     }
@@ -119,17 +116,6 @@ class FrequencySettingsViewModel @Inject constructor(
         list[index] = list[target].also { list[target] = list[index] }
         _order.value = list
         persistOrder()
-    }
-
-    /**
-     * Flips what one list's numbers mean. The stored ranks are rewritten from
-     * the original values and the whole rollup runs again — the same pass
-     * changing the leading list triggers, for the same reason.
-     */
-    fun setCountBased(name: String, countBased: Boolean) {
-        // Shown flipped at once; the stored flag follows within a moment.
-        _countBased.value = if (countBased) _countBased.value + name else _countBased.value - name
-        recomputer.setDirection(name, countBased)
     }
 
     fun setStrictLeading(value: Boolean) {

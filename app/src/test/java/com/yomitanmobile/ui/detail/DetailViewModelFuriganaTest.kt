@@ -85,6 +85,15 @@ class DetailViewModelFuriganaTest {
         languageSettings = LanguageSettings(context),
         favoriteWordDao = db.favoriteWordDao(),
         lookupCountDao = db.lookupCountDao(),
+        frequencySettings = com.yomitanmobile.data.settings.FrequencySettings(context),
+        frequencyDao = db.frequencyDao(),
+        frequencyRecomputer = com.yomitanmobile.data.repository.FrequencyRecomputer(
+            repo,
+            db.frequencyDao(),
+            db.dictionaryDao(),
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO),
+            com.yomitanmobile.data.repository.BackgroundWorkStarter {}
+        ),
         appContext = context
     )
 

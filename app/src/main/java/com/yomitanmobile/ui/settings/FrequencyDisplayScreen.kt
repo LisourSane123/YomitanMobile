@@ -21,6 +21,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -81,6 +85,54 @@ fun FrequencyDisplayScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+            Text(
+                tr("Główna lista", "Leading list"),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                tr(
+                    "Dotknij listy, żeby ustawić ją jako główną. Tylko z niej pochodzą oznaczenia „Top 3K” itd. " +
+                        "i liczba na fiszce, i to ona ustawia kolejność wyników. Pozostałe listy są widoczne " +
+                        "na ekranie słowa, a strzałki ustalają ich kolejność.",
+                    "Tap a list to make it leading. \"Top 3K\" badges and the number on the card come from it " +
+                        "alone, and it orders search results. The other lists show on the word screen; the " +
+                        "arrows set their order."
+                ),
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+
+            if (order.isEmpty()) {
+                Text(
+                    tr(
+                        "Brak zainstalowanych list częstotliwości. Pobierz je z ekranu słowników.",
+                        "No frequency lists installed. Download some from the dictionaries screen."
+                    ),
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
+                order.forEachIndexed { index, name ->
+                    FrequencyListCard(
+                        position = index + 1,
+                        name = name,
+                        isLeading = index == 0,
+                        isCounted = name in countBased,
+                        canMoveUp = index > 1,
+                        canMoveDown = index in 1 until order.lastIndex,
+                        onMakeLeading = { viewModel.makeLeading(name) },
+                        onMoveUp = { viewModel.moveUp(name) },
+                        onMoveDown = { viewModel.moveDown(name) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
             Card(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -122,14 +174,13 @@ fun FrequencyDisplayScreen(
                         )
                         Text(
                             tr(
-                                "Włączone: słowo, którego główna lista nie zna, zostaje bez rankingu — " +
-                                    "każda liczba w aplikacji i na fiszce pochodzi z jednej skali, więc dodatki " +
-                                    "sortujące w Anki (np. AutoReorder) układają nowe karty poprawnie. " +
-                                    "Wyłączone: takie słowo dostaje ranking z innej listy.",
-                                "On: a word the leading list does not know is left unranked — every number in the app " +
-                                    "and on a card comes from one scale, so an Anki sorting addon (AutoReorder and " +
-                                    "friends) orders new cards the way that list meant. Off: such a word borrows " +
-                                    "another list's rank."
+                                "Dotyczy kolejności wyników i filtrów „za rzadkie” w generatorach talii. " +
+                                    "Włączone: słowo, którego główna lista nie zna, traktowane jest jak nieznane. " +
+                                    "Wyłączone: jego pozycję bierzemy z innej listy. Oznaczenia Top 3K i liczba " +
+                                    "na fiszce zawsze pochodzą tylko z głównej listy.",
+                                "Affects search order and the deck generators' \"too rare\" filters. On: a word the " +
+                                    "leading list does not know counts as unranked. Off: its standing is taken from " +
+                                    "another list. Top 3K badges and the card number always come from the leading list alone."
                             ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -142,131 +193,145 @@ fun FrequencyDisplayScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+        }
+        if (isReapplying) RecomputingOverlay()
+      }
+    }
+}
 
-            Text(
-                tr("Kolejność priorytetów", "Priority order"),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                tr(
-                    "Pierwsza lista jest główna: to jej ranking trafia na fiszkę, ustawia kolejność " +
-                        "wyników wyszukiwania i decyduje, co generatory uznają za zbyt rzadkie. " +
-                        "Pozostałe listy są używane dla słów, których główna nie zna.",
-                    "The first list leads: its rank is what goes on a card, orders search results and " +
-                        "decides what the deck generators call too rare. The rest fill in the words the " +
-                        "leading list does not know."
-                ),
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(8.dp))
-
-            if (order.isEmpty()) {
+/**
+ * One installed list: whether it leads, and — stated plainly, because the
+ * format has no field for it and the two kinds run opposite ways — whether its
+ * numbers are ranks or occurrence counts. The numbers are shown as the list
+ * shipped them; nothing here converts one kind into the other.
+ */
+@Composable
+private fun FrequencyListCard(
+    position: Int,
+    name: String,
+    isLeading: Boolean,
+    isCounted: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMakeLeading: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
+) {
+    val tr = rememberTr()
+    val isEnglish = LocalIsEnglish.current
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable(enabled = !isLeading, onClick = onMakeLeading),
+        colors = if (isLeading) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = isLeading, onClick = if (isLeading) null else onMakeLeading)
+            Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
                 Text(
-                    tr(
-                        "Brak zainstalowanych list częstotliwości. Pobierz je z ekranu słowników.",
-                        "No frequency lists installed. Download some from the dictionaries screen."
-                    ),
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 12.dp)
+                    if (isLeading) name else "$position. $name",
+                    fontSize = 15.sp,
+                    fontWeight = if (isLeading) FontWeight.SemiBold else FontWeight.Normal
                 )
-            } else {
-                order.forEachIndexed { index, name ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(vertical = 10.dp)) {
-                                Text("${index + 1}. $name", fontSize = 15.sp)
-                                // What the list actually counted. The installed
-                                // name ("JPDBv2", "CEJC-LUW") says who made it
-                                // and nothing about what is in it.
-                                FrequencyCorpus.labelFor(name)?.let { label ->
-                                    Text(
-                                        if (isEnglish) label.en else label.pl,
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                if (index == 0) {
-                                    Text(
-                                        tr("główna — jej ranking trafia na fiszkę", "leading — its rank goes on the card"),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                // What the numbers in this list MEAN. A list
-                                // of occurrence counts runs the other way, and
-                                // read as ranks it calls the commonest words
-                                // the rarest — so it is converted on import
-                                // and the conversion is said out loud here,
-                                // with a way to correct it.
-                                val isCounted = name in countBased
-                                Text(
-                                    if (isCounted) {
-                                        tr(
-                                            "liczby wystąpień (większa = częstsze) — przeliczone na ranking",
-                                            "occurrence counts (higher = commoner) — converted to ranks"
-                                        )
-                                    } else {
-                                        tr(
-                                            "ranking (mniejszy numer = częstsze)",
-                                            "ranks (lower number = commoner)"
-                                        )
-                                    },
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                TextButton(
-                                    onClick = { viewModel.setCountBased(name, !isCounted) },
-                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
-                                ) {
-                                    Text(
-                                        if (isCounted) {
-                                            tr("To jednak ranking", "These are ranks after all")
-                                        } else {
-                                            tr("To liczby wystąpień", "These are occurrence counts")
-                                        },
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
-                            if (index > 0) {
-                                TextButton(onClick = { viewModel.makeLeading(name) }) {
-                                    Text(tr("Ustaw główną", "Make leading"), fontSize = 12.sp)
-                                }
-                            }
-                            IconButton(
-                                onClick = { viewModel.moveUp(name) },
-                                enabled = index > 0
-                            ) {
-                                Icon(
-                                    Icons.Default.KeyboardArrowUp,
-                                    contentDescription = tr("W górę", "Move up")
-                                )
-                            }
-                            IconButton(
-                                onClick = { viewModel.moveDown(name) },
-                                enabled = index < order.lastIndex
-                            ) {
-                                Icon(
-                                    Icons.Default.KeyboardArrowDown,
-                                    contentDescription = tr("W dół", "Move down")
-                                )
-                            }
-                        }
+                if (isLeading) {
+                    Text(
+                        tr("GŁÓWNA — Top 3K itd. i liczba na fiszce", "LEADING — Top 3K etc. and the card number"),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                // What the list actually counted. The installed name
+                // ("JPDBv2", "CEJC-LUW") says who made it, not what is in it.
+                FrequencyCorpus.labelFor(name)?.let { label ->
+                    Text(
+                        if (isEnglish) label.en else label.pl,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                FormatBadge(isCounted = isCounted, isLeading = isLeading)
+            }
+            if (!isLeading) {
+                Column {
+                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = tr("W górę", "Move up"))
+                    }
+                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = tr("W dół", "Move down"))
                     }
                 }
             }
         }
-        if (isReapplying) RecomputingOverlay()
-      }
+    }
+}
+
+/**
+ * The list's format in words and with an example, so nobody has to know what
+ * "higher is better" means to read it right.
+ */
+@Composable
+private fun FormatBadge(isCounted: Boolean, isLeading: Boolean) {
+    val tr = rememberTr()
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = if (isCounted) {
+            MaterialTheme.colorScheme.tertiaryContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        }
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            Text(
+                if (isCounted) {
+                    tr("Format: LICZBA WYSTĄPIEŃ  ↓ malejąco", "Format: OCCURRENCE COUNTS  ↓ descending")
+                } else {
+                    tr("Format: RANKING  ↑ rosnąco", "Format: RANKS  ↑ ascending")
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                if (isCounted) {
+                    tr(
+                        "Większa liczba = częstsze słowo (np. 120000× częściej niż 50×).",
+                        "Higher number = commoner word (e.g. 120000× is commoner than 50×)."
+                    )
+                } else {
+                    tr(
+                        "Mniejsza liczba = częstsze słowo (#1 to najczęstsze).",
+                        "Lower number = commoner word (#1 is the commonest)."
+                    )
+                },
+                fontSize = 12.sp
+            )
+            if (isLeading) {
+                Text(
+                    if (isCounted) {
+                        tr(
+                            "Na fiszkę trafia ta liczba bez zmian — w Anki sortuj pole Frequency malejąco.",
+                            "The card gets this number unchanged — sort the Frequency field descending in Anki."
+                        )
+                    } else {
+                        tr(
+                            "Na fiszkę trafia ta liczba bez zmian — w Anki sortuj pole Frequency rosnąco.",
+                            "The card gets this number unchanged — sort the Frequency field ascending in Anki."
+                        )
+                    },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
     }
 }
 

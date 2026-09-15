@@ -106,6 +106,25 @@ class TextExtractionTest {
     }
 
     @Test
+    fun `epub drops the head title, the table of contents and the colophon`() {
+        val head = "<head><title>クラスの大嫌いな女子と結婚することになった。【電子特典付き】</title></head>"
+        val chapter = "<html>$head<body class=\"p-text\"><p>朱音は叫んだ。</p></body></html>"
+        val toc = "<html>$head<body class=\"p-toc\"><p>第一話　結婚</p></body></html>"
+        val colophon = "<html>$head<body class=\"p-colophon\"><p>発行者　青柳昌行</p></body></html>"
+        val bytes = zipOf(
+            "OEBPS/Text/p-001.xhtml" to chapter,
+            "OEBPS/Text/p-toc-001.xhtml" to toc,
+            "OEBPS/Text/p-colophon.xhtml" to colophon,
+            "OEBPS/nav.xhtml" to "<html><body><nav><ol><li>第一話</li></ol></nav></body></html>"
+        )
+
+        val result = TextExtraction.extractEpub(bytes)
+
+        assertEquals("朱音は叫んだ。", result.text.trim())
+        assertEquals(1, result.partCount)
+    }
+
+    @Test
     fun `shift-jis subtitles are decoded, not mojibaked`() {
         val japanese = "静かな夜だ。"
         val bytes = japanese.toByteArray(charset("Shift_JIS"))

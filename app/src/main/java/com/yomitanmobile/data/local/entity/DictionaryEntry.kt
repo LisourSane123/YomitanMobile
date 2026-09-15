@@ -29,8 +29,18 @@ data class DictionaryEntry(
     @ColumnInfo(name = "definition")
     val definition: String,
 
+    // How common the word is, 1 = commonest: the leading frequency list's
+    // position, or another list's when the leading one does not know the word
+    // (unless "strict"). Orders search and feeds the rarity filters.
     @ColumnInfo(name = "frequency")
     val frequency: Int = 0,
+
+    // The LEADING list's own number for this word, as it shipped ("4821", or
+    // "120000" for a list of counts); "" when the leading list does not know
+    // the word. What the card carries, and the gate for tier labels — "Top 3K"
+    // is only ever said on the leading list's authority.
+    @ColumnInfo(name = "frequency_value", defaultValue = "")
+    val frequencyValue: String = "",
 
     @ColumnInfo(name = "pitch_accent")
     val pitchAccent: String = "",

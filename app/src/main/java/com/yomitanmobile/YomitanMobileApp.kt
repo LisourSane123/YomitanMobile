@@ -24,10 +24,14 @@ class YomitanMobileApp : Application() {
     @javax.inject.Inject
     lateinit var languageSettings: LanguageSettings
 
+    @javax.inject.Inject
+    lateinit var frequencyRecomputer: com.yomitanmobile.data.repository.FrequencyRecomputer
+
     override fun onCreate() {
         super.onCreate()
         installLastResortHandler()
         languageSettings.loadBlocking()
+        frequencyRecomputer.ensureStorageCurrent()
     }
 
     /**

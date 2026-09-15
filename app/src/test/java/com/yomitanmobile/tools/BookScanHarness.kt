@@ -18,6 +18,10 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assume
 import org.junit.Test
 import java.io.File
+import com.yomitanmobile.data.anki.AnkiCollectionIndex
+import com.yomitanmobile.data.anki.AnkiNoteFieldIndexer
+import com.yomitanmobile.domain.usecase.WordFilterRules
+import com.yomitanmobile.domain.usecase.ScanEntryResolver
 import java.text.Normalizer
 
 /**
@@ -40,8 +44,13 @@ import java.text.Normalizer
  *   -Dbook.paths=/path/vol1.epub[:/path/vol2.epub] \
  *   -Ddict.zip=/path/JMdict_english.zip \
  *   -Dfreq.zip=/path/JPDB_frequency.zip \
- *   -Dout.dir=/path/report
+ *   -Dout.dir=/path/report \
+ *   [-Danki.fields=/path/fields.txt]
  * ```
+ *
+ * `anki.fields` turns on the "already in Anki" filter. Dump it from a COPY of
+ * the desktop collection (never the live file):
+ * `sqlite3 collection.anki2 "select replace(replace(replace(flds, char(10), '<br>'), char(13), ''), char(31), '␟') from notes" > fields.txt`
  */
 class BookScanHarness {
 
@@ -153,39 +162,42 @@ class BookScanHarness {
         log("tokens: ${tokens.size} distinct, $totalTokenCount running")
 
         // ---- 5. entries for the words the text actually used ---------------
-        val needed = tokens.mapTo(HashSet()) { it.baseForm }
-        val byExpression = HashMap<String, MutableList<WordEntry>>()
-        val byReading = HashMap<String, MutableList<WordEntry>>()
-        parser.parseFromZipStreaming(
-            inputStream = File(dictZip).inputStream().buffered(),
-            onBatch = { entries: List<DictionaryEntry>, _ ->
-                for (entry in entries) {
-                    val wantedExpression = entry.expression in needed
-                    val wantedReading = entry.reading in needed
-                    if (!wantedExpression && !wantedReading) continue
-                    val domain = entry
-                        .copy(frequency = rankOf(entry.expression, entry.reading))
-                        .toDomain()
-                    if (wantedExpression) {
-                        byExpression.getOrPut(entry.expression) { ArrayList(4) }.add(domain)
-                    }
-                    if (wantedReading) {
-                        byReading.getOrPut(entry.reading) { ArrayList(4) }.add(domain)
+        // The dictionary is streamed, so lookups are answered from the set of
+        // entries a pass collected. Redirect targets are only known once the
+        // first answers are in, which is what the second pass is for.
+        suspend fun collect(expressions: Set<String>, readings: Set<String>): List<WordEntry> {
+            val out = ArrayList<WordEntry>()
+            parser.parseFromZipStreaming(
+                inputStream = File(dictZip).inputStream().buffered(),
+                onBatch = { entries: List<DictionaryEntry>, _ ->
+                    for (entry in entries) {
+                        if (entry.expression !in expressions && entry.reading !in readings) continue
+                        out += entry.copy(frequency = rankOf(entry.expression, entry.reading)).toDomain()
                     }
                 }
+            )
+            return out
+        }
+        val needed = tokens.mapTo(HashSet()) { it.baseForm }
+        val firstPass = collect(needed, needed)
+        val secondPass = HashMap<String, List<WordEntry>>()
+        val resolved = ScanEntryResolver.resolve(
+            words = needed,
+            byExpressions = { list ->
+                val wanted = list.toHashSet()
+                val known = firstPass.filter { it.expression in wanted }
+                val missing = wanted - known.mapTo(HashSet()) { it.expression } - secondPass.keys
+                if (missing.isNotEmpty()) {
+                    val fetched = collect(missing, emptySet()).groupBy { it.expression }
+                    for (m in missing) secondPass[m] = fetched[m].orEmpty()
+                }
+                known + wanted.flatMap { secondPass[it].orEmpty() }
+            },
+            byReadings = { list ->
+                val wanted = list.toHashSet()
+                firstPass.filter { it.reading in wanted }
             }
         )
-
-        // Same rule as TextScanViewModel.resolveEntries: written form first,
-        // reading only for what is left over, commonest homophone wins.
-        val resolved = HashMap<String, MergedWordEntry>(needed.size)
-        for (word in needed) {
-            val entries = byExpression[word] ?: byReading[word] ?: continue
-            val best = MergedWordEntry.mergeEntries(entries)
-                .minByOrNull { if (it.frequency > 0) it.frequency else Int.MAX_VALUE }
-                ?: continue
-            resolved[word] = best
-        }
         log("resolved: ${resolved.size} of ${needed.size} words found in the dictionary")
 
         // ---- 6. the plan ---------------------------------------------------
@@ -198,13 +210,33 @@ class BookScanHarness {
                 partCount = document.partCount
             )
         }
+        // ---- 5b. the Anki collection, when a field dump is given ------------
+        // One note per line, fields separated by ␟ — Anki's own `flds` column,
+        // dumped with newlines turned into <br> (see the doc comment at the top). Indexed by the same code AnkiCollectionIndex runs on
+        // the phone, so "already in Anki" means exactly what it means there.
+        val ankiFields = System.getProperty("anki.fields").orEmpty()
+        val ankiIndex = if (ankiFields.isNotEmpty()) {
+            val keys = HashSet<String>(1 shl 14)
+            var notes = 0
+            File(ankiFields).forEachLine { line ->
+                // ␟ stands in for U+001F: the sqlite3 shell prints the real
+                // separator as the two characters "^_".
+                AnkiNoteFieldIndexer.collectKeysFromNote(line.replace('␟', '\u001f'), keys)
+                notes++
+            }
+            log("anki: $notes notes, ${keys.size} keys")
+            AnkiCollectionIndex.Index(keys, notes, available = true)
+        } else {
+            null
+        }
+
         val filters = TextScanFilters(
             tier = FrequencyTier.entries.first { it.name == (System.getProperty("tier") ?: "TOP_20K") },
             minOccurrences = System.getProperty("minOccurrences")?.toIntOrNull() ?: 1,
             assumeKnownTopRank = System.getProperty("assumeKnownTopRank")?.toIntOrNull() ?: 0,
             maxWords = System.getProperty("maxWords")?.toIntOrNull() ?: 0,
-            // Nothing here can read the AnkiDroid collection or exported_words.
-            skipAlreadyInAnki = false,
+            // exported_words lives on the phone; the collection only when dumped.
+            skipAlreadyInAnki = ankiIndex != null,
             skipAlreadyMined = false
         )
         val plan = TextScanPlanner.plan(
@@ -213,7 +245,14 @@ class BookScanHarness {
             entries = resolved,
             filters = filters,
             totalTokenCount = totalTokenCount,
-            ankiScanUnavailable = true
+            isInAnki = { entry ->
+                ankiIndex?.containsAny(
+                    listOf(entry.primaryExpression) + entry.alternativeExpressions,
+                    entry.reading,
+                    readingCountsAlone = WordFilterRules.isUsuallyKana(entry)
+                ) ?: false
+            },
+            ankiScanUnavailable = ankiIndex == null
         )
 
         // ---- 7. report ------------------------------------------------------

@@ -24,6 +24,7 @@ import com.yomitanmobile.domain.model.TextScanPlan
 import com.yomitanmobile.domain.model.TextScanSource
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
+import com.yomitanmobile.domain.usecase.ScanEntryResolver
 import com.yomitanmobile.domain.usecase.TextScanPlanner
 import com.yomitanmobile.util.JapaneseTokenizer
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -269,30 +270,12 @@ class TextScanViewModel @Inject constructor(
      * context there is no better signal, and picking the rarest homophone
      * would be strictly worse.
      */
-    private suspend fun resolveEntries(words: Set<String>): Map<String, MergedWordEntry> {
-        if (words.isEmpty()) return emptyMap()
-        val wordList = words.toList()
-
-        val byExpression = repository.getEntriesForExpressions(wordList)
-            .groupBy { it.expression }
-        val unresolved = wordList.filter { it !in byExpression }
-        val byReading = if (unresolved.isEmpty()) {
-            emptyMap()
-        } else {
-            repository.getEntriesForReadings(unresolved).groupBy { it.reading }
-        }
-
-        val result = HashMap<String, MergedWordEntry>(words.size)
-        for (word in wordList) {
-            val entries: List<WordEntry> = byExpression[word] ?: byReading[word] ?: continue
-            val merged = MergedWordEntry.mergeEntries(entries)
-            val best = merged.minByOrNull {
-                if (it.frequency > 0) it.frequency else Int.MAX_VALUE
-            } ?: continue
-            result[word] = best
-        }
-        return result
-    }
+    private suspend fun resolveEntries(words: Set<String>): Map<String, MergedWordEntry> =
+        ScanEntryResolver.resolve(
+            words = words,
+            byExpressions = { repository.getEntriesForExpressions(it) },
+            byReadings = { repository.getEntriesForReadings(it) }
+        )
 
     /**
      * Attaches the sentence the word was met in.

@@ -377,6 +377,7 @@ fun DetailScreen(
                     kanjiInfo = kanjiInfo,
                     frequencies = frequencies,
                     leadingDictionary = leadingDictionary,
+                    onMakeLeading = viewModel::makeLeading,
                     generatedFurigana = generatedFurigana,
                     onToggleFavorite = { viewModel.toggleFavorite() },
                     modifier = Modifier.padding(paddingValues)
@@ -401,6 +402,7 @@ private fun WordDetailContent(
     kanjiInfo: List<com.yomitanmobile.domain.model.KanjiInfo>,
     frequencies: List<com.yomitanmobile.domain.model.WordFrequencyInfo>,
     leadingDictionary: String,
+    onMakeLeading: (String) -> Unit = {},
     generatedFurigana: Map<String, List<com.yomitanmobile.domain.model.FuriganaSegment>> = emptyMap(),
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
@@ -448,19 +450,31 @@ private fun WordDetailContent(
                 }
                 Spacer(Modifier.height(8.dp))
                 // Per-source frequency chips, in the user's chosen priority
-                // order (and collapsed to the top list when "show all" is off).
-                // Falls back to the legacy single label for words whose ranks
-                // predate the per-source table (e.g. before a re-import).
+                // order (collapsed to the leading list when "show all" is off).
+                // Every chip shows its list's number as the list shipped it;
+                // the tier badge ("Top 3K") is read from the leading list and
+                // nothing else. Tapping another list's chip offers to make it
+                // the leading one.
                 if (frequencies.isNotEmpty()) {
+                    var askLeading by remember { mutableStateOf<String?>(null) }
+                    val leadingInfo = frequencies.firstOrNull { it.dictionary == leadingDictionary }
+                    val tierLabel = leadingInfo?.let {
+                        com.yomitanmobile.domain.model.FrequencyTier.label(it.position, it.value())
+                    }.orEmpty()
+                    if (tierLabel.isNotBlank()) {
+                        Text(
+                            tierLabel,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         frequencies.forEach { freq ->
-                            // The leading list is the one the search list
-                            // showed and the one the card will carry, so it
-                            // stays recognisable among the others rather than
-                            // being just the first chip.
                             val isLeading = freq.dictionary == leadingDictionary
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -468,7 +482,8 @@ private fun WordDetailContent(
                                     MaterialTheme.colorScheme.primaryContainer
                                 } else {
                                     MaterialTheme.colorScheme.tertiaryContainer
-                                }
+                                },
+                                onClick = { if (!isLeading) askLeading = freq.dictionary }
                             ) {
                                 Text(
                                     text = if (isLeading) "★ ${freq.label()}" else freq.label(),
@@ -483,6 +498,29 @@ private fun WordDetailContent(
                                 )
                             }
                         }
+                    }
+                    askLeading?.let { name ->
+                        AlertDialog(
+                            onDismissRequest = { askLeading = null },
+                            title = { Text(tr("Ustawić jako główną listę?", "Make this the leading list?")) },
+                            text = {
+                                Text(
+                                    tr(
+                                        "„$name” będzie źródłem oznaczeń Top 3K, liczby na fiszce i kolejności wyników.",
+                                        "\"$name\" will supply Top 3K badges, the card number and the search order."
+                                    )
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    onMakeLeading(name)
+                                    askLeading = null
+                                }) { Text(tr("Ustaw", "Make leading")) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { askLeading = null }) { Text(tr("Anuluj", "Cancel")) }
+                            }
+                        )
                     }
                 } else {
                     val freqLabel = entry.frequencyLabel()

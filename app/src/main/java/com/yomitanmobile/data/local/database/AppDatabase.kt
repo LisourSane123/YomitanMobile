@@ -47,7 +47,7 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         JlptTag::class,
         AnkiCollectionWord::class
     ],
-    version = 21,
+    version = 22,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -69,6 +69,52 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
+
+        /**
+         * Frequency lists keep the numbers they shipped.
+         *
+         * 20→21 converted a list of occurrence counts into ranks IN PLACE, so
+         * a list that said "seen 120 000 times" said "#3" on the card, in the
+         * detail chips and on the frequency screen — a number no list ever
+         * contained. This puts the shipped number back (it survived in
+         * `display_value`), and moves the derived "where does it stand" into a
+         * column of its own, `word_frequencies.position`, used only for
+         * ordering and "Top N". `dictionary_entries.frequency_value` is filled
+         * by the next frequency rollup, which the app runs once after this
+         * migration (FrequencyRecomputer.ensureStorageCurrent).
+         *
+         * The ALTERs must match what Room generates for the entities verbatim.
+         */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `word_frequencies` ADD COLUMN `position` INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE `dictionary_entries` ADD COLUMN `frequency_value` TEXT NOT NULL DEFAULT ''"
+                )
+                db.execSQL(
+                    """
+                    UPDATE word_frequencies SET rank = CAST(display_value AS INTEGER)
+                    WHERE dictionary IN (SELECT dictionary FROM frequency_lists WHERE higher_is_better = 1)
+                      AND display_value GLOB '[0-9]*' AND CAST(display_value AS INTEGER) > 0
+                    """
+                )
+                val lists = mutableListOf<Pair<String, Boolean>>()
+                db.query(
+                    "SELECT w.dictionary, COALESCE(l.higher_is_better, 0) FROM " +
+                        "(SELECT DISTINCT dictionary FROM word_frequencies) w " +
+                        "LEFT JOIN frequency_lists l ON l.dictionary = w.dictionary"
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        lists += cursor.getString(0) to (cursor.getInt(1) == 1)
+                    }
+                }
+                lists.forEach { (name, higherIsBetter) ->
+                    FrequencyPositions.recompute(db, name, higherIsBetter)
+                }
+            }
+        }
 
         /**
          * Records what each frequency list's numbers mean.

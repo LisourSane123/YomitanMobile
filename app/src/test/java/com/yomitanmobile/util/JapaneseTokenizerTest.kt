@@ -326,10 +326,35 @@ class JapaneseTokenizerTest {
 
     @Test
     fun `a three-character word starting with a particle is left alone`() {
-        // はなし is 話: the rule only ever looks at one- and two-character
-        // matches, so it cannot come apart into は and なし.
+        // はなし is 話: nothing runs past its end, so it cannot come apart
+        // into は and なし.
         val lexicon = lexiconOf("はなし", "なし", "は", "聞く")
         assertTrue("はなし" in baseForms("はなしを聞いた。", lexicon))
+    }
+
+    @Test
+    fun `a particle loses to a word that runs past the match, not only a longer one`() {
+        // 「ここにいる」 read にい (兄) because いる is no LONGER than にい.
+        val lexicon = lexiconOf("にい", "いる", "ここ", "に")
+        val bases = baseForms("ここにいる。", lexicon)
+        assertFalse(bases.toString(), "にい" in bases)
+        assertTrue(bases.toString(), "いる" in bases)
+    }
+
+    @Test
+    fun `の and か open fragments too`() {
+        val lexicon = lexiconOf("のみ", "みんな", "クラス", "の")
+        val bases = baseForms("クラスのみんなに言う。", lexicon)
+        assertFalse(bases.toString(), "のみ" in bases)
+        assertTrue(bases.toString(), "みんな" in bases)
+    }
+
+    @Test
+    fun `an unranked word plus か is the word and the particle`() {
+        val lexicon = lexiconOf("いるか", "いる", "ヤツ", "が", "か")
+        val bases = baseForms("ヤツがいるか。", lexicon)
+        assertFalse(bases.toString(), "いるか" in bases)
+        assertTrue(bases.toString(), "いる" in bases)
     }
 
     @Test

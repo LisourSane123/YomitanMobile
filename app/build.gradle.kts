@@ -96,7 +96,7 @@ android {
                 // pointed at files without editing code.
                 for (key in listOf(
                     "book.paths", "dict.zip", "freq.zip", "out.dir",
-                    "tier", "minOccurrences", "assumeKnownTopRank", "maxWords"
+                    "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields"
                 )) {
                     System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
                 }

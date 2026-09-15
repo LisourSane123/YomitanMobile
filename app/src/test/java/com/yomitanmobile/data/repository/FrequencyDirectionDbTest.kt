@@ -19,13 +19,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * A frequency list built from occurrence counts, against a real database.
+ * Frequency lists of both directions against a real database.
  *
- * The app reads `rank` as "lower is better" everywhere — search order, the
- * number on a card, the rarity cut in both deck generators — so a counted list
- * has to be converted into ranks on the way in. These tests pin the conversion
- * and the fact that it is reversible, because the detector can be wrong and
- * the user's override has to be able to undo it exactly.
+ * The list's numbers stay exactly as shipped — on the chips, in the stored
+ * table and on the card. Only `position` (1 = commonest) is derived, and only
+ * the leading list's number reaches `dictionary_entries.frequency_value`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -89,42 +87,51 @@ class FrequencyDirectionDbTest {
     }
 
     @Test
-    fun `a counted list becomes ranks, commonest word first`() = runBlocking {
+    fun `a counted list keeps its numbers and gets positions, commonest first`() = runBlocking {
         insertCountedList()
 
         repo.classifyUnknownFrequencyLists()
 
-        // Seen 60 000 times — the commonest word in the list, so rank 1.
         val commonest = repo.getFrequencies("語60", "ご60").single()
-        assertEquals(1, commonest.rank)
-        // …and it still SAYS 60 000, because that is what the list shipped and
-        // what the user recognises; only the sort key was derived from it.
+        // Untouched: the list said 60 000, and so does every copy of it.
+        assertEquals(60_000, commonest.rank)
         assertEquals("60000", commonest.displayValue)
         assertTrue(commonest.higherIsBetter)
         assertEquals("$listName 60000×", commonest.label())
-
-        val rarest = repo.getFrequencies("語1", "ご1").single()
-        assertEquals(60, rarest.rank)
-
-        // The rollup that feeds search order and the card ran too.
-        assertEquals(
-            1,
-            db.dictionaryDao().getEntriesByExpressions(listOf("語60"), "ja").single().frequency
-        )
+        // Derived, for ordering and tiers only.
+        assertEquals(1, commonest.position)
+        assertEquals(60, repo.getFrequencies("語1", "ご1").single().position)
     }
 
     @Test
-    fun `the user can say it was ranks after all, and nothing is lost`() = runBlocking {
+    fun `the leading list's own number lands on the entry, its position orders it`() = runBlocking {
         insertCountedList()
+        FrequencySettings(ApplicationProvider.getApplicationContext()).setOrder(listOf(listName))
+
         repo.classifyUnknownFrequencyLists()
+        repo.reapplyFrequencies()
 
-        repo.setFrequencyListDirection(listName, higherIsBetter = false)
+        val entry = db.dictionaryDao().getEntriesByExpressions(listOf("語60"), "ja").single()
+        assertEquals("60000", entry.frequencyValue)
+        assertEquals(1, entry.frequency)
+    }
 
-        // Back to the numbers the file shipped, computed from the display
-        // value rather than from anything the conversion kept.
-        val restored = repo.getFrequencies("語60", "ご60").single()
-        assertEquals(60_000, restored.rank)
-        assertEquals("$listName #60000", restored.label())
+    @Test
+    fun `a word the leading list does not know carries no leading number`() = runBlocking {
+        insertCountedList()
+        db.frequencyDao().insertAll(listOf(WordFrequency("語1", "ご1", "JPDBv2", 7, "7")))
+        FrequencySettings(ApplicationProvider.getApplicationContext()).setOrder(listOf("JPDBv2", listName))
+
+        repo.classifyUnknownFrequencyLists()
+        repo.reapplyFrequencies()
+
+        val known = db.dictionaryDao().getEntriesByExpressions(listOf("語1"), "ja").single()
+        assertEquals("7", known.frequencyValue)
+        // Not strict: ordering may borrow the other list's standing, but the
+        // card number and the tier do not.
+        val unknown = db.dictionaryDao().getEntriesByExpressions(listOf("語60"), "ja").single()
+        assertEquals("", unknown.frequencyValue)
+        assertEquals(1, unknown.frequency)
     }
 
     @Test
@@ -138,6 +145,7 @@ class FrequencyDirectionDbTest {
 
         val first = repo.getFrequencies("単語1", "たんご1").single()
         assertEquals(1, first.rank)
+        assertEquals(1, first.position)
         assertEquals("JPDBv2 #1", first.label())
     }
 }

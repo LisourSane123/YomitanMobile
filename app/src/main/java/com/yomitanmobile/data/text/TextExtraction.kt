@@ -213,6 +213,7 @@ object TextExtraction {
                     name.endsWith(".htm")
                 if (!isDocument) continue
                 val raw = decode(zip.readBytes()).first
+                if (isNavigationOrColophon(name, raw)) continue
                 chapters++
                 out.append(htmlToText(raw)).append('\n')
             }
@@ -220,7 +221,35 @@ object TextExtraction {
         return Result(out.toString(), TextFileFormat.EPUB, "UTF-8", chapters)
     }
 
-    private val SCRIPT_OR_STYLE = Regex("""<(script|style)\b[^>]*>.*?</\1>""", RE_OPTIONS)
+    /**
+     * `<head>` goes with scripts and styles. Its `<title>` repeats the book's
+     * full title in EVERY chapter file — one volume counted 電子, 特典 and 付き
+     * (from "【電子特典付き】") 26 times each and made cards of them, and
+     * inflated クラス, 大嫌い and 結婚 by the same count.
+     */
+    private val SCRIPT_OR_STYLE = Regex("""<(head|script|style)\b[^>]*>.*?</\1>""", RE_OPTIONS)
+
+    /**
+     * `class="p-colophon"` (and `p-colophon2`, the second page of it),
+     * `p-caution` (the e-book terms: 再ダウンロード, 複製, 譲渡),
+     * `epub:type="toc"`, `<nav …>`: publisher matter, not text.
+     */
+    private val NON_TEXT_BODY = Regex(
+        """<body\b[^>]*\b(class|epub:type)\s*=\s*"[^"]*\b(colophon\d*|toc\d*|nav|caution\d*)\b|<nav\b""",
+        RE_OPTIONS
+    )
+
+    /**
+     * The table of contents and the colophon. The first repeats every chapter
+     * title once more; the second is the same publisher boilerplate in every
+     * book of an imprint (発行者, ご覧になるリーディングシステムにより…), which
+     * reached the deck as ことがある and 発行.
+     */
+    private fun isNavigationOrColophon(name: String, html: String): Boolean {
+        val file = name.substringAfterLast('/')
+        if (file == "nav.xhtml" || file == "toc.xhtml") return true
+        return NON_TEXT_BODY.containsMatchIn(html)
+    }
     private val RUBY_READING = Regex("""<(rt|rp)\b[^>]*>.*?</\1>""", RE_OPTIONS)
     private val BLOCK_BREAK = Regex("""</(p|div|h[1-6]|li|br|tr)\s*>|<br\s*/?>""", RE_OPTIONS)
 

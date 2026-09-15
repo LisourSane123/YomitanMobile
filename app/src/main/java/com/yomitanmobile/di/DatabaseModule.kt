@@ -48,7 +48,8 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_17_18,
                 AppDatabase.MIGRATION_18_19,
                 AppDatabase.MIGRATION_19_20,
-                AppDatabase.MIGRATION_20_21
+                AppDatabase.MIGRATION_20_21,
+                AppDatabase.MIGRATION_21_22
             )
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {

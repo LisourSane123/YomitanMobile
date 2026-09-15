@@ -28,6 +28,26 @@ enum class FrequencyTier(val maxRank: Int) {
         /** Tiers offered as filter chips, commonest first. */
         val SELECTABLE = listOf(TOP_5K, TOP_10K, TOP_20K, TOP_30K, TOP_50K, ALL)
 
+        /**
+         * The starred badge ("★★★ Top 3K") for a word's [position], or "" —
+         * and "" whenever [leadingValue] is blank. A tier is a claim about how
+         * common a word is, and only the leading list gets to make it: a word
+         * the leading list does not know shows no tier, rather than one quietly
+         * borrowed from another list's scale. Past 50K there is no badge; the
+         * list's own number says the rest.
+         */
+        fun label(position: Int, leadingValue: String): String = when {
+            leadingValue.isBlank() || position <= 0 -> ""
+            position <= 1_000 -> "★★★ Top 1K"
+            position <= 3_000 -> "★★★ Top 3K"
+            position <= 5_000 -> "★★ Top 5K"
+            position <= 10_000 -> "★ Top 10K"
+            position <= 20_000 -> "Top 20K"
+            position <= 30_000 -> "Top 30K"
+            position <= 50_000 -> "Top 50K"
+            else -> ""
+        }
+
         /** Tier a rank falls into; null for unranked words. */
         fun of(rank: Int): FrequencyTier? = when {
             rank <= 0 -> null

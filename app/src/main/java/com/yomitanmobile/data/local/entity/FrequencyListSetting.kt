@@ -5,22 +5,17 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * What one installed frequency list's numbers MEAN.
+ * Which way one installed frequency list's numbers run.
  *
  * Yomitan's meta format carries a bare number per word and says nothing about
- * which direction it runs. Most lists ship a rank (1 = the commonest word,
- * lower is better), but some ship the raw occurrence count they were built
- * from (Innocent Corpus and the hand-made "word count" lists: 5 000 000 = the
- * commonest word, HIGHER is better). Both land in the same column, and the
- * whole app — search order, the number stamped on a card, the "too rare" cut
- * in both deck generators — reads that column as "lower is better".
+ * direction. Most lists ship a rank (1 = the commonest word, lower is better);
+ * some ship the occurrence count they were built from (Innocent Corpus and the
+ * "word count" lists: 5 000 000 = the commonest, HIGHER is better).
  *
- * So the direction is resolved once, at import, and the count-based lists are
- * converted into ranks in place ([higherIsBetter] = true means "this list was
- * counted, and `rank` now holds the position we derived from it"). The
- * original number survives in `display_value`, which is both what the detail
- * screen shows and what a re-conversion is computed from — so flipping this
- * flag by hand is lossless in either direction.
+ * The direction is detected once, at import, from the shape of the numbers
+ * ([com.yomitanmobile.domain.model.FrequencyDirection]) and shown on the
+ * frequency screen. The numbers themselves are never converted: they stay as
+ * the list shipped them, and only `word_frequencies.position` is derived.
  */
 @Entity(tableName = "frequency_lists")
 data class FrequencyListSetting(

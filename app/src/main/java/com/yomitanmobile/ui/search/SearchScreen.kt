@@ -556,31 +556,27 @@ private fun MergedWordEntryCard(
                     )
                 }
             }
-            // The leading list's own number, named — this is the rank that
-            // will be stamped on the card, so it is the one worth reading
-            // here. Words that list does not know fall back to the tier
-            // label, which is visibly a different kind of statement.
+            // The leading list's own number, named, with its tier. Both come
+            // from that list alone: a word it does not know shows nothing
+            // here rather than a badge borrowed from another list's scale.
             val leading = entry.leadingFrequency
             if (leading != null) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.End) {
+                    val tier = com.yomitanmobile.domain.model.FrequencyTier.label(leading.position, leading.value())
+                    if (tier.isNotBlank()) {
+                        Text(
+                            text = tier,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     Text(
-                        text = leading.value(),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = leading.shortDictionary(),
+                        text = "${leading.value()} ${leading.shortDictionary()}",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-            } else {
-                val freqLabel = entry.frequencyLabel()
-                if (freqLabel.isNotBlank()) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = freqLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                 }
             }
             val jlptLevel = JlptLevelUtil.fromDbValue(entry.jlptLevel)

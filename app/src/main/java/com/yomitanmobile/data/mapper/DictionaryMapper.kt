@@ -48,6 +48,7 @@ fun DictionaryEntry.toDomain(): WordEntry {
         reading = reading,
         definitions = notesResult.definitions,
         frequency = frequency,
+        frequencyValue = frequencyValue,
         pitchAccent = pitchAccent,
         partsOfSpeech = partsOfSpeech,
         dictionaryName = dictionaryName,

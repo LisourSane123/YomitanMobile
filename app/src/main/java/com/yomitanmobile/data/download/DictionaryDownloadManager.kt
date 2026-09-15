@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
 import java.io.File
@@ -144,10 +143,14 @@ class DictionaryDownloadManager(
      * lock: the worker deciding "nothing left to do" and a tap adding work are
      * the two halves of the same decision, and taking them separately is what
      * let a queue go to sleep with items still in it.
+     *
+     * A plain lock rather than a coroutine Mutex: nothing under it suspends,
+     * and it lets [enqueue] add to the queue before returning. Adding from a
+     * launched coroutine let two quick taps land in the queue in either order.
      */
-    private val queueMutex = Mutex()
+    private val queueLock = Any()
 
-    /** True while a worker is walking the queue. Only read/written under [queueMutex]. */
+    /** True while a worker is walking the queue. Only read/written under [queueLock]. */
     private var draining = false
 
     /**
@@ -169,29 +172,27 @@ class DictionaryDownloadManager(
      */
     fun enqueue(dictionaries: List<DictionaryDownloadInfo>) {
         if (dictionaries.isEmpty()) return
-        scope.launch {
-            var added = false
-            val startWorker = queueMutex.withLock {
-                val pending = _queue.value.filter { it.state == QueueState.WAITING || it.state == QueueState.RUNNING }
-                    .mapTo(HashSet()) { it.info.id }
-                val newItems = dictionaries.filterNot { it.id in pending }.map { QueuedDownload(it) }
-                if (newItems.isEmpty()) return@withLock false
-                _queue.value = _queue.value + newItems
-                added = true
-                // Claim the worker slot under the same lock that added the
-                // work. Asking a Job whether it is still active could not
-                // answer this: a worker that has just found the queue empty is
-                // active for a moment longer, and an item added in that moment
-                // waited forever for a worker that was on its way out. Short
-                // installs — a 1-2 MB frequency list — land in that window far
-                // more often than a dictionary that takes minutes.
-                if (draining) false else { draining = true; true }
-            }
-            // After the items are in the queue, so the service's first look
-            // at it already finds work instead of stopping straight away.
-            if (added) backgroundWork.start()
-            if (startWorker) drainQueue()
+        var added = false
+        val startWorker = synchronized(queueLock) {
+            val pending = _queue.value.filter { it.state == QueueState.WAITING || it.state == QueueState.RUNNING }
+                .mapTo(HashSet()) { it.info.id }
+            val newItems = dictionaries.filterNot { it.id in pending }.map { QueuedDownload(it) }
+            if (newItems.isEmpty()) return@synchronized false
+            _queue.value = _queue.value + newItems
+            added = true
+            // Claim the worker slot under the same lock that added the
+            // work. Asking a Job whether it is still active could not
+            // answer this: a worker that has just found the queue empty is
+            // active for a moment longer, and an item added in that moment
+            // waited forever for a worker that was on its way out. Short
+            // installs — a 1-2 MB frequency list — land in that window far
+            // more often than a dictionary that takes minutes.
+            if (draining) false else { draining = true; true }
         }
+        // After the items are in the queue, so the service's first look at it
+        // already finds work instead of stopping straight away.
+        if (added) backgroundWork.start()
+        if (startWorker) scope.launch { drainQueue() }
     }
 
     fun enqueue(info: DictionaryDownloadInfo) = enqueue(listOf(info))
@@ -202,14 +203,12 @@ class DictionaryDownloadManager(
      * import is the long part anyway.
      */
     fun cancelQueued(id: String) {
-        scope.launch {
-            queueMutex.withLock {
-                _queue.value = _queue.value.map {
-                    if (it.info.id == id && it.state == QueueState.WAITING) {
-                        it.copy(state = QueueState.CANCELLED)
-                    } else {
-                        it
-                    }
+        synchronized(queueLock) {
+            _queue.value = _queue.value.map {
+                if (it.info.id == id && it.state == QueueState.WAITING) {
+                    it.copy(state = QueueState.CANCELLED)
+                } else {
+                    it
                 }
             }
         }
@@ -217,11 +216,9 @@ class DictionaryDownloadManager(
 
     /** Clears everything that is no longer going to change. */
     fun clearFinished() {
-        scope.launch {
-            queueMutex.withLock {
-                _queue.value = _queue.value.filter {
-                    it.state == QueueState.WAITING || it.state == QueueState.RUNNING
-                }
+        synchronized(queueLock) {
+            _queue.value = _queue.value.filter {
+                it.state == QueueState.WAITING || it.state == QueueState.RUNNING
             }
         }
     }
@@ -230,12 +227,12 @@ class DictionaryDownloadManager(
      * Installs queued dictionaries one at a time until none are waiting.
      *
      * Picking the next item and standing down are both done under
-     * [queueMutex], so "the queue is empty, I am finished" and "here is
+     * [queueLock], so "the queue is empty, I am finished" and "here is
      * another one" can never be decided at the same time.
      */
     private suspend fun drainQueue() {
         while (true) {
-            val next = queueMutex.withLock {
+            val next = synchronized(queueLock) {
                 val waiting = _queue.value.firstOrNull { it.state == QueueState.WAITING }
                 if (waiting == null) {
                     draining = false
@@ -253,7 +250,7 @@ class DictionaryDownloadManager(
                 Log.w(TAG, "Install of ${next.info.name} failed", t)
                 DownloadResult.Error(next.info.name, "${t.javaClass.simpleName}: ${t.message ?: "no message"}")
             }
-            queueMutex.withLock {
+            synchronized(queueLock) {
                 when (result) {
                     is DownloadResult.Success -> setStateLocked(next.info.id) {
                         it.copy(state = QueueState.DONE, entriesImported = result.entriesImported)
@@ -267,7 +264,7 @@ class DictionaryDownloadManager(
         }
     }
 
-    /** Call sites hold [queueMutex]; every write to [_queue] goes through it. */
+    /** Call sites hold [queueLock]; every write to [_queue] goes through it. */
     private fun setStateLocked(id: String, transform: (QueuedDownload) -> QueuedDownload) {
         _queue.value = _queue.value.map { if (it.info.id == id) transform(it) else it }
     }

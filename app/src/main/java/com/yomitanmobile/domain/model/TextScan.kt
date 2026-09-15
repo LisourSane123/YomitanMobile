@@ -70,6 +70,8 @@ enum class TextScanSkipReason {
     NOT_IN_DICTIONARY,
     TOO_FEW_OCCURRENCES,
     FUNCTION_WORD,
+    /** Sounds of dialogue and pieces of words — see NoiseRules. */
+    NOISE,
     NO_DEFINITION,
     TOO_RARE,
     UNRANKED,

@@ -11,6 +11,8 @@ data class MergedWordEntry(
     val definitions: List<String>,
     val alternativeExpressions: List<String>,
     val frequency: Int = 0,
+    /** The leading list's own number; "" when it does not know the word. */
+    val frequencyValue: String = "",
     val pitchAccent: String = "",
     val partsOfSpeech: List<String> = emptyList(),
     val dictionaryName: String = "",
@@ -48,17 +50,8 @@ data class MergedWordEntry(
         return if (joined.length > 120) joined.take(117) + "..." else joined
     }
 
-    fun frequencyLabel(): String = when {
-        frequency <= 0 -> ""
-        frequency <= 1000 -> "★★★ Top 1K"
-        frequency <= 3000 -> "★★★ Top 3K"
-        frequency <= 5000 -> "★★ Top 5K"
-        frequency <= 10000 -> "★ Top 10K"
-        frequency <= 20000 -> "Top 20K"
-        frequency <= 30000 -> "Top 30K"
-        frequency <= 50000 -> "Top 50K"
-        else -> "#$frequency"
-    }
+    /** Tier label, on the leading list's authority only; "" otherwise. */
+    fun frequencyLabel(): String = FrequencyTier.label(frequency, frequencyValue)
 
     /**
      * Convert back to a single WordEntry (for Anki export compatibility).
@@ -69,6 +62,7 @@ data class MergedWordEntry(
         reading = reading,
         definitions = definitions,
         frequency = frequency,
+        frequencyValue = frequencyValue,
         pitchAccent = pitchAccent,
         partsOfSpeech = partsOfSpeech.joinToString(", "),
         dictionaryName = dictionaryName,
@@ -199,6 +193,10 @@ data class MergedWordEntry(
                     definitions = allDefinitions,
                     alternativeExpressions = alternatives,
                     frequency = bestFrequency,
+                    // From a row the leading list knows, preferring the primary.
+                    frequencyValue = primary.frequencyValue.ifBlank {
+                        group.firstOrNull { it.frequencyValue.isNotBlank() }?.frequencyValue.orEmpty()
+                    },
                     pitchAccent = pitchAccent,
                     partsOfSpeech = allPartsOfSpeech,
                     dictionaryName = dictionaryName,

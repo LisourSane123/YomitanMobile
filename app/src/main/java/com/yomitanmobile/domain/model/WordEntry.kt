@@ -5,7 +5,10 @@ data class WordEntry(
     val expression: String,
     val reading: String,
     val definitions: List<String>,
+    // How common the word is, 1 = commonest (see DictionaryEntry.frequency).
     val frequency: Int = 0,
+    // The leading list's own number, verbatim; "" when it does not know the word.
+    val frequencyValue: String = "",
     val pitchAccent: String = "",
     val partsOfSpeech: String = "",
     val dictionaryName: String = "",
@@ -31,15 +34,6 @@ data class WordEntry(
 
     fun displayText(): String = expression.ifBlank { reading }
 
-    fun frequencyLabel(): String = when {
-        frequency <= 0 -> ""
-        frequency <= 1000 -> "★★★ Top 1K"
-        frequency <= 3000 -> "★★★ Top 3K"
-        frequency <= 5000 -> "★★ Top 5K"
-        frequency <= 10000 -> "★ Top 10K"
-        frequency <= 20000 -> "Top 20K"
-        frequency <= 30000 -> "Top 30K"
-        frequency <= 50000 -> "Top 50K"
-        else -> "#$frequency"
-    }
+    /** Tier label, on the leading list's authority only; "" otherwise. */
+    fun frequencyLabel(): String = FrequencyTier.label(frequency, frequencyValue)
 }

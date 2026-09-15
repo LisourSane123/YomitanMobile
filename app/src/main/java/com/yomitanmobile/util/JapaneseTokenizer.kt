@@ -95,6 +95,18 @@ object JapaneseTokenizer {
     private const val CASE_PARTICLES = "はをがもへにねよ"
 
     /**
+     * Particles a short match may have swallowed from the FRONT, for
+     * [losesToParticleSplit]. Wider than [CASE_PARTICLES]: の, か, で and と
+     * cannot be split off the end of a word (なにか, どこか) but do open the
+     * fragments a novel scan was full of — のみ out of 「クラスのみんな」,
+     * かあ out of 「なにかあった」, といい out of 「しないといけない」.
+     */
+    private const val LEADING_PARTICLES = "はをがもへにねよのかでと"
+
+    /** Longest match [losesToParticleSplit] second-guesses. */
+    private const val MAX_PARTICLE_FRAGMENT = 3
+
+    /**
      * Rank at which a form counts as one people use. Everything JPDB-class
      * lists reach past this — 今日は at 296 050, 急いで at 81 833 — is a
      * spelling the corpus barely sees, and loses to a common reading of the
@@ -392,10 +404,21 @@ object JapaneseTokenizer {
             if (!lexicon.isCommon(surface)) {
                 commonDeconjugation(surface, lexicon)?.let { return it }
             }
+            stemOfCommonerVerb(surface, lexicon)?.let { return it }
             return surface
         }
         if (surface.length < 2) return null
         if (!isKana(surface.last())) return null
+        // A verb left on its bare stem before a comma or another verb —
+        // 「言われ、」, 「全貌を現し、」, 「出され」. Nothing matched it, so
+        // longest match fell back to the lone kanji, and 言, 現 and 出 became
+        // cards. Only for a form carrying a kanji: in kana the same shapes are
+        // everywhere.
+        if (surface.any { isKanji(it) }) {
+            bestDeconjugation(surface, lexicon)?.let { return it }
+            stemVerb(surface, lexicon)?.let { return it }
+            return null
+        }
         // Among the deconjugations that are words, the common one wins.
         // 続けている offers 続けて (an adverb JMdict lists, ranked nowhere) one
         // step before 続ける (ranked 196), and taking the first hit spent ten
@@ -443,6 +466,63 @@ object JapaneseTokenizer {
      * characters is enough: 来た is a JMdict entry of its own and was taking 50
      * occurrences off 来る in one novel.
      */
+    /**
+     * The verb a bare stem stands for, when the stem is not a dictionary word:
+     * a godan 連用形 (現し → 現す) or an ichidan stem (言われ → 言われる, and
+     * on to 言う). The commoner candidate wins, the same as everywhere else.
+     */
+    private fun stemVerb(surface: String, lexicon: Lexicon): String? {
+        // An ichidan stem ends on an e- or i-row kana (言われ, 見). Adding る
+        // to anything else invents verbs: 失礼す + る made 失礼する swallow the
+        // す of すぎる and left ぎる behind, ten cards of it.
+        val ichidan = if (surface.last() in ICHIDAN_STEM_ENDINGS) listOf(surface + "る") else emptyList()
+        // bareStemBases offers +る for any ending; only a godan stem (i-row,
+        // same length: 現し → 現す) is taken from it.
+        val godan = JapaneseDeconjugator.bareStemBases(surface).filter { it.length == surface.length }
+        val candidates = godan + ichidan
+        var best: String? = null
+        var bestRank = Int.MAX_VALUE
+        for (candidate in candidates) {
+            // A derived form the dictionary happens to list (撃たれる, ranked
+            // nowhere) gives way to the verb it was derived from when that
+            // one is common.
+            val derived = bestDeconjugation(candidate, lexicon)
+            val base = when {
+                lexicon.contains(candidate) && lexicon.isCommon(candidate) -> candidate
+                derived != null && lexicon.isCommon(derived) -> derived
+                lexicon.contains(candidate) -> candidate
+                else -> derived ?: continue
+            }
+            val rank = lexicon.rank(base).takeIf { it > 0 } ?: (Int.MAX_VALUE - 1)
+            if (best == null || rank < bestRank) {
+                best = base
+                bestRank = rank
+            }
+        }
+        return best
+    }
+
+    /**
+     * A 連用形 the dictionary lists as a noun of its own, met where the text
+     * means the verb: はね上げ, 絡み合い, 取りに行く. The noun 上げ is ranked
+     * 12 460 and the verb 上げる is common, so nine cards in one novel went to
+     * a word the text never used. Only a clearly rarer noun gives way —
+     * 終わり, 考え and 違い are words people use and keep their own reading.
+     */
+    private fun stemOfCommonerVerb(surface: String, lexicon: Lexicon): String? {
+        val nounRank = lexicon.rank(surface)
+        if (nounRank !in STEM_NOUN_RARE_RANK..COMMON_RANK) return null
+        return JapaneseDeconjugator.bareStemBases(surface)
+            .filter { lexicon.contains(it) }
+            .minByOrNull { lexicon.rank(it).takeIf { r -> r > 0 } ?: Int.MAX_VALUE }
+            ?.takeIf { verb -> lexicon.rank(verb) in 1 until nounRank / STEM_NOUN_RATIO }
+    }
+
+    private const val ICHIDAN_STEM_ENDINGS = "えけげせぜてでねへべぺめれいきぎしじちぢにひびぴみり"
+
+    private const val STEM_NOUN_RARE_RANK = 5_000
+    private const val STEM_NOUN_RATIO = 4
+
     private fun commonDeconjugation(surface: String, lexicon: Lexicon): String? {
         if (surface.length < 2 || !isKana(surface.last())) return null
         bestDeconjugation(surface, lexicon)?.takeIf { lexicon.isCommon(it) }?.let { return it }
@@ -469,11 +549,25 @@ object JapaneseTokenizer {
         runEnd: Int,
         lexicon: Lexicon
     ): Boolean {
-        if (length > 2 || sentence[start] !in CASE_PARTICLES) return false
+        if (length > MAX_PARTICLE_FRAGMENT || sentence[start] !in LEADING_PARTICLES) return false
         val next = start + 1
         val maxLength = minOf(MAX_TOKEN_LENGTH, runEnd - next)
-        for (len in maxLength downTo length + 1) {
+        // A word behind the particle that runs PAST the end of this match.
+        // It used to have to be longer than the whole match, which let
+        // 「ここにいる」 read にい (兄) over に + いる, since いる is no longer
+        // than にい — only further along.
+        for (len in maxLength downTo maxOf(2, length)) {
             if (resolve(sentence.substring(next, next + len), lexicon) != null) return true
+        }
+        // …or exactly the rest of it, when the corpus settles which reading is
+        // meant: the match is a form no list calls common and the rest is a
+        // common word. 「真っ赤にして」 is に + して (する), not the rare
+        // expression にして "at (a time)"; はなし stays whole, because it is
+        // the common one of the two.
+        val rest = length - 1
+        if (rest >= 2 && !lexicon.isCommon(sentence.substring(start, start + length))) {
+            val restBase = resolve(sentence.substring(next, next + rest), lexicon)
+            if (restBase != null && lexicon.isCommon(restBase)) return true
         }
         return false
     }
@@ -490,12 +584,25 @@ object JapaneseTokenizer {
             // A one-character remainder only counts when it is a kanji: 何を is
             // 何 plus を, but なに must not come apart into な and に.
             val usable = withoutParticle.length > 1 || isKanji(withoutParticle[0])
-            if (usable && lexicon.contains(withoutParticle)) return true
+            // One kanji plus は that the corpus ranks as a word of its own is
+            // that word: 実は is "actually", while 実 on its own is "truth" —
+            // six cards of the wrong word per novel. The same for 最も
+            // ("most"), 誰も ("nobody"). Not に: the ranked blends with に are
+            // mostly a noun and its particle (本に, 横に).
+            val frozen = withoutParticle.length == 1 && candidate.last() in FROZEN_AFTER_KANJI &&
+                lexicon.isCommon(candidate)
+            if (usable && !frozen && lexicon.contains(withoutParticle)) return true
         }
         // Particles of more than one character — 上から, 家まで. Only when the
         // blend is one the frequency lists do not know: これから is ranked 249
         // and is a word of its own, while 上から is ranked nowhere.
         if (lexicon.rank(candidate) > 0) return false
+        // か and の cannot be split off a word that IS ranked (なにか, どこか),
+        // but a blend no list knows is the word plus the particle: いるか
+        // ("dolphin") out of 「ヤツがいるか」 is いる + か.
+        if (candidate.length >= 3 && candidate.last() in UNRANKED_SPLIT_PARTICLES &&
+            lexicon.contains(candidate.dropLast(1))
+        ) return true
         for (particle in LONG_PARTICLES) {
             if (!candidate.endsWith(particle) || candidate.length <= particle.length) continue
             val stem = candidate.dropLast(particle.length)
@@ -505,6 +612,10 @@ object JapaneseTokenizer {
         }
         return false
     }
+
+    private const val UNRANKED_SPLIT_PARTICLES = "かの"
+
+    private const val FROZEN_AFTER_KANJI = "はも"
 
     /** Particles that trail a noun and are longer than one character. */
     private val LONG_PARTICLES = listOf("から", "まで", "より", "など", "だけ", "ほど", "ばかり")

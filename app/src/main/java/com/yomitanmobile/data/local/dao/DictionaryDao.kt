@@ -451,38 +451,73 @@ interface DictionaryDao {
     suspend fun applyJlptLevelsFromTags()
 
     /**
-     * Same idea for frequency: `dictionary_entries.frequency` is the best rank
-     * across installed lists and is used for search ordering AND for the JLPT
-     * deck's rarity filter, but it lives on rows a term re-import throws away.
-     * `word_frequencies` keeps the real data, so roll it back down afterwards.
+     * Rolls `word_frequencies` down onto the term rows, which lose everything
+     * on a re-import. Two columns come out of it:
+     *
+     *  • `frequency_value` — the LEADING list's own number, verbatim, or "" when
+     *    it does not know the word. What goes on a card and what gates "Top 3K".
+     *  • `frequency` — how common the word is, as a position (1 = commonest):
+     *    the leading list's, else (not strict) the best position any other list
+     *    gives. Positions, not the lists' numbers, because a list of counts runs
+     *    the other way and cannot be compared or cut at "Top 20K" as it is.
+     *
+     * Two statements rather than one: the first clears `frequency_value` on
+     * rows that no list covers any more (a deleted list, a new leading list),
+     * which the EXISTS of the second never reaches.
      */
+    @androidx.room.Transaction
+    suspend fun applyFrequenciesFromTable(leadingDictionary: String, strict: Int) {
+        clearOrphanedFrequencyValues()
+        applyFrequencyRollup(leadingDictionary, strict)
+    }
+
+    /** False right after the 21→22 migration, before the first rollup. */
+    @Query("SELECT EXISTS(SELECT 1 FROM dictionary_entries WHERE frequency_value != '')")
+    suspend fun hasFrequencyValues(): Boolean
+
     @Query(
         """
-        UPDATE dictionary_entries SET frequency = COALESCE(
+        UPDATE dictionary_entries SET frequency_value = ''
+        WHERE frequency_value != '' AND NOT EXISTS (
+            SELECT 1 FROM word_frequencies f
+            WHERE f.expression = dictionary_entries.expression
+              AND (f.reading = dictionary_entries.reading OR f.reading = '')
+              AND f.position > 0
+        )
+        """
+    )
+    suspend fun clearOrphanedFrequencyValues()
+
+    @Query(
+        """
+        UPDATE dictionary_entries SET
+        frequency_value = COALESCE((
+            SELECT f.display_value FROM word_frequencies f
+            WHERE :leadingDictionary != ''
+              AND f.dictionary = :leadingDictionary
+              AND f.expression = dictionary_entries.expression
+              AND (f.reading = dictionary_entries.reading OR f.reading = '')
+              AND f.position > 0
+            ORDER BY f.reading = '' , f.position
+            LIMIT 1
+        ), ''),
+        frequency = COALESCE(
             (
-                -- The leading list first, when the user named one and it knows
-                -- the word. Several lists disagree by design — a word common in
-                -- conversation is rare in print — so "best rank anywhere" made
-                -- one generous list speak for all of them, on the card, in the
-                -- search order and in the rarity filters.
-                SELECT MIN(f.rank) FROM word_frequencies f
+                SELECT MIN(f.position) FROM word_frequencies f
                 WHERE :leadingDictionary != ''
                   AND f.dictionary = :leadingDictionary
                   AND f.expression = dictionary_entries.expression
                   AND (f.reading = dictionary_entries.reading OR f.reading = '')
-                  AND f.rank > 0
+                  AND f.position > 0
             ),
-            -- Strict: the leading list is the only source, so a word it does
-            -- not know is unranked rather than borrowing another list's
-            -- number. One scale on every card is what an Anki reorder addon
-            -- needs — ranks from two lists interleaved sort into an order
-            -- neither of them meant.
+            -- Strict: a word the leading list does not know is unranked
+            -- rather than borrowing another list's standing.
             CASE WHEN :strict = 1 AND :leadingDictionary != '' THEN 0 ELSE NULL END,
             (
-                SELECT MIN(f.rank) FROM word_frequencies f
+                SELECT MIN(f.position) FROM word_frequencies f
                 WHERE f.expression = dictionary_entries.expression
                   AND (f.reading = dictionary_entries.reading OR f.reading = '')
-                  AND f.rank > 0
+                  AND f.position > 0
             ),
             frequency
         )
@@ -490,9 +525,9 @@ interface DictionaryDao {
             SELECT 1 FROM word_frequencies f
             WHERE f.expression = dictionary_entries.expression
               AND (f.reading = dictionary_entries.reading OR f.reading = '')
-              AND f.rank > 0
+              AND f.position > 0
         )
         """
     )
-    suspend fun applyFrequenciesFromTable(leadingDictionary: String, strict: Int)
+    suspend fun applyFrequencyRollup(leadingDictionary: String, strict: Int)
 }
