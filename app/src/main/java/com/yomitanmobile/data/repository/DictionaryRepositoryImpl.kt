@@ -27,6 +27,7 @@ import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.model.WordFrequencyInfo
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.util.InputSanitizer
+import com.yomitanmobile.util.JapaneseTokenizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -168,9 +169,18 @@ class DictionaryRepositoryImpl @Inject constructor(
             // [DictionaryDao.getKanaWrittenReadings]; taking every reading is
             // what let kana fragments of one word match another word entirely.
             val readings = dictionaryDao.getKanaWrittenReadings(language)
-            HashSet<String>(expressions.size + readings.size).apply {
+            // …plus the kana spellings the frequency lists rank as written.
+            // Jitendex does not tag ご飯, 頷く or 柔らかい "usually kana", but a
+            // novel writes ごはん, うなずく and やわらかい — and without them
+            // longest match cut ご + はん, うな + ずい, やわ + らかい.
+            val writtenKana = runCatching {
+                frequencyDao.getRankedWrittenForms(JapaneseTokenizer.KANA_WRITTEN_RANK)
+                    .filter { form -> form.all { JapaneseTokenizer.isKana(it) || it == 'ー' } }
+            }.getOrDefault(emptyList())
+            HashSet<String>(expressions.size + readings.size + writtenKana.size).apply {
                 addAll(expressions)
                 addAll(readings)
+                addAll(writtenKana)
             }
         } catch (e: Exception) {
             Log.w(TAG, "getSurfaceLexicon failed", e)

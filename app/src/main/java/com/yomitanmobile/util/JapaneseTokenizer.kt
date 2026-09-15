@@ -115,6 +115,22 @@ object JapaneseTokenizer {
     const val COMMON_RANK = 30_000
 
     /**
+     * A kana spelling the frequency lists rank this well AS WRITTEN joins the
+     * lexicon even when the dictionary does not call the word "usually kana".
+     * Past it the kana form is an accident of the text, and letting it in
+     * brings back the fragments the kana-reading rule removed — になう, ranked
+     * 14 382 in kana, would read 「そうになった」 as 担う again.
+     */
+    const val KANA_WRITTEN_RANK = 10_000
+
+    /**
+     * A sentence this long with no kana at all is not Japanese. One volume of
+     * a series shipped with a Chinese translation interleaved, and 同学, 所以
+     * and 不知 became cards.
+     */
+    private const val KANALESS_SENTENCE_LENGTH = 8
+
+    /**
      * The verbs that carry the language. Their kana forms collide with rarer
      * words at every turn — 「〜があった」 deconjugates to あう (会う, ranked
      * 172), あつ and ある, and the frequency lists cannot settle it because
@@ -241,6 +257,7 @@ object JapaneseTokenizer {
             lexicon: Lexicon,
             resolved: HashMap<String, String?>
         ) {
+            if (sentence.count { isJapanese(it) } >= KANALESS_SENTENCE_LENGTH && sentence.none { isKana(it) }) return
             val usableSentence = sentence.takeIf {
                 it.length in MIN_SENTENCE_LENGTH..MAX_SENTENCE_LENGTH
             }.orEmpty()

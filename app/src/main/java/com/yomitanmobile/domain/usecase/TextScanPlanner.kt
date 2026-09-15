@@ -142,6 +142,15 @@ object TextScanPlanner {
     const val NAME_HONORIFIC_HITS = 3
 
     /**
+     * Past this rank a word the text keeps calling somebody by is that
+     * somebody. The lists DO rank plenty of names as words — 才人 "talented
+     * person" at 41 468, 真帆 "full sail" at 48 470 — and requiring "unranked"
+     * let the protagonist of a ten-volume series through with 9 241
+     * occurrences. 池 (a classmate and a pond, 3 770) is still kept.
+     */
+    const val NAME_RARE_RANK = 20_000
+
+    /**
      * An expression that is a word the reader has plus a particle: 自分で,
      * 今から, 静かに, 誰にも, 中でも. JMdict lists them as entries of their
      * own, so they reached the deck even when 自分, 今 and 静か were all in
@@ -222,7 +231,8 @@ object TextScanPlanner {
      * cards.
      */
     private fun isNameOnly(token: ScanToken, entry: MergedWordEntry): Boolean =
-        token.honorificHits >= NAME_HONORIFIC_HITS && entry.frequency <= 0
+        token.honorificHits >= NAME_HONORIFIC_HITS &&
+            (entry.frequency <= 0 || entry.frequency > NAME_RARE_RANK)
 
     /**
      * Whether the stoplist covers this word — the WORD, not the spelling it

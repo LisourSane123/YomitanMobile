@@ -69,6 +69,20 @@ interface FrequencyDao {
     suspend fun getCommonSurfaceRanks(maxRank: Int): List<SurfaceRank>
 
     /**
+     * Spellings a list ranks AS WRITTEN — rows with no reading, the way JPDB
+     * files うなずく (3 098) and ごはん (5 198) next to 頷く and ご飯. The
+     * caller keeps the kana ones: they are how authors actually write those
+     * words, which the dictionary's own "usually kana" tag does not say.
+     */
+    @Query(
+        """
+        SELECT DISTINCT expression FROM word_frequencies
+        WHERE reading = '' AND position BETWEEN 1 AND :maxPosition AND expression != ''
+        """
+    )
+    suspend fun getRankedWrittenForms(maxPosition: Int): List<String>
+
+    /**
      * One named list's ranks for a batch of spellings — what the search list
      * shows beside each word, so the leading list is visible before the user
      * opens anything. Chunk the caller's expressions: SQLite takes 999 bound

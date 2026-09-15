@@ -117,6 +117,13 @@ class BookScanHarness {
             )
         }
         log("frequency: ${ranks.size} expressions ranked")
+        // Same as getSurfaceLexicon: kana spellings a list ranks as written.
+        for ((surface, entries) in ranks) {
+            if (!surface.all { JapaneseTokenizer.isKana(it) || it == 'ー' }) continue
+            if (entries.any { it.first.isEmpty() && it.second in 1..JapaneseTokenizer.KANA_WRITTEN_RANK }) {
+                lexicon.add(surface)
+            }
+        }
 
         fun rankOf(expression: String, reading: String): Int =
             ranks[expression].orEmpty()
