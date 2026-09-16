@@ -110,7 +110,12 @@ data class MergedWordEntry(
                 groups.getOrPut(key) { mutableListOf() }.add(entry)
             }
 
-            return groups.values.map { group ->
+            return groups.values.map { unordered ->
+                // Homographs in JMdict order: the entry the dictionary had
+                // first is the one people mean. Stable, so entries with no
+                // sequence keep the order the query returned them in. Without
+                // it バス could open on "bath" and コップ on "cop".
+                val group = unordered.sortedBy { if (it.sequenceNumber > 0) it.sequenceNumber else Int.MAX_VALUE }
                 // Sort: prefer entries with kanji and frequency
                 val sorted = group.sortedWith(
                     compareByDescending<WordEntry> { containsKanji(it.expression) }

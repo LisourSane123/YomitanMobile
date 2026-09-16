@@ -358,6 +358,26 @@ class JapaneseTokenizerTest {
     }
 
     @Test
+    fun `だろう after a verb stays grammar, it does not leave ろう behind`() {
+        val lexicon = lexiconOf("ろう", "言う", "だ", "違う", "って")
+        val bases = baseForms("違うって言ってるだろう。", lexicon)
+        assertFalse(bases.toString(), "ろう" in bases)
+        assertTrue(bases.toString(), "言う" in bases)
+    }
+
+    @Test
+    fun `an honorific is not read as the end of a word`() {
+        val lexicon = lexiconOf("兄", "兄い", "くん", "シセ")
+        assertFalse("兄い" in baseForms("兄くんが好き。", lexicon))
+    }
+
+    @Test
+    fun `a kanaless sentence is not Japanese`() {
+        val lexicon = lexiconOf("同学", "母亲")
+        assertTrue(baseForms("班上同学的母亲们打扮得更朴素。", lexicon).isEmpty())
+    }
+
+    @Test
     fun `a sentence-final particle is split off like a case particle`() {
         val lexicon = lexiconOf("いい", "いいよ", "よ", "そう")
         assertFalse("いいよ" in baseForms("それでいいよ。", lexicon))

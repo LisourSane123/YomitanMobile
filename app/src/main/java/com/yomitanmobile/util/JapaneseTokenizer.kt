@@ -299,6 +299,15 @@ object JapaneseTokenizer {
                         if (isWordPlusParticle(candidate, lexicon)) continue
                         if (losesToParticleSplit(sentence, i, len, runEnd, lexicon)) continue
                         val hit = resolved.getOrPut(candidate) { resolve(candidate, lexicon) }
+                        // Only a DERIVED reading is second-guessed: 行く in
+                        // 「行くんだ」 is a word, 兄く in 「兄くん」 is not.
+                        if (hit != null && hit != candidate && endsInsideHonorific(sentence, i + len)) continue
+                        // A derived reading that ends by taking the だ of a
+                        // grammar chain: 「言ってるだろう」 read 言ってるだ as
+                        // 言う + copula and left ろう ("six") — 552 cards.
+                        if (hit != null && hit != candidate && candidate.last() == 'だ' &&
+                            grammarFormAt(sentence, i + len - 1, runEnd) != null
+                        ) continue
                         if (hit != null) {
                             matchedLength = len
                             base = hit
@@ -366,6 +375,22 @@ object JapaneseTokenizer {
             if (gluedToKatakana) return false
         }
         return true
+    }
+
+    /**
+     * True when a match ending at [end] takes the first part of an honorific
+     * with it. 「兄くん」 matched 兄く, which the adverbial rule turned into 兄い
+     * ("elder brother", archaic) — 628 cards in one series, from a text that
+     * never writes 兄い at all.
+     */
+    private fun endsInsideHonorific(sentence: String, end: Int): Boolean {
+        for (honorific in HONORIFIC_SUFFIXES) {
+            for (split in 1 until honorific.length) {
+                val start = end - split
+                if (start > 0 && sentence.startsWith(honorific, start)) return true
+            }
+        }
+        return false
     }
 
     private fun followedByHonorific(sentence: String, at: Int): Boolean =
@@ -575,6 +600,12 @@ object JapaneseTokenizer {
         // than にい — only further along.
         for (len in maxLength downTo maxOf(2, length)) {
             if (resolve(sentence.substring(next, next + len), lexicon) != null) return true
+        }
+        // A grammar chain behind the particle counts the same: 「のだろう」 is
+        // の + だろう, and reading のだ first left ろう ("six") behind — 552
+        // cards of it in one series.
+        grammarFormAt(sentence, next, runEnd)?.let { form ->
+            if (next + form.length > start + length) return true
         }
         // …or exactly the rest of it, when the corpus settles which reading is
         // meant: the match is a form no list calls common and the rest is a

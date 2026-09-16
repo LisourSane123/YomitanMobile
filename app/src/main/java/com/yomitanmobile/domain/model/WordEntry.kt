@@ -9,6 +9,10 @@ data class WordEntry(
     val frequency: Int = 0,
     // The leading list's own number, verbatim; "" when it does not know the word.
     val frequencyValue: String = "",
+    // JMdict sequence of the source entry (0 when the dictionary has none).
+    // Orders homographs: the core entry (バス "bus", 1098390) was added long
+    // before the rare one sharing its spelling (バス "bath", 2845312).
+    val sequenceNumber: Int = 0,
     val pitchAccent: String = "",
     val partsOfSpeech: String = "",
     val dictionaryName: String = "",
