@@ -34,6 +34,22 @@ data class TextScanFilters(
      * setting for a novel, where a word seen once is rarely worth a card.
      */
     val minOccurrences: Int = 1,
+    /**
+     * Only make cards for words written with at least one kanji.
+     *
+     * The blunt instrument, and the reason it is a switch: nearly every
+     * remaining piece of segmentation noise is kana (それだけ, かと, けし, たん),
+     * because the pieces longest match breaks off a sentence are kana by
+     * nature. So is a fifth of the real vocabulary, though — every loanword
+     * (クラス, ポイント, コンビニ, イヤホン) and every kana adverb (そもそも,
+     * もしかして, とはいえ, やらかす).
+     *
+     * Off by default HERE so the rest of the rules can be tested without it;
+     * the scanner screen turns it on (TextScanViewModel), which is what the
+     * user actually sees.
+     */
+    val requireKanji: Boolean = false,
+
     /** Drop words already present in the AnkiDroid collection (stored scan). */
     val skipAlreadyInAnki: Boolean = true,
     /** Drop words this app already exported (any deck). */
@@ -72,6 +88,8 @@ enum class TextScanSkipReason {
     FUNCTION_WORD,
     /** Sounds of dialogue and pieces of words — see NoiseRules. */
     NOISE,
+    /** Written without kanji, and [TextScanFilters.requireKanji] is on. */
+    KANA_ONLY,
     NO_DEFINITION,
     TOO_RARE,
     UNRANKED,

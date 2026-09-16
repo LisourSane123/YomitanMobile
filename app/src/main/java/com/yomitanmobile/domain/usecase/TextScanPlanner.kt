@@ -446,6 +446,10 @@ object TextScanPlanner {
                     reject(TextScanSkipReason.NOT_IN_DICTIONARY, occurrences)
                 NoiseRules.isKanaFragment(word, entry) ->
                     reject(TextScanSkipReason.NOISE, occurrences)
+                // Judged on the spelling the card will carry, which is the
+                // one the text used.
+                filters.requireKanji && word.none { JapaneseTokenizer.isKanji(it) } ->
+                    reject(TextScanSkipReason.KANA_ONLY, occurrences)
                 isSegmentationNoise(word, entry) ->
                     reject(TextScanSkipReason.UNRANKED, occurrences)
                 // Same reason, second source of truth: the dictionary's own

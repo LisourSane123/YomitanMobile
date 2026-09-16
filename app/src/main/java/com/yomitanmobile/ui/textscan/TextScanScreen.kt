@@ -370,6 +370,23 @@ fun TextScanScreen(
                     )
 
                     ToggleRow(
+                        title = tr("Tylko słowa z kanji", "Only words written with kanji"),
+                        subtitle = tr(
+                            "Resztki błędów segmentacji to prawie zawsze kana (それだけ, かと, けし), " +
+                                "więc to je wycina — ale razem z zapożyczeniami (クラス, コンビニ, " +
+                                "イヤホン) i przysłówkami pisanymi kaną (そもそも, とはいえ). " +
+                                "Około jednej piątej kart.",
+                            "What is left of the segmentation errors is nearly all kana (それだけ, かと, " +
+                                "けし), so this removes them — along with every loanword (クラス, コンビニ, " +
+                                "イヤホン) and the kana adverbs (そもそも, とはいえ). About a fifth of the cards."
+                        ),
+                        checked = filters.requireKanji,
+                        onCheckedChange = { value ->
+                            viewModel.updateFilters { it.copy(requireKanji = value) }
+                        }
+                    )
+
+                    ToggleRow(
                         title = tr("Pomiń słowa gramatyczne", "Skip function words"),
                         subtitle = tr(
                             "Partykuły, です/ます, する/いる oraz wszystko, co słownik oznacza jako " +
@@ -755,6 +772,8 @@ private fun skipReasonLabel(reason: TextScanSkipReason, isEnglish: Boolean): Str
         if (isEnglish) "Too few occurrences" else "Za mało wystąpień"
     TextScanSkipReason.FUNCTION_WORD ->
         if (isEnglish) "Grammar / function words" else "Słowa gramatyczne"
+    TextScanSkipReason.KANA_ONLY ->
+        if (isEnglish) "Written without kanji" else "Bez kanji"
     TextScanSkipReason.NOISE ->
         if (isEnglish) "Noise (sounds, word fragments)" else "Szum (odgłosy, fragmenty słów)"
     TextScanSkipReason.NO_DEFINITION ->

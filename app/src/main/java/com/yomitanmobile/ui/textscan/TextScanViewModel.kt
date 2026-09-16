@@ -84,7 +84,10 @@ class TextScanViewModel @Inject constructor(
 
     private val logTag = "TextScanViewModel"
 
-    private val _filters = MutableStateFlow(TextScanFilters())
+    // Kanji-only is on when the screen opens: what is left of the
+    // segmentation noise is almost all kana. It costs the loanwords and the
+    // kana adverbs, which is why it is a switch and says so.
+    private val _filters = MutableStateFlow(TextScanFilters(requireKanji = true))
     val filters: StateFlow<TextScanFilters> = _filters.asStateFlow()
 
     private val _deckName = MutableStateFlow(DEFAULT_DECK)

@@ -487,6 +487,29 @@ class TextScanPlannerTest {
     }
 
     @Test
+    fun `requireKanji keeps only what is written with kanji`() {
+        val words = mapOf(
+            "手紙" to entry("手紙", frequency = 900),
+            "クラス" to entry("クラス", frequency = 1457),
+            "それだけ" to entry("それだけ", frequency = 176035)
+        )
+        val kept = plan(
+            tokens("手紙" to 5, "クラス" to 5, "それだけ" to 5),
+            words,
+            filters = TextScanFilters(tier = FrequencyTier.ALL, requireKanji = true)
+        )
+        assertEquals(listOf("手紙"), kept.selected.map { it.entry.primaryExpression })
+        assertEquals(2, kept.skipped[TextScanSkipReason.KANA_ONLY])
+
+        val all = plan(
+            tokens("手紙" to 5, "クラス" to 5, "それだけ" to 5),
+            words,
+            filters = TextScanFilters(tier = FrequencyTier.ALL, requireKanji = false)
+        )
+        assertEquals(3, all.selected.size)
+    }
+
+    @Test
     fun `a word met with an honorific once or twice keeps its card`() {
         val word = entry("先生", frequency = 2000)
         val result = TextScanPlanner.plan(
