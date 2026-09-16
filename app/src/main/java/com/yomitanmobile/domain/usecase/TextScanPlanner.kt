@@ -339,6 +339,76 @@ object TextScanPlanner {
      * Counts add up; the sentence and the earliness come from whichever
      * spelling appeared first.
      */
+    /**
+     * Collapses inflections onto the dictionary form the deck already has:
+     * 食べたい, 食べすぎる and 食べやすい are 食べる, 近く is 近い. Counts add up
+     * and the earliest occurrence wins, exactly like [mergeByEntry] — this
+     * runs first, so the entry merge then sees one token per word.
+     */
+    private fun mergeByParadigm(
+        words: List<ScanToken>,
+        entries: Map<String, MergedWordEntry>
+    ): Pair<List<ScanToken>, Map<String, MergedWordEntry>> {
+        val bases = words.map { it.baseForm }.filter { word ->
+            entries[word]?.let { isInflectable(it) } == true
+        }
+        if (bases.isEmpty()) return words to entries
+        val index = ParadigmMerge.index(bases)
+        if (index.isEmpty()) return words to entries
+
+        val grouped = LinkedHashMap<String, MutableList<ScanToken>>()
+        for (token in words) {
+            val target = index[token.baseForm]?.takeIf { it != token.baseForm } ?: token.baseForm
+            grouped.getOrPut(target) { mutableListOf() }.add(token)
+        }
+        val outWords = grouped.map { (target, tokens) ->
+            if (tokens.size == 1 && tokens[0].baseForm == target) return@map tokens[0]
+            val earliest = tokens.maxByOrNull { it.earliness } ?: tokens[0]
+            val base = tokens.firstOrNull { it.baseForm == target } ?: earliest
+            ScanToken(
+                baseForm = target,
+                occurrences = tokens.sumOf { it.occurrences },
+                sentence = base.sentence.ifBlank { earliest.sentence },
+                earliness = earliest.earliness,
+                honorificHits = tokens.sumOf { it.honorificHits }
+            )
+        }
+        val outEntries = HashMap<String, MergedWordEntry>(grouped.size)
+        for ((target, tokens) in grouped) {
+            val entry = entries[target] ?: tokens.firstNotNullOfOrNull { entries[it.baseForm] } ?: continue
+            outEntries[target] = entry
+        }
+        return outWords to outEntries
+    }
+
+    /** A word with a paradigm of its own: a verb or an i-adjective. */
+    private fun isInflectable(entry: MergedWordEntry): Boolean =
+        with(WordFilterRules) {
+            entry.posTokens().any { tag -> tag.startsWith("v") || tag == "adj-i" || tag == "adj-ix" }
+        }
+
+    /**
+     * True when the collection holds the dictionary form this word is an
+     * inflection of. 近い is in Anki, 近く (a JMdict noun of its own, ranked
+     * 348) was not compared against it and became a card.
+     */
+    private fun isInflectionInAnki(
+        word: String,
+        entry: MergedWordEntry,
+        isInAnki: (MergedWordEntry) -> Boolean
+    ): Boolean {
+        if (word.length < 2 || !JapaneseTokenizer.isKana(word.last())) return false
+        return ParadigmMerge.possibleBases(word).any { base ->
+            isInAnki(
+                entry.copy(
+                    primaryExpression = base,
+                    reading = base,
+                    alternativeExpressions = emptyList()
+                )
+            )
+        }
+    }
+
     private fun mergeByEntry(
         words: List<ScanToken>,
         entries: Map<String, MergedWordEntry>
@@ -420,7 +490,8 @@ object TextScanPlanner {
             }
         }
 
-        val merged = mergeByEntry(words, entries)
+        val byParadigm = mergeByParadigm(words, entries)
+        val merged = mergeByEntry(byParadigm.first, byParadigm.second)
         val maxOccurrences = merged.first.maxOfOrNull { it.occurrences } ?: 1
         val mergedWords = merged.first
         val mergedEntries = merged.second
@@ -476,7 +547,11 @@ object TextScanPlanner {
                     reject(TextScanSkipReason.TOO_RARE, occurrences)
                 filters.skipArchaic && WordFilterRules.isArchaic(entry) ->
                     reject(TextScanSkipReason.ARCHAIC, occurrences)
-                filters.skipAlreadyInAnki && (isInAnki(entry) || isKnownBlend(entry, isInAnki)) ->
+                filters.skipAlreadyInAnki && (
+                    isInAnki(entry) ||
+                        isKnownBlend(entry, isInAnki) ||
+                        isInflectionInAnki(word, entry, isInAnki)
+                    ) ->
                     reject(TextScanSkipReason.ALREADY_IN_ANKI, occurrences)
                 filters.skipAlreadyMined && isMined(entry) ->
                     reject(TextScanSkipReason.ALREADY_MINED, occurrences)

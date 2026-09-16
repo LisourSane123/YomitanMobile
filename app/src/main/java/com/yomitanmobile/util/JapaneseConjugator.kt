@@ -64,6 +64,53 @@ object JapaneseConjugator {
         return forms.toList()
     }
 
+    /**
+     * Everything that is still the same WORD: the paradigm plus the
+     * derivations a dictionary files under their own headword — 食べたい,
+     * 高さ, 深み, 悲しがる, 食べすぎる.
+     *
+     * Wider than [inflectedForms], which only has to find the word inside a
+     * sentence. This set is what the text scanner merges cards by, so a reader
+     * who has 食べる does not also get 食べたい, 食べすぎる and 食べ方 as three
+     * more cards. Callers must still check that the form starts with the
+     * base's stem: the る-final ambiguity makes this list emit both classes'
+     * endings, and among them する's potential できる, which is a word of its
+     * own.
+     */
+    fun derivedForms(dictionaryForm: String): List<String> {
+        val word = dictionaryForm.trim()
+        if (word.length < 2) return emptyList()
+        val out = LinkedHashSet(inflectedForms(word))
+        if (word.endsWith("い")) {
+            val stem = word.dropLast(1)
+            out += ADJECTIVE_DERIVATIONS.map { stem + it }
+        }
+        masuStemOf(word)?.let { stem ->
+            out += VERB_DERIVATIONS.map { stem + it }
+        }
+        return out.toList()
+    }
+
+    /** 食べる → 食べ, 話す → 話し: the stem everything polite hangs off. */
+    private fun masuStemOf(word: String): String? =
+        inflectedForms(word).firstOrNull { it.endsWith("ます") }?.removeSuffix("ます")?.takeIf { it.isNotEmpty() }
+
+    /**
+     * On the ます-stem. たい is an inflection of the verb however JMdict files
+     * it, and so are すぎる and そう; 方 is deliberately absent — 読み方 is a
+     * word people look up.
+     */
+    private val VERB_DERIVATIONS = listOf(
+        "たい", "たくない", "たかった", "たくて", "たければ", "たがる", "たがって",
+        "すぎる", "すぎた", "すぎて", "そう", "そうだ", "ながら", "なさい", "やすい", "にくい"
+    )
+
+    /** On the adjective stem: 高さ, 深み, 嬉しげ, 悲しがる, 高すぎる. */
+    private val ADJECTIVE_DERIVATIONS = listOf(
+        "さ", "み", "げ", "がる", "がって", "がった", "そう", "すぎる", "すぎた", "すぎて",
+        "く", "くて", "かった", "くない", "くなかった", "ければ", "くなる", "くなった", "くなり"
+    )
+
     private fun iAdjectiveForms(stem: String): List<String> {
         if (stem.isBlank()) return emptyList()
         return listOf(
