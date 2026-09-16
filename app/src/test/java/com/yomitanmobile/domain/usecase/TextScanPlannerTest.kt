@@ -512,6 +512,23 @@ class TextScanPlannerTest {
     }
 
     @Test
+    fun `katakana goes when asked, reduplications stay`() {
+        val words = mapOf(
+            "クラス" to entry("クラス", frequency = 1457),
+            "ドキドキ" to entry("ドキドキ", frequency = 3249),
+            "手紙" to entry("手紙", frequency = 900)
+        )
+        val result = plan(
+            tokens("クラス" to 5, "ドキドキ" to 5, "手紙" to 5),
+            words,
+            filters = TextScanFilters(tier = FrequencyTier.ALL, skipKatakana = true)
+        )
+
+        assertEquals(1, result.skipped[TextScanSkipReason.KATAKANA_ONLY])
+        assertEquals(setOf("ドキドキ", "手紙"), result.selected.map { it.entry.primaryExpression }.toSet())
+    }
+
+    @Test
     fun `a word met with an honorific once or twice keeps its card`() {
         val word = entry("先生", frequency = 2000)
         val result = TextScanPlanner.plan(

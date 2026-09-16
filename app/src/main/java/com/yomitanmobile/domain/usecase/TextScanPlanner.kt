@@ -451,6 +451,8 @@ object TextScanPlanner {
                 // one the text used.
                 filters.skipPlainKana && NoiseRules.isPlainKana(word) ->
                     reject(TextScanSkipReason.KANA_ONLY, occurrences)
+                filters.skipKatakana && NoiseRules.isKatakanaWord(word) ->
+                    reject(TextScanSkipReason.KATAKANA_ONLY, occurrences)
                 isSegmentationNoise(word, entry) ->
                     reject(TextScanSkipReason.UNRANKED, occurrences)
                 // Same reason, second source of truth: the dictionary's own

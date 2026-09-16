@@ -87,7 +87,8 @@ class TextScanViewModel @Inject constructor(
     // On when the screen opens: what is left of the segmentation noise is
     // almost all plain hiragana. It costs the kana adverbs, which is why it
     // is a switch and says so.
-    private val _filters = MutableStateFlow(TextScanFilters(skipPlainKana = true))
+    private val _filters =
+        MutableStateFlow(TextScanFilters(skipPlainKana = true, skipKatakana = true))
     val filters: StateFlow<TextScanFilters> = _filters.asStateFlow()
 
     private val _deckName = MutableStateFlow(DEFAULT_DECK)

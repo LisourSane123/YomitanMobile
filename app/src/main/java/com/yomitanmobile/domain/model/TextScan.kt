@@ -50,6 +50,18 @@ data class TextScanFilters(
      */
     val skipPlainKana: Boolean = false,
 
+    /**
+     * Drop words written in katakana — see [NoiseRules.isKatakanaWord], which
+     * keeps the two-mora reduplications (ドキドキ).
+     *
+     * Katakana is where a story keeps its loanwords and its names, and a
+     * reader who has English gets the loanwords for free.
+     *
+     * Off by default HERE, like [skipPlainKana]; the scanner screen turns it
+     * on (TextScanViewModel).
+     */
+    val skipKatakana: Boolean = false,
+
     /** Drop words already present in the AnkiDroid collection (stored scan). */
     val skipAlreadyInAnki: Boolean = true,
     /** Drop words this app already exported (any deck). */
@@ -88,8 +100,10 @@ enum class TextScanSkipReason {
     FUNCTION_WORD,
     /** Sounds of dialogue and pieces of words — see NoiseRules. */
     NOISE,
-    /** Written without kanji, and [TextScanFilters.requireKanji] is on. */
+    /** Written without kanji, and [TextScanFilters.skipPlainKana] is on. */
     KANA_ONLY,
+    /** Written in katakana, and [TextScanFilters.skipKatakana] is on. */
+    KATAKANA_ONLY,
     NO_DEFINITION,
     TOO_RARE,
     UNRANKED,

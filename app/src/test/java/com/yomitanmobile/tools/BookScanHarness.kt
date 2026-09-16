@@ -242,6 +242,7 @@ class BookScanHarness {
             tier = FrequencyTier.entries.first { it.name == (System.getProperty("tier") ?: "TOP_20K") },
             minOccurrences = System.getProperty("minOccurrences")?.toIntOrNull() ?: 1,
             skipPlainKana = System.getProperty("skipPlainKana")?.toBooleanStrictOrNull() ?: true,
+            skipKatakana = System.getProperty("skipKatakana")?.toBooleanStrictOrNull() ?: true,
             assumeKnownTopRank = System.getProperty("assumeKnownTopRank")?.toIntOrNull() ?: 0,
             maxWords = System.getProperty("maxWords")?.toIntOrNull() ?: 0,
             // exported_words lives on the phone; the collection only when dumped.

@@ -102,6 +102,19 @@ object NoiseRules {
     }
 
     /**
+     * Written in katakana and nothing else: the loanwords (クラス, ポイント,
+     * コンビニ) and the names a story spells that way.
+     *
+     * A two-mora reduplication is not counted — ドキドキ, ニヤニヤ and ワクワク
+     * are ordinary vocabulary that happens to be written in katakana, the same
+     * exception [isPlainKana] makes for hiragana.
+     */
+    fun isKatakanaWord(word: String): Boolean {
+        if (word.isEmpty() || !word.all { it in 'ァ'..'ヺ' || it in STRETCH_MARKS || it == '・' }) return false
+        return !(word.length == 4 && word.take(2) == word.drop(2) && word[0] != word[1])
+    }
+
+    /**
      * What no rule can tell from a real word, in the spelling the text used.
      * Checked against the word and every spelling of the entry it resolved to.
      */

@@ -387,6 +387,20 @@ fun TextScanScreen(
                     )
 
                     ToggleRow(
+                        title = tr("Pomiń słowa w katakanie", "Skip katakana words"),
+                        subtitle = tr(
+                            "Zapożyczenia (クラス, コンビニ, イヤホン) i imiona pisane katakaną. " +
+                                "Powtórzenia dwóch sylab zostają (ドキドキ, ニヤニヤ).",
+                            "Loanwords (クラス, コンビニ, イヤホン) and the names a story spells that " +
+                                "way. Two-mora reduplications stay (ドキドキ, ニヤニヤ)."
+                        ),
+                        checked = filters.skipKatakana,
+                        onCheckedChange = { value ->
+                            viewModel.updateFilters { it.copy(skipKatakana = value) }
+                        }
+                    )
+
+                    ToggleRow(
                         title = tr("Pomiń słowa gramatyczne", "Skip function words"),
                         subtitle = tr(
                             "Partykuły, です/ます, する/いる oraz wszystko, co słownik oznacza jako " +
@@ -774,6 +788,8 @@ private fun skipReasonLabel(reason: TextScanSkipReason, isEnglish: Boolean): Str
         if (isEnglish) "Grammar / function words" else "Słowa gramatyczne"
     TextScanSkipReason.KANA_ONLY ->
         if (isEnglish) "Plain hiragana" else "Sama hiragana"
+    TextScanSkipReason.KATAKANA_ONLY ->
+        if (isEnglish) "Katakana" else "Katakana"
     TextScanSkipReason.NOISE ->
         if (isEnglish) "Noise (sounds, word fragments)" else "Szum (odgłosy, fragmenty słów)"
     TextScanSkipReason.NO_DEFINITION ->
