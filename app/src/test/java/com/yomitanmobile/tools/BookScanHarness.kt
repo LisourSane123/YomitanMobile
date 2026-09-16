@@ -22,6 +22,7 @@ import com.yomitanmobile.data.anki.AnkiCollectionIndex
 import com.yomitanmobile.data.anki.AnkiNoteFieldIndexer
 import com.yomitanmobile.domain.usecase.WordFilterRules
 import com.yomitanmobile.domain.usecase.ScanEntryResolver
+import com.yomitanmobile.domain.usecase.ParadigmMerge
 import java.text.Normalizer
 
 /**
@@ -330,6 +331,26 @@ class BookScanHarness {
                             entry.definitions.firstOrNull().orEmpty().replace('\t', ' ').take(70)
                     )
                 }
+            appendLine()
+            // Does "one word, one card" hold? Every card whose surface is an
+            // inflection of something the dictionary lists is a leak: the
+            // paradigm rules should have merged it into that word, or dropped
+            // it as an inflection of a word already in the collection.
+            appendLine("## inflections still on cards")
+            appendLine("card\tbase\tbase in deck\tocc\trank")
+            val selectedWords = plan.selected.mapTo(HashSet()) { it.entry.primaryExpression }
+            var leaks = 0
+            for (word in plan.selected) {
+                val surface = word.entry.primaryExpression
+                val base = ParadigmMerge.possibleBases(surface)
+                    .firstOrNull { it != surface && it in lexicon } ?: continue
+                leaks++
+                appendLine(
+                    "$surface\t$base\t${if (base in selectedWords) "yes" else "no"}\t" +
+                        "${word.occurrences}\t${word.entry.frequency}"
+                )
+            }
+            appendLine("inflection leaks: $leaks of ${plan.selectedCount} cards")
             appendLine()
             appendLine("## cards, in the order Anki would introduce them")
             appendLine("#\tword\treading\tocc\trank\tscore\ttags\tmeaning\tsentence")

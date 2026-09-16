@@ -48,6 +48,22 @@ class ParadigmMergeTest {
     }
 
     @Test
+    fun `a chain of forms ends on the dictionary form`() {
+        val index = ParadigmMerge.index(listOf("食べる", "食べたい"))
+        assertEquals("食べる", index["食べたい"])
+        assertEquals("食べる", index["食べたかった"])
+        assertEquals("食べる", index["食べたくない"])
+    }
+
+    @Test
+    fun `a suru expression inflects on its し, not on its す`() {
+        val index = ParadigmMerge.index(listOf("気にする", "お願いする"))
+        assertEquals("気にする", index["気にしない"])
+        assertEquals("気にする", index["気にして"])
+        assertEquals("お願いする", index["お願いします"])
+    }
+
+    @Test
     fun `a paradigm does not swallow a word of its own`() {
         // する generates できる; 食べる generates nothing 見る could claim.
         val index = ParadigmMerge.index(listOf("する", "食べる", "見る"))
@@ -63,6 +79,13 @@ class ParadigmMergeTest {
             when (word) {
                 "食べる" -> entry("食べる", listOf("v1, vt"))
                 "近い" -> entry("近い", listOf("adj-i"))
+                // JMdict tags these as words of their own — 食べたい and
+                // 近くない are adj-i, 食べすぎる is v1 — which is exactly the
+                // case that used to keep them out of the merge.
+                "食べたい", "食べたくない", "食べたかった", "近くない", "近くなかった",
+                "食べやすい", "食べにくい" -> entry(word, listOf("adj-i"))
+                "食べすぎる", "食べたがる", "食べられる", "食べさせる", "近すぎる", "近くなる",
+                "近がる" -> entry(word, listOf("v1"))
                 else -> entry(word, listOf("n"))
             }
         }

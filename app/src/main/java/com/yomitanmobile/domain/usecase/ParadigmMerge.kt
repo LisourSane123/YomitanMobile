@@ -34,18 +34,38 @@ object ParadigmMerge {
      * its own — the stem test is what keeps those out.
      */
     fun index(dictionaryForms: Collection<String>): Map<String, String> {
-        val out = HashMap<String, String>()
+        val direct = HashMap<String, String>()
         val bases = dictionaryForms.toHashSet()
         for (base in dictionaryForms) {
             val stems = stemsOf(base)
             if (stems.isEmpty()) continue
             for (form in JapaneseConjugator.derivedForms(base)) {
-                if (form == base || form in bases) continue
+                if (form == base) continue
                 if (stems.none { form.startsWith(it) }) continue
+                // A form the text ALSO uses as a headword of its own is only a
+                // form when its ending says so. 食べたい and 気にしない are
+                // adj-i entries and still inflections; 走り抜ける, 憶える and
+                // 乗せる end where a potential or a causative would, and are
+                // verbs in their own right — Japanese pairs them with 走り抜く,
+                // 憶う and 乗す, and a deck wants both.
+                if (form in bases && SAFE_ENDINGS.none { form.endsWith(it) }) continue
                 // First base wins: two paradigms reaching the same surface is
                 // rare, and picking either is better than dropping the card.
-                out.putIfAbsent(form, base)
+                direct.putIfAbsent(form, base)
             }
+        }
+        // 食べたかった → 食べたい → 食べる: follow the chain, so one word ends
+        // up with one card however many steps the text took to get there.
+        val out = HashMap<String, String>(direct.size)
+        for ((form, base) in direct) {
+            var target = base
+            val seen = hashSetOf(form, base)
+            while (true) {
+                val next = direct[target] ?: break
+                if (!seen.add(next)) break
+                target = next
+            }
+            if (target != form) out[form] = target
         }
         return out
     }
@@ -98,8 +118,27 @@ object ParadigmMerge {
         base == "する" -> listOf("し", "さ", "せ")
         base == "くる" -> listOf("き", "こ", "く")
         base == "来る" -> listOf("来")
+        // 気にする inflects as 気にし〜, which "drop the last kana" (気にす)
+        // rejected — so 気にしない and お願いします kept their own cards next to
+        // the word they are a form of. Same for the 〜てくる compounds.
+        base.endsWith("する") -> base.dropLast(2).let { listOf(it + "し", it + "さ", it + "せ", it + "す") }
+        base.endsWith("くる") -> base.dropLast(2).let { listOf(it + "き", it + "こ", it + "く") }
         else -> listOf(base.dropLast(1))
     }
+
+    /**
+     * Endings that are never a word of their own, so a headword carrying one
+     * is safe to merge into the word it inflects. Deliberately without 〜える /
+     * 〜ける / 〜せる: those are where the potential and the causative collide
+     * with the transitive-intransitive pairs Japanese is built on.
+     */
+    private val SAFE_ENDINGS = listOf(
+        "たい", "たくない", "たかった", "たくて", "たければ", "たがる",
+        "ない", "なかった", "ます", "ました", "ません", "ませんでした",
+        "させる", "させられる", "られる", "すぎる", "すぎた", "すぎて",
+        "やすい", "にくい", "ながら", "なさい", "そう",
+        "さ", "み", "げ", "くて", "かった", "くない", "ければ", "くなる", "くなった"
+    )
 
     private const val SPOKEN_NEGATIVE = "negative (ん)"
 
