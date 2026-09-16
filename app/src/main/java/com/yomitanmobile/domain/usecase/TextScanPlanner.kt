@@ -150,6 +150,12 @@ object TextScanPlanner {
      */
     const val NAME_RARE_RANK = 20_000
 
+    /** Called by an honorific this often, a word is somebody's name. */
+    const val NAME_HONORIFIC_CERTAIN = 5
+
+    /** …unless the corpus calls it an everyday word (猫, 先生, 母). */
+    const val NAME_EVERYDAY_RANK = 1_500
+
     /**
      * An expression that is a word the reader has plus a particle: 自分で,
      * 今から, 静かに, 誰にも, 中でも. JMdict lists them as entries of their
@@ -230,9 +236,15 @@ object TextScanPlanner {
      * compounds used ten times each in the same book and are perfectly good
      * cards.
      */
-    private fun isNameOnly(token: ScanToken, entry: MergedWordEntry): Boolean =
+    private fun isNameOnly(token: ScanToken, entry: MergedWordEntry): Boolean = when {
         token.honorificHits >= NAME_HONORIFIC_HITS &&
-            (entry.frequency <= 0 || entry.frequency > NAME_RARE_RANK)
+            (entry.frequency <= 0 || entry.frequency > NAME_RARE_RANK) -> true
+        // A classmate the text keeps calling 池くん: eight くん out of 156
+        // occurrences, and the word is common enough (3 770) to pass the rule
+        // above. Anything the corpus calls everyday — 猫ちゃん, お母さん — stays.
+        else -> token.honorificHits >= NAME_HONORIFIC_CERTAIN &&
+            (entry.frequency <= 0 || entry.frequency > NAME_EVERYDAY_RANK)
+    }
 
     /**
      * Whether the stoplist covers this word — the WORD, not the spelling it

@@ -107,6 +107,11 @@ object NoiseRules {
         "だし",     // 「孫だし」: だ + し, read as 出汁
         "間分",     // 「一時間分」 cut between 時 and 間
         "ぐぬぬ",   // a growl
+        // ようこそ実力至上主義の教室へ 1 — first 400 cards
+        "はないか",  // 「つもりはないから」: は + ない + か, read as 墨魚
+        "何やつ",    // 「何やってるの」 cut between や and つ
+        "うだる",    // 「ようだねえ」 read as 茹だる
+        "しな",      // 「困るだろうしな」: し + な
     )
 
     fun foldKatakana(value: String): String = buildString(value.length) {

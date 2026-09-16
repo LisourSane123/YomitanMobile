@@ -460,24 +460,43 @@ class TextScanPlannerTest {
     }
 
     @Test
-    fun `a name that is also a word keeps its card, one that is not does not`() {
-        // Both are classmates in the same novel. 池 is also a pond, ranked
-        // 3 770 — the reader will meet that word outside this book. 平田 is a
-        // person and nothing else.
-        val alsoAWord = entry("池", frequency = 3770)
+    fun `a classmate called by an honorific is a name, an everyday word is not`() {
+        // 池 is a pond (ranked 3 770) AND a classmate: eight 池くん out of 156
+        // occurrences in one novel, and every one of those cards taught the
+        // reader "pond" from a sentence about a boy. Called by an honorific
+        // five times or more, a word that is not everyday is a person.
+        val classmate = entry("池", frequency = 3770)
         val nameOnly = entry("平田", frequency = 0)
+        // A word the corpus calls everyday keeps its card however often the
+        // book says 猫ちゃん.
+        val everydayWord = entry("猫", frequency = 800)
         val result = TextScanPlanner.plan(
             sources = listOf(source),
             words = listOf(
                 ScanToken("池", 156, honorificHits = 8),
-                ScanToken("平田", 126, honorificHits = 11)
+                ScanToken("平田", 126, honorificHits = 11),
+                ScanToken("猫", 40, honorificHits = 9)
             ),
-            entries = mapOf("池" to alsoAWord, "平田" to nameOnly),
+            entries = mapOf("池" to classmate, "平田" to nameOnly, "猫" to everydayWord),
             filters = TextScanFilters(),
-            totalTokenCount = 300
+            totalTokenCount = 400
         )
 
-        assertEquals(listOf("池"), result.selected.map { it.entry.primaryExpression })
-        assertEquals(1, result.skipped[TextScanSkipReason.PROPER_NAME])
+        assertEquals(listOf("猫"), result.selected.map { it.entry.primaryExpression })
+        assertEquals(2, result.skipped[TextScanSkipReason.PROPER_NAME])
+    }
+
+    @Test
+    fun `a word met with an honorific once or twice keeps its card`() {
+        val word = entry("先生", frequency = 2000)
+        val result = TextScanPlanner.plan(
+            sources = listOf(source),
+            words = listOf(ScanToken("先生", 30, honorificHits = 2)),
+            entries = mapOf("先生" to word),
+            filters = TextScanFilters(),
+            totalTokenCount = 100
+        )
+
+        assertEquals(listOf("先生"), result.selected.map { it.entry.primaryExpression })
     }
 }

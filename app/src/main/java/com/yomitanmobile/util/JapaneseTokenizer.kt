@@ -295,6 +295,7 @@ object JapaneseTokenizer {
                     // the two commonest "words" in the deck.
                     for (len in maxLength downTo 1) {
                         if (!isSelfContained(sentence, i, len, runEnd)) continue
+                        if (len == 1 && isCounterAfterDigit(sentence, i)) continue
                         val candidate = sentence.substring(i, i + len)
                         if (isWordPlusParticle(candidate, lexicon)) continue
                         if (losesToParticleSplit(sentence, i, len, runEnd, lexicon)) continue
@@ -305,7 +306,11 @@ object JapaneseTokenizer {
                         // A derived reading that ends by taking the だ of a
                         // grammar chain: 「言ってるだろう」 read 言ってるだ as
                         // 言う + copula and left ろう ("six") — 552 cards.
-                        if (hit != null && hit != candidate && candidate.last() == 'だ' &&
+                        // A match that ends by taking the だ of a grammar chain:
+                        // 「言ってるだろう」 read 言ってるだ as 言う + copula and
+                        // 「なんだろうか」 read なんだ, both leaving ろう ("six")
+                        // behind — 552 cards in one series, 41 in another.
+                        if (hit != null && candidate.last() == 'だ' && candidate.length > 1 &&
                             grammarFormAt(sentence, i + len - 1, runEnd) != null
                         ) continue
                         if (hit != null) {
@@ -392,6 +397,21 @@ object JapaneseTokenizer {
         }
         return false
     }
+
+    /**
+     * A counter standing right after a number — 「１位」, 「５秒」, 「１階」.
+     * The digits are not Japanese characters, so the counter was left as a
+     * one-character word of its own and became a card for "throne", "second"
+     * and "storey". Kanji numerals are handled by NoiseRules.isBareNumber,
+     * which never sees these because the digit is not part of the token.
+     */
+    private fun isCounterAfterDigit(sentence: String, start: Int): Boolean {
+        if (sentence[start] !in COUNTER_KANJI) return false
+        val previous = sentence.getOrNull(start - 1) ?: return false
+        return previous.isDigit() || previous in '０'..'９'
+    }
+
+    private const val COUNTER_KANJI = "位秒階人年本枚冊回分時歳個匹台点件度杯頭羽話巻週番倍円"
 
     private fun followedByHonorific(sentence: String, at: Int): Boolean =
         HONORIFIC_SUFFIXES.any { sentence.startsWith(it, at) }
