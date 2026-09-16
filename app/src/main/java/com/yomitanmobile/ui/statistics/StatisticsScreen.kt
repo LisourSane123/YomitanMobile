@@ -259,7 +259,7 @@ private fun CategoryDistributionCard(
                     "Distribution of all mined words by category."
                 ),
                 fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             if (totalCount <= 0) {
@@ -269,7 +269,7 @@ private fun CategoryDistributionCard(
                         "No category data yet. Mine your first words to see the chart."
                     ),
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 val donutCenterColor = MaterialTheme.colorScheme.surface
@@ -349,7 +349,7 @@ private fun CategoryDistributionCard(
                         Text(
                             text = "${stat.categoryLabel}: ${stat.count}",
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

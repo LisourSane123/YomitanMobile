@@ -388,7 +388,7 @@ private fun QueueCard(
                         item.error?.let {
                             Text(
                                 it,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.error,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
@@ -410,7 +410,7 @@ private fun QueueCard(
                     "Instalacja idzie dalej, gdy wyjdziesz z tego ekranu.",
                     "The install keeps going when you leave this screen."
                 ),
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp)
             )

@@ -336,7 +336,7 @@ fun AnkiScanScreen(
                         if (row.source.isNotBlank()) {
                             Text(
                                 row.source,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

@@ -121,7 +121,7 @@ fun FavoritesScreen(
                     Text(
                         tr("Brak ulubionych słów", "No favorite words"),
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -130,7 +130,7 @@ fun FavoritesScreen(
                             "Add a word to favorites by tapping ❤ on the detail page"
                         ),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -199,7 +199,7 @@ private fun FavoriteWordCard(
                     Text(
                         text = favorite.definitionPreview,
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )

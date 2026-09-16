@@ -70,7 +70,7 @@ fun ToggleRow(
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
         if (showDivider) {
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }

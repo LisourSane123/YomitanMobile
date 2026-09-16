@@ -169,13 +169,13 @@ private fun DictionaryCard(dictionary: DictionaryInfo, onDelete: () -> Unit) {
                     Text(
                         "${tr("Wersja", "Version")}: ${dictionary.revision}",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text(
                     "${tr("Dodano", "Added")}: ${dateFormat.format(Date(dictionary.importDate))}",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = onDelete) {

@@ -223,7 +223,7 @@ fun BackupScreen(
                         "Pick a settings.json from a backup folder. The database is untouched; the AI key is never carried over."
                     ),
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -263,8 +263,8 @@ fun BackupScreen(
                                 )
                                 Text(
                                     backup.absolutePath,
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             

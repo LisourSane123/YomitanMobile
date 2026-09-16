@@ -237,7 +237,7 @@ fun TextScanScreen(
                             // The order matters for the card order, so show it.
                             Text(
                                 currentPlan.sources.joinToString(" → ") { it.fileName },
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -730,7 +730,7 @@ private fun GrammarCounter(uses: List<GrammarUse>, isEnglish: Boolean) {
             "list = dropped as basics · tags = dropped by the dictionary's tags · " +
                 "passed = the grammar rules let it through; ✓ marks the ones that became a card"
         ),
-        fontSize = 11.sp,
+        fontSize = 12.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Spacer(Modifier.height(4.dp))
@@ -764,7 +764,7 @@ private fun GrammarCounter(uses: List<GrammarUse>, isEnglish: Boolean) {
                 "…i ${uses.size - GRAMMAR_COUNTER_LIMIT} rzadszych",
                 "…and ${uses.size - GRAMMAR_COUNTER_LIMIT} rarer ones"
             ),
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

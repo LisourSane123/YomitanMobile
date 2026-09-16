@@ -540,7 +540,7 @@ fun SettingsScreen(
                     Text(
                         tr("Aplikacja musi być zrestartowana po przywróceniu.", "App must be restarted after restore."),
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 }
@@ -798,7 +798,7 @@ fun SettingsScreen(
                                         "File ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} entries"
                                     ),
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                             }
                         }
@@ -930,7 +930,7 @@ fun SettingsScreen(
                                 if (currentDeckName.isNotBlank()) currentDeckName
                                 else tr("Nie wybrano (zostaniesz zapytany przy eksporcie)", "Not selected (you will be asked during export)"),
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         IconButton(onClick = { showDeckEditDialog = true }) {
@@ -1083,7 +1083,7 @@ fun SettingsScreen(
                                     if (dailyGoalCount.toInt() == 0) tr("Wyłączony", "Disabled")
                                     else tr("${dailyGoalCount.toInt()} fiszek dziennie", "${dailyGoalCount.toInt()} cards/day"),
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -1098,7 +1098,7 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text("50", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                            Text("50", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Slider(
                             value = dailyGoalCount,
@@ -1115,8 +1115,8 @@ fun SettingsScreen(
                         )
                         Text(
                             tr("Ustaw na 0 aby wyłączyć cel dzienny", "Set to 0 to disable daily goal"),
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -1185,7 +1185,7 @@ fun SettingsScreen(
                                         else -> tr("Systemowy", "System")
                                     },
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -1344,7 +1344,7 @@ private fun SettingsClickableItem(
                 Text(
                     subtitle,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

@@ -93,6 +93,7 @@ fun DetailScreen(
     val kanjiInfo by viewModel.kanjiInfo.collectAsState()
     val frequencies by viewModel.frequencies.collectAsState()
     val leadingDictionary by viewModel.leadingDictionary.collectAsState()
+    val aiSummaryConfigured by viewModel.aiSummaryConfigured.collectAsState()
     val generatedFurigana by viewModel.generatedFurigana.collectAsState()
     val isEnglish = LocalIsEnglish.current
     val tr = rememberTr()
@@ -299,46 +300,51 @@ fun DetailScreen(
                         }
                         // AI-flavored export — calls the LLM for a summary.
                         // Visually distinct: gradient pill + sparkle icon
-                        // so it's obvious which one will hit the API.
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 4.dp)
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            Color(0xFF7E57C2),
-                                            Color(0xFFEC407A)
+                        // so it's obvious which one will hit the API. Absent
+                        // without an API key: the call would return Disabled
+                        // and the user would have tapped the brighter of the
+                        // two buttons to get the plain card anyway.
+                        if (aiSummaryConfigured) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 4.dp)
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(
+                                                Color(0xFF7E57C2),
+                                                Color(0xFFEC407A)
+                                            )
                                         )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            IconButton(
-                                onClick = {
-                                    pendingIncludeAi = true
-                                    viewModel.exportToAnki(includeAiSummary = true)
-                                },
-                                enabled = !isExporting,
-                                modifier = Modifier.size(40.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
-                                if (isExporting) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                        color = Color.White
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Default.AutoAwesome,
-                                        contentDescription = tr(
-                                            "Eksportuj do Anki ze streszczeniem AI",
-                                            "Export to Anki with AI summary"
-                                        ),
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                IconButton(
+                                    onClick = {
+                                        pendingIncludeAi = true
+                                        viewModel.exportToAnki(includeAiSummary = true)
+                                    },
+                                    enabled = !isExporting,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    if (isExporting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = Color.White
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.AutoAwesome,
+                                            contentDescription = tr(
+                                                "Eksportuj do Anki ze streszczeniem AI",
+                                                "Export to Anki with AI summary"
+                                            ),
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -444,7 +450,7 @@ private fun WordDetailContent(
                             "Alternative forms: ${entry.alternativeExpressions.joinToString(", ")}"
                         ),
                         fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontStyle = FontStyle.Italic
                     )
                 }
@@ -589,7 +595,7 @@ private fun WordDetailContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.primaryContainer,
                                 shape = RoundedCornerShape(8.dp)
                             )
                             .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -697,7 +703,7 @@ private fun WordDetailContent(
                     FuriganaSentence(
                         example = ex,
                         fontSizeSp = 14,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        color = MaterialTheme.colorScheme.onSurface,
                         generatedFurigana = generatedFurigana,
                         modifier = Modifier.padding(start = 20.dp)
                     )
@@ -737,7 +743,7 @@ private fun WordDetailContent(
                     FuriganaSentence(
                         example = ex,
                         fontSizeSp = 14,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                        color = MaterialTheme.colorScheme.onSurface,
                         generatedFurigana = generatedFurigana
                     )
                     if (ex.en.isNotBlank()) {
@@ -800,7 +806,7 @@ private fun WordDetailContent(
                                 Text(
                                     text = kanji.meanings.joinToString(", "),
                                     fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     lineHeight = 18.sp,
                                     modifier = Modifier.padding(top = 2.dp)
                                 )
@@ -814,7 +820,7 @@ private fun WordDetailContent(
 
         // Dictionary source
         if (entry.dictionaryName.isNotBlank()) {
-            Text(tr("Źródło: ${entry.dictionaryName}", "Source: ${entry.dictionaryName}"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(horizontal = 4.dp))
+            Text(tr("Źródło: ${entry.dictionaryName}", "Source: ${entry.dictionaryName}"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
             Spacer(Modifier.height(16.dp))
         }
 

@@ -301,8 +301,8 @@ private fun DeconjugationHintsCard(
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = candidate.reason,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.75f),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -543,7 +543,7 @@ private fun MergedWordEntryCard(
                             "…and ${entry.definitions.size - 3} more"
                         ),
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 val posLabel = PartsOfSpeechFormatter.format(entry.partsOfSpeech.joinToString(" "))
@@ -574,7 +574,7 @@ private fun MergedWordEntryCard(
                     }
                     Text(
                         text = "${leading.value()} ${leading.shortDictionary()}",
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -625,7 +625,7 @@ private fun EmptySearchState(
                     }
                 },
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
             Text(
@@ -635,7 +635,7 @@ private fun EmptySearchState(
                     SearchMode.ROMAJI -> tr("np. taberu → 食べる, nomu → 飲む", "e.g. taberu → 食べる, nomu → 飲む")
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -751,7 +751,7 @@ private fun NoResultsState(
                     }
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

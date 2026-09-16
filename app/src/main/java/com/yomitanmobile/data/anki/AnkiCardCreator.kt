@@ -62,6 +62,13 @@ class AnkiCardCreator(
         private const val MAX_EXAMPLES_PER_MEANING = 1
         private const val MODEL_NAME_PREFIX = "Yomitan-Mobile"
         private const val MAX_MODEL_CREATE_RETRIES = 8
+
+        /**
+         * How many compatible note types to look at before picking one. A
+         * collection can hold hundreds of them (a refused template write used
+         * to mint one per export), and each check is a provider round trip.
+         */
+        private const val MAX_MODEL_CANDIDATES = 8
         private const val DEFAULT_PITCH_ACCENT_COLOR = "#ff8a65"
         private const val DEFAULT_PITCH_LOW_COLOR = "#777777"
         private const val DEFAULT_PITCH_KANA_COLOR = "#80cbc4"
@@ -902,7 +909,7 @@ class AnkiCardCreator(
             return null
         }
 
-        val compatibleModelId = modelList
+        val compatibleCandidates = modelList
             .entries
             .asSequence()
             // Only models belonging to THIS profile are candidates. Both
@@ -913,25 +920,39 @@ class AnkiCardCreator(
             .filter { (_, name) -> name.startsWith(profile.modelName) }
             .sortedBy { (_, name) -> modelNamePriority(name, profile) }
             .map { it.key }
-            .firstOrNull { modelId -> isModelCompatible(modelId, profile) }
+            .filter { modelId -> isModelCompatible(modelId, profile) }
+            .take(MAX_MODEL_CANDIDATES)
+            .toList()
 
-        if (compatibleModelId != null) {
-            updateModelCss(compatibleModelId, css)
+        if (compatibleCandidates.isNotEmpty()) {
+            // A model whose templates already say what this export would say
+            // needs no write at all — and on an AnkiDroid that refuses
+            // template writes, it is the only model that renders correctly.
+            // Looking for it first is what stops a refused write from minting
+            // another note type: one user's collection had 1 113 of them,
+            // 1 029 holding a single note.
+            val ready = compatibleCandidates.firstOrNull { modelId ->
+                templatesMatch(modelId, CARD_FRONT_TEMPLATE, backTemplate)
+            }
+            if (ready != null) {
+                updateModelCss(ready, css)
+                return ready
+            }
+            val modelId = compatibleCandidates.first()
+            updateModelCss(modelId, css)
             // Push the current front/back templates so layout changes
             // (re-orderable sections, AI summary slot, etc.) propagate to
-            // existing v8 cards without bumping the model name and
-            // leaving an orphan model in the user's AnkiDroid deck.
-            val pushed = updateModelTemplates(compatibleModelId, CARD_FRONT_TEMPLATE, backTemplate)
-            if (pushed) {
-                return compatibleModelId
+            // existing v8 cards.
+            if (!updateModelTemplates(modelId, CARD_FRONT_TEMPLATE, backTemplate)) {
+                // The write was refused. Keep exporting to this model: its
+                // cards render with the previous layout, which is a far
+                // smaller problem than a new note type per export.
+                android.util.Log.w(
+                    "AnkiCardCreator",
+                    "Template update refused for model=$modelId; exporting to it anyway"
+                )
             }
-            // Older AnkiDroid silently dropped the template write — the
-            // existing model still has its old back template, so a new
-            // section order would never render. Spawn a numbered variant
-            // (Yomitan-Mobile-v8-1, -2, …) so this and future exports
-            // land on a model whose template matches the current order.
-            // Pre-existing cards stay valid on the original model.
-            return createCompatibleModel(css, backTemplate, skipPrimaryName = true)
+            return modelId
         }
 
         return createCompatibleModel(css, backTemplate)
@@ -970,20 +991,18 @@ class AnkiCardCreator(
     }
 
     /**
-     * @param skipPrimaryName when true, never reuses or recreates
-     * [MODEL_NAME] — used when the caller already determined that
-     * model's template can't be updated and needs a fresh variant.
-     * Without this guard, the existing-model fallback below would loop
-     * back into the same broken model.
+     * Creates the note type, or lands on one that already carries this
+     * profile's fields. Only reached when the collection has no compatible
+     * model at all: a refused template write is no longer a reason to make
+     * one (see [getOrCreateModel]).
      */
     private fun createCompatibleModel(
         css: String,
-        backTemplate: String = CARD_BACK_TEMPLATE,
-        skipPrimaryName: Boolean = false
+        backTemplate: String = CARD_BACK_TEMPLATE
     ): Long? {
         val profile = this.profile
         val candidateNames = buildList {
-            if (!skipPrimaryName) add(profile.modelName)
+            add(profile.modelName)
             for (index in 1..MAX_MODEL_CREATE_RETRIES) {
                 add("${profile.modelName}-$index")
             }
@@ -1006,13 +1025,6 @@ class AnkiCardCreator(
             if (createdModelId != null) {
                 return createdModelId
             }
-
-            // When falling through from a failed-template-update path we
-            // must NOT reuse an existing variant either — that variant
-            // either has the same stale template or comes from an older
-            // export. Skip straight to the next numbered name so we end
-            // up on a freshly created model with the current order.
-            if (skipPrimaryName) continue
 
             val existingCandidateId = ankiApi.modelList
                 ?.entries
@@ -1078,6 +1090,26 @@ class AnkiCardCreator(
      * Update the CSS of an existing AnkiDroid model via the content resolver.
      * This ensures card style preferences are applied even when the model already exists.
      */
+    /**
+     * True when the model's templates are already the ones this export would
+     * write. Unknown (unreadable provider, older AnkiDroid) counts as false,
+     * which only means the caller tries the write it would have tried anyway.
+     */
+    private fun templatesMatch(modelId: Long, frontTemplate: String, backTemplate: String): Boolean {
+        return try {
+            val uri = Uri.parse("content://com.ichi2.anki.flashcards/models/$modelId/templates/0")
+            context.contentResolver.query(uri, arrayOf("qfmt", "afmt"), null, null, null)?.use { cursor ->
+                if (!cursor.moveToFirst()) return false
+                val front = cursor.getString(cursor.getColumnIndexOrThrow("qfmt"))
+                val back = cursor.getString(cursor.getColumnIndexOrThrow("afmt"))
+                front == frontTemplate && back == backTemplate
+            } ?: false
+        } catch (e: Exception) {
+            android.util.Log.w("AnkiCardCreator", "Reading model templates failed", e)
+            false
+        }
+    }
+
     private fun updateModelCss(modelId: Long, css: String) {
         try {
             val modelUri = Uri.parse("content://com.ichi2.anki.flashcards/models/$modelId")
@@ -1101,12 +1133,10 @@ class AnkiCardCreator(
      * "Card 1" template per model.
      */
     /**
-     * @return true if AnkiDroid accepted the template push (>= 1 row
-     * updated), false if the write was silently dropped or threw. The
-     * boolean lets [getOrCreateModel] decide whether to fall through to
-     * a fresh numbered variant so section reorder still propagates on
-     * older AnkiDroid builds that don't expose templates as writable
-     * content-provider rows.
+     * @return true if AnkiDroid accepted the push (>= 1 row updated), false
+     * if the write was silently dropped or threw. A false used to mean "make
+     * another note type"; it now only means the cards on this model keep the
+     * layout they have.
      */
     private fun updateModelTemplates(
         modelId: Long,
@@ -1123,8 +1153,7 @@ class AnkiCardCreator(
             if (rows == 0) {
                 android.util.Log.w(
                     "AnkiCardCreator",
-                    "updateModelTemplates: 0 rows updated for model=$modelId. " +
-                        "Falling through to a versioned variant so reorder still applies."
+                    "updateModelTemplates: 0 rows updated for model=$modelId"
                 )
                 false
             } else {

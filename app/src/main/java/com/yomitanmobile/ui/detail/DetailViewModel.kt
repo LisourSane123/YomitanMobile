@@ -48,7 +48,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import androidx.datastore.preferences.core.edit
 import java.time.Instant
@@ -428,6 +430,16 @@ class DetailViewModel @Inject constructor(
                 }
         }
     }
+
+    /**
+     * Whether the AI summary can run at all: the user supplies their own key
+     * and without one the call returns Disabled. The button used to sit there
+     * regardless, promising something it could not do — and it is the more
+     * eye-catching of the two export buttons.
+     */
+    val aiSummaryConfigured: StateFlow<Boolean> = appContext.dataStore.data
+        .map { prefs -> !prefs[MainActivity.CARD_AI_API_KEY].isNullOrBlank() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     /** True while a frequency rollup runs (after [makeLeading]). */
     val isRecomputingFrequencies: StateFlow<Boolean> = frequencyRecomputer.isRunning

@@ -639,7 +639,7 @@ fun CardStyleScreen(
                                 "Choose classic rendering or dots and lines with kana below"
                             ),
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 2.dp)
                         )
                         Spacer(Modifier.height(10.dp))
@@ -755,7 +755,7 @@ fun CardStyleScreen(
                                 "Use the arrows to reorder the sections below the header (pitch, meaning, kanji, etc.)."
                             ),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         val profile = com.yomitanmobile.domain.model.CardProfile
@@ -840,7 +840,7 @@ fun CardStyleScreen(
                                         "Configure the AI provider and API key. Whether to include the summary on a card is chosen per-export with the dedicated AI button."
                                     ),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             Switch(
@@ -966,7 +966,7 @@ fun CardStyleScreen(
                                         "When exporting a card, the front expression will use a random font from selected ones"
                                     ),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             Switch(
@@ -1025,7 +1025,7 @@ fun CardStyleScreen(
                                         "When exporting a card with TTS audio, a random voice from selected ones will be used"
                                     ),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             Switch(
@@ -1122,7 +1122,7 @@ private fun SettingRow(
                 Text(
                     subtitle,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             trailing()
