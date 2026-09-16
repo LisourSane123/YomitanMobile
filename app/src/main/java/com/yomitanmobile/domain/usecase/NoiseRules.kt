@@ -140,6 +140,11 @@ object NoiseRules {
         "呼ばる",    // 「三大流派と呼ばれ」: 呼ばれる read as a dated 呼ばる
         "小中",      // 「小中と同じクラス」: 小中学校 cut short
         "クッと",    // 「チクッとした」: チ + クッと
+        "乗す",      // 「馬の上に乗せられた」: the stem of 乗せる read as archaic 乗す
+        "別言",      // 「別言語を学ぶ」 cut between 言 and 語
+        "水系",      // 「水系統の初級魔術」 cut the same way
+        "年分",      // 「六年分の差」: a number, a counter and 分
+        "舐め",      // 「舐めさせて」: the bare stem of 舐める
     )
 
     fun foldKatakana(value: String): String = buildString(value.length) {

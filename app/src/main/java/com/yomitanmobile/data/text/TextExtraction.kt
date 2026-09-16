@@ -248,8 +248,19 @@ object TextExtraction {
     private fun isNavigationOrColophon(name: String, html: String): Boolean {
         val file = name.substringAfterLast('/')
         if (file == "nav.xhtml" || file == "toc.xhtml") return true
-        return NON_TEXT_BODY.containsMatchIn(html)
+        if (NON_TEXT_BODY.containsMatchIn(html)) return true
+        // Some publishers obfuscate the class names (class_s5gw), so the page
+        // is recognised by what it says: three of these phrases together are
+        // the terms of an e-book, never a scene. They put 電子書籍, 複製 and
+        // 発行 into the deck.
+        return COLOPHON_PHRASES.count { it in html } >= COLOPHON_PHRASE_HITS
     }
+
+    private val COLOPHON_PHRASES = listOf(
+        "本電子書籍", "無断", "複製", "転載", "発行者", "発行所", "著作権", "禁じ", "落丁", "乱丁"
+    )
+
+    private const val COLOPHON_PHRASE_HITS = 3
     private val RUBY_READING = Regex("""<(rt|rp)\b[^>]*>.*?</\1>""", RE_OPTIONS)
     private val BLOCK_BREAK = Regex("""</(p|div|h[1-6]|li|br|tr)\s*>|<br\s*/?>""", RE_OPTIONS)
 
