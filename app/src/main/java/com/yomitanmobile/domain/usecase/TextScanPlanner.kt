@@ -180,7 +180,8 @@ object TextScanPlanner {
     }
 
     /** Longest first, so 中には is 中 + には rather than 中に + は. */
-    private val BLEND_PARTICLES = listOf("には", "にも", "でも", "から", "まで", "とは", "で", "に", "と", "も")
+    private val BLEND_PARTICLES =
+        listOf("には", "にも", "でも", "から", "まで", "とは", "で", "に", "と", "も", "を", "は", "が")
 
     /**
      * A one- or two-kana "word" that no frequency list ranks at all.

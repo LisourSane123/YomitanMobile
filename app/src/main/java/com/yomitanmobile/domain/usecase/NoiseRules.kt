@@ -134,6 +134,12 @@ object NoiseRules {
         "何やつ",    // 「何やってるの」 cut between や and つ
         "うだる",    // 「ようだねえ」 read as 茹だる
         "しな",      // 「困るだろうしな」: し + な
+        // 無職転生 1-2 — first 5 800 cards
+        "第",        // 「第 一 話」: the heading spaces the ordinal apart
+        "ＢＢ",      // 「ビービー泣く」 in full-width letters
+        "呼ばる",    // 「三大流派と呼ばれ」: 呼ばれる read as a dated 呼ばる
+        "小中",      // 「小中と同じクラス」: 小中学校 cut short
+        "クッと",    // 「チクッとした」: チ + クッと
     )
 
     fun foldKatakana(value: String): String = buildString(value.length) {

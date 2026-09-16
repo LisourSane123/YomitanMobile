@@ -58,6 +58,14 @@ object JapaneseTokenizer {
      */
     private val HONORIFIC_SUFFIXES = listOf("くん", "君", "さん", "ちゃん", "先輩", "先生", "氏")
 
+    /**
+     * 様 names people too — エリス様 is how a servant says it — but it also
+     * follows ordinary words (神様, 王子様, お客様), so it only counts after a
+     * name-shaped token: two characters or more, or katakana. 神 stays.
+     */
+    private fun honorificSamaAt(sentence: String, at: Int, token: String): Boolean =
+        sentence.startsWith("様", at) && (token.length >= 2 || isKatakana(token[0]))
+
     /** The word list token boundaries are tested against. */
     fun interface Lexicon {
         fun contains(surface: String): Boolean
@@ -305,6 +313,9 @@ object JapaneseTokenizer {
                     for (len in maxLength downTo 1) {
                         if (!isSelfContained(sentence, i, len, runEnd)) continue
                         if (len == 1 && isCounterAfterDigit(sentence, i)) continue
+                        // A lone kanji right after katakana is the tail of a
+                        // compound, not a word: ミグルド族, パンク系, バス停.
+                        if (len == 1 && i > 0 && isKatakana(sentence[i - 1])) continue
                         if (isRareKatakanaPiece(sentence, i, len, runEnd, lexicon)) continue
                         val candidate = sentence.substring(i, i + len)
                         if (isWordPlusParticle(candidate, lexicon)) continue
@@ -344,7 +355,7 @@ object JapaneseTokenizer {
                         MutableToken(surface, base != surface, sentenceOffset + i)
                     }
                     entry.count++
-                    if (followedByHonorific(sentence, i + matchedLength)) {
+                    if (followedByHonorific(sentence, i + matchedLength, surface)) {
                         entry.honorificHits++
                     }
                     // A word first met in a too-long or too-short sentence still
@@ -459,8 +470,8 @@ object JapaneseTokenizer {
 
     private const val COUNTER_KANJI = "位秒階人年本枚冊回分時歳個匹台点件度杯頭羽話巻週番倍円"
 
-    private fun followedByHonorific(sentence: String, at: Int): Boolean =
-        HONORIFIC_SUFFIXES.any { sentence.startsWith(it, at) }
+    private fun followedByHonorific(sentence: String, at: Int, token: String): Boolean =
+        HONORIFIC_SUFFIXES.any { sentence.startsWith(it, at) } || honorificSamaAt(sentence, at, token)
 
     private class MutableToken(
         val surface: String,
