@@ -214,8 +214,10 @@ object TextExtraction {
                 if (!isDocument) continue
                 val raw = decode(zip.readBytes()).first
                 if (isNavigationOrColophon(name, raw)) continue
+                val text = htmlToText(raw)
+                if (isPublisherPage(text)) continue
                 chapters++
-                out.append(htmlToText(raw)).append('\n')
+                out.append(text).append('\n')
             }
         }
         return Result(out.toString(), TextFileFormat.EPUB, "UTF-8", chapters)
@@ -251,9 +253,25 @@ object TextExtraction {
         if (NON_TEXT_BODY.containsMatchIn(html)) return true
         // Some publishers obfuscate the class names (class_s5gw), so the page
         // is recognised by what it says: three of these phrases together are
-        // the terms of an e-book, never a scene. They put 電子書籍, 複製 and
-        // 発行 into the deck.
+        // the terms of an e-book, never a scene.
         return COLOPHON_PHRASES.count { it in html } >= COLOPHON_PHRASE_HITS
+    }
+
+    /**
+     * The other end of the book: the colophon, the staff credits, the author's
+     * profile and the e-book notice. One volume of 無職転生 had them on four
+     * pages of 120 to 285 characters each, none with three of the phrases
+     * above, and they put 発行, 株式会社, 在住, 岐阜県, 小説家 and the editors'
+     * surnames into the deck.
+     *
+     * Length is what makes a single phrase enough: a chapter runs to
+     * thousands of characters, so a page this short that also talks like a
+     * publisher is one.
+     */
+    private fun isPublisherPage(text: String): Boolean {
+        val length = text.count { !it.isWhitespace() }
+        if (length == 0 || length > MAX_PUBLISHER_PAGE_LENGTH) return false
+        return PUBLISHER_PHRASES.any { it in text }
     }
 
     private val COLOPHON_PHRASES = listOf(
@@ -261,6 +279,15 @@ object TextExtraction {
     )
 
     private const val COLOPHON_PHRASE_HITS = 3
+
+    private val PUBLISHER_PHRASES = COLOPHON_PHRASES + listOf(
+        "電子書籍", "発行", "印刷", "製本", "定価", "ISBN", "初出", "小説家になろう",
+        "著者プロフィール", "担当編集", "ブックデザイン", "企画", "株式会社", "在住",
+        "お問い合わせ", "リーディングシステム", "縦書き", "書籍化"
+    )
+
+    /** Longer than this and it is a chapter, whatever words it uses. */
+    private const val MAX_PUBLISHER_PAGE_LENGTH = 800
     private val RUBY_READING = Regex("""<(rt|rp)\b[^>]*>.*?</\1>""", RE_OPTIONS)
     private val BLOCK_BREAK = Regex("""</(p|div|h[1-6]|li|br|tr)\s*>|<br\s*/?>""", RE_OPTIONS)
 

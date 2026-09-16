@@ -444,10 +444,15 @@ object JapaneseTokenizer {
         lexicon: Lexicon
     ): Boolean {
         val end = start + length
-        if (!(start until end).all { isKatakana(sentence[it]) }) return false
-        val wholeRun = (start == 0 || !isKatakana(sentence[start - 1])) &&
-            (end >= runEnd || !isKatakana(sentence[end]))
-        if (wholeRun) return false
+        if (!isKatakana(sentence[start])) return false
+        // Either the match is all katakana and sits inside a longer run, or it
+        // simply STARTS inside one: シュンと out of 「バシュンという」, キッと out
+        // of 「バキバキッと」, デンと out of the town ウィーデン — the same cut,
+        // one kana later.
+        val startsInsideRun = start > 0 && isKatakana(sentence[start - 1])
+        val allKatakana = (start until end).all { isKatakana(sentence[it]) }
+        val runsPastEnd = allKatakana && end < runEnd && isKatakana(sentence[end])
+        if (!startsInsideRun && !runsPastEnd) return false
         if (!lexicon.ranksAvailable) return false
         return lexicon.rank(sentence.substring(start, end)) !in 1..KATAKANA_PIECE_RANK
     }

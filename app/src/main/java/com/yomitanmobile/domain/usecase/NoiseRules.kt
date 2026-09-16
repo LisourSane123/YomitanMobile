@@ -158,6 +158,16 @@ object NoiseRules {
         "水系",      // 「水系統の初級魔術」 cut the same way
         "年分",      // 「六年分の差」: a number, a counter and 分
         "舐め",      // 「舐めさせて」: the bare stem of 舐める
+        "年足",      // 「掲載から１年足らずで」 cut before らず
+        "二歩",      // 「二歩目」 cut before 目
+        "七段",      // 「七段階」 cut before 階
+        "元三",      // 「元三十四歳」 cut inside the number
+        "三教",      // 「三教科」 cut before 科
+        "という位",  // 「という位置づけ」 cut inside 位置
+        "雨降",      // 「雨降らせ」 read as 雨降 (a sea hare)
+        "仕手",      // 「…だったし手の…」: し + 手
+        "上書",      // 「加筆の上書籍化」: 上 + 書籍化
+        "友達がい",  // 「友達がいなかった」: 友達 + が + いる
     )
 
     fun foldKatakana(value: String): String = buildString(value.length) {
