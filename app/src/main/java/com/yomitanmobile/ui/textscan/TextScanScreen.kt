@@ -370,19 +370,19 @@ fun TextScanScreen(
                     )
 
                     ToggleRow(
-                        title = tr("Tylko słowa z kanji", "Only words written with kanji"),
+                        title = tr("Pomiń słowa pisane samą hiraganą", "Skip plain hiragana words"),
                         subtitle = tr(
-                            "Resztki błędów segmentacji to prawie zawsze kana (それだけ, かと, けし), " +
-                                "więc to je wycina — ale razem z zapożyczeniami (クラス, コンビニ, " +
-                                "イヤホン) i przysłówkami pisanymi kaną (そもそも, とはいえ). " +
-                                "Około jednej piątej kart.",
-                            "What is left of the segmentation errors is nearly all kana (それだけ, かと, " +
-                                "けし), so this removes them — along with every loanword (クラス, コンビニ, " +
-                                "イヤホン) and the kana adverbs (そもそも, とはいえ). About a fifth of the cards."
+                            "Zostają słowa z kanji, katakaną (クラス, コンビニ) oraz powtórzenia " +
+                                "dwóch sylab (わざわざ, そろそろ). Resztki błędów segmentacji są " +
+                                "w hiraganie (それだけ, かと, けし) — razem z nimi znikają przysłówki " +
+                                "typu そもそも czy とはいえ.",
+                            "Keeps kanji, katakana (クラス, コンビニ) and two-mora reduplications " +
+                                "(わざわざ, そろそろ). What is left of the segmentation errors is plain " +
+                                "hiragana (それだけ, かと, けし) — and so are adverbs like そもそも and とはいえ."
                         ),
-                        checked = filters.requireKanji,
+                        checked = filters.skipPlainKana,
                         onCheckedChange = { value ->
-                            viewModel.updateFilters { it.copy(requireKanji = value) }
+                            viewModel.updateFilters { it.copy(skipPlainKana = value) }
                         }
                     )
 
@@ -773,7 +773,7 @@ private fun skipReasonLabel(reason: TextScanSkipReason, isEnglish: Boolean): Str
     TextScanSkipReason.FUNCTION_WORD ->
         if (isEnglish) "Grammar / function words" else "Słowa gramatyczne"
     TextScanSkipReason.KANA_ONLY ->
-        if (isEnglish) "Written without kanji" else "Bez kanji"
+        if (isEnglish) "Plain hiragana" else "Sama hiragana"
     TextScanSkipReason.NOISE ->
         if (isEnglish) "Noise (sounds, word fragments)" else "Szum (odgłosy, fragmenty słów)"
     TextScanSkipReason.NO_DEFINITION ->

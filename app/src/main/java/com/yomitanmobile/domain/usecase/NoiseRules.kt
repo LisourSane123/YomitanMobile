@@ -80,6 +80,26 @@ object NoiseRules {
     }
 
     /**
+     * Plain hiragana, with nothing about the spelling that says "vocabulary".
+     *
+     * What survives the other rules is nearly all hiragana, because the pieces
+     * longest match breaks off a sentence are hiragana by nature (それだけ, かと,
+     * けし, たん). Three spellings are kept:
+     *  • anything carrying a kanji,
+     *  • katakana, which is how Japanese writes its loanwords (クラス, コンビニ,
+     *    イヤホン) and plenty of mimetics,
+     *  • a two-mora reduplication (わざわざ, そろそろ, ぼちぼち) — the shape of
+     *    hiragana onomatopoeia and mimetic adverbs. The two morae have to
+     *    differ, or ああああ would come back in through it.
+     */
+    fun isPlainKana(word: String): Boolean {
+        if (word.any { JapaneseTokenizer.isKanji(it) }) return false
+        if (word.any { it in 'ァ'..'ヺ' }) return false
+        if (word.length == 4 && word.take(2) == word.drop(2) && word[0] != word[1]) return false
+        return true
+    }
+
+    /**
      * What no rule can tell from a real word, in the spelling the text used.
      * Checked against the word and every spelling of the entry it resolved to.
      */

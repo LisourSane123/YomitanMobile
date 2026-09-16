@@ -35,20 +35,20 @@ data class TextScanFilters(
      */
     val minOccurrences: Int = 1,
     /**
-     * Only make cards for words written with at least one kanji.
+     * Drop words written in plain hiragana — see [NoiseRules.isPlainKana],
+     * which keeps kanji, katakana and two-mora reduplications (わざわざ).
      *
-     * The blunt instrument, and the reason it is a switch: nearly every
-     * remaining piece of segmentation noise is kana (それだけ, かと, けし, たん),
-     * because the pieces longest match breaks off a sentence are kana by
-     * nature. So is a fifth of the real vocabulary, though — every loanword
-     * (クラス, ポイント, コンビニ, イヤホン) and every kana adverb (そもそも,
-     * もしかして, とはいえ, やらかす).
+     * The blunt instrument, and the reason it is a switch: what survives the
+     * other rules is nearly all hiragana, because the pieces longest match
+     * breaks off a sentence are hiragana by nature (それだけ, かと, けし, たん).
+     * So are the kana adverbs and set phrases (そもそも, もしかして, とはいえ),
+     * which this takes with them.
      *
      * Off by default HERE so the rest of the rules can be tested without it;
      * the scanner screen turns it on (TextScanViewModel), which is what the
      * user actually sees.
      */
-    val requireKanji: Boolean = false,
+    val skipPlainKana: Boolean = false,
 
     /** Drop words already present in the AnkiDroid collection (stored scan). */
     val skipAlreadyInAnki: Boolean = true,

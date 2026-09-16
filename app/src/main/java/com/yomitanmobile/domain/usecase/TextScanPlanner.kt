@@ -448,7 +448,7 @@ object TextScanPlanner {
                     reject(TextScanSkipReason.NOISE, occurrences)
                 // Judged on the spelling the card will carry, which is the
                 // one the text used.
-                filters.requireKanji && word.none { JapaneseTokenizer.isKanji(it) } ->
+                filters.skipPlainKana && NoiseRules.isPlainKana(word) ->
                     reject(TextScanSkipReason.KANA_ONLY, occurrences)
                 isSegmentationNoise(word, entry) ->
                     reject(TextScanSkipReason.UNRANKED, occurrences)

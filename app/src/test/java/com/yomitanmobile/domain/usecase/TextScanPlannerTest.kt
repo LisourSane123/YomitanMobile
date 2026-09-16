@@ -487,26 +487,28 @@ class TextScanPlannerTest {
     }
 
     @Test
-    fun `requireKanji keeps only what is written with kanji`() {
+    fun `plain hiragana goes, kanji katakana and reduplications stay`() {
         val words = mapOf(
             "手紙" to entry("手紙", frequency = 900),
             "クラス" to entry("クラス", frequency = 1457),
-            "それだけ" to entry("それだけ", frequency = 176035)
+            "わざわざ" to entry("わざわざ", frequency = 848),
+            "それだけ" to entry("それだけ", frequency = 176035),
+            "かと" to entry("かと", frequency = 300657)
         )
+        val tokens = tokens("手紙" to 5, "クラス" to 5, "わざわざ" to 5, "それだけ" to 5, "かと" to 5)
         val kept = plan(
-            tokens("手紙" to 5, "クラス" to 5, "それだけ" to 5),
+            tokens,
             words,
-            filters = TextScanFilters(tier = FrequencyTier.ALL, requireKanji = true)
+            filters = TextScanFilters(tier = FrequencyTier.ALL, skipPlainKana = true)
         )
-        assertEquals(listOf("手紙"), kept.selected.map { it.entry.primaryExpression })
+        assertEquals(
+            listOf("手紙", "クラス", "わざわざ"),
+            kept.selected.map { it.entry.primaryExpression }.sortedBy { listOf("手紙", "クラス", "わざわざ").indexOf(it) }
+        )
         assertEquals(2, kept.skipped[TextScanSkipReason.KANA_ONLY])
 
-        val all = plan(
-            tokens("手紙" to 5, "クラス" to 5, "それだけ" to 5),
-            words,
-            filters = TextScanFilters(tier = FrequencyTier.ALL, requireKanji = false)
-        )
-        assertEquals(3, all.selected.size)
+        val all = plan(tokens, words, filters = TextScanFilters(tier = FrequencyTier.ALL, skipPlainKana = false))
+        assertEquals(5, all.selected.size)
     }
 
     @Test
