@@ -406,10 +406,17 @@ object JapaneseTokenizer {
      * which never sees these because the digit is not part of the token.
      */
     private fun isCounterAfterDigit(sentence: String, start: Int): Boolean {
-        if (sentence[start] !in COUNTER_KANJI) return false
-        val previous = sentence.getOrNull(start - 1) ?: return false
-        return previous.isDigit() || previous in '０'..'９'
+        val previous = sentence.getOrNull(start - 1)
+        if (sentence[start] in COUNTER_KANJI && previous != null && isDigit(previous)) return true
+        // The mirror image: a prefix in front of a number — 全20問, 各５点,
+        // 第3話 — left 全, 各 and 第 standing as words of their own.
+        val next = sentence.getOrNull(start + 1)
+        return sentence[start] in NUMBER_PREFIX_KANJI && next != null && isDigit(next)
     }
+
+    private fun isDigit(c: Char): Boolean = c.isDigit() || c in '０'..'９'
+
+    private const val NUMBER_PREFIX_KANJI = "全各第約計総"
 
     private const val COUNTER_KANJI = "位秒階人年本枚冊回分時歳個匹台点件度杯頭羽話巻週番倍円"
 
