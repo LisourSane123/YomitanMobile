@@ -128,6 +128,23 @@ class DictionaryDownloadViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Every frequency list this app knows, minus what is already installed.
+     *
+     * They are small (1-5 MB) and the app uses them for far more than a badge:
+     * the leading list decides the number on a card and the order of search
+     * results, and the scanner reads all of them while segmenting — which is
+     * why "install them all and choose afterwards" is a reasonable thing to
+     * want. FrequencySettings decides which one leads.
+     */
+    fun downloadAllFrequencyLists() {
+        downloadManager.enqueue(
+            availableDictionaries
+                .filter { it.category == DictionaryCategory.FREQUENCY }
+                .filterNot { isDictionaryInstalled(it) }
+        )
+    }
+
     /** Everything recommended that is not installed yet, in one go. */
     fun downloadAllRecommended() {
         downloadManager.enqueue(

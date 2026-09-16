@@ -227,6 +227,34 @@ fun DictionaryDownloadScreen(
 
             Spacer(Modifier.height(8.dp))
 
+            // …and the frequency lists in one go. They are 1-5 MB each and
+            // every one of them is used: the leading list stamps the card and
+            // orders search, the rest fill in the words it does not know, and
+            // the text scanner reads all of them while segmenting.
+            val frequencyCount = viewModel.availableDictionaries.count {
+                it.category == DictionaryCategory.FREQUENCY
+            }
+            // Nothing to offer a learner whose language has no lists.
+            if (frequencyCount > 0) {
+                OutlinedButton(
+                    onClick = { withNotifications { viewModel.downloadAllFrequencyLists() } },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        tr(
+                            "Pobierz wszystkie listy częstotliwości ($frequencyCount)",
+                            "Download all frequency lists ($frequencyCount)"
+                        )
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
             // Dictionary list
             val filteredDicts = if (selectedCategory != null) {
                 viewModel.availableDictionaries.filter { it.category == selectedCategory }
