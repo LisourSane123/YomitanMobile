@@ -152,6 +152,7 @@ class BookScanHarness {
         val words = object : JapaneseTokenizer.Lexicon {
             override fun contains(surface: String) = surface in lexicon
             override fun rank(surface: String) = common[surface] ?: 0
+            override val ranksAvailable: Boolean get() = common.isNotEmpty()
         }
         val accumulator = JapaneseTokenizer.Accumulator()
         for ((_, document) in documents) accumulator.add(document.text, words)

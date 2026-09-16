@@ -147,5 +147,16 @@ class KatakanaOnomatopoeiaTest {
         val bases = JapaneseTokenizer.tokenize("ゲームセンターに行く。", lexicon).map { it.baseForm }
 
         assertTrue(bases.toString(), "ゲーム" in bases)
+
+        // …and with frequency data, only because ゲーム is a word the corpus
+        // knows. シルフ out of シルフィエット (44 127) is a piece of a name.
+        val ranked = object : JapaneseTokenizer.Lexicon {
+            private val ranks = mapOf("ゲーム" to 1470, "センター" to 7750, "シルフ" to 44127, "行く" to 50)
+            override fun contains(surface: String) = surface in ranks
+            override fun rank(surface: String) = ranks[surface] ?: 0
+            override val ranksAvailable: Boolean get() = true
+        }
+        assertTrue("ゲーム" in JapaneseTokenizer.tokenize("ゲームセンターに行く。", ranked).map { it.baseForm })
+        assertTrue("シルフ" !in JapaneseTokenizer.tokenize("シルフィエットに行く。", ranked).map { it.baseForm })
     }
 }

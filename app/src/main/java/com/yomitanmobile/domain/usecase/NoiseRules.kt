@@ -56,6 +56,8 @@ object NoiseRules {
         // A number with its counter — 十人, 三十分, 二本, 四人 — is the same
         // non-word once the numeral is more than 一: 一人, 一度, 一歩 and 一気
         // are vocabulary in their own right, 十人 and 二十四時 are arithmetic.
+        // 第七, 第十: the ordinal prefix and a numeral, nothing else.
+        if (word.length >= 2 && word[0] == '第' && word.drop(1).all { it in NUMERALS }) return true
         val numerals = word.takeWhile { it in NUMERALS }
         val rest = word.drop(numerals.length)
         return numerals.isNotEmpty() && numerals != "一" && rest.length == 1 && rest[0] in COUNTERS

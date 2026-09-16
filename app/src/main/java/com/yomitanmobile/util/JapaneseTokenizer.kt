@@ -76,6 +76,15 @@ object JapaneseTokenizer {
 
         /** Ranked, and inside the band of forms people actually use. */
         fun isCommon(surface: String): Boolean = rank(surface) in 1..COMMON_RANK
+
+        /**
+         * Whether [rank] can answer at all. False with no frequency list
+         * installed, and for the bare-set lexicons tests build — every rule
+         * that reads a number has to fall back to "keep it" then, or a
+         * frequency-less install would quietly lose words (ゲーム out of
+         * ゲームセンター among them).
+         */
+        val ranksAvailable: Boolean get() = false
     }
 
     /**
@@ -296,6 +305,7 @@ object JapaneseTokenizer {
                     for (len in maxLength downTo 1) {
                         if (!isSelfContained(sentence, i, len, runEnd)) continue
                         if (len == 1 && isCounterAfterDigit(sentence, i)) continue
+                        if (isRareKatakanaPiece(sentence, i, len, runEnd, lexicon)) continue
                         val candidate = sentence.substring(i, i + len)
                         if (isWordPlusParticle(candidate, lexicon)) continue
                         if (losesToParticleSplit(sentence, i, len, runEnd, lexicon)) continue
@@ -405,6 +415,35 @@ object JapaneseTokenizer {
      * and "storey". Kanji numerals are handled by NoiseRules.isBareNumber,
      * which never sees these because the digit is not part of the token.
      */
+    /**
+     * A piece of a longer katakana run that the corpus barely knows.
+     *
+     * Katakana is how a story writes its names, and longest match finds
+     * dictionary words inside them: グレイラット gave 75 cards for グレイ and 75
+     * for ラット, ルーデウス (the protagonist) gave 222 for デウス, シルフィエット
+     * gave 169 for シルフ, フィリップ 89 for リップ. A piece that covers the
+     * whole run is left alone — so is a common word inside a compound, because
+     * ゲーム out of ゲームセンター is still the word the reader needs.
+     */
+    private fun isRareKatakanaPiece(
+        sentence: String,
+        start: Int,
+        length: Int,
+        runEnd: Int,
+        lexicon: Lexicon
+    ): Boolean {
+        val end = start + length
+        if (!(start until end).all { isKatakana(sentence[it]) }) return false
+        val wholeRun = (start == 0 || !isKatakana(sentence[start - 1])) &&
+            (end >= runEnd || !isKatakana(sentence[end]))
+        if (wholeRun) return false
+        if (!lexicon.ranksAvailable) return false
+        return lexicon.rank(sentence.substring(start, end)) !in 1..KATAKANA_PIECE_RANK
+    }
+
+    /** How common a katakana word has to be to be read out of a longer run. */
+    private const val KATAKANA_PIECE_RANK = 20_000
+
     private fun isCounterAfterDigit(sentence: String, start: Int): Boolean {
         val previous = sentence.getOrNull(start - 1)
         if (sentence[start] in COUNTER_KANJI && previous != null && isDigit(previous)) return true

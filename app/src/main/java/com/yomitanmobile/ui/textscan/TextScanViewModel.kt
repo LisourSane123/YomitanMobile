@@ -175,8 +175,17 @@ class TextScanViewModel @Inject constructor(
                 val tokens = withContext(Dispatchers.Default) {
                     val words = object : JapaneseTokenizer.Lexicon {
                         override fun contains(surface: String) = surface in lexicon
+                        // The rank itself, not only the yes/no: several rules
+                        // compare two numbers (a noun against the verb it is
+                        // the stem of, a katakana piece against the run it sits
+                        // in). Leaving rank() at its default made the app read
+                        // every word as unranked while the offline harness read
+                        // the real numbers — the two disagreed on every one of
+                        // those rules.
+                        override fun rank(surface: String) = common[surface] ?: 0
                         override fun isCommon(surface: String) =
                             common.isEmpty() || surface in common
+                        override val ranksAvailable: Boolean get() = common.isNotEmpty()
                     }
                     val accumulator = JapaneseTokenizer.Accumulator()
                     for (document in documents) {
