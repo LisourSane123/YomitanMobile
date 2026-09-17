@@ -36,5 +36,23 @@ data class AnkiCollectionWord(
 
     /** When the scan that produced this row ran (epoch millis). */
     @ColumnInfo(name = "scanned_at")
-    val scannedAt: Long = 0L
+    val scannedAt: Long = 0L,
+
+    /**
+     * Whether a card carrying this word is mature — Anki's own definition, an
+     * interval of 21 days or more, and not suspended.
+     *
+     * "I have a card for this" and "I know this" are different claims, and the
+     * app used to make the first while meaning the second. A word added
+     * yesterday is not knowledge; the figures that say how much of a text the
+     * reader understands, and how much of a kanji grade they cover, are only
+     * honest about the mature half.
+     *
+     * False also covers "the provider would not answer the maturity search"
+     * (older AnkiDroid), which is why nothing is ever HIDDEN on the strength
+     * of this column — it only ever adds a second, stricter number next to the
+     * first.
+     */
+    @ColumnInfo(name = "mature")
+    val mature: Boolean = false
 )

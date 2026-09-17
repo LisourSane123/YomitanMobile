@@ -22,7 +22,9 @@ data class KanjiBucketState(
     val grade: Int = 0,
     val jlpt: Int = 0,
     val total: Int = 0,
-    val known: Int = 0
+    val known: Int = 0,
+    /** Of [known], how many are carried by a card the user actually knows. */
+    val mature: Int = 0
 ) {
     val coverage: Float get() = if (total == 0) 0f else known.toFloat() / total
 }
@@ -56,6 +58,14 @@ class KanjiViewModel @Inject constructor(
     private val _knownKanji = MutableStateFlow<Set<String>>(emptySet())
     val knownKanji: StateFlow<Set<String>> = _knownKanji.asStateFlow()
 
+    /**
+     * Kanji carried by a MATURE card. A subset of [knownKanji] — the screen
+     * shows both, because "I made a card yesterday" and "I know this" are
+     * different claims and only the second is worth a coverage bar.
+     */
+    private val _matureKanji = MutableStateFlow<Set<String>>(emptySet())
+    val matureKanji: StateFlow<Set<String>> = _matureKanji.asStateFlow()
+
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -82,6 +92,9 @@ class KanjiViewModel @Inject constructor(
             _loading.value = true
             val known = runCatching { ankiCollectionStore.knownKanji() }.getOrDefault(emptySet())
             _knownKanji.value = known
+            val mature = runCatching { ankiCollectionStore.knownKanji(matureOnly = true) }
+                .getOrDefault(emptySet())
+            _matureKanji.value = mature
 
             val grades = repository.kanjiCountsByGrade()
             val jlpt = repository.kanjiCountsByJlpt()
@@ -89,29 +102,25 @@ class KanjiViewModel @Inject constructor(
             _empty.value = all.isEmpty()
             _needsReimport.value = all.isNotEmpty() && grades.isEmpty() && jlpt.isEmpty()
 
-            val knownPerBucket = { rows: List<KanjiEntry> -> rows.count { it.kanji in known } }
             val buckets = ArrayList<KanjiBucketState>()
-            buckets += KanjiBucketState(
-                label = ALL,
-                total = all.size,
-                known = knownPerBucket(all)
-            )
-            for (row in jlpt) {
-                val members = all.filter { it.jlpt == row.bucket }
-                buckets += KanjiBucketState(
-                    label = "N${row.bucket}",
-                    jlpt = row.bucket,
+            fun bucketOf(label: String, members: List<KanjiEntry>, grade: Int = 0, jlpt: Int = 0) =
+                KanjiBucketState(
+                    label = label,
+                    grade = grade,
+                    jlpt = jlpt,
                     total = members.size,
-                    known = knownPerBucket(members)
+                    known = members.count { it.kanji in known },
+                    mature = members.count { it.kanji in mature }
                 )
+            buckets += bucketOf(ALL, all)
+            for (row in jlpt) {
+                buckets += bucketOf("N${row.bucket}", all.filter { it.jlpt == row.bucket }, jlpt = row.bucket)
             }
             for (row in grades) {
-                val members = all.filter { it.grade == row.bucket }
-                buckets += KanjiBucketState(
-                    label = gradeLabel(row.bucket),
-                    grade = row.bucket,
-                    total = members.size,
-                    known = knownPerBucket(members)
+                buckets += bucketOf(
+                    gradeLabel(row.bucket),
+                    all.filter { it.grade == row.bucket },
+                    grade = row.bucket
                 )
             }
             _buckets.value = buckets

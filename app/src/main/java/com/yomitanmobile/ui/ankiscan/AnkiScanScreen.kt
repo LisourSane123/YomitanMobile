@@ -198,6 +198,28 @@ fun AnkiScanScreen(
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            // Two different claims, and only the second one is
+                            // about knowing anything: a card added yesterday
+                            // proves you own a card.
+                            Text(
+                                if (result.matureWordCount > 0) {
+                                    tr(
+                                        "W tym ${result.matureWordCount} na fiszkach dojrzałych " +
+                                            "(interwał od 21 dni, nieuśpione)",
+                                        "Of those, ${result.matureWordCount} sit on mature cards " +
+                                            "(interval 21 days or more, not suspended)"
+                                    )
+                                } else {
+                                    tr(
+                                        "Twoja wersja AnkiDroida nie podała dojrzałości fiszek — " +
+                                            "pozostaje liczba słów, jakie masz w kolekcji.",
+                                        "Your AnkiDroid did not report card maturity — the word " +
+                                            "count is all there is."
+                                    )
+                                },
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 tr(

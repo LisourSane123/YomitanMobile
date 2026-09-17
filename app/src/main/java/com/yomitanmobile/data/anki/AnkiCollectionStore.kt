@@ -35,6 +35,8 @@ class AnkiCollectionStore @Inject constructor(
     data class ScanSummary(
         val noteCount: Int,
         val wordCount: Int,
+        /** Of [wordCount], how many have a mature card. 0 on an old provider. */
+        val matureWordCount: Int = 0,
         val scannedAt: Long,
         /** False when the provider could not be read at all. */
         val available: Boolean,
@@ -42,13 +44,15 @@ class AnkiCollectionStore @Inject constructor(
         val truncated: Boolean = false
     ) {
         companion object {
-            val UNAVAILABLE = ScanSummary(0, 0, 0L, available = false)
+            val UNAVAILABLE = ScanSummary(0, 0, 0, 0L, available = false)
         }
     }
 
     private val cacheLock = Mutex()
     @Volatile
     private var cachedWords: Set<String>? = null
+    @Volatile
+    private var cachedMature: Set<String>? = null
 
     /** Word count of the stored scan, for badges and settings rows. */
     fun observeWordCount(): Flow<Int> = dao.observeCount()
@@ -67,15 +71,34 @@ class AnkiCollectionStore @Inject constructor(
                 Log.w(TAG, "Collection scan unavailable; keeping the previous result")
                 return@withContext ScanSummary.UNAVAILABLE
             }
+            // A second, cheap sweep: which of those words the user actually
+            // knows. Empty on an older provider, and that is fine — nothing is
+            // hidden on the strength of maturity, it only adds a stricter
+            // number beside the first.
+            val mature = runCatching { index.scanMature(deckNames) }
+                .getOrElse {
+                    Log.w(TAG, "Maturity sweep failed; treating nothing as mature", it)
+                    emptySet()
+                }
+
             val now = System.currentTimeMillis()
             val rows = scan.wordSources.map { (word, source) ->
-                AnkiCollectionWord(word = word, source = source, scannedAt = now)
+                AnkiCollectionWord(
+                    word = word,
+                    source = source,
+                    scannedAt = now,
+                    mature = word in mature
+                )
             }
             dao.replaceAll(rows)
-            cacheLock.withLock { cachedWords = rows.mapTo(HashSet(rows.size)) { it.word } }
+            cacheLock.withLock {
+                cachedWords = rows.mapTo(HashSet(rows.size)) { it.word }
+                cachedMature = null
+            }
             ScanSummary(
                 noteCount = scan.noteCount,
                 wordCount = rows.size,
+                matureWordCount = rows.count { it.mature },
                 scannedAt = now,
                 available = true,
                 truncated = scan.truncated
@@ -182,7 +205,30 @@ class AnkiCollectionStore @Inject constructor(
 
     suspend fun clear() = withContext(Dispatchers.IO) {
         runCatching { dao.deleteAll() }
-        cacheLock.withLock { cachedWords = emptySet() }
+        cacheLock.withLock {
+            cachedWords = emptySet()
+            cachedMature = emptySet()
+        }
+    }
+
+    /**
+     * Words the collection holds a MATURE card for. See [AnkiCollectionWord].
+     *
+     * Empty means "nothing is known to be mature", which is also what an older
+     * provider and a pre-maturity scan produce — so callers use it to state a
+     * second figure, never to decide that a word is missing.
+     */
+    suspend fun matureWords(): Set<String> {
+        cachedMature?.let { return it }
+        return cacheLock.withLock {
+            cachedMature ?: withContext(Dispatchers.IO) {
+                runCatching { dao.getMatureWords().toHashSet() }
+                    .getOrElse {
+                        Log.w(TAG, "Reading mature words failed", it)
+                        emptySet()
+                    }
+            }.also { cachedMature = it }
+        }
     }
 
     /**
@@ -193,8 +239,8 @@ class AnkiCollectionStore @Inject constructor(
      * the note on the scan itself — but it is the only honest answer the app
      * can give without reading review history.
      */
-    suspend fun knownKanji(): Set<String> {
-        val all = words()
+    suspend fun knownKanji(matureOnly: Boolean = false): Set<String> {
+        val all = if (matureOnly) matureWords() else words()
         if (all.isEmpty()) return emptySet()
         val out = HashSet<String>(2048)
         for (word in all) {

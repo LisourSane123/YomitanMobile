@@ -51,6 +51,12 @@ interface AnkiCollectionWordDao {
     @Query("SELECT word FROM anki_collection_words")
     suspend fun getAllWords(): List<String>
 
+    @Query("SELECT word FROM anki_collection_words WHERE mature = 1")
+    suspend fun getMatureWords(): List<String>
+
+    @Query("SELECT COUNT(*) FROM anki_collection_words WHERE mature = 1")
+    suspend fun matureCount(): Int
+
     @Query("SELECT * FROM anki_collection_words ORDER BY source, word LIMIT :limit OFFSET :offset")
     suspend fun getPage(limit: Int, offset: Int): List<AnkiCollectionWord>
 

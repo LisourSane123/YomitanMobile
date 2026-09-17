@@ -145,12 +145,25 @@ fun KanjiBrowseScreen(
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            tr(
-                                "„Znane” znaczy: jakaś fiszka w kolekcji zawiera ten znak. " +
-                                    "To nie jest pomiar pamięci.",
-                                "“Known” means: some card in the collection carries this " +
-                                    "character. It is not a measure of recall."
-                            ),
+                            if (bucket.mature > 0) {
+                                tr(
+                                    "Z tego ${bucket.mature} na fiszkach dojrzałych " +
+                                        "(interwał 21 dni lub więcej) — to jest ta liczba, " +
+                                        "która mówi coś o pamięci.",
+                                    "Of those, ${bucket.mature} sit on mature cards (interval " +
+                                        "21 days or more) — that is the number that says " +
+                                        "something about memory."
+                                )
+                            } else {
+                                tr(
+                                    "„Znane” znaczy: jakaś fiszka w kolekcji zawiera ten znak. " +
+                                        "To nie jest pomiar pamięci — przeskanuj kolekcję, " +
+                                        "żeby poznać też dojrzałość kart.",
+                                    "“Known” means: some card in the collection carries this " +
+                                        "character. It is not a measure of recall — rescan the " +
+                                        "collection to learn card maturity too."
+                                )
+                            },
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

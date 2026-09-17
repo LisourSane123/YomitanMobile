@@ -50,7 +50,7 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         AnkiCollectionWord::class,
         AudioFile::class
     ],
-    version = 24,
+    version = 25,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -89,6 +89,22 @@ abstract class AppDatabase : RoomDatabase() {
          *
          * The ALTERs must match what Room generates for the entities verbatim.
          */
+        /**
+         * Maturity on the stored collection scan.
+         *
+         * Defaults to 0, which reads as "this scan predates the maturity
+         * sweep" — the same thing as "the provider would not answer it". Both
+         * are safe: the column only ever adds a stricter number beside the
+         * existing one, it never hides a word from the duplicate check.
+         */
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `anki_collection_words` ADD COLUMN `mature` INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         /**
          * A kanji's own metadata: grade, JLPT, strokes, newspaper rank.
          *

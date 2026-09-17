@@ -180,6 +180,37 @@ class AnkiCollectionIndex @Inject constructor(
         }
     }
 
+    /**
+     * The words whose cards are MATURE — interval of three weeks or more, and
+     * not suspended.
+     *
+     * A second sweep rather than a per-note card lookup: AnkiDroid's provider
+     * has no bulk card query, so asking each note for its cards would be one
+     * binder round trip per note, tens of thousands of them. The search string
+     * does the same job on Anki's side in one pass.
+     *
+     * Why it is worth a sweep at all: "I have a card for this" and "I know
+     * this" are different claims, and the app has been making the first while
+     * meaning the second — in the duplicate check, in the "you know X% of this
+     * text" figure, and in the kanji coverage bar. A card added yesterday
+     * counts for nothing.
+     *
+     * Empty when the provider refuses the search (older AnkiDroid), which
+     * degrades to the old behaviour: everything counts as known, never the
+     * other way round.
+     */
+    suspend fun scanMature(
+        deckNames: List<String> = emptyList(),
+        maxNotes: Int = MAX_NOTES
+    ): Set<String> = withContext(Dispatchers.IO) {
+        if (!hasPermission()) return@withContext emptySet()
+        val decks = buildSearches(deckNames).firstOrNull { !it.isNullOrEmpty() && it != ALL_NOTES_SEARCH }
+        val search = listOfNotNull(decks, MATURE_SEARCH).joinToString(" ")
+        val scan = scanNotes(search, maxNotes) ?: return@withContext emptySet()
+        Log.i(TAG, "Mature sweep: ${scan.noteCount} notes -> ${scan.wordCount} word keys")
+        scan.wordSources.keys
+    }
+
     /** Runs one search; null means the provider refused it. */
     private fun scanNotes(search: String?, maxNotes: Int): Scan? {
         val sources = LinkedHashMap<String, String>(4096)
@@ -293,6 +324,13 @@ class AnkiCollectionIndex @Inject constructor(
         const val TAG = "AnkiCollectionIndex"
         /** Anki search that matches every note in the collection. */
         const val ALL_NOTES_SEARCH = "deck:*"
+
+        /**
+         * Anki's own definition of a mature card: an interval of 21 days or
+         * more. Suspended cards are excluded — a suspended card is one the
+         * user took out of rotation, whatever its interval says.
+         */
+        const val MATURE_SEARCH = "prop:ivl>=21 -is:suspended"
         /** Safety valve for very large collections. */
         const val MAX_NOTES = 200_000
     }
