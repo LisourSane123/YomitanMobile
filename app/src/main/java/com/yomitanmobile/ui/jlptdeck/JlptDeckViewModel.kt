@@ -109,6 +109,26 @@ class JlptDeckViewModel @Inject constructor(
      * Keyed by expression + reading (see `previewKeyOf`), so a re-analysis
      * that produces the same word keeps the mark.
      */
+    /**
+     * Whether the generated words are taught to the stored collection scan.
+     *
+     * Normally yes: generated cards stay out of `exported_words` on purpose,
+     * so the stored scan is the ONLY record that they exist, and without it a
+     * second run offers the very words it just created.
+     *
+     * Off is for building a deck you do not yet trust. The scan is the app's
+     * memory of the collection, and teaching it about a deck that turns out
+     * to be wrong means every later run skips those words — with nothing to
+     * undo it but a full rescan. Leaving it off keeps the memory untouched
+     * until the user rescans, which is the honest source anyway.
+     */
+    private val _recordAsKnown = MutableStateFlow(true)
+    val recordAsKnown: StateFlow<Boolean> = _recordAsKnown.asStateFlow()
+
+    fun setRecordAsKnown(value: Boolean) {
+        _recordAsKnown.value = value
+    }
+
     private val _suspendedKeys = MutableStateFlow<Set<String>>(emptySet())
     val suspendedKeys: StateFlow<Set<String>> = _suspendedKeys.asStateFlow()
 
@@ -425,7 +445,7 @@ class JlptDeckViewModel @Inject constructor(
                         // has to learn about them straight away — otherwise
                         // running the generator again offers the very words it
                         // just created.
-                        if (batch.added > 0) {
+                        if (batch.added > 0 && _recordAsKnown.value) {
                             ankiCollectionStore.addWords(
                                 entries.flatMap {
                                     listOf(it.expression, it.reading)
@@ -438,7 +458,8 @@ class JlptDeckViewModel @Inject constructor(
                                 JlptDeckResult(
                                     deckName = deck,
                                     added = batch.added,
-                                    failed = batch.failed
+                                    failed = batch.failed,
+                                    recordedAsKnown = _recordAsKnown.value
                                 )
                             )
                         )

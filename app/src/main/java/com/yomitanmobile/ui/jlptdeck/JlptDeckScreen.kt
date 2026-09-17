@@ -90,6 +90,7 @@ fun JlptDeckScreen(
     val progress by viewModel.progress.collectAsState()
     val taggedWordCount by viewModel.taggedWordCount.collectAsState()
     val suspendedKeys by viewModel.suspendedKeys.collectAsState()
+    val recordAsKnown by viewModel.recordAsKnown.collectAsState()
 
     // CreateDocument rather than a folder pick: the user names the file and
     // puts it where their Anki is, and the app never needs storage permission.
@@ -107,9 +108,11 @@ fun JlptDeckScreen(
                         // Not necessarily errors: AnkiDroid returns fewer ids
                         // when it skips notes it considers duplicates, and the
                         // batch cannot tell the two apart.
-                        if (event.result.failed > 0) " (${event.result.failed} pominięte: duplikaty lub błędy)" else "",
+                        (if (event.result.failed > 0) " (${event.result.failed} pominięte: duplikaty lub błędy)" else "") +
+                        (if (!event.result.recordedAsKnown) " — skan kolekcji nietknięty" else ""),
                     "Created ${event.result.added} cards in deck “${event.result.deckName}”" +
-                        if (event.result.failed > 0) " (${event.result.failed} skipped: duplicates or errors)" else ""
+                        (if (event.result.failed > 0) " (${event.result.failed} skipped: duplicates or errors)" else "") +
+                        (if (!event.result.recordedAsKnown) " — the collection scan was left untouched" else "")
                 )
                 is JlptDeckEvent.Error -> tr("Błąd: ${event.message}", "Error: ${event.message}")
                 JlptDeckEvent.PermissionRequired -> {
@@ -270,6 +273,24 @@ fun JlptDeckScreen(
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(includeUnranked = value) }
                         }
+                    )
+
+                    ToggleRow(
+                        title = tr(
+                            "Zapamiętaj utworzone słowa jako posiadane",
+                            "Remember the created words as owned"
+                        ),
+                        subtitle = tr(
+                            "Zapisany skan kolekcji to jedyny ślad po tej talii — fiszki " +
+                                "generowane nie trafiają do statystyk kopania. Wyłącz przy " +
+                                "talii próbnej: skan zostanie nietknięty, aż zrobisz go sam.",
+                            "The stored collection scan is the only record this deck exists — " +
+                                "generated cards stay out of the mining statistics. Turn it off " +
+                                "for a trial deck: the scan stays untouched until you rescan."
+                        ),
+                        checked = recordAsKnown,
+                        onCheckedChange = viewModel::setRecordAsKnown,
+                        showDivider = true
                     )
 
                     ToggleRow(

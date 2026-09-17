@@ -84,5 +84,13 @@ data class JlptDeckProgress(
 data class JlptDeckResult(
     val deckName: String,
     val added: Int,
-    val failed: Int
+    val failed: Int,
+    /**
+     * Whether the written words were taught to the stored collection scan.
+     *
+     * Reported because the two outcomes differ in a way only shows up later:
+     * with it off, a re-run offers these words again — which is the point when
+     * the deck was a trial, and a surprise otherwise.
+     */
+    val recordedAsKnown: Boolean = true
 )

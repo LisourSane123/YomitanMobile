@@ -109,6 +109,7 @@ fun TextScanScreen(
     val plan by viewModel.plan.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val suspendedKeys by viewModel.suspendedKeys.collectAsState()
+    val recordAsKnown by viewModel.recordAsKnown.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -118,9 +119,11 @@ fun TextScanScreen(
                         // Not necessarily errors: AnkiDroid returns fewer ids
                         // when it skips notes it considers duplicates, and the
                         // batch cannot tell the two apart.
-                        if (event.result.failed > 0) " (${event.result.failed} pominięte: duplikaty lub błędy)" else "",
+                        (if (event.result.failed > 0) " (${event.result.failed} pominięte: duplikaty lub błędy)" else "") +
+                        (if (!event.result.recordedAsKnown) " — skan kolekcji nietknięty" else ""),
                     "Created ${event.result.added} cards in deck “${event.result.deckName}”" +
-                        if (event.result.failed > 0) " (${event.result.failed} skipped: duplicates or errors)" else ""
+                        (if (event.result.failed > 0) " (${event.result.failed} skipped: duplicates or errors)" else "") +
+                        (if (!event.result.recordedAsKnown) " — the collection scan was left untouched" else "")
                 )
                 is TextScanEvent.Error -> tr("Błąd: ${event.message}", "Error: ${event.message}")
                 is TextScanEvent.FileTooLarge -> tr(
@@ -451,6 +454,25 @@ fun TextScanScreen(
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(useSourceSentences = value) }
                         }
+                    )
+
+                    ToggleRow(
+                        title = tr(
+                            "Zapamiętaj utworzone słowa jako posiadane",
+                            "Remember the created words as owned"
+                        ),
+                        subtitle = tr(
+                            "Zapisany skan kolekcji to jedyny ślad po tej talii — fiszki " +
+                                "generowane nie trafiają do statystyk kopania. Wyłącz przy " +
+                                "talii próbnej: kolejny tom nie zostanie zatruty, a skan " +
+                                "zrobisz sam, kiedy talia będzie dobra.",
+                            "The stored collection scan is the only record this deck exists — " +
+                                "generated cards stay out of the mining statistics. Turn it off " +
+                                "for a trial deck: the next volume's scan stays clean, and you " +
+                                "rescan yourself once the deck is good."
+                        ),
+                        checked = recordAsKnown,
+                        onCheckedChange = viewModel::setRecordAsKnown
                     )
 
                     ToggleRow(

@@ -322,6 +322,19 @@ class TextScanViewModel @Inject constructor(
      * dropped. Here the case is even stronger: a book scan's first hundred
      * cards are, by construction, the commonest words in the language.
      */
+    /**
+     * Whether the generated words are taught to the stored collection scan.
+     * See the same field on `JlptDeckViewModel`; here the case for turning it
+     * off is stronger, because a scan of the next volume reads that memory and
+     * a bad deck poisons every run after it.
+     */
+    private val _recordAsKnown = MutableStateFlow(true)
+    val recordAsKnown: StateFlow<Boolean> = _recordAsKnown.asStateFlow()
+
+    fun setRecordAsKnown(value: Boolean) {
+        _recordAsKnown.value = value
+    }
+
     private val _suspendedKeys = MutableStateFlow<Set<String>>(emptySet())
     val suspendedKeys: StateFlow<Set<String>> = _suspendedKeys.asStateFlow()
 
@@ -502,7 +515,7 @@ class TextScanViewModel @Inject constructor(
                         // Same as the JLPT generator: teach the stored scan
                         // about the cards we just wrote, so a second scan of
                         // the next volume does not offer them again.
-                        if (batch.added > 0) {
+                        if (batch.added > 0 && _recordAsKnown.value) {
                             ankiCollectionStore.addWords(
                                 entries.flatMap {
                                     listOf(it.expression, it.reading)
@@ -515,7 +528,8 @@ class TextScanViewModel @Inject constructor(
                                 JlptDeckResult(
                                     deckName = deck,
                                     added = batch.added,
-                                    failed = batch.failed
+                                    failed = batch.failed,
+                                    recordedAsKnown = _recordAsKnown.value
                                 )
                             )
                         )
