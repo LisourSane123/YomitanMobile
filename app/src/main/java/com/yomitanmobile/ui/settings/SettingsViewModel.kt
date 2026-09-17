@@ -91,10 +91,7 @@ class SettingsViewModel @Inject constructor(
      * list when AnkiDroid isn't installed / permission isn't granted, in which
      * case the dialog falls back to the manual text field.
      */
-    suspend fun getAvailableDecks(): List<String> =
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            ankiCardCreator.getAvailableDecks()
-        }
+    suspend fun getAvailableDecks(): List<String> = ankiCardCreator.getAvailableDecks()
 
     val dictionaries: StateFlow<List<DictionaryInfo>> = getDictionariesUseCase.invoke()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

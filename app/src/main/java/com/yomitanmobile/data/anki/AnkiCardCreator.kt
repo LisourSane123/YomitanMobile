@@ -892,8 +892,20 @@ class AnkiCardCreator(
         return ankiApi.addNewDeck(deckName)
     }
 
-    fun getAvailableDecks(): List<String> {
-        return try {
+    /**
+     * The collection's deck names.
+     *
+     * Suspending and on [Dispatchers.IO] because `deckList` is a binder round
+     * trip into AnkiDroid, which opens the collection to answer it — seconds
+     * on a large one, and longer when AnkiDroid is cold. It used to be a plain
+     * blocking call, and the deck generator's `init` ran it on the main
+     * thread: the screen came up frozen and the back button did nothing until
+     * the provider answered. The dispatcher lives here rather than at the call
+     * sites so the next caller cannot repeat that (only one of the three
+     * wrapped it).
+     */
+    suspend fun getAvailableDecks(): List<String> = withContext(Dispatchers.IO) {
+        try {
             ankiApi.deckList?.values?.toList()?.sorted() ?: emptyList()
         } catch (_: Exception) {
             emptyList()

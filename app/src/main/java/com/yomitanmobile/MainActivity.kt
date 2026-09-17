@@ -17,11 +17,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.yomitanmobile.ui.common.LocalIsEnglish
+import com.yomitanmobile.ui.common.isEnglishUi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
@@ -208,38 +211,43 @@ class MainActivity : ComponentActivity() {
             }
 
             YomitanMobileTheme(darkTheme = isDarkTheme) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    lastCrash?.let { trace ->
-                        CrashReportDialog(trace = trace, onDismiss = { lastCrash = null })
-                    }
-                    startRoute?.let { route ->
-                        val navController = rememberNavController()
-                        AppScaffold(
-                            navController = navController,
-                            startDestination = route,
-                            focusSearch = shouldFocusSearch,
-                            sharedSearchQuery = sharedSearchQuery,
-                            sharedSearchNonce = sharedSearchNonce
-                        )
+                // Every `tr(pl, en)` literal in the app reads this. Nothing
+                // provided it, so the default (`false`) stood everywhere and an
+                // English device saw a Polish interface.
+                CompositionLocalProvider(LocalIsEnglish provides isEnglishUi()) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        lastCrash?.let { trace ->
+                            CrashReportDialog(trace = trace, onDismiss = { lastCrash = null })
+                        }
+                        startRoute?.let { route ->
+                            val navController = rememberNavController()
+                            AppScaffold(
+                                navController = navController,
+                                startDestination = route,
+                                focusSearch = shouldFocusSearch,
+                                sharedSearchQuery = sharedSearchQuery,
+                                sharedSearchNonce = sharedSearchNonce
+                            )
 
-                        // Keyed on the nonce (not just the text) so sharing
-                        // the SAME word a second time still navigates back
-                        // to Search from wherever the user currently is.
-                        LaunchedEffect(sharedSearchQuery, sharedSearchNonce) {
-                            if (!sharedSearchQuery.isNullOrBlank()) {
-                                shouldFocusSearch = false
-                                navController.navigate(Screen.Search.route) {
-                                    launchSingleTop = true
+                            // Keyed on the nonce (not just the text) so sharing
+                            // the SAME word a second time still navigates back
+                            // to Search from wherever the user currently is.
+                            LaunchedEffect(sharedSearchQuery, sharedSearchNonce) {
+                                if (!sharedSearchQuery.isNullOrBlank()) {
+                                    shouldFocusSearch = false
+                                    navController.navigate(Screen.Search.route) {
+                                        launchSingleTop = true
+                                    }
                                 }
                             }
-                        }
 
-                        // Mark setup as completed when navigating away from setup
-                        LaunchedEffect(navController) {
-                            navController.currentBackStackEntryFlow.collect { entry ->
-                                if (entry.destination.route == Screen.Search.route) {
-                                    dataStore.edit { prefs ->
-                                        prefs[SETUP_COMPLETED] = true
+                            // Mark setup as completed when navigating away from setup
+                            LaunchedEffect(navController) {
+                                navController.currentBackStackEntryFlow.collect { entry ->
+                                    if (entry.destination.route == Screen.Search.route) {
+                                        dataStore.edit { prefs ->
+                                            prefs[SETUP_COMPLETED] = true
+                                        }
                                     }
                                 }
                             }
