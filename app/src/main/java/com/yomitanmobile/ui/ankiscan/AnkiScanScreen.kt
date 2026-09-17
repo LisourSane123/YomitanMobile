@@ -112,6 +112,9 @@ fun AnkiScanScreen(
                             "Pole, którego nie da się odtworzyć (streszczenie AI, zdanie z " +
                             "książki), zachowuje dotychczasową wartość. Słowo, którego nie ma w " +
                             "żadnym zainstalowanym słowniku, jest pomijane w całości.\n\n" +
+                            "Uwaga: jeśli poprawiałeś ręcznie treść pola (np. skróciłeś " +
+                            "znaczenie), zostanie ono nadpisane wersją ze słownika — " +
+                            "aplikacja nie rozpozna Twojej edycji.\n\n" +
                             "Zrób najpierw kopię zapasową kolekcji w AnkiDroidzie.",
                         "Every note of this app is rebuilt from today's data: the frequency from " +
                             "the leading list, pitch accent, kanji breakdown, a recording from " +
@@ -120,6 +123,9 @@ fun AnkiScanScreen(
                             "A field that cannot be rebuilt (the AI summary, a sentence from a " +
                             "book) keeps what it had. A word no installed dictionary knows is " +
                             "skipped entirely.\n\n" +
+                            "Careful: a field you edited by hand (a meaning you shortened, " +
+                            "say) is overwritten with the dictionary's version — the app " +
+                            "cannot recognise your edit.\n\n" +
                             "Back up your collection in AnkiDroid first."
                     ),
                     fontSize = 13.sp
