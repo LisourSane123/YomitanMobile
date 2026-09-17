@@ -180,6 +180,39 @@ class AudioPlayer(
         }
     }
 
+    /**
+     * Plays a file the app does not own — a recording out of the user's
+     * archive, read through the SAF permission taken when the folder was
+     * picked. Separate from [playAudioFile] because a document URI has no
+     * path: `File(uri.toString()).exists()` is false for every one of them.
+     */
+    fun playUri(uri: android.net.Uri) {
+        stopPlayback()
+        try {
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(context, uri)
+                setOnPreparedListener {
+                    _isPlaying.value = true
+                    start()
+                }
+                setOnCompletionListener {
+                    _isPlaying.value = false
+                    release()
+                    mediaPlayer = null
+                }
+                setOnErrorListener { mp, _, _ ->
+                    _isPlaying.value = false
+                    try { mp.release() } catch (_: Exception) {}
+                    mediaPlayer = null
+                    true
+                }
+                prepareAsync()
+            }
+        } catch (_: Exception) {
+            _isPlaying.value = false
+        }
+    }
+
     fun playWord(text: String, audioFilePath: String? = null) {
         if (!audioFilePath.isNullOrBlank()) {
             playAudioFile(audioFilePath)

@@ -98,6 +98,7 @@ class DetailViewModel @Inject constructor(
     private val repository: DictionaryRepository,
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
+    private val audioArchive: com.yomitanmobile.data.audio.AudioArchive,
     private val sentenceDao: SentenceDao,
     private val aiSummaryService: AiSummaryService,
     private val exportedWordDao: ExportedWordDao,
@@ -565,10 +566,29 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Pronunciation, best source first: a file the dictionary shipped, then a
+     * recording from the user's archive, then the synthesiser.
+     *
+     * TTS is last on purpose — it reads a headword with no context and picks a
+     * plausible reading rather than the right one, which is exactly the word
+     * the user came here to hear.
+     */
     fun playAudio() {
         val merged = _entry.value ?: return
         val textToSpeak = merged.reading.ifBlank { merged.primaryExpression }
-        audioPlayer.playWord(textToSpeak, merged.audioFile.takeIf { it.isNotBlank() })
+        val dictionaryFile = merged.audioFile.takeIf { it.isNotBlank() }
+        if (dictionaryFile != null) {
+            audioPlayer.playWord(textToSpeak, dictionaryFile)
+            return
+        }
+        viewModelScope.launch {
+            val match = runCatching {
+                audioArchive.find(merged.primaryExpression, merged.reading)
+            }.getOrNull()
+            if (match != null) audioPlayer.playUri(match.uri)
+            else audioPlayer.playWord(textToSpeak)
+        }
     }
 
     fun stopAudio() {
@@ -852,7 +872,11 @@ class DetailViewModel @Inject constructor(
                 tts = audioPlayer.getTts(),
                 deckName = deckName,
                 stylePrefs = stylePrefs,
-                aiSummaryText = aiSummaryText
+                aiSummaryText = aiSummaryText,
+                // A mined card has always taken whatever voice happened to be
+                // running. The archive needs no voice, so the card asks for
+                // audio outright and the synthesiser stays the fallback.
+                audioWanted = true
             )
             result.fold(
                 onSuccess = { noteId ->

@@ -48,6 +48,10 @@ sealed class SettingsEvent {
         val skippedMissing: Int
     ) : SettingsEvent()
     data class ReclassifyError(val message: String) : SettingsEvent()
+    /** The pronunciation archive was walked: [files] distinct recordings. */
+    data class AudioArchiveIndexed(val files: Int) : SettingsEvent()
+    /** The picked folder held no readable audio; the old index was kept. */
+    object AudioArchiveEmpty : SettingsEvent()
 }
 
 data class MinedCategoryStat(
@@ -65,8 +69,55 @@ class SettingsViewModel @Inject constructor(
     private val ankiCardCreator: com.yomitanmobile.data.anki.AnkiCardCreator,
     getDictionariesUseCase: GetDictionariesUseCase,
     exportedWordDao: ExportedWordDao,
-    private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings
+    private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
+    private val audioArchive: com.yomitanmobile.data.audio.AudioArchive
 ) : ViewModel() {
+
+    // ── Pronunciation archive ────────────────────────────────────────────
+
+    /** Files indexed in the user's archive; 0 means there is none. */
+    val audioArchiveFiles: StateFlow<Int> = audioArchive.observeFileCount()
+        .catch { emit(0) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    private val _audioArchiveLabel = MutableStateFlow<String?>(null)
+    val audioArchiveLabel: StateFlow<String?> = _audioArchiveLabel.asStateFlow()
+
+    private val _audioArchiveIndexing = MutableStateFlow(false)
+    val audioArchiveIndexing: StateFlow<Boolean> = _audioArchiveIndexing.asStateFlow()
+
+    init {
+        viewModelScope.launch { _audioArchiveLabel.value = audioArchive.folderLabel() }
+    }
+
+    /**
+     * Walks a picked folder and replaces the index.
+     *
+     * The walk is the only slow part of this feature and it happens once per
+     * archive, so it runs here rather than behind the download queue — but
+     * [audioArchiveIndexing] covers the row while it does, since a large
+     * archive is hundreds of thousands of files.
+     */
+    fun indexAudioArchive(treeUri: android.net.Uri) {
+        if (_audioArchiveIndexing.value) return
+        _audioArchiveIndexing.value = true
+        viewModelScope.launch {
+            val result = audioArchive.index(treeUri)
+            _audioArchiveLabel.value = audioArchive.folderLabel()
+            _audioArchiveIndexing.value = false
+            _events.emit(
+                if (result.failed) SettingsEvent.AudioArchiveEmpty
+                else SettingsEvent.AudioArchiveIndexed(result.files)
+            )
+        }
+    }
+
+    fun forgetAudioArchive() {
+        viewModelScope.launch {
+            audioArchive.forget()
+            _audioArchiveLabel.value = null
+        }
+    }
 
     /** The language currently being studied, for the settings row. */
     val studyLanguage: com.yomitanmobile.domain.model.AppLanguage

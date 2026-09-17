@@ -351,6 +351,8 @@ class TextScanViewModel @Inject constructor(
                     stylePrefs = stylePrefs,
                     kanjiProvider = { kanji -> repository.getKanjis(kanji) },
                     tts = tts,
+                    // See the JLPT generator: the archive answers without TTS.
+                    audioWanted = filters.generateAudio,
                     tags = tagsForSources(plan.sources),
                     onProgress = { done, total, word ->
                         _progress.value = JlptDeckProgress(done, total, word)

@@ -71,6 +71,13 @@ class MainActivity : ComponentActivity() {
         val ANKI_DECK_NAME = stringPreferencesKey("anki_deck_name")
         val THEME_MODE = stringPreferencesKey("theme_mode") // "system", "light", "dark"
 
+        // The user's own pronunciation archive: the SAF tree they picked and a
+        // readable name for it. The index over the folder lives in Room
+        // (`audio_files`); these two only say which folder it was built from,
+        // so the settings screen can name it and a re-index can repeat itself.
+        val AUDIO_ARCHIVE_URI = stringPreferencesKey("audio_archive_uri")
+        val AUDIO_ARCHIVE_LABEL = stringPreferencesKey("audio_archive_label")
+
         // Card style preferences
         val CARD_EXPRESSION_BOLD = booleanPreferencesKey("card_expression_bold")
         val CARD_EXPRESSION_FONT_SIZE = intPreferencesKey("card_expression_font_size")

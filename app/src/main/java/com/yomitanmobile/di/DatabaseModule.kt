@@ -49,7 +49,8 @@ object DatabaseModule {
                 AppDatabase.MIGRATION_18_19,
                 AppDatabase.MIGRATION_19_20,
                 AppDatabase.MIGRATION_20_21,
-                AppDatabase.MIGRATION_21_22
+                AppDatabase.MIGRATION_21_22,
+                AppDatabase.MIGRATION_22_23
             )
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -184,5 +185,13 @@ object DatabaseModule {
         database: AppDatabase
     ): com.yomitanmobile.data.local.dao.AnkiCollectionWordDao {
         return database.ankiCollectionWordDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAudioFileDao(
+        database: AppDatabase
+    ): com.yomitanmobile.data.local.dao.AudioFileDao {
+        return database.audioFileDao()
     }
 }

@@ -257,6 +257,9 @@ class JlptDeckViewModel @Inject constructor(
                     stylePrefs = stylePrefs,
                     kanjiProvider = { kanji -> repository.getKanjis(kanji) },
                     tts = tts,
+                    // Asked for, even when the synthesiser is missing: the
+                    // pronunciation archive answers first and needs no voice.
+                    audioWanted = wantsAudio,
                     tags = tagsForLevel(plan.level),
                     onProgress = { done, total, word ->
                         _progress.value = JlptDeckProgress(done, total, word)

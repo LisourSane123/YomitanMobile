@@ -11,6 +11,7 @@ import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
 import com.yomitanmobile.data.local.dao.AnkiCollectionWordDao
+import com.yomitanmobile.data.local.dao.AudioFileDao
 import com.yomitanmobile.data.local.dao.JlptTagDao
 import com.yomitanmobile.data.local.dao.KanjiDao
 import com.yomitanmobile.data.local.dao.LookupCountDao
@@ -24,6 +25,7 @@ import com.yomitanmobile.data.local.entity.FrequencyListSetting
 import com.yomitanmobile.data.local.entity.ExportedWord
 import com.yomitanmobile.data.local.entity.FavoriteWord
 import com.yomitanmobile.data.local.entity.AnkiCollectionWord
+import com.yomitanmobile.data.local.entity.AudioFile
 import com.yomitanmobile.data.local.entity.JlptTag
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.local.entity.LookupCount
@@ -45,9 +47,10 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         WordFrequency::class,
         FrequencyListSetting::class,
         JlptTag::class,
-        AnkiCollectionWord::class
+        AnkiCollectionWord::class,
+        AudioFile::class
     ],
-    version = 22,
+    version = 23,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -66,6 +69,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun frequencyDao(): FrequencyDao
     abstract fun jlptTagDao(): JlptTagDao
     abstract fun ankiCollectionWordDao(): AnkiCollectionWordDao
+    abstract fun audioFileDao(): AudioFileDao
 
     companion object {
         const val DATABASE_NAME = "yomitan_mobile_db"
@@ -85,6 +89,27 @@ abstract class AppDatabase : RoomDatabase() {
          *
          * The ALTERs must match what Room generates for the entities verbatim.
          */
+        /**
+         * The index over the user's own pronunciation archive.
+         *
+         * Created empty: the folder is picked in settings and the walk fills
+         * it. An install that never picks one keeps an empty table and the
+         * card audio stays what it was, device TTS.
+         */
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `audio_files` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`key` TEXT NOT NULL, " +
+                        "`uri` TEXT NOT NULL, " +
+                        "`file_name` TEXT NOT NULL, " +
+                        "`priority` INTEGER NOT NULL)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_audio_files_key` ON `audio_files` (`key`)")
+            }
+        }
+
         val MIGRATION_21_22 = object : Migration(21, 22) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(

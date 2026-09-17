@@ -36,7 +36,12 @@ data class BatchExportResult(
 @Singleton
 class AnkiCardCreator(
     private val context: Context,
-    private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings
+    private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
+    /**
+     * The user's pronunciation archive, asked before the synthesiser. Null in
+     * the tests that only build HTML.
+     */
+    private val audioArchive: com.yomitanmobile.data.audio.AudioArchive? = null
 ) {
 
     /**
@@ -1409,6 +1414,46 @@ class AnkiCardCreator(
         }
     }
 
+    /**
+     * The `Audio` field for one entry: a real recording when the user's
+     * archive has one, the synthesiser otherwise.
+     *
+     * The order is the whole point. A TTS engine reads a headword with no
+     * context, so it picks a plausible reading rather than the right one
+     * (行った, 一日, 開く) and flattens the pitch accent the card prints right
+     * above it. A recording of the word is simply what the word sounds like.
+     *
+     * Falling back rather than failing is the same rule the monolingual card
+     * engine follows: an archive covers a fraction of the dictionary, and a
+     * synthesised reading beats a silent card.
+     */
+    private suspend fun resolveAudio(
+        entry: WordEntry,
+        tts: TextToSpeech?,
+        stylePrefs: CardStylePreferences?
+    ): String {
+        val archived = archiveAudio(entry)
+        if (archived.isNotEmpty()) return archived
+        if (tts == null) return ""
+        applyRandomVoice(tts, stylePrefs)
+        return generateTtsAudio(entry.reading.ifBlank { entry.expression }, tts)
+    }
+
+    /** The archive's recording for [entry], already copied into Anki's media. */
+    private suspend fun archiveAudio(entry: WordEntry): String {
+        val archive = audioArchive ?: return ""
+        return try {
+            val match = archive.find(entry.expression, entry.reading) ?: return ""
+            val file = archive.copyToCache(match) ?: return ""
+            val reference = addMediaToAnki(file, file.name)
+            file.delete()
+            reference
+        } catch (e: Exception) {
+            android.util.Log.w("AnkiCardCreator", "Archive audio for ${entry.expression} failed", e)
+            ""
+        }
+    }
+
     suspend fun generateTtsAudio(text: String, tts: TextToSpeech): String =
         withContext(Dispatchers.IO) {
             try {
@@ -1479,17 +1524,15 @@ class AnkiCardCreator(
         }
     }
 
-    suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null, kanjiData: List<com.yomitanmobile.data.local.entity.KanjiEntry> = emptyList(), aiSummaryText: String = ""): Result<Long> {
-        val audioFileName = if (tts != null) {
-            val textForTts = entry.reading.ifBlank { entry.expression }
-            if (stylePrefs != null && stylePrefs.randomVoicesEnabled && stylePrefs.randomVoices.isNotEmpty()) {
-                try {
-                    val randomVoiceName = stylePrefs.randomVoices.random()
-                    tts.voices?.find { it.name == randomVoiceName }?.let { tts.setVoice(it) }
-                } catch (e: Exception) { }
-            }
-            generateTtsAudio(textForTts, tts)
-        } else ""
+    /**
+     * @param audioWanted whether this card should carry audio at all. It
+     * defaults to "there is a synthesiser", which is what the callers used to
+     * mean by passing one — but a user with a pronunciation archive and no
+     * working TTS voice still wants the recording, so the two questions are
+     * now separate.
+     */
+    suspend fun exportToAnki(entry: WordEntry, tts: TextToSpeech?, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null, kanjiData: List<com.yomitanmobile.data.local.entity.KanjiEntry> = emptyList(), aiSummaryText: String = "", audioWanted: Boolean = tts != null): Result<Long> {
+        val audioFileName = if (audioWanted) resolveAudio(entry, tts, stylePrefs) else ""
         
         var randomFont: String? = null
         if (stylePrefs != null && stylePrefs.randomFontsEnabled && stylePrefs.randomFonts.isNotEmpty()) {
@@ -1575,6 +1618,8 @@ class AnkiCardCreator(
         kanjiProvider: suspend (List<String>) -> List<com.yomitanmobile.data.local.entity.KanjiEntry>,
         tts: TextToSpeech? = null,
         tags: Set<String> = emptySet(),
+        /** See [exportToAnki]: audio can come from the archive without a TTS voice. */
+        audioWanted: Boolean = tts != null,
         onProgress: suspend (done: Int, total: Int, currentWord: String) -> Unit = { _, _, _ -> }
     ): Result<BatchExportResult> = withContext(Dispatchers.IO) {
         if (entries.isEmpty()) return@withContext Result.success(BatchExportResult(0, 0))
@@ -1626,10 +1671,7 @@ class AnkiCardCreator(
                 // is restored at the end of every chunk.
                 onProgress(added + fieldsList.size, entries.size, entry.expression.ifBlank { entry.reading })
 
-                val audioFileName = if (tts != null) {
-                    applyRandomVoice(tts, stylePrefs)
-                    generateTtsAudio(entry.reading.ifBlank { entry.expression }, tts)
-                } else ""
+                val audioFileName = if (audioWanted) resolveAudio(entry, tts, stylePrefs) else ""
                 val randomFont = if (
                     stylePrefs != null && stylePrefs.randomFontsEnabled &&
                     stylePrefs.randomFonts.isNotEmpty()

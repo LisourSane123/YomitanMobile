@@ -74,6 +74,11 @@ class DetailViewModelFuriganaTest {
         repository = repo,
         ankiCardCreator = AnkiCardCreator(context, LanguageSettings(context)),
         audioPlayer = AudioPlayer(context, LanguageSettings(context)),
+        audioArchive = com.yomitanmobile.data.audio.AudioArchive(
+            context,
+            db.audioFileDao(),
+            com.yomitanmobile.data.settings.AudioArchiveSettings(context)
+        ),
         sentenceDao = db.sentenceDao(),
         aiSummaryService = AiSummaryService(),
         exportedWordDao = db.exportedWordDao(),

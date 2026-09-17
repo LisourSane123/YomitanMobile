@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
@@ -241,6 +242,17 @@ fun SettingsScreen(
         }
     }
 
+    // The pronunciation archive: one folder, walked once. OpenDocumentTree
+    // rather than a file picker because the archives are directory trees of
+    // hundreds of thousands of files, and SAF cannot be asked for one of them
+    // by name — see AudioArchive.
+    val audioArchiveFiles by viewModel.audioArchiveFiles.collectAsState()
+    val audioArchiveLabel by viewModel.audioArchiveLabel.collectAsState()
+    val audioArchiveIndexing by viewModel.audioArchiveIndexing.collectAsState()
+    val audioArchivePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri -> uri?.let(viewModel::indexAudioArchive) }
+
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
@@ -311,6 +323,24 @@ fun SettingsScreen(
                     Toast.makeText(
                         context,
                         tr("Błąd: ${event.message}", "Error: ${event.message}"),
+                        Toast.LENGTH_LONG
+                    ).show()
+                is SettingsEvent.AudioArchiveIndexed ->
+                    Toast.makeText(
+                        context,
+                        tr(
+                            "Zindeksowano ${event.files} nagrań",
+                            "Indexed ${event.files} recordings"
+                        ),
+                        Toast.LENGTH_LONG
+                    ).show()
+                is SettingsEvent.AudioArchiveEmpty ->
+                    Toast.makeText(
+                        context,
+                        tr(
+                            "W tym folderze nie ma plików audio z japońskimi nazwami — poprzednie archiwum zostało bez zmian.",
+                            "That folder holds no audio files with Japanese names — the previous archive was left alone."
+                        ),
                         Toast.LENGTH_LONG
                     ).show()
             }
@@ -891,6 +921,75 @@ fun SettingsScreen(
                     subtitle = tr("Kolejność list, pokaż wszystkie", "List order, show all"),
                     onClick = onNavigateToFrequencyDisplay
                 )
+            }
+
+            // Pronunciation archive
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.VolumeUp,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    tr("Archiwum wymowy", "Pronunciation archive"),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    when {
+                                        audioArchiveIndexing -> tr(
+                                            "Indeksowanie folderu…",
+                                            "Indexing the folder…"
+                                        )
+                                        audioArchiveFiles > 0 -> tr(
+                                            "$audioArchiveFiles nagrań" +
+                                                (audioArchiveLabel?.let { " — $it" } ?: ""),
+                                            "$audioArchiveFiles recordings" +
+                                                (audioArchiveLabel?.let { " — $it" } ?: "")
+                                        )
+                                        else -> tr(
+                                            "Brak. Fiszki mówią głosem syntezatora, który czyta hasło bez kontekstu i gubi akcent.",
+                                            "None. Cards speak with the synthesiser, which reads a headword without context and drops the accent."
+                                        )
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { audioArchivePicker.launch(null) },
+                                enabled = !audioArchiveIndexing
+                            ) {
+                                Text(
+                                    if (audioArchiveFiles > 0) tr("Zmień folder", "Change folder")
+                                    else tr("Wskaż folder", "Pick a folder")
+                                )
+                            }
+                            if (audioArchiveFiles > 0) {
+                                OutlinedButton(
+                                    onClick = viewModel::forgetAudioArchive,
+                                    enabled = !audioArchiveIndexing
+                                ) {
+                                    Text(tr("Usuń", "Remove"))
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // ═══════════════════════════════════════
