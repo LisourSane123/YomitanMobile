@@ -4,6 +4,9 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import com.yomitanmobile.ui.common.DeckPreviewItem
+import com.yomitanmobile.ui.common.DeckPreviewSection
+import com.yomitanmobile.ui.common.previewKeyOf
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -86,6 +89,15 @@ fun JlptDeckScreen(
     val plan by viewModel.plan.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val taggedWordCount by viewModel.taggedWordCount.collectAsState()
+    val suspendedKeys by viewModel.suspendedKeys.collectAsState()
+
+    // CreateDocument rather than a folder pick: the user names the file and
+    // puts it where their Anki is, and the app never needs storage permission.
+    val fileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(
+            com.yomitanmobile.data.anki.ApkgWriter.MIME_TYPE
+        )
+    ) { uri -> uri?.let(viewModel::exportToFile) }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -106,6 +118,20 @@ fun JlptDeckScreen(
                 }
                 JlptDeckEvent.AnkiNotInstalled -> tr("AnkiDroid nie jest zainstalowany", "AnkiDroid is not installed")
                 JlptDeckEvent.Cancelled -> tr("Przerwano generowanie", "Generation cancelled")
+                is JlptDeckEvent.SuspendNeedsAnki -> tr(
+                    "AnkiDroid nie pozwala usypiać fiszek z zewnątrz. ${event.count} kart " +
+                        "dostało tag „${event.tag}” — wyszukaj go w Anki i uśpij jednym " +
+                        "ruchem. Zapis do pliku .apkg usypia je od razu.",
+                    "AnkiDroid does not let another app suspend cards. ${event.count} of them " +
+                        "carry the tag “${event.tag}” — search for it in Anki and suspend them " +
+                        "in one go. Exporting to an .apkg file suspends them outright."
+                )
+                is JlptDeckEvent.FileWritten -> tr(
+                    "Zapisano plik: ${event.notes} fiszek, w tym ${event.suspended} uśpionych. " +
+                        "Zaimportuj go w Anki.",
+                    "File written: ${event.notes} cards, ${event.suspended} of them suspended. " +
+                        "Import it in Anki."
+                )
                 JlptDeckEvent.AudioUnavailable -> tr(
                     "Brak działającego syntezatora mowy — karty powstaną bez audio.",
                     "No working text-to-speech voice — cards will be created without audio."
@@ -503,6 +529,24 @@ fun JlptDeckScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
+                DeckPreviewSection(
+                    items = currentPlan.selected.map { entry ->
+                        DeckPreviewItem(
+                            key = previewKeyOf(entry),
+                            expression = entry.primaryExpression,
+                            reading = entry.reading,
+                            gloss = entry.definitionTextShort(),
+                            note = if (entry.frequency > 0) "#${entry.frequency}" else ""
+                        )
+                    },
+                    suspended = suspendedKeys,
+                    onToggle = viewModel::toggleSuspended,
+                    onSuspendAll = viewModel::suspendAll,
+                    onClearSuspended = viewModel::clearSuspended,
+                    onSuspendFirst = viewModel::suspendFirst
+                )
+
+                Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = { withAnkiPermission { viewModel.generate() } },
                     enabled = currentPlan.selectedCount > 0 && !busy,
@@ -515,6 +559,30 @@ fun JlptDeckScreen(
                         )
                     )
                 }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        fileLauncher.launch(
+                            "${deckName.trim().ifBlank { "JLPT N${currentPlan.level}" }}.apkg"
+                        )
+                    },
+                    enabled = currentPlan.selectedCount > 0 && !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(tr("Zapisz jako plik .apkg", "Save as an .apkg file"))
+                }
+                Text(
+                    tr(
+                        "Plik nie potrzebuje AnkiDroida, ma dokładnie jeden typ notatki i " +
+                            "naprawdę usypia zaznaczone fiszki — czego API AnkiDroida nie potrafi.",
+                        "A file needs no AnkiDroid, carries exactly one note type, and really " +
+                            "suspends the cards you marked — which AnkiDroid's API cannot do."
+                    ),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
                 Text(
                     tr(
                         "Karty dostają tagi yomitan-mobile i jlpt-n${currentPlan.level}, więc łatwo je w Anki odnaleźć lub usunąć. " +

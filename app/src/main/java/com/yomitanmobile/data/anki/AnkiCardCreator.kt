@@ -1430,23 +1430,26 @@ class AnkiCardCreator(
     private suspend fun resolveAudio(
         entry: WordEntry,
         tts: TextToSpeech?,
-        stylePrefs: CardStylePreferences?
+        stylePrefs: CardStylePreferences?,
+        media: MediaSink = providerMedia
     ): String {
-        val archived = archiveAudio(entry)
+        val archived = archiveAudio(entry, media)
         if (archived.isNotEmpty()) return archived
         if (tts == null) return ""
         applyRandomVoice(tts, stylePrefs)
-        return generateTtsAudio(entry.reading.ifBlank { entry.expression }, tts)
+        return generateTtsAudio(entry.reading.ifBlank { entry.expression }, tts, media)
     }
 
-    /** The archive's recording for [entry], already copied into Anki's media. */
-    private suspend fun archiveAudio(entry: WordEntry): String {
+    /** The archive's recording for [entry], already handed to [media]. */
+    private suspend fun archiveAudio(entry: WordEntry, media: MediaSink): String {
         val archive = audioArchive ?: return ""
         return try {
             val match = archive.find(entry.expression, entry.reading) ?: return ""
             val file = archive.copyToCache(match) ?: return ""
-            val reference = addMediaToAnki(file, file.name)
-            file.delete()
+            val reference = media.add(file, file.name)
+            // The package writer reads the file when it zips, long after this
+            // returns, so only the provider path may delete it here.
+            if (media.consumesImmediately) file.delete()
             reference
         } catch (e: Exception) {
             android.util.Log.w("AnkiCardCreator", "Archive audio for ${entry.expression} failed", e)
@@ -1454,7 +1457,51 @@ class AnkiCardCreator(
         }
     }
 
-    suspend fun generateTtsAudio(text: String, tts: TextToSpeech): String =
+    /**
+     * Where a card's audio file ends up.
+     *
+     * Two destinations, and they behave differently enough to be worth naming:
+     * AnkiDroid's provider copies the file into its own media folder during
+     * the call, while the `.apkg` writer only notes it down and reads it when
+     * the zip is built. Deleting a temp file after the call is right for the
+     * first and destroys the second.
+     */
+    interface MediaSink {
+        suspend fun add(file: File, fileName: String): String
+
+        /** True when [add] has finished with the file by the time it returns. */
+        val consumesImmediately: Boolean get() = true
+    }
+
+    private val providerMedia = object : MediaSink {
+        override suspend fun add(file: File, fileName: String) = addMediaToAnki(file, fileName)
+    }
+
+    /**
+     * Collects media for a package instead of handing it to AnkiDroid.
+     *
+     * The returned reference is the same `[sound:…]` an Anki note carries; the
+     * file behind it is copied into the zip at the end.
+     */
+    class PackageMedia : MediaSink {
+        private val collected = LinkedHashMap<String, File>()
+
+        val files: Map<String, File> get() = collected
+
+        override val consumesImmediately: Boolean get() = false
+
+        override suspend fun add(file: File, fileName: String): String {
+            val name = fileName.ifBlank { file.name }
+            collected[name] = file
+            return "[sound:$name]"
+        }
+    }
+
+    suspend fun generateTtsAudio(
+        text: String,
+        tts: TextToSpeech,
+        media: MediaSink = providerMedia
+    ): String =
         withContext(Dispatchers.IO) {
             try {
                 val fileName =
@@ -1487,8 +1534,8 @@ class AnkiCardCreator(
                 }
 
                 if (success && tempFile.exists()) {
-                    val soundRef = addMediaToAnki(tempFile, fileName)
-                    tempFile.delete()
+                    val soundRef = media.add(tempFile, fileName)
+                    if (media.consumesImmediately) tempFile.delete()
                     soundRef
                 } else ""
             } catch (_: Exception) {
@@ -1611,6 +1658,89 @@ class AnkiCardCreator(
      * The coroutine is cancellable between chunks — a cancelled job keeps the
      * cards written so far, which is why [onProgress] reports committed counts.
      */
+    /**
+     * The same cards [exportBatchToAnki] would write, prepared for a file.
+     *
+     * Everything about a card is identical — templates, CSS, audio resolution,
+     * kanji breakdown — so a deck imported from a package is the same deck. It
+     * is the destination that differs, and with it two things the provider
+     * cannot do: the note type is exactly ours, and a card can be created
+     * suspended.
+     *
+     * @param suspendWord decides per word whether its card arrives suspended.
+     */
+    suspend fun buildPackageNotes(
+        entries: List<WordEntry>,
+        stylePrefs: CardStylePreferences?,
+        kanjiProvider: suspend (List<String>) -> List<com.yomitanmobile.data.local.entity.KanjiEntry>,
+        tts: TextToSpeech? = null,
+        tags: Set<String> = emptySet(),
+        audioWanted: Boolean = tts != null,
+        suspendWord: (WordEntry) -> Boolean = { false },
+        onProgress: suspend (done: Int, total: Int, currentWord: String) -> Unit = { _, _, _ -> }
+    ): Pair<List<ApkgWriter.Note>, Map<String, File>> = withContext(Dispatchers.IO) {
+        val media = PackageMedia()
+        val notes = ArrayList<ApkgWriter.Note>(entries.size)
+
+        for (chunk in entries.chunked(BATCH_CHUNK_SIZE)) {
+            currentCoroutineContext().ensureActive()
+            val kanjiChars = chunk
+                .flatMap { entry ->
+                    entry.expression.filter {
+                        com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it)
+                    }.map(Char::toString)
+                }
+                .distinct()
+            val kanjiByChar = runCatching { kanjiProvider(kanjiChars) }
+                .getOrElse { emptyList() }
+                .associateBy { it.kanji }
+
+            for (entry in chunk) {
+                currentCoroutineContext().ensureActive()
+                onProgress(notes.size, entries.size, entry.expression.ifBlank { entry.reading })
+
+                val audioFileName =
+                    if (audioWanted) resolveAudio(entry, tts, stylePrefs, media) else ""
+                val randomFont = if (
+                    stylePrefs != null && stylePrefs.randomFontsEnabled &&
+                    stylePrefs.randomFonts.isNotEmpty()
+                ) {
+                    stylePrefs.randomFonts.random()
+                } else null
+
+                val kanjiData = entry.expression
+                    .filter { com.yomitanmobile.domain.model.MergedWordEntry.isKanji(it) }
+                    .map(Char::toString)
+                    .distinct()
+                    .mapNotNull { kanjiByChar[it] }
+
+                val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs)
+                    .copy(kanjiBreakdown = buildKanjiBreakdownHtml(entry, kanjiData))
+                notes += ApkgWriter.Note(
+                    fields = card.toFieldArray(profile),
+                    tags = tags,
+                    suspended = suspendWord(entry)
+                )
+            }
+        }
+        onProgress(notes.size, entries.size, "")
+        notes to media.files
+    }
+
+    /** The note type a package written now would carry. */
+    fun packageProfile(): com.yomitanmobile.domain.model.CardProfile = profile
+
+    /** Styling for a package, resolved exactly as the provider path resolves it. */
+    fun packageStyling(stylePrefs: CardStylePreferences?): Triple<String, String, String> {
+        val css = if (stylePrefs != null) buildCssFromPreferences(stylePrefs) else CARD_CSS
+        val back = buildBackTemplate(
+            stylePrefs?.sectionOrder
+                ?: com.yomitanmobile.domain.model.CardSection.defaultOrder(),
+            profile
+        )
+        return Triple(css, CARD_FRONT_TEMPLATE, back)
+    }
+
     suspend fun exportBatchToAnki(
         entries: List<WordEntry>,
         deckName: String,

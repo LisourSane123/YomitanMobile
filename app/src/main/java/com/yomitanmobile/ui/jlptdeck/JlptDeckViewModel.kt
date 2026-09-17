@@ -44,6 +44,14 @@ sealed class JlptDeckEvent {
     object Cancelled : JlptDeckEvent()
     /** Audio was requested but the device has no usable TTS voice. */
     object AudioUnavailable : JlptDeckEvent()
+    /**
+     * Cards were marked as known, and AnkiDroid's provider has no way to
+     * suspend them — they carry [tag] instead. Not an error: the deck was
+     * written, and the user is told the one action that finishes the job.
+     */
+    data class SuspendNeedsAnki(val tag: String, val count: Int) : JlptDeckEvent()
+    /** An `.apkg` was written: [notes] cards, [suspended] of them suspended. */
+    data class FileWritten(val notes: Int, val suspended: Int) : JlptDeckEvent()
 }
 
 /**
@@ -65,6 +73,7 @@ class JlptDeckViewModel @Inject constructor(
     private val exportedWordDao: ExportedWordDao,
     private val jlptTagDao: JlptTagDao,
     private val audioPlayer: AudioPlayer,
+    private val apkgWriter: com.yomitanmobile.data.anki.ApkgWriter,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -87,6 +96,46 @@ class JlptDeckViewModel @Inject constructor(
 
     private val _progress = MutableStateFlow<JlptDeckProgress?>(null)
     val progress: StateFlow<JlptDeckProgress?> = _progress.asStateFlow()
+
+    /**
+     * Words the user marked as already known while reviewing the plan.
+     *
+     * They are still created — the deck stays complete and one unsuspend
+     * brings a word back — but they arrive suspended, so studying does not
+     * begin with a hundred cards the reader already has. Frequency-first
+     * ordering makes that the default shape of a generated deck, and
+     * `assumeKnownTopRank` can only cut it off by a number.
+     *
+     * Keyed by expression + reading (see `previewKeyOf`), so a re-analysis
+     * that produces the same word keeps the mark.
+     */
+    private val _suspendedKeys = MutableStateFlow<Set<String>>(emptySet())
+    val suspendedKeys: StateFlow<Set<String>> = _suspendedKeys.asStateFlow()
+
+    fun toggleSuspended(key: String) {
+        _suspendedKeys.value = _suspendedKeys.value.let {
+            if (key in it) it - key else it + key
+        }
+    }
+
+    fun suspendAll() {
+        _suspendedKeys.value = _plan.value?.selected
+            ?.map { com.yomitanmobile.ui.common.previewKeyOf(it) }
+            ?.toSet()
+            .orEmpty()
+    }
+
+    fun suspendFirst(count: Int) {
+        _suspendedKeys.value = _suspendedKeys.value + (
+            _plan.value?.selected.orEmpty()
+                .take(count)
+                .map { com.yomitanmobile.ui.common.previewKeyOf(it) }
+            )
+    }
+
+    fun clearSuspended() {
+        _suspendedKeys.value = emptySet()
+    }
 
     private val _availableDecks = MutableStateFlow<List<String>>(emptyList())
     val availableDecks: StateFlow<List<String>> = _availableDecks.asStateFlow()
@@ -224,6 +273,79 @@ class JlptDeckViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Writes the planned cards to an `.apkg` file instead of to AnkiDroid.
+     *
+     * The file is the only path where a card can really arrive suspended, and
+     * the only one where the note type is guaranteed to be ours — see
+     * [com.yomitanmobile.data.anki.ApkgWriter]. It also needs no AnkiDroid
+     * permission and no AnkiDroid on this device.
+     */
+    fun exportToFile(target: android.net.Uri) {
+        val plan = _plan.value ?: return
+        if (plan.selected.isEmpty()) return
+        if (generationJob?.isActive == true) return
+
+        generationJob = viewModelScope.launch {
+            _progress.value = JlptDeckProgress(0, plan.selectedCount)
+            try {
+                val stylePrefs = readCardStylePreferences(appContext.dataStore.data.first())
+                val wantsAudio = _filters.value.generateAudio
+                val tts = if (wantsAudio) audioPlayer.ensureTts() else null
+                if (wantsAudio && tts == null) {
+                    _events.emit(JlptDeckEvent.AudioUnavailable)
+                }
+                val deck = _deckName.value.trim().ifBlank { defaultDeckName(plan.level) }
+                val entries = monolingualCardResolver.apply(plan.selected.map { it.toWordEntry() })
+                val marks = _suspendedKeys.value
+
+                val (notes, media) = ankiCardCreator.buildPackageNotes(
+                    entries = entries,
+                    stylePrefs = stylePrefs,
+                    kanjiProvider = { kanji -> repository.getKanjis(kanji) },
+                    tts = tts,
+                    tags = tagsForLevel(plan.level),
+                    audioWanted = wantsAudio,
+                    suspendWord = { markKey(it) in marks },
+                    onProgress = { done, total, word ->
+                        _progress.value = JlptDeckProgress(done, total, word)
+                    }
+                )
+                val (css, front, back) = ankiCardCreator.packageStyling(stylePrefs)
+                val written = apkgWriter.write(
+                    target = target,
+                    notes = notes,
+                    profile = ankiCardCreator.packageProfile(),
+                    deckName = deck,
+                    css = css,
+                    frontTemplate = front,
+                    backTemplate = back,
+                    media = media
+                )
+                written.fold(
+                    onSuccess = { result ->
+                        _events.emit(JlptDeckEvent.FileWritten(result.notes, result.suspended))
+                        // Deliberately NOT told to the stored collection scan:
+                        // a file is not an import. Until the user imports it,
+                        // those words are not in any collection, and claiming
+                        // otherwise would make the next run skip them.
+                    },
+                    onFailure = { error ->
+                        _events.emit(JlptDeckEvent.Error(error.message ?: "unknown error"))
+                    }
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                _events.emit(JlptDeckEvent.Cancelled)
+                throw e
+            } catch (e: Exception) {
+                Log.e(logTag, "Package export failed", e)
+                _events.emit(JlptDeckEvent.Error(e.message ?: "unknown error"))
+            } finally {
+                _progress.value = null
+            }
+        }
+    }
+
     /** Writes the planned cards to AnkiDroid. */
     fun generate() {
         val plan = _plan.value ?: return
@@ -251,20 +373,49 @@ class JlptDeckViewModel @Inject constructor(
                     plan.selected.map { it.toWordEntry() }
                 )
 
-                val result = ankiCardCreator.exportBatchToAnki(
-                    entries = entries,
-                    deckName = deck,
-                    stylePrefs = stylePrefs,
-                    kanjiProvider = { kanji -> repository.getKanjis(kanji) },
-                    tts = tts,
-                    // Asked for, even when the synthesiser is missing: the
-                    // pronunciation archive answers first and needs no voice.
-                    audioWanted = wantsAudio,
-                    tags = tagsForLevel(plan.level),
-                    onProgress = { done, total, word ->
-                        _progress.value = JlptDeckProgress(done, total, word)
+                // AnkiDroid's AddContentApi cannot suspend anything, so a
+                // card marked here is written with an extra tag and the user
+                // is told to suspend by that tag — or to export the deck as a
+                // file instead, where the card really does arrive suspended.
+                val suspendedMarks = _suspendedKeys.value
+                val toSuspend = entries.filter { markKey(it) in suspendedMarks }
+                val toStudy = entries.filterNot { markKey(it) in suspendedMarks }
+
+                suspend fun writeBatch(batch: List<WordEntry>, extraTag: String?) =
+                    if (batch.isEmpty()) {
+                        Result.success(
+                            com.yomitanmobile.data.anki.BatchExportResult(0, 0)
+                        )
+                    } else {
+                        ankiCardCreator.exportBatchToAnki(
+                            entries = batch,
+                            deckName = deck,
+                            stylePrefs = stylePrefs,
+                            kanjiProvider = { kanji -> repository.getKanjis(kanji) },
+                            tts = tts,
+                            // Asked for, even when the synthesiser is missing:
+                            // the pronunciation archive answers first and needs
+                            // no voice.
+                            audioWanted = wantsAudio,
+                            tags = tagsForLevel(plan.level) + listOfNotNull(extraTag),
+                            onProgress = { done, total, word ->
+                                _progress.value = JlptDeckProgress(done, total, word)
+                            }
+                        )
                     }
-                )
+
+                val studied = writeBatch(toStudy, null)
+                val marked = writeBatch(toSuspend, SUSPEND_TAG)
+                if (toSuspend.isNotEmpty()) {
+                    _events.emit(JlptDeckEvent.SuspendNeedsAnki(SUSPEND_TAG, toSuspend.size))
+                }
+                val result = studied.mapCatching { first ->
+                    val second = marked.getOrThrow()
+                    com.yomitanmobile.data.anki.BatchExportResult(
+                        added = first.added + second.added,
+                        failed = first.failed + second.failed
+                    )
+                }
 
                 result.fold(
                     onSuccess = { batch ->
@@ -383,9 +534,19 @@ class JlptDeckViewModel @Inject constructor(
     private fun tagsForLevel(level: Int): Set<String> =
         setOf("yomitan-mobile", "jlpt-n$level", "auto-generated")
 
+    /** The key a word is marked under while reviewing; see `previewKeyOf`. */
+    private fun markKey(entry: WordEntry): String = "${entry.expression}\t${entry.reading}"
+
     companion object {
         /** Note-type label the scan screen shows for generated words. */
         private const val GENERATED_SOURCE = "Yomitan Mobile (JLPT)"
+
+        /**
+         * Carried by cards the user marked as known when they are written
+         * through AnkiDroid's provider, which cannot suspend. Searching
+         * `tag:yomitan-suspend` in Anki selects exactly them.
+         */
+        const val SUSPEND_TAG = "yomitan-suspend"
 
         val LEVELS = listOf(5, 4, 3, 2, 1)
 

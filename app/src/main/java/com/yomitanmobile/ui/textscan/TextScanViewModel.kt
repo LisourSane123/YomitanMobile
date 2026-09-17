@@ -54,6 +54,10 @@ sealed class TextScanEvent {
     object Cancelled : TextScanEvent()
     /** Audio was requested but the device has no usable TTS voice. */
     object AudioUnavailable : TextScanEvent()
+    /** See JlptDeckEvent.SuspendNeedsAnki — the provider cannot suspend. */
+    data class SuspendNeedsAnki(val tag: String, val count: Int) : TextScanEvent()
+    /** An `.apkg` was written: [notes] cards, [suspended] of them suspended. */
+    data class FileWritten(val notes: Int, val suspended: Int) : TextScanEvent()
 }
 
 /**
@@ -79,6 +83,7 @@ class TextScanViewModel @Inject constructor(
     private val monolingualCardResolver: MonolingualCardResolver,
     private val exportedWordDao: ExportedWordDao,
     private val audioPlayer: AudioPlayer,
+    private val apkgWriter: com.yomitanmobile.data.anki.ApkgWriter,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -311,6 +316,113 @@ class TextScanViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Words marked as already known while reviewing the plan; see the same
+     * field on `JlptDeckViewModel` for why they are suspended rather than
+     * dropped. Here the case is even stronger: a book scan's first hundred
+     * cards are, by construction, the commonest words in the language.
+     */
+    private val _suspendedKeys = MutableStateFlow<Set<String>>(emptySet())
+    val suspendedKeys: StateFlow<Set<String>> = _suspendedKeys.asStateFlow()
+
+    fun toggleSuspended(key: String) {
+        _suspendedKeys.value = _suspendedKeys.value.let {
+            if (key in it) it - key else it + key
+        }
+    }
+
+    fun suspendAll() {
+        _suspendedKeys.value = _plan.value?.selected
+            ?.map { com.yomitanmobile.ui.common.previewKeyOf(it.entry) }
+            ?.toSet()
+            .orEmpty()
+    }
+
+    fun suspendFirst(count: Int) {
+        _suspendedKeys.value = _suspendedKeys.value + (
+            _plan.value?.selected.orEmpty()
+                .take(count)
+                .map { com.yomitanmobile.ui.common.previewKeyOf(it.entry) }
+            )
+    }
+
+    fun clearSuspended() {
+        _suspendedKeys.value = emptySet()
+    }
+
+    private fun markKey(entry: WordEntry): String = "${entry.expression}\t${entry.reading}"
+
+    /**
+     * Writes the planned cards to an `.apkg` file instead of to AnkiDroid —
+     * the only path where a marked card really arrives suspended. See
+     * [com.yomitanmobile.data.anki.ApkgWriter].
+     */
+    fun exportToFile(target: android.net.Uri) {
+        val plan = _plan.value ?: return
+        if (plan.selected.isEmpty()) return
+        if (generationJob?.isActive == true) return
+
+        generationJob = viewModelScope.launch {
+            _progress.value = JlptDeckProgress(0, plan.selectedCount)
+            try {
+                val filters = _filters.value
+                val storedStyle = readCardStylePreferences(appContext.dataStore.data.first())
+                val stylePrefs = if (filters.useSourceSentences) {
+                    storedStyle.copy(showFrontContextSentence = true)
+                } else {
+                    storedStyle
+                }
+                val tts = if (filters.generateAudio) audioPlayer.ensureTts() else null
+                if (filters.generateAudio && tts == null) {
+                    _events.emit(TextScanEvent.AudioUnavailable)
+                }
+                val deck = _deckName.value.trim().ifBlank { DEFAULT_DECK }
+                val entries = monolingualCardResolver.apply(
+                    plan.selected.map { withSourceSentence(it, filters.useSourceSentences) }
+                )
+                val marks = _suspendedKeys.value
+
+                val (notes, media) = ankiCardCreator.buildPackageNotes(
+                    entries = entries,
+                    stylePrefs = stylePrefs,
+                    kanjiProvider = { kanji -> repository.getKanjis(kanji) },
+                    tts = tts,
+                    tags = tagsForSources(plan.sources),
+                    audioWanted = filters.generateAudio,
+                    suspendWord = { markKey(it) in marks },
+                    onProgress = { done, total, word ->
+                        _progress.value = JlptDeckProgress(done, total, word)
+                    }
+                )
+                val (css, front, back) = ankiCardCreator.packageStyling(stylePrefs)
+                apkgWriter.write(
+                    target = target,
+                    notes = notes,
+                    profile = ankiCardCreator.packageProfile(),
+                    deckName = deck,
+                    css = css,
+                    frontTemplate = front,
+                    backTemplate = back,
+                    media = media
+                ).fold(
+                    onSuccess = { result ->
+                        _events.emit(TextScanEvent.FileWritten(result.notes, result.suspended))
+                    },
+                    onFailure = { error ->
+                        _events.emit(TextScanEvent.Error(error.message ?: "unknown error"))
+                    }
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                _events.emit(TextScanEvent.Cancelled)
+                throw e
+            } catch (e: Exception) {
+                _events.emit(TextScanEvent.Error(e.message ?: "unknown error"))
+            } finally {
+                _progress.value = null
+            }
+        }
+    }
+
     /** Writes the planned cards to AnkiDroid. */
     fun generate() {
         val plan = _plan.value ?: return
@@ -345,19 +457,45 @@ class TextScanViewModel @Inject constructor(
                     plan.selected.map { withSourceSentence(it, filters.useSourceSentences) }
                 )
 
-                val result = ankiCardCreator.exportBatchToAnki(
-                    entries = entries,
-                    deckName = deck,
-                    stylePrefs = stylePrefs,
-                    kanjiProvider = { kanji -> repository.getKanjis(kanji) },
-                    tts = tts,
-                    // See the JLPT generator: the archive answers without TTS.
-                    audioWanted = filters.generateAudio,
-                    tags = tagsForSources(plan.sources),
-                    onProgress = { done, total, word ->
-                        _progress.value = JlptDeckProgress(done, total, word)
+                // AnkiDroid's provider cannot suspend, so marked cards are
+                // written with an extra tag and the user is told; the .apkg
+                // path suspends them for real.
+                val marks = _suspendedKeys.value
+                val toSuspend = entries.filter { markKey(it) in marks }
+                val toStudy = entries.filterNot { markKey(it) in marks }
+
+                suspend fun writeBatch(batch: List<WordEntry>, extraTag: String?) =
+                    if (batch.isEmpty()) {
+                        Result.success(com.yomitanmobile.data.anki.BatchExportResult(0, 0))
+                    } else {
+                        ankiCardCreator.exportBatchToAnki(
+                            entries = batch,
+                            deckName = deck,
+                            stylePrefs = stylePrefs,
+                            kanjiProvider = { kanji -> repository.getKanjis(kanji) },
+                            tts = tts,
+                            // See the JLPT generator: the archive answers
+                            // without TTS.
+                            audioWanted = filters.generateAudio,
+                            tags = tagsForSources(plan.sources) + listOfNotNull(extraTag),
+                            onProgress = { done, total, word ->
+                                _progress.value = JlptDeckProgress(done, total, word)
+                            }
+                        )
                     }
-                )
+
+                val studied = writeBatch(toStudy, null)
+                val marked = writeBatch(toSuspend, SUSPEND_TAG)
+                if (toSuspend.isNotEmpty()) {
+                    _events.emit(TextScanEvent.SuspendNeedsAnki(SUSPEND_TAG, toSuspend.size))
+                }
+                val result = studied.mapCatching { first ->
+                    val second = marked.getOrThrow()
+                    com.yomitanmobile.data.anki.BatchExportResult(
+                        added = first.added + second.added,
+                        failed = first.failed + second.failed
+                    )
+                }
 
                 result.fold(
                     onSuccess = { batch ->
@@ -482,6 +620,9 @@ class TextScanViewModel @Inject constructor(
 
     companion object {
         const val DEFAULT_DECK = "Yomitan Mobile"
+
+        /** See JlptDeckViewModel.SUSPEND_TAG. The same tag on purpose. */
+        const val SUSPEND_TAG = "yomitan-suspend"
 
         /** Note-type label the scan screen shows for generated words. */
         private const val GENERATED_SOURCE = "Yomitan Mobile (skan tekstu)"

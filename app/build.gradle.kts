@@ -213,6 +213,10 @@ dependencies {
 
     // Unit tests
     testImplementation("junit:junit:4.13.2")
+    // A real org.json on the JVM classpath. The Android stub throws on every
+    // call, and the .apkg writer's whole output is JSON blobs — untestable
+    // without it.
+    testImplementation("org.json:json:20231013")
     // Pinned to the same 1.7.3 line as coroutines-android so test runtime
     // matches production.
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
