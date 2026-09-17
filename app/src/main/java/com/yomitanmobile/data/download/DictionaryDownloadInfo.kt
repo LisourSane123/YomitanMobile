@@ -228,6 +228,37 @@ object AvailableDictionaries {
         studyLanguage = AppLanguage.SPANISH
     )
 
+    /**
+     * Everything on offer, in the order the download screen draws it.
+     *
+     * Exactly THREE frequency lists live here, one per register, and that is
+     * a decision rather than a state of the port:
+     *
+     *   • JPDB — anime, manga, light novels and visual novels. The default,
+     *     and the one in [recommended].
+     *   • BCCWJ — news, books, formal writing. The balanced written corpus.
+     *   • CEJC — recorded everyday conversation.
+     *
+     * Seven of them were offered before, and the extra four (CSJ, NWJC,
+     * Aozora Bunko, and the ones still waiting for a mirror) bought almost
+     * nothing: only the LEADING list's numbers reach a card, an Anki reorder
+     * addon or a rarity cut, so every list past the first is a tiebreak for
+     * words the leader does not know. Three registers cover what a learner
+     * actually chooses between; more of them turn `FrequencyDisplayScreen`
+     * into a list to scroll and each one costs another rollup pass.
+     *
+     * All three ship RANKS, not occurrence counts — 1 is the commonest word
+     * and the numbers climb as words get rarer, which is the direction the
+     * card's `Frequency` field, the search order and the "Top N" tiers all
+     * read (see [com.yomitanmobile.domain.model.FrequencyDirection]). Keep it
+     * that way: a count-based list added here would be detected at import and
+     * stored honestly, but it would put a five-million on a card next to a
+     * four-digit one from another list and mean the opposite by it.
+     *
+     * A list the user wants anyway still goes in by hand through the
+     * "import dictionary from file" path — nothing below is a whitelist for
+     * what the app can read, only for what it offers.
+     */
     val all: List<DictionaryDownloadInfo> = listOf(
         jitendex,
         wiktionaryEnPl,
@@ -277,8 +308,8 @@ object AvailableDictionaries {
         DictionaryDownloadInfo(
             id = "jpdb_freq",
             name = "JPDB Frequency v2.2",
-            descriptionPl = "Ranking częstotliwości z jpdb.io – anime, manga, visual novels. Najnowsza wersja.",
-            descriptionEn = "Frequency ranking from jpdb.io - anime, manga, visual novels. Latest version.",
+            descriptionPl = "Ranking częstotliwości z jpdb.io – anime, manga, light novele, visual novele. Lista domyślna. Im niższa liczba, tym częstsze słowo.",
+            descriptionEn = "Frequency ranking from jpdb.io - anime, manga, light novels, visual novels. The default list. Lower number = commoner word.",
             category = DictionaryCategory.FREQUENCY,
             url = "https://raw.githubusercontent.com/Kuuuube/yomitan-dictionaries/d6fde809e3f26eb5aed6d41896f332179044998c/dictionaries/JPDB_v2.2_Frequency_2024-10-13.zip",
             fileSize = "~5 MB",
@@ -293,78 +324,32 @@ object AvailableDictionaries {
         DictionaryDownloadInfo(
             id = "bccwj_freq",
             name = "BCCWJ Frequency",
-            descriptionPl = "Częstotliwości z korpusu BCCWJ – prasa, książki, teksty formalne. Uzupełnia JPDB.",
-            descriptionEn = "Frequencies from the BCCWJ corpus - news, books, formal writing. Complements JPDB.",
+            descriptionPl = "Częstotliwości z korpusu BCCWJ – prasa, książki, teksty formalne. Uzupełnia JPDB. Im niższa liczba, tym częstsze słowo.",
+            descriptionEn = "Frequencies from the BCCWJ corpus - news, books, formal writing. Complements JPDB. Lower number = commoner word.",
             category = DictionaryCategory.FREQUENCY,
             url = "https://raw.githubusercontent.com/Kuuuube/yomitan-dictionaries/d6fde809e3f26eb5aed6d41896f332179044998c/dictionaries/BCCWJ_SUW_LUW_combined.zip",
             fileSize = "~19 MB",
             sha256 = "7d17054735e738d02e9f7f62fdad5d6e592a458abd93301367500d04d0c000c3",
             language = "EN"
         ),
-        // ── Frequency lists covering the registers JPDB (media/fiction) and
-        // BCCWJ (formal writing) miss. All four are rank-based Yomitan meta
-        // dictionaries pinned to a commit + sha256, same rule as above.
-        //
         // Everyday spoken Japanese: NINJAL's conversation corpus, recorded
         // real-life talk. The single best list for "what people actually say"
         // — words like うん / そう / ちょっと rank at the top here and nowhere
         // near it in a written corpus.
+        //
+        // Third and last of the frequency lists on offer; see the note above
+        // `all` for why the catalogue stops at three.
         DictionaryDownloadInfo(
             id = "cejc_freq",
             name = "CEJC (Conversation)",
-            descriptionPl = "Częstotliwości z korpusu codziennych rozmów (NINJAL CEJC). Najlepsza lista dla języka mówionego.",
-            descriptionEn = "Frequencies from the Corpus of Everyday Japanese Conversation (NINJAL). The best list for spoken Japanese.",
+            descriptionPl = "Częstotliwości z korpusu codziennych rozmów (NINJAL CEJC). Najlepsza lista dla języka mówionego. Im niższa liczba, tym częstsze słowo.",
+            descriptionEn = "Frequencies from the Corpus of Everyday Japanese Conversation (NINJAL). The best list for spoken Japanese. Lower number = commoner word.",
             category = DictionaryCategory.FREQUENCY,
             url = "https://raw.githubusercontent.com/forsakeninfinity/CEJC_yomichan_freq_dict/" +
                 "854ed02b791a9ca247d0752fb22d34f1ab3c650f/releases/" +
                 "Corpus%20of%20Everyday%20Japanese%20Conversation.zip",
             fileSize = "~2 MB",
             sha256 = "273c603b7ea285debfd8b7d41dc326f97b2fd42c2ed94f22e6dafc1c9cbd8a6b",
-            language = "JA"
-        ),
-        // Spontaneous speech (lectures, monologues) — complements CEJC's
-        // dialogue with the register you meet in talks and presentations.
-        DictionaryDownloadInfo(
-            id = "csj_freq",
-            name = "CSJ (Spoken)",
-            descriptionPl = "Częstotliwości z Korpusu Mowy Spontanicznej (CSJ) – wykłady, wypowiedzi mówione.",
-            descriptionEn = "Frequencies from the Corpus of Spontaneous Japanese (CSJ) - lectures and spoken monologue.",
-            category = DictionaryCategory.FREQUENCY,
-            url = "https://raw.githubusercontent.com/Maltesaa/CSJ_and_NWJC_yomitan_freq_dict/" +
-                "9902cc61eb8bfd9b5f99ad74e46349200777c103/CSJ%20releases/" +
-                "Corpus%20of%20Spontaneous%20Japanese%20-%20CSJ.zip",
-            fileSize = "~3 MB",
-            sha256 = "2d3fd1735129f4d55871ce65125cd45197b8f28894d1fbb59ebd140c9de207c8",
-            language = "JA"
-        ),
-        // Web Japanese: blogs, forums, shops. The register of most casual
-        // written Japanese online, which neither BCCWJ nor JPDB covers.
-        DictionaryDownloadInfo(
-            id = "nwjc_freq",
-            name = "NWJC (Web)",
-            descriptionPl = "Częstotliwości z korpusu japońskiego internetu (NINJAL NWJC) – blogi, fora, sklepy.",
-            descriptionEn = "Frequencies from the NINJAL Web Japanese Corpus - blogs, forums, shops.",
-            category = DictionaryCategory.FREQUENCY,
-            url = "https://raw.githubusercontent.com/Maltesaa/CSJ_and_NWJC_yomitan_freq_dict/" +
-                "9902cc61eb8bfd9b5f99ad74e46349200777c103/NWJC%20releases/" +
-                "NINJAL%20Web%20Japanese%20Corpus%20-%20NWJC.zip",
-            fileSize = "~8 MB",
-            sha256 = "b20b9e6e29f4abf4e9a1a37a59314ea66cf5868cad1a94014847381bda23e8e8",
-            language = "JA"
-        ),
-        // Literary/classical vocabulary from Aozora Bunko. Keyed by kanji
-        // compound (jukugo) with no readings, so it ranks written vocabulary
-        // rather than spoken forms — the counterpart to CEJC.
-        DictionaryDownloadInfo(
-            id = "aozora_freq",
-            name = "Aozora Bunko (Literary)",
-            descriptionPl = "Częstotliwości złożeń kanji z Aozora Bunko – literatura klasyczna i formalna.",
-            descriptionEn = "Kanji-compound frequencies from Aozora Bunko - classical and literary Japanese.",
-            category = DictionaryCategory.FREQUENCY,
-            url = "https://raw.githubusercontent.com/MarvNC/yomitan-dictionaries/" +
-                "574961e823e33fb36b6b86778a0d6b606af29c25/dl/%5BFreq%5D%20Aozora%20Bunko.zip",
-            fileSize = "~1 MB",
-            sha256 = "116009c3034d97a16b257fda10f2138067815986c954bffbb5c93aad60faa867",
             language = "JA"
         ),
         DictionaryDownloadInfo(
@@ -382,33 +367,18 @@ object AvailableDictionaries {
     )
 
     // ─────────────────────────────────────────────────────────────────────
-    // Frequency lists that still need a mirror (TO WIRE UP).
+    // Deliberately NOT offered.
     //
-    // These are only distributed through MarvNC's Google Drive folder or
-    // catbox, and ALLOWED_DOWNLOAD_HOSTS in DictionaryDownloadManager permits
-    // GitHub hosts only (so a pinned URL + sha256 can't be swapped under us):
+    // CC100, Innocent Corpus, Narou, Anime & Drama and the sixteen YouTube
+    // lists are distributed through MarvNC's Google Drive folder or catbox,
+    // and ALLOWED_DOWNLOAD_HOSTS in DictionaryDownloadManager permits GitHub
+    // only. Mirroring them is no longer the blocker though — the catalogue is
+    // capped at three lists on purpose (see the note on `all`), so a new one
+    // would have to replace a register rather than join the list.
     //
-    //   • CC100            – web crawl corpus, the list learnjapanese.moe pairs
-    //                        with JPDB
-    //   • Innocent Corpus  – ~5000 visual novel scripts
-    //   • Narou            – 小説家になろう web novels
-    //   • Anime & Drama    – subs2srs subtitle corpus
-    //   • YouTube (x16)    – domain-specific spoken lists
-    //
-    // Once mirrored to a GitHub repo, each becomes one entry in `all` above —
-    // no code change beyond the URL, because storage, per-source display and
-    // the ordering settings already handle any number of FREQUENCY lists (the
-    // zip's index.json title becomes the source label automatically):
-    //
-    //   DictionaryDownloadInfo(
-    //       id = "cc100_freq",
-    //       name = "CC100 (Web crawl)",
-    //       descriptionPl = "…", descriptionEn = "…",
-    //       category = DictionaryCategory.FREQUENCY,
-    //       url = "https://raw.githubusercontent.com/<user>/<repo>/<commit>/cc100.zip",
-    //       fileSize = "~? MB",
-    //       sha256 = "<sha256sum of the zip>",
-    //   ),
+    // CSJ (spontaneous speech), NWJC (web) and Aozora Bunko (literary) were
+    // offered and removed for that reason. Their FrequencyCorpus labels stay,
+    // so a user who imports one by hand still gets it described properly.
     // ─────────────────────────────────────────────────────────────────────
 
     fun getByCategory(category: DictionaryCategory): List<DictionaryDownloadInfo> {
