@@ -1727,6 +1727,82 @@ class AnkiCardCreator(
         notes to media.files
     }
 
+    /**
+     * Every field of a card for [entry], built exactly as an export would.
+     *
+     * Exists for refreshing notes that are ALREADY in the collection: their
+     * fields were written by an older version of the app, with older data
+     * (an empty Frequency because no list was installed yet, no audio, a kanji
+     * breakdown from a dictionary since replaced). The provider cannot change
+     * a note's type, but `updateNoteFields` can rewrite its contents.
+     */
+    suspend fun rebuildFields(
+        entry: WordEntry,
+        stylePrefs: CardStylePreferences?,
+        kanjiData: List<com.yomitanmobile.data.local.entity.KanjiEntry> = emptyList(),
+        tts: TextToSpeech? = null,
+        audioWanted: Boolean = false
+    ): Array<String> {
+        val audio = if (audioWanted) resolveAudio(entry, tts, stylePrefs) else ""
+        val randomFont = if (
+            stylePrefs != null && stylePrefs.randomFontsEnabled && stylePrefs.randomFonts.isNotEmpty()
+        ) {
+            stylePrefs.randomFonts.random()
+        } else null
+        return createAnkiCard(entry, audio, randomFont, stylePrefs)
+            .copy(kanjiBreakdown = buildKanjiBreakdownHtml(entry, kanjiData))
+            .toFieldArray(profile)
+    }
+
+    /**
+     * Rewrites the templates and CSS of one note type to the current design.
+     *
+     * Public because of the mess this app made: a collection can hold hundreds
+     * of near-identical note types minted by the old refusal path, and while
+     * the provider will not merge them, it will restyle them — so every card
+     * renders as the current design even though its note type is a stray.
+     *
+     * False when the provider refused the write, which is the same refusal
+     * that created the strays in the first place.
+     */
+    fun restyleModel(modelId: Long, stylePrefs: CardStylePreferences?): Boolean {
+        val (css, front, back) = packageStyling(stylePrefs)
+        updateModelCss(modelId, css)
+        return updateModelTemplates(modelId, front, back)
+    }
+
+    /** Note types whose name is ours — the canonical one and its strays. */
+    fun ourModels(): Map<Long, String> = try {
+        val canonical = com.yomitanmobile.domain.model.CardProfile.entries.map { it.modelName }
+        (ankiApi.modelList ?: emptyMap()).filterValues { name ->
+            canonical.any { base -> name == base || name.startsWith("$base-") }
+        }
+    } catch (_: Exception) {
+        emptyMap()
+    }
+
+    /** How many notes one note type holds. */
+    fun noteCountOf(modelId: Long): Int = try {
+        ankiApi.getNoteCount(modelId)
+    } catch (_: Exception) {
+        0
+    }
+
+    /** Field names of one note type, so a stray can be written by name. */
+    fun fieldNamesOf(modelId: Long): List<String> = try {
+        ankiApi.getFieldList(modelId)?.toList().orEmpty()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    /** Rewrites one existing note's fields. False when the provider refused. */
+    fun updateNoteFields(noteId: Long, fields: Array<String>): Boolean = try {
+        ankiApi.updateNoteFields(noteId, fields)
+    } catch (e: Exception) {
+        android.util.Log.w("AnkiCardCreator", "updateNoteFields failed for $noteId", e)
+        false
+    }
+
     /** The note type a package written now would carry. */
     fun packageProfile(): com.yomitanmobile.domain.model.CardProfile = profile
 

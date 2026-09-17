@@ -18,6 +18,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -85,10 +88,58 @@ fun AnkiScanScreen(
     val isScanning by viewModel.isScanning.collectAsState()
     val summary by viewModel.summary.collectAsState()
     val storedWordCount by viewModel.storedWordCount.collectAsState()
+    val refreshSurvey by viewModel.refreshSurvey.collectAsState()
+    val refreshing by viewModel.refreshing.collectAsState()
+    val refreshProgress by viewModel.refreshProgress.collectAsState()
+    val refreshReport by viewModel.refreshReport.collectAsState()
+    var confirmRefresh by remember { mutableStateOf(false) }
     val sources by viewModel.sources.collectAsState()
     val words by viewModel.words.collectAsState()
     val query by viewModel.query.collectAsState()
     val error by viewModel.error.collectAsState()
+
+    if (confirmRefresh) {
+        AlertDialog(
+            onDismissRequest = { confirmRefresh = false },
+            title = { Text(tr("Przepisać pola fiszek?", "Rewrite the card fields?")) },
+            text = {
+                Text(
+                    tr(
+                        "Każda notatka tej aplikacji zostanie zbudowana na nowo z dzisiejszych " +
+                            "danych: częstotliwość z listy wiodącej, akcent, rozkład kanji, " +
+                            "wymowa z archiwum. Historia powtórek, talia i harmonogram zostają " +
+                            "nietknięte — zmienia się treść pól.\n\n" +
+                            "Pole, którego nie da się odtworzyć (streszczenie AI, zdanie z " +
+                            "książki), zachowuje dotychczasową wartość. Słowo, którego nie ma w " +
+                            "żadnym zainstalowanym słowniku, jest pomijane w całości.\n\n" +
+                            "Zrób najpierw kopię zapasową kolekcji w AnkiDroidzie.",
+                        "Every note of this app is rebuilt from today's data: the frequency from " +
+                            "the leading list, pitch accent, kanji breakdown, a recording from " +
+                            "the archive. Review history, deck and scheduling are untouched — " +
+                            "the field contents change.\n\n" +
+                            "A field that cannot be rebuilt (the AI summary, a sentence from a " +
+                            "book) keeps what it had. A word no installed dictionary knows is " +
+                            "skipped entirely.\n\n" +
+                            "Back up your collection in AnkiDroid first."
+                    ),
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRefresh = false
+                    withAnkiPermission { viewModel.refreshNotes(audioWanted = true) }
+                }) {
+                    Text(tr("Przepisz", "Rewrite"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRefresh = false }) {
+                    Text(tr("Anuluj", "Cancel"))
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -283,6 +334,16 @@ fun AnkiScanScreen(
                     }
 
                     Spacer(Modifier.height(12.dp))
+                    RefreshSection(
+                        survey = refreshSurvey,
+                        refreshing = refreshing,
+                        progress = refreshProgress,
+                        report = refreshReport,
+                        onRestyle = viewModel::restyleNoteTypes,
+                        onRefresh = { confirmRefresh = true },
+                        onCancel = viewModel::cancelRefresh,
+                        onDismissReport = viewModel::clearRefreshReport
+                    )
                 } else if (storedWordCount > 0) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Text(
@@ -490,3 +551,130 @@ private fun StrayNoteTypeCard(
 
 /** A collection can hold a thousand of these; the card shows the worst few. */
 private const val STRAY_PREVIEW_LIMIT = 8
+
+
+/**
+ * Bringing cards this app wrote earlier up to what it writes today.
+ *
+ * Two buttons for two different operations, and the difference matters:
+ * restyling touches note TYPES only (no note, no scheduling, nothing to lose),
+ * while refreshing rewrites the contents of real notes and is therefore
+ * confirmed, backed by the rule that an unbuildable field keeps its old value.
+ *
+ * What is missing from the list is merging the stray note types, and it is
+ * missing because the provider cannot do it — see AnkiNoteRefresher.
+ */
+@Composable
+private fun RefreshSection(
+    survey: com.yomitanmobile.data.anki.AnkiNoteRefresher.Survey?,
+    refreshing: Boolean,
+    progress: Triple<Int, Int, String>?,
+    report: RefreshReport?,
+    onRestyle: () -> Unit,
+    onRefresh: () -> Unit,
+    onCancel: () -> Unit,
+    onDismissReport: () -> Unit
+) {
+    val tr = rememberTr()
+    if (survey == null || !survey.available || survey.noteCount == 0) return
+
+    Spacer(Modifier.height(12.dp))
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                tr("Odśwież fiszki tej aplikacji", "Refresh this app's cards"),
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                tr(
+                    "${survey.noteCount} notatek w ${survey.modelCount} typach notatek.",
+                    "${survey.noteCount} notes across ${survey.modelCount} note types."
+                ),
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                tr(
+                    "Wygląd: nadpisuje szablony i CSS we wszystkich typach notatek — także " +
+                        "w tych zduplikowanych, więc stare fiszki zaczynają wyglądać jak nowe. " +
+                        "Nie rusza żadnej notatki.",
+                    "Look: rewrites the templates and CSS on every note type of ours, the " +
+                        "duplicated ones included, so old cards start rendering like new ones. " +
+                        "No note is touched."
+                ),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                tr(
+                    "Treść: przepisuje pola z dzisiejszych danych — częstotliwość, akcent, " +
+                        "kanji, wymowa z archiwum. Historia powtórek zostaje.",
+                    "Contents: rewrites the fields from today's data — frequency, pitch, kanji, " +
+                        "a recording from the archive. Review history is kept."
+                ),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (progress != null) {
+                Spacer(Modifier.height(8.dp))
+                val (done, total, word) = progress
+                Text(
+                    tr("$done / $total — $word", "$done / $total — $word"),
+                    fontSize = 12.sp
+                )
+                LinearProgressIndicator(
+                    progress = if (total > 0) done.toFloat() / total else 0f,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            report?.let { outcome ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    when (outcome) {
+                        is RefreshReport.Restyled -> if (outcome.refused > 0) {
+                            tr(
+                                "Odświeżono wygląd ${outcome.restyled} typów; " +
+                                    "${outcome.refused} odrzucił AnkiDroid.",
+                                "Restyled ${outcome.restyled} note types; AnkiDroid refused " +
+                                    "${outcome.refused}."
+                            )
+                        } else {
+                            tr(
+                                "Odświeżono wygląd ${outcome.restyled} typów notatek.",
+                                "Restyled ${outcome.restyled} note types."
+                            )
+                        }
+                        is RefreshReport.Refreshed -> tr(
+                            "Przepisano ${outcome.updated} notatek; ${outcome.missing} słów " +
+                                "nie ma w żadnym słowniku; ${outcome.refused} odrzucił AnkiDroid.",
+                            "Rewrote ${outcome.updated} notes; ${outcome.missing} words are in " +
+                                "no dictionary; AnkiDroid refused ${outcome.refused}."
+                        )
+                        RefreshReport.Failed -> tr(
+                            "Nie udało się — sprawdź uprawnienie do AnkiDroida.",
+                            "It failed — check the AnkiDroid permission."
+                        )
+                    },
+                    fontSize = 13.sp
+                )
+                TextButton(onClick = onDismissReport) { Text(tr("OK", "OK")) }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onRestyle, enabled = !refreshing) {
+                    Text(tr("Odśwież wygląd", "Refresh the look"))
+                }
+                OutlinedButton(onClick = onRefresh, enabled = !refreshing) {
+                    Text(tr("Przepisz pola", "Rewrite the fields"))
+                }
+                if (refreshing) {
+                    TextButton(onClick = onCancel) { Text(tr("Przerwij", "Stop")) }
+                }
+            }
+        }
+    }
+}

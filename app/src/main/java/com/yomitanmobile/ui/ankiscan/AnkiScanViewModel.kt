@@ -14,6 +14,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Outcome of a restyle or a refresh, for the screen to put into words. */
+sealed interface RefreshReport {
+    data class Restyled(val restyled: Int, val refused: Int) : RefreshReport
+    data class Refreshed(val updated: Int, val missing: Int, val refused: Int) : RefreshReport
+    object Failed : RefreshReport
+}
+
 /**
  * Drives the "what does my AnkiDroid collection already contain?" screen.
  *
@@ -24,7 +31,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AnkiScanViewModel @Inject constructor(
-    private val store: AnkiCollectionStore
+    private val store: AnkiCollectionStore,
+    private val refresher: com.yomitanmobile.data.anki.AnkiNoteRefresher
 ) : ViewModel() {
 
     private val logTag = "AnkiScanViewModel"
@@ -52,8 +60,85 @@ class AnkiScanViewModel @Inject constructor(
 
     private var searchJob: Job? = null
 
+    // ── Refreshing cards this app wrote earlier ──────────────────────────
+
+    private val _refreshSurvey =
+        MutableStateFlow<com.yomitanmobile.data.anki.AnkiNoteRefresher.Survey?>(null)
+    val refreshSurvey: StateFlow<com.yomitanmobile.data.anki.AnkiNoteRefresher.Survey?> =
+        _refreshSurvey.asStateFlow()
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /** Word being rewritten, with its position, while a refresh runs. */
+    private val _refreshProgress = MutableStateFlow<Triple<Int, Int, String>?>(null)
+    val refreshProgress: StateFlow<Triple<Int, Int, String>?> = _refreshProgress.asStateFlow()
+
+    private val _refreshReport = MutableStateFlow<RefreshReport?>(null)
+    val refreshReport: StateFlow<RefreshReport?> = _refreshReport.asStateFlow()
+
+    private var refreshJob: Job? = null
+
     init {
         reloadStored()
+        surveyRefresh()
+    }
+
+    /** Counts our note types and notes, writing nothing. */
+    fun surveyRefresh() {
+        viewModelScope.launch {
+            _refreshSurvey.value = runCatching { refresher.survey() }
+                .getOrElse {
+                    Log.w(logTag, "Survey failed", it)
+                    null
+                }
+        }
+    }
+
+    /**
+     * Rewrites templates and CSS on every note type of ours.
+     *
+     * Touches no note, so it needs no confirmation: the worst case is that a
+     * card renders with a layout the user then changes again.
+     */
+    fun restyleNoteTypes() {
+        if (_refreshing.value) return
+        _refreshing.value = true
+        refreshJob = viewModelScope.launch {
+            val result = runCatching { refresher.restyleAll() }.getOrNull()
+            _refreshing.value = false
+            _refreshReport.value = result
+                ?.let { RefreshReport.Restyled(it.restyled, it.refused) }
+                ?: RefreshReport.Failed
+        }
+    }
+
+    /** Rebuilds the FIELDS of our notes. Writes into the collection. */
+    fun refreshNotes(audioWanted: Boolean) {
+        if (_refreshing.value) return
+        _refreshing.value = true
+        refreshJob = viewModelScope.launch {
+            val result = runCatching {
+                refresher.refreshAll(audioWanted) { done, total, word ->
+                    _refreshProgress.value = Triple(done, total, word)
+                }
+            }.getOrNull()
+            _refreshing.value = false
+            _refreshProgress.value = null
+            _refreshReport.value = result
+                ?.let { RefreshReport.Refreshed(it.updated, it.notInDictionary, it.refused) }
+                ?: RefreshReport.Failed
+        }
+    }
+
+    fun cancelRefresh() {
+        refreshJob?.cancel()
+        _refreshing.value = false
+        _refreshProgress.value = null
+    }
+
+    fun clearRefreshReport() {
+        _refreshReport.value = null
     }
 
     fun setQuery(value: String) {
