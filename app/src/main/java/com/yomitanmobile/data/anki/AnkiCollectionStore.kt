@@ -41,12 +41,26 @@ class AnkiCollectionStore @Inject constructor(
         /** False when the provider could not be read at all. */
         val available: Boolean,
         /** True when the sweep hit its note ceiling and covered only part. */
-        val truncated: Boolean = false
+        val truncated: Boolean = false,
+        /**
+         * Note types this app created that a collection should only ever have
+         * one of, with how many notes each holds.
+         *
+         * A refused template write used to mint `Yomitan-Mobile-v8-1`,
+         * `-2`… on every export; one real collection ended up with 1 113 of
+         * them, 1 029 holding a single note. The cause is fixed, but the
+         * damage stays until someone merges them, and nothing in the app could
+         * even show it.
+         */
+        val strayNoteTypes: List<StrayNoteType> = emptyList()
     ) {
         companion object {
             val UNAVAILABLE = ScanSummary(0, 0, 0, 0L, available = false)
         }
     }
+
+    /** One near-duplicate note type this app left behind. See [ScanSummary]. */
+    data class StrayNoteType(val name: String, val notes: Int)
 
     private val cacheLock = Mutex()
     @Volatile
@@ -101,9 +115,27 @@ class AnkiCollectionStore @Inject constructor(
                 matureWordCount = rows.count { it.mature },
                 scannedAt = now,
                 available = true,
-                truncated = scan.truncated
+                truncated = scan.truncated,
+                strayNoteTypes = strayNoteTypes(scan.notesPerModel)
             )
         }
+
+    /**
+     * Note types of ours beyond the one there should be, worst first.
+     *
+     * Matched by name rather than by field list: the strays are exactly the
+     * ones whose name is the canonical one plus a numeric suffix, because that
+     * is how AnkiDroid names a model it was asked to create twice.
+     */
+    private fun strayNoteTypes(notesPerModel: Map<String, Int>): List<StrayNoteType> {
+        val canonical = com.yomitanmobile.domain.model.CardProfile.entries.map { it.modelName }
+        return notesPerModel
+            .filterKeys { name ->
+                canonical.any { base -> name != base && name.startsWith("$base-") }
+            }
+            .map { (name, notes) -> StrayNoteType(name, notes) }
+            .sortedByDescending { it.notes }
+    }
 
     /**
      * Records words this app just wrote into AnkiDroid, so the stored scan

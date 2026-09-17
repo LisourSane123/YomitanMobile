@@ -602,6 +602,7 @@ fun TextScanScreen(
                         if (currentPlan.grammarUses.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
                             Divider()
+                            GrammarHighlights(currentPlan.grammarUses)
                             GrammarCounter(currentPlan.grammarUses, isEnglish)
                         }
                     }
@@ -759,6 +760,48 @@ private fun stageLabel(stage: String, isEnglish: Boolean): String = when (stage)
 private val ASSUME_KNOWN_RANKS = listOf(0, 1_000, 2_000, 3_000, 5_000)
 
 /**
+ * What the text leans on grammatically, as something to read before reading.
+ *
+ * The counter below it is an instrument for tuning the filters; this is the
+ * same data answering a learner's question instead — a construction met forty
+ * times in one volume is worth half an hour with a grammar guide, and no
+ * vocabulary deck will teach it.
+ *
+ * Its limits are stated rather than hidden: what the scanner can see are
+ * dictionary ENTRIES tagged as grammar, so 〜ざるを得ない shows up and 〜ている
+ * never will — JMdict has no entry for it.
+ */
+@Composable
+private fun GrammarHighlights(uses: List<GrammarUse>) {
+    val tr = rememberTr()
+    val top = uses.sortedByDescending { it.occurrences }.take(GRAMMAR_HIGHLIGHT_LIMIT)
+    if (top.isEmpty()) return
+
+    Spacer(Modifier.height(8.dp))
+    Text(
+        tr("Na czym stoi ten tekst:", "What this text leans on:"),
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium
+    )
+    Text(
+        top.joinToString("、") { "${it.form}(${it.occurrences})" },
+        fontSize = 14.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Text(
+        tr(
+            "Konstrukcje, które słownik zna jako osobne hasła — powtórz je przed lekturą. " +
+                "Formy bez własnego hasła (〜ている, 〜てしまう) się tu nie pojawią.",
+            "Constructions the dictionary lists as entries of their own — worth revising " +
+                "before you read. Forms with no entry (〜ている, 〜てしまう) cannot appear here."
+        ),
+        fontSize = 11.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(Modifier.height(4.dp))
+}
+
+/**
  * How often the text used each grammatical structure.
  *
  * A diagnostic, collapsed by default: it is the only way to see where the
@@ -838,6 +881,9 @@ private fun GrammarCounter(uses: List<GrammarUse>, isEnglish: Boolean) {
 }
 
 /** Long enough to see the shape of the text, short enough to scroll past. */
+/** How many structures the pre-reading summary names. */
+private const val GRAMMAR_HIGHLIGHT_LIMIT = 10
+
 private const val GRAMMAR_COUNTER_LIMIT = 60
 
 private fun grammarSourceLabel(source: GrammarSource, isEnglish: Boolean): String = when (source) {

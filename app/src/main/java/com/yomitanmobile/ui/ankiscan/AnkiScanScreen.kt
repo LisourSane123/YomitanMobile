@@ -277,6 +277,11 @@ fun AnkiScanScreen(
                             }
                         }
                     }
+                    if (result.strayNoteTypes.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        StrayNoteTypeCard(result.strayNoteTypes)
+                    }
+
                     Spacer(Modifier.height(12.dp))
                 } else if (storedWordCount > 0) {
                     Card(modifier = Modifier.fillMaxWidth()) {
@@ -397,3 +402,91 @@ fun AnkiScanScreen(
 }
 
 private const val ANKI_PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
+
+/**
+ * Near-duplicate note types this app left in the collection.
+ *
+ * A report and nothing more, and that is deliberate. AnkiDroid's provider
+ * cannot move a note to a different note type: the only way to do it from here
+ * would be to create a new note and delete the old one, which throws away its
+ * review history — the single thing in a collection that cannot be rebuilt.
+ * Anki on the desktop changes a note type in place, in one action, so the
+ * honest help is to say exactly what to do there.
+ *
+ * The cause is fixed (see `getOrCreateModel`), so this list can only shrink.
+ */
+@Composable
+private fun StrayNoteTypeCard(
+    strays: List<com.yomitanmobile.data.anki.AnkiCollectionStore.StrayNoteType>
+) {
+    val tr = rememberTr()
+    val singles = strays.count { it.notes <= 1 }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                tr(
+                    "${strays.size} zbędnych typów notatek",
+                    "${strays.size} redundant note types"
+                ),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                tr(
+                    "Starsze wersje tej aplikacji tworzyły nowy typ notatki, gdy AnkiDroid " +
+                        "odmówił zapisu szablonu — $singles z nich trzyma jedną notatkę. " +
+                        "Nowe eksporty już tego nie robią.",
+                    "Older versions of this app minted a new note type whenever AnkiDroid " +
+                        "refused a template write — $singles of these hold a single note. " +
+                        "New exports no longer do that."
+                ),
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                tr(
+                    "Naprawa musi się odbyć w Anki na komputerze: Przeglądaj → zaznacz " +
+                        "notatki → Notatki → Zmień typ notatki. Aplikacja tego nie zrobi — " +
+                        "AnkiDroid nie pozwala zmienić typu notatki, a obejście (nowa " +
+                        "notatka i skasowanie starej) kasuje historię powtórek.",
+                    "The fix has to happen in Anki on the desktop: Browse → select the " +
+                        "notes → Notes → Change Note Type. The app cannot do it — AnkiDroid " +
+                        "has no way to change a note's type, and the workaround (new note, " +
+                        "delete the old) throws away its review history."
+                ),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(Modifier.height(8.dp))
+            for (stray in strays.take(STRAY_PREVIEW_LIMIT)) {
+                Text(
+                    tr(
+                        "${stray.name} — ${stray.notes} notatek",
+                        "${stray.name} — ${stray.notes} notes"
+                    ),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            if (strays.size > STRAY_PREVIEW_LIMIT) {
+                Text(
+                    tr(
+                        "...oraz ${strays.size - STRAY_PREVIEW_LIMIT} kolejnych",
+                        "...and ${strays.size - STRAY_PREVIEW_LIMIT} more"
+                    ),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
+    }
+}
+
+/** A collection can hold a thousand of these; the card shows the worst few. */
+private const val STRAY_PREVIEW_LIMIT = 8

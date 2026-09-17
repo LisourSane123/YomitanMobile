@@ -171,7 +171,16 @@ class AnkiCollectionIndex @Inject constructor(
          * have this word yet" answers on a very large collection, which is the
          * one thing the duplicate check must never say.
          */
-        val truncated: Boolean = false
+        val truncated: Boolean = false,
+        /**
+         * Notes per note type across the whole sweep.
+         *
+         * Not for matching — it is what lets the scan screen show a collection
+         * that has accumulated hundreds of near-identical note types, which is
+         * exactly what this app did to one real collection before
+         * `getOrCreateModel` learned to stop.
+         */
+        val notesPerModel: Map<String, Int> = emptyMap()
     ) {
         val wordCount: Int get() = wordSources.size
 
@@ -215,6 +224,10 @@ class AnkiCollectionIndex @Inject constructor(
     private fun scanNotes(search: String?, maxNotes: Int): Scan? {
         val sources = LinkedHashMap<String, String>(4096)
         val perNote = HashSet<String>(16)
+        // Notes per note type. Free here — the sweep already reads every
+        // note's model id — and the only way to see a collection's note-type
+        // hygiene without one provider query per note type.
+        val notesPerModel = HashMap<String, Int>()
         var notes = 0
         return try {
             val modelNames = loadModelNames()
@@ -248,6 +261,9 @@ class AnkiCollectionIndex @Inject constructor(
                     } else {
                         ""
                     }
+                    if (noteType.isNotEmpty()) {
+                        notesPerModel[noteType] = (notesPerModel[noteType] ?: 0) + 1
+                    }
                     perNote.clear()
                     AnkiNoteFieldIndexer.collectKeysFromNote(flds, perNote)
                     // First note type wins: a word shared by Core and a mining
@@ -263,7 +279,8 @@ class AnkiCollectionIndex @Inject constructor(
                 Index(sources.keys.toSet(), notes, available = true),
                 sources,
                 notes,
-                truncated
+                truncated,
+                notesPerModel
             )
         } catch (e: Exception) {
             // Older AnkiDroid builds, a revoked permission or a locked
