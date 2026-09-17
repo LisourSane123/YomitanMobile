@@ -54,6 +54,45 @@ class AnkiCardCreator(
         get() = com.yomitanmobile.domain.model.CardProfile.forLanguage(languageSettings.current)
     companion object {
         /**
+         * Note types this app will never touch, whatever else changes.
+         *
+         * Anki's own, the shared decks people actually have, and the note
+         * types desktop Yomitan/Yomichan writes to. A card here was not made
+         * by this app and its owner did not ask us to redesign it.
+         */
+        private val STANDARD_MODEL_NAMES = listOf(
+            "Basic",
+            "Basic (and reversed card)",
+            "Basic (optional reversed card)",
+            "Basic (type in the answer)",
+            "Cloze",
+            "Image Occlusion",
+            "Image Occlusion Enhanced",
+            "Yomitan",
+            "Yomichan",
+            "Yomitan Japanese",
+            "Yomichan Japanese",
+            "Japanese",
+            "Japanese (recognition)",
+            "Japanese (recognition&recall)",
+            "Mining",
+            "JP Mining Note",
+            "Lapis",
+            "Core 2000",
+            "Core 2k",
+            "Core 2k/6k",
+            "Core 2k/6k Optimized",
+            "Core 6000",
+            "Core 10k",
+            "Kaishi 1.5k",
+            "Tango N5",
+            "Tango N4",
+            "Tango N3",
+            "Tango N2",
+            "Tango N1"
+        )
+
+        /**
          * Notes per `addNotes` call. Big enough that the per-transaction
          * overhead disappears, small enough that a cancelled generation loses
          * at most this many cards' worth of work and progress still moves.
@@ -210,8 +249,27 @@ class AnkiCardCreator(
         fun buildBackTemplate(
             sectionOrder: List<com.yomitanmobile.domain.model.CardSection>,
             profile: com.yomitanmobile.domain.model.CardProfile =
-                com.yomitanmobile.domain.model.CardProfile.JAPANESE
+                com.yomitanmobile.domain.model.CardProfile.JAPANESE,
+            /**
+             * Fields the note type being written actually has. Null means "the
+             * current profile's", which is the case for every new export.
+             *
+             * It is not null when restyling a note type left over from an
+             * older version of this app: those have fewer fields (no Summary,
+             * no FrontContext, no KanjiBreakdown), and a template naming a
+             * field the type lacks renders as the literal text
+             * "{{KanjiBreakdown}}" on the card. So the template is cut down to
+             * what is there instead of the note type being refused.
+             */
+            available: Set<String>? = null
         ): String {
+            val has = { field: String -> available == null || field in available }
+            val wordField = when {
+                available == null || "Front" in available -> "Front"
+                // An ancient note type of ours may name it something else;
+                // whatever its first field is, that is the word.
+                else -> available.firstOrNull() ?: "Front"
+            }
             val sb = StringBuilder()
             sb.append("<div class=\"back\">\n")
             // Frequency rank, pinned to the top-right corner of the card. The
@@ -220,16 +278,18 @@ class AnkiCardCreator(
             // decides whether CSS reveals it. It used to be the other way
             // round — the CSS rule existed but nothing ever produced the
             // element, so the toggle changed nothing.
-            sb.append("    {{#Frequency}}<div class=\"freq\">{{Frequency}}</div>{{/Frequency}}\n")
+            if (has("Frequency")) {
+                sb.append("    {{#Frequency}}<div class=\"freq\">{{Frequency}}</div>{{/Frequency}}\n")
+            }
             sb.append("    <div class=\"section header-section\">\n")
             // Header order: expression → bold word-divider → reading.
             // The Frequency field is still on the model schema (so cards
             // keep working) but no longer rendered — users asked for a
             // cleaner header.
-            sb.append("        <div class=\"expression\">{{Front}}</div>\n")
+            sb.append("        <div class=\"expression\">{{" + wordField + "}}</div>\n")
             // Japanese only: see CardProfile.readingInHeader. On a Latin-script
             // card the Reading field is IPA and lives in its own section below.
-            if (profile.readingInHeader) {
+            if (profile.readingInHeader && has("Reading")) {
                 sb.append("        <hr class=\"word-divider\">\n")
                 sb.append("        <div class=\"reading\">{{Reading}}</div>\n")
             }
@@ -239,10 +299,52 @@ class AnkiCardCreator(
             // as the literal text "{{KanjiBreakdown}}" on the card, so it is
             // dropped here rather than left to collapse at display time.
             for (section in profile.orderSections(sectionOrder)) {
+                if (!sectionFieldsPresent(section, profile, available)) continue
                 sb.append("    ").append(blockHtmlFor(section, profile)).append("\n")
             }
             sb.append("</div>")
             return sb.toString()
+        }
+
+        /** Fields one back-side section names, so a lean note type can skip it. */
+        private fun sectionFieldsPresent(
+            section: com.yomitanmobile.domain.model.CardSection,
+            profile: com.yomitanmobile.domain.model.CardProfile,
+            available: Set<String>?
+        ): Boolean {
+            if (available == null) return true
+            val needed = when (section) {
+                com.yomitanmobile.domain.model.CardSection.PITCH ->
+                    if (profile.readingInHeader) "PitchAccent" else "Reading"
+                com.yomitanmobile.domain.model.CardSection.SUMMARY -> "Summary"
+                com.yomitanmobile.domain.model.CardSection.MEANING -> "Meaning"
+                com.yomitanmobile.domain.model.CardSection.SENTENCE -> "Sentence"
+                com.yomitanmobile.domain.model.CardSection.AUDIO -> "Audio"
+                com.yomitanmobile.domain.model.CardSection.KANJI -> "KanjiBreakdown"
+            }
+            return needed in available
+        }
+
+        /**
+         * The front template for a note type that may lack our fields.
+         *
+         * Same reason as [buildBackTemplate]'s `available`: a `{{FrontContext}}`
+         * on a note type without that field is printed, not rendered.
+         */
+        fun buildFrontTemplate(available: Set<String>? = null): String {
+            if (available == null) return CARD_FRONT_TEMPLATE
+            val wordField = if ("Front" in available) "Front" else available.firstOrNull() ?: "Front"
+            val context = if ("FrontContext" in available) {
+                "\n                {{#FrontContext}}<div class=\"front-context\">" +
+                    "{{FrontContext}}</div>{{/FrontContext}}"
+            } else {
+                ""
+            }
+            return """
+            <div class="front">
+                <span class="expression">{{$wordField}}</span>$context
+            </div>
+        """
         }
 
         private fun blockHtmlFor(
@@ -1766,41 +1868,68 @@ class AnkiCardCreator(
      * that created the strays in the first place.
      */
     fun restyleModel(modelId: Long, stylePrefs: CardStylePreferences?): Boolean {
-        val (css, front, back) = packageStyling(stylePrefs)
+        // Built against THIS note type's fields, not the current profile's.
+        // The types worth restyling are the ones older versions of this app
+        // left behind, and they have fewer fields — a template naming a field
+        // they lack prints "{{KanjiBreakdown}}" on the card instead of
+        // rendering it, which is a worse card than the one we started with.
+        val available = fieldNamesOf(modelId).toSet().ifEmpty { null }
+        val css = if (stylePrefs != null) buildCssFromPreferences(stylePrefs) else CARD_CSS
+        val back = buildBackTemplate(
+            stylePrefs?.sectionOrder
+                ?: com.yomitanmobile.domain.model.CardSection.defaultOrder(),
+            profile,
+            available
+        )
         updateModelCss(modelId, css)
-        return updateModelTemplates(modelId, front, back)
+        return updateModelTemplates(modelId, buildFrontTemplate(available), back)
     }
 
     /**
-     * Note types this app is allowed to rewrite: ours by name AND by fields.
+     * Note types this app may rewrite. **The name decides.**
      *
-     * Both halves are load-bearing, because everything that edits an existing
-     * collection goes through here and a false positive rewrites somebody
-     * else's cards.
+     * Everything that edits an existing collection goes through here, so the
+     * test is exact: a profile's model name, or that name followed by a
+     * hyphen — which is precisely how AnkiDroid names a model it was asked to
+     * create a second time (`Yomitan-Mobile-v8-1`). Nothing from desktop
+     * Yomitan ("Yomitan", "Lapis", "JP Mining Note"), Core 2k/6k, Kaishi or a
+     * hand-written note type can match it, and [isOurModelName] refuses those
+     * names outright as well, so a future loosening of the prefix rule cannot
+     * quietly swallow them.
      *
-     * The name test is an exact match on a profile's model name or that name
-     * followed by a hyphen — which is precisely how AnkiDroid names a model it
-     * was asked to create a second time (`Yomitan-Mobile-v8-1`). A note type
-     * from desktop Yomitan ("Yomitan", "Lapis", "JP Mining Note"), from Core
-     * 2k/6k, from Kaishi or one the user wrote by hand cannot match it.
-     *
-     * The field test then requires every field of this profile to be present.
-     * A note type that somehow carried our name without our fields would be
-     * written with templates referring to fields it does not have — AnkiDroid
-     * renders an unknown `{{Field}}` as literal text, so the cards would come
-     * out full of `{{Meaning}}`.
+     * Field count is deliberately NOT part of the test. Note types left over
+     * from this app's own development have fewer fields — no Summary, no
+     * FrontContext, no KanjiBreakdown — and those are exactly the cards worth
+     * refreshing. A lean note type is adapted to instead of refused: the
+     * templates are built from the fields it actually has (see
+     * [buildBackTemplate]'s `available`), and a field it lacks is simply not
+     * written.
      */
     fun ourModels(): Map<Long, String> = try {
         // The CURRENT profile only. A Japanese session must not rebuild an
         // English note with Japanese logic, and each profile's note type is
         // named after it anyway.
         val base = profile.modelName
-        val wanted = profile.fieldNames.toList()
         (ankiApi.modelList ?: emptyMap())
-            .filterValues { name -> name == base || name.startsWith("$base-") }
-            .filterKeys { modelId -> fieldNamesOf(modelId).containsAll(wanted) }
+            .filterValues { name -> isOurModelName(name, base) }
     } catch (_: Exception) {
         emptyMap()
+    }
+
+    /**
+     * Is this note-type name one of ours?
+     *
+     * Two gates. The name has to be the profile's own or a numbered variant of
+     * it, and it must not be one of the well-known note types a collection is
+     * full of. The second is redundant against the first today — none of those
+     * names begins with "Yomitan-Mobile-" — and it stays because the first one
+     * is the kind of rule that gets loosened later, and these are the names it
+     * must never reach.
+     */
+    internal fun isOurModelName(name: String, base: String = profile.modelName): Boolean {
+        val trimmed = name.trim()
+        if (STANDARD_MODEL_NAMES.any { it.equals(trimmed, ignoreCase = true) }) return false
+        return trimmed == base || trimmed.startsWith("$base-")
     }
 
     /** How many notes one note type holds. */

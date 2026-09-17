@@ -126,18 +126,23 @@ class AnkiNoteRefresher @Inject constructor(
         for ((modelId, modelName) in models) {
             currentCoroutineContext().ensureActive()
             val noteTypeFields = ankiCardCreator.fieldNamesOf(modelId)
-            if (noteTypeFields.isEmpty()) continue
-            // A note type that shares our name but not our fields is not ours
-            // to rewrite — better to skip it than to shuffle someone's data.
-            if (!noteTypeFields.containsAll(profileFields.toList())) {
-                Log.w(TAG, "Skipping '$modelName': its fields are not ours")
+            if (noteTypeFields.isEmpty()) {
+                Log.w(TAG, "Skipping '$modelName': the provider lists no fields for it")
                 continue
             }
+            // Deliberately no "must have all our fields" test. The note types
+            // most in need of a refresh are the ones this app left behind
+            // while it was being written, and they have fewer fields. Each
+            // field is written by NAME, so a type without Summary simply never
+            // receives one.
+            val wordIndex = noteTypeFields.indexOf(FRONT_FIELD).takeIf { it >= 0 } ?: 0
 
             for ((noteId, current) in readNotes(modelId)) {
                 currentCoroutineContext().ensureActive()
                 done++
-                val front = current.getOrNull(noteTypeFields.indexOf(FRONT_FIELD)).orEmpty()
+                // "Front" when the type has it; otherwise its first field,
+                // which in every version of our note type is the word.
+                val front = current.getOrNull(wordIndex).orEmpty()
                 val word = plainText(front)
                 onProgress(done, total, word)
                 if (word.isBlank()) continue

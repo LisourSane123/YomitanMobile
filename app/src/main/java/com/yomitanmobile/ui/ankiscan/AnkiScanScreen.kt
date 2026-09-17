@@ -603,11 +603,12 @@ private fun RefreshSection(
             Text(
                 tr(
                     "Wygląd: nadpisuje szablony i CSS we wszystkich typach notatek — także " +
-                        "w tych zduplikowanych, więc stare fiszki zaczynają wyglądać jak nowe. " +
-                        "Nie rusza żadnej notatki.",
-                    "Look: rewrites the templates and CSS on every note type of ours, the " +
-                        "duplicated ones included, so old cards start rendering like new ones. " +
-                        "No note is touched."
+                        "w tych zduplikowanych i tych starszych, z mniejszą liczbą pól: " +
+                        "szablon powstaje z pól, które dany typ naprawdę ma. Nie rusza " +
+                        "żadnej notatki.",
+                    "Look: rewrites the templates and CSS on every note type of ours — the " +
+                        "duplicates and the older, leaner ones included: the template is built " +
+                        "from the fields each type actually has. No note is touched."
                 ),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

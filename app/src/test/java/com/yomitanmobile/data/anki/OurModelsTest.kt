@@ -1,32 +1,42 @@
 package com.yomitanmobile.data.anki
 
 import com.yomitanmobile.domain.model.CardProfile
+import com.yomitanmobile.domain.model.CardSection
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Which note types this app may rewrite.
+ * Which note types this app may rewrite, and what it writes into a lean one.
  *
  * `AnkiCardCreator.ourModels()` is the gate in front of every write into an
  * existing collection — restyling templates, rewriting note fields — and a
  * false positive there damages cards the app did not create. The provider is
- * not reachable from a JVM test, so the two rules it applies are asserted
- * directly here, on the names real collections actually carry.
+ * not reachable from a JVM test, so the rules are asserted directly, on the
+ * names real collections actually carry.
  */
 class OurModelsTest {
 
-    /** The name half of `ourModels()`, as that function applies it. */
+    /**
+     * The name rule, mirroring `AnkiCardCreator.isOurModelName`.
+     *
+     * The blocklist is checked first there for the same reason it is here: the
+     * prefix rule is the kind that gets loosened later, and these are the names
+     * it must never reach.
+     */
     private fun nameMatches(name: String, profile: CardProfile = CardProfile.JAPANESE): Boolean {
+        val trimmed = name.trim()
+        if (STANDARD.any { it.equals(trimmed, ignoreCase = true) }) return false
         val base = profile.modelName
-        return name == base || name.startsWith("$base-")
+        return trimmed == base || trimmed.startsWith("$base-")
     }
 
-    /** The field half: every field of the profile has to be there. */
-    private fun fieldsMatch(
-        fields: List<String>,
-        profile: CardProfile = CardProfile.JAPANESE
-    ): Boolean = fields.containsAll(profile.fieldNames.toList())
+    private val STANDARD = listOf(
+        "Basic", "Basic (and reversed card)", "Cloze", "Image Occlusion",
+        "Yomitan", "Yomichan", "Japanese", "Japanese (recognition)", "Mining",
+        "JP Mining Note", "Lapis", "Core 2000", "Core 2k/6k Optimized",
+        "Core 6000", "Kaishi 1.5k", "Tango N5"
+    )
 
     @Test
     fun `our own note type matches`() {
@@ -35,7 +45,7 @@ class OurModelsTest {
 
     @Test
     fun `the strays our old refusal path minted match`() {
-        // These are the names from the real collection that started all this.
+        // These are the shapes from the real collection that started all this.
         assertTrue(nameMatches("Yomitan-Mobile-v8-1"))
         assertTrue(nameMatches("Yomitan-Mobile-v8-1-a3f9c2"))
         assertTrue(nameMatches("Yomitan-Mobile-v8-1129"))
@@ -52,7 +62,7 @@ class OurModelsTest {
             "Mining",
             "JP Mining Note",
             "Lapis",
-            "yomitan-mobile-v8",
+            "yomitan-mobile-v8 extra",
             "Yomitan Mobile v8",
             "My Yomitan-Mobile-v8"
         )) {
@@ -61,43 +71,82 @@ class OurModelsTest {
     }
 
     @Test
-    fun `shared decks are not ours`() {
+    fun `shared decks and Anki's own note types are not ours`() {
         for (name in listOf(
             "Core 2000",
             "Core 2k/6k Optimized",
+            "Core 6000",
             "Kaishi 1.5k",
             "Tango N5",
             "Basic",
             "Basic (and reversed card)",
-            "Cloze"
+            "Cloze",
+            "Image Occlusion"
         )) {
             assertFalse("'$name' must not be treated as ours", nameMatches(name))
         }
     }
 
     @Test
-    fun `a note type carrying our name but not our fields is refused`() {
-        // The second gate: if a name ever collided, the templates we would
-        // write refer to fields that type does not have, and AnkiDroid renders
-        // an unknown {{Field}} as literal text.
-        assertFalse(fieldsMatch(listOf("Front", "Back")))
-        assertFalse(fieldsMatch(listOf("Expression", "Meaning", "Reading")))
-    }
-
-    @Test
-    fun `our own field set passes, and extra fields do not disqualify it`() {
-        val ours = CardProfile.JAPANESE.fieldNames.toList()
-        assertTrue(fieldsMatch(ours))
-        // A user who added a field of their own to our note type still has
-        // our note type — every field the templates name is present.
-        assertTrue(fieldsMatch(ours + "My Notes"))
-    }
-
-    @Test
-    fun `an English note type is not rewritten by a Japanese session`() {
-        // ourModels() asks the CURRENT profile, so a Japanese session sees
-        // neither the English name nor the English field set.
+    fun `an English note type is not touched by a Japanese session`() {
         assertFalse(nameMatches(CardProfile.ENGLISH.modelName, CardProfile.JAPANESE))
-        assertFalse(fieldsMatch(CardProfile.ENGLISH.fieldNames.toList(), CardProfile.JAPANESE))
+    }
+
+    /**
+     * The point of dropping the field test: a note type from this app's own
+     * development has fewer fields, and it is exactly the one worth fixing. It
+     * must be recognised as ours, and the template written to it must name
+     * only fields it has — AnkiDroid prints an unknown `{{Field}}` verbatim.
+     */
+    @Test
+    fun `a lean note type from an older version is still ours`() {
+        assertTrue(nameMatches("Yomitan-Mobile-v8-3"))
+    }
+
+    @Test
+    fun `the template for a lean note type names only its own fields`() {
+        // No Summary, no FrontContext, no KanjiBreakdown, no Frequency —
+        // roughly what an early version of the note type looked like.
+        val lean = setOf("Front", "Reading", "Meaning", "PitchAccent", "Audio", "Sentence")
+        val back = AnkiCardCreator.buildBackTemplate(
+            CardSection.defaultOrder(),
+            CardProfile.JAPANESE,
+            lean
+        )
+        for (missing in listOf("Summary", "KanjiBreakdown", "Frequency", "FrontContext")) {
+            assertFalse(
+                "the back template must not name $missing",
+                back.contains("{{$missing}}") || back.contains("{{#$missing}}")
+            )
+        }
+        // …and it still renders the card: word, reading, meaning.
+        assertTrue(back.contains("{{Front}}"))
+        assertTrue(back.contains("{{Reading}}"))
+        assertTrue(back.contains("{{Meaning}}"))
+
+        val front = AnkiCardCreator.buildFrontTemplate(lean)
+        assertTrue(front.contains("{{Front}}"))
+        assertFalse(front.contains("FrontContext"))
+    }
+
+    @Test
+    fun `a full note type gets the full template`() {
+        val full = CardProfile.JAPANESE.fieldNames.toSet()
+        val back = AnkiCardCreator.buildBackTemplate(
+            CardSection.defaultOrder(),
+            CardProfile.JAPANESE,
+            full
+        )
+        for (field in listOf("Summary", "KanjiBreakdown", "Frequency", "Meaning")) {
+            assertTrue("the back template must name $field", back.contains(field))
+        }
+    }
+
+    @Test
+    fun `a note type that lost its Front field is fronted with its first one`() {
+        val odd = setOf("Expression", "Meaning")
+        val front = AnkiCardCreator.buildFrontTemplate(odd)
+        assertTrue(front.contains("{{Expression}}"))
+        assertFalse(front.contains("{{Front}}"))
     }
 }
