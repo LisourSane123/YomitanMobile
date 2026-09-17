@@ -1771,12 +1771,34 @@ class AnkiCardCreator(
         return updateModelTemplates(modelId, front, back)
     }
 
-    /** Note types whose name is ours — the canonical one and its strays. */
+    /**
+     * Note types this app is allowed to rewrite: ours by name AND by fields.
+     *
+     * Both halves are load-bearing, because everything that edits an existing
+     * collection goes through here and a false positive rewrites somebody
+     * else's cards.
+     *
+     * The name test is an exact match on a profile's model name or that name
+     * followed by a hyphen — which is precisely how AnkiDroid names a model it
+     * was asked to create a second time (`Yomitan-Mobile-v8-1`). A note type
+     * from desktop Yomitan ("Yomitan", "Lapis", "JP Mining Note"), from Core
+     * 2k/6k, from Kaishi or one the user wrote by hand cannot match it.
+     *
+     * The field test then requires every field of this profile to be present.
+     * A note type that somehow carried our name without our fields would be
+     * written with templates referring to fields it does not have — AnkiDroid
+     * renders an unknown `{{Field}}` as literal text, so the cards would come
+     * out full of `{{Meaning}}`.
+     */
     fun ourModels(): Map<Long, String> = try {
-        val canonical = com.yomitanmobile.domain.model.CardProfile.entries.map { it.modelName }
-        (ankiApi.modelList ?: emptyMap()).filterValues { name ->
-            canonical.any { base -> name == base || name.startsWith("$base-") }
-        }
+        // The CURRENT profile only. A Japanese session must not rebuild an
+        // English note with Japanese logic, and each profile's note type is
+        // named after it anyway.
+        val base = profile.modelName
+        val wanted = profile.fieldNames.toList()
+        (ankiApi.modelList ?: emptyMap())
+            .filterValues { name -> name == base || name.startsWith("$base-") }
+            .filterKeys { modelId -> fieldNamesOf(modelId).containsAll(wanted) }
     } catch (_: Exception) {
         emptyMap()
     }
