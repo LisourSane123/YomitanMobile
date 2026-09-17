@@ -91,6 +91,29 @@ class DictionaryRepositoryImpl @Inject constructor(
         return kanjiDao.getKanjis(kanjiList)
     }
 
+    override suspend fun getKanji(kanji: String): KanjiEntry? =
+        withContext(Dispatchers.IO) { runCatching { kanjiDao.getKanji(kanji) }.getOrNull() }
+
+    override suspend fun listKanji(grade: Int, jlpt: Int): List<KanjiEntry> =
+        withContext(Dispatchers.IO) {
+            runCatching { kanjiDao.listKanji(grade, jlpt) }.getOrDefault(emptyList())
+        }
+
+    override suspend fun kanjiCountsByGrade() = withContext(Dispatchers.IO) {
+        runCatching { kanjiDao.countsByGrade() }.getOrDefault(emptyList())
+    }
+
+    override suspend fun kanjiCountsByJlpt() = withContext(Dispatchers.IO) {
+        runCatching { kanjiDao.countsByJlpt() }.getOrDefault(emptyList())
+    }
+
+    override suspend fun wordsContainingKanji(kanji: String, limit: Int): List<WordEntry> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                dictionaryDao.wordsContainingKanji(kanji, language, limit).map { it.toDomain() }
+            }.getOrDefault(emptyList())
+        }
+
     override suspend fun getReadingsForExpressions(
         expressions: List<String>
     ): Map<String, String> {

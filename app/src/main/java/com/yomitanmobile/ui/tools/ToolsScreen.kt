@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
@@ -49,7 +50,8 @@ fun ToolsScreen(
     onNavigateToAnkiScan: () -> Unit,
     onNavigateToDictionaries: () -> Unit,
     onNavigateToDownload: () -> Unit,
-    onNavigateToFavorites: () -> Unit
+    onNavigateToFavorites: () -> Unit,
+    onNavigateToKanji: () -> Unit
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text(tr("Narzędzia", "Tools")) }) }
@@ -107,6 +109,16 @@ fun ToolsScreen(
                 subtitle = tr("Przeglądaj i zarządzaj słownikami", "Browse and manage dictionaries"),
                 onClick = onNavigateToDictionaries
             )
+            ToolCard(
+                icon = Icons.Default.Translate,
+                title = tr("Kanji", "Kanji"),
+                subtitle = tr(
+                    "Znaki według poziomu i ile z nich masz już w kolekcji",
+                    "Characters by level, and how many your collection covers"
+                ),
+                onClick = onNavigateToKanji
+            )
+
             ToolCard(
                 icon = Icons.Default.FavoriteBorder,
                 title = tr("Ulubione", "Favourites"),

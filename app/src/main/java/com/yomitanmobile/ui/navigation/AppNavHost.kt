@@ -66,7 +66,8 @@ fun AppNavHost(
                 onNavigateToAnkiScan = { navController.navigate(Screen.AnkiScan.route) },
                 onNavigateToDictionaries = { navController.navigate(Screen.Dictionaries.route) },
                 onNavigateToDownload = { navController.navigate(Screen.DictionaryDownload.route) },
-                onNavigateToFavorites = { navController.navigate(Screen.Favorites.route) }
+                onNavigateToFavorites = { navController.navigate(Screen.Favorites.route) },
+                onNavigateToKanji = { navController.navigate(Screen.Kanji.route) }
             )
         }
 
@@ -95,7 +96,10 @@ fun AppNavHost(
             )
         ) {
             DetailScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onKanjiClick = { kanji ->
+                    navController.navigate(Screen.KanjiDetail.createRoute(kanji))
+                }
             )
         }
 
@@ -141,6 +145,27 @@ fun AppNavHost(
         composable(Screen.TextScan.route) {
             com.yomitanmobile.ui.textscan.TextScanScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Kanji.route) {
+            com.yomitanmobile.ui.kanji.KanjiBrowseScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onKanjiClick = { kanji ->
+                    navController.navigate(Screen.KanjiDetail.createRoute(kanji))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.KanjiDetail.route,
+            arguments = listOf(navArgument("kanji") { type = NavType.StringType })
+        ) {
+            com.yomitanmobile.ui.kanji.KanjiDetailScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onWordClick = { entryId ->
+                    navController.navigate(Screen.Detail.createRoute(entryId))
+                }
             )
         }
 

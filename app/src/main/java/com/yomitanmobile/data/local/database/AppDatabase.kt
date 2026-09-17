@@ -50,7 +50,7 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         AnkiCollectionWord::class,
         AudioFile::class
     ],
-    version = 23,
+    version = 24,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -89,6 +89,24 @@ abstract class AppDatabase : RoomDatabase() {
          *
          * The ALTERs must match what Room generates for the entities verbatim.
          */
+        /**
+         * A kanji's own metadata: grade, JLPT, strokes, newspaper rank.
+         *
+         * The parser read a kanji bank's readings and meanings and threw the
+         * rest away, so the app could describe a kanji but not group them —
+         * "which of jōyō do I already know" had nothing to count over. The
+         * columns default to 0, which reads as "the dictionary did not say";
+         * an already-installed KANJIDIC fills them on its next re-import.
+         */
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `kanji_entries` ADD COLUMN `grade` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `kanji_entries` ADD COLUMN `jlpt` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `kanji_entries` ADD COLUMN `strokes` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `kanji_entries` ADD COLUMN `frequency` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         /**
          * The index over the user's own pronunciation archive.
          *

@@ -185,6 +185,26 @@ class AnkiCollectionStore @Inject constructor(
         cacheLock.withLock { cachedWords = emptySet() }
     }
 
+    /**
+     * Every kanji that appears in a word the collection holds.
+     *
+     * "Known" here means exactly what the stored scan means elsewhere: there
+     * is a card carrying this character. It is not a claim about recall — see
+     * the note on the scan itself — but it is the only honest answer the app
+     * can give without reading review history.
+     */
+    suspend fun knownKanji(): Set<String> {
+        val all = words()
+        if (all.isEmpty()) return emptySet()
+        val out = HashSet<String>(2048)
+        for (word in all) {
+            for (ch in word) {
+                if (ch in '\u4e00'..'\u9fff') out += ch.toString()
+            }
+        }
+        return out
+    }
+
     private suspend fun words(): Set<String> {
         cachedWords?.let { return it }
         return cacheLock.withLock {

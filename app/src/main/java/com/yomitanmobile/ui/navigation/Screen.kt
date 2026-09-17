@@ -16,6 +16,11 @@ sealed class Screen(val route: String) {
     data object Favorites : Screen("favorites")
     data object Dictionaries : Screen("dictionaries")
     data object JlptDeck : Screen("jlpt_deck")
+    /** The kanji browser: buckets, coverage, the characters themselves. */
+    data object Kanji : Screen("kanji")
+    data object KanjiDetail : Screen("kanji/{kanji}") {
+        fun createRoute(kanji: String): String = "kanji/$kanji"
+    }
     data object AnkiScan : Screen("anki_scan")
     data object TextScan : Screen("text_scan")
     /** The hub the bottom bar opens: everything that builds cards in bulk. */

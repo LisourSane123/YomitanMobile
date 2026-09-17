@@ -182,6 +182,31 @@ interface DictionaryDao {
         limit: Int = 30
     ): Flow<List<DictionaryEntry>>
 
+    /**
+     * Words written with [kanji] somewhere in them, commonest first.
+     *
+     * The `id IN (…)` shape is the one [searchContains] uses and for the same
+     * reason: the unavoidable leading-wildcard scan stays inside the narrow
+     * `expression` index instead of dragging every definition blob through the
+     * page cache.
+     */
+    @Query("""
+        SELECT * FROM dictionary_entries
+        WHERE id IN (
+            SELECT id FROM dictionary_entries WHERE expression LIKE '%' || :kanji || '%'
+        )
+        AND language = :language
+        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
+                 frequency ASC,
+                 LENGTH(expression) ASC
+        LIMIT :limit
+    """)
+    suspend fun wordsContainingKanji(
+        kanji: String,
+        language: String,
+        limit: Int = 60
+    ): List<DictionaryEntry>
+
     @Query("SELECT * FROM dictionary_entries WHERE id = :id")
     suspend fun getById(id: Long): DictionaryEntry?
 

@@ -26,6 +26,19 @@ interface DictionaryRepository {
     suspend fun getEntriesByReading(reading: String): List<WordEntry>
     suspend fun getKanjis(kanjiList: List<String>): List<KanjiEntry>
 
+    /** One character's full row, or null when no installed dictionary has it. */
+    suspend fun getKanji(kanji: String): KanjiEntry?
+
+    /** Kanji in a grade / JLPT bucket (0 = any), commonest first. */
+    suspend fun listKanji(grade: Int = 0, jlpt: Int = 0): List<KanjiEntry>
+
+    suspend fun kanjiCountsByGrade(): List<com.yomitanmobile.data.local.dao.KanjiBucket>
+
+    suspend fun kanjiCountsByJlpt(): List<com.yomitanmobile.data.local.dao.KanjiBucket>
+
+    /** Words written with this character, commonest first. */
+    suspend fun wordsContainingKanji(kanji: String, limit: Int = 60): List<WordEntry>
+
     /**
      * Best (frequency-ranked) reading for each of [expressions], for
      * synthesising furigana on example sentences that lack ruby data.

@@ -81,6 +81,8 @@ import com.yomitanmobile.ui.common.rememberAnkiPermissionGate
 @Composable
 fun DetailScreen(
     onNavigateBack: () -> Unit,
+    /** Opens the kanji screen for one character of the headword. */
+    onKanjiClick: (String) -> Unit = {},
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val entry by viewModel.entry.collectAsState()
@@ -386,6 +388,7 @@ fun DetailScreen(
                     onMakeLeading = viewModel::makeLeading,
                     generatedFurigana = generatedFurigana,
                     onToggleFavorite = { viewModel.toggleFavorite() },
+                    onKanjiClick = onKanjiClick,
                     modifier = Modifier.padding(paddingValues)
                 )
             }
@@ -411,6 +414,7 @@ private fun WordDetailContent(
     onMakeLeading: (String) -> Unit = {},
     generatedFurigana: Map<String, List<com.yomitanmobile.domain.model.FuriganaSegment>> = emptyMap(),
     onToggleFavorite: () -> Unit,
+    onKanjiClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val tr = rememberTr()
@@ -778,7 +782,15 @@ private fun WordDetailContent(
             SectionCard(title = tr("Kanji", "Kanji")) {
                 kanjiInfo.forEachIndexed { index, kanji ->
                     if (index > 0) Divider(modifier = Modifier.padding(vertical = 8.dp))
-                    Row(verticalAlignment = Alignment.Top) {
+                    // The whole row opens the character's own screen: its
+                    // readings are here, but the words it is written in — the
+                    // thing that turns a character into vocabulary — are not.
+                    Row(
+                        verticalAlignment = Alignment.Top,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onKanjiClick(kanji.kanji) }
+                    ) {
                         Text(
                             text = kanji.kanji,
                             fontSize = 32.sp,

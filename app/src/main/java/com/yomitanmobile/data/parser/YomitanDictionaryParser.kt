@@ -320,6 +320,21 @@ class YomitanDictionaryParser @Inject constructor() {
                                             meaningsArr
                                         )
 
+                                        // Index 3 is the tag string, index 5
+                                        // the stats object. KANJIDIC says the
+                                        // same things in both and different
+                                        // converters fill one or the other, so
+                                        // read both and let the stats win.
+                                        val tags = safeString(kanjiArr[3])
+                                        val stats = kanjiArr.getOrNull(5) as? JsonObject
+                                        val grade = statInt(stats, "grade")
+                                            .takeIf { it > 0 } ?: tagNumber(tags, "grade")
+                                        val jlpt = statInt(stats, "jlpt")
+                                            .takeIf { it > 0 } ?: tagNumber(tags, "jlpt")
+                                        val strokes = statInt(stats, "strokes")
+                                            .takeIf { it > 0 } ?: statInt(stats, "stroke_count")
+                                        val kanjiFrequency = statInt(stats, "freq")
+
                                         if (character.isNotBlank()) {
                                             batch.add(
                                                 KanjiEntry(
@@ -327,7 +342,11 @@ class YomitanDictionaryParser @Inject constructor() {
                                                     onyomi = onyomi,
                                                     kunyomi = kunyomi,
                                                     meanings = encodedMeanings,
-                                                    dictionaryName = TEMP_DICTIONARY_NAME
+                                                    dictionaryName = TEMP_DICTIONARY_NAME,
+                                                    grade = grade,
+                                                    jlpt = jlpt,
+                                                    strokes = strokes,
+                                                    frequency = kanjiFrequency
                                                 )
                                             )
                                         }
@@ -634,6 +653,21 @@ class YomitanDictionaryParser @Inject constructor() {
         } catch (_: Exception) {
             ""
         }
+    }
+
+    /** One number out of a kanji bank's stats object, 0 when it says nothing. */
+    private fun statInt(stats: JsonObject?, key: String): Int {
+        val raw = stats?.get(key) ?: return 0
+        val text = safeString(raw).trim()
+        // KANJIDIC writes these as strings ("grade": "1") in some conversions
+        // and as numbers in others.
+        return text.takeWhile { it.isDigit() }.toIntOrNull() ?: 0
+    }
+
+    /** "…grade1 jlpt5…" → the number after [prefix], 0 when it is absent. */
+    private fun tagNumber(tags: String, prefix: String): Int {
+        val token = tags.split(' ', '\t').firstOrNull { it.startsWith(prefix) } ?: return 0
+        return token.removePrefix(prefix).takeWhile { it.isDigit() }.toIntOrNull() ?: 0
     }
 
     private fun safeString(element: JsonElement): String = when (element) {
