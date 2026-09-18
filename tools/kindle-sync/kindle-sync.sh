@@ -13,6 +13,7 @@
 #   --deck      target deck (default: test_kindle)
 #   --wait      how long to wait for the Kindle to appear (default: 0)
 #   --vocab     use this vocab.db instead of the Kindle's (testing)
+#   --no-sync   skip the AnkiWeb sync before and after (on by default)
 #
 # Environment: KINDLE_SYNC_DICT (Jitendex zip), KINDLE_SYNC_FREQ (frequency
 # zip), KINDLE_SYNC_PITCH, KINDLE_SYNC_KANJI, KINDLE_SYNC_REPO (checkout of
@@ -26,6 +27,7 @@ DRY_RUN=false
 ALL=false
 WAIT=0
 VOCAB=
+SYNC=true
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=true ;;
@@ -33,6 +35,7 @@ while [[ $# -gt 0 ]]; do
         --deck) DECK="$2"; shift ;;
         --wait) WAIT="$2"; shift ;;
         --vocab) VOCAB="$2"; shift ;;
+        --no-sync) SYNC=false ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -163,6 +166,12 @@ if ! curl -s -m 3 "$ANKI_CONNECT" -d '{"action":"version","version":6}' | grep -
     fail "Anki (AnkiConnect) nie odpowiada, nic nie dodano"
 fi
 
+# AutoReorder, found by name: its folder is an AnkiWeb id, not a name.
+REORDER_ADDON=
+for meta in "$HOME"/.local/share/Anki2/addons21/*/meta.json; do
+    if grep -q '"name": *"AutoReorder"' "$meta" 2>/dev/null; then REORDER_ADDON="$(dirname "$meta")"; fi
+done
+
 # ---- 4. the app's pipeline -------------------------------------------------
 OUT="$STATE/last-run"
 mkdir -p "$OUT"
@@ -177,11 +186,13 @@ rm -f "$OUT/summary.txt"
     -Dkindle.tts="$TTS_PYTHON:$REPO/tools/kindle-sync/tts.py" \
     -Dkindle.deck="$DECK" \
     -Dkindle.dryRun="$DRY_RUN" \
+    -Dkindle.sync="$SYNC" \
+    -Danki.reorderAddon="$REORDER_ADDON" \
     -Danki.connect="$ANKI_CONNECT" \
     -Dout.dir="$OUT") >&2 || true
 
 if [[ ! -f "$OUT/summary.txt" ]]; then
-    fail "błąd przetwarzania, szczegóły: journalctl --user -u kindle-sync"
+    fail "błąd przetwarzania albo synchronizacji przed dodaniem (nic nie dodano), szczegóły: journalctl --user -u kindle-watch"
 fi
 SUMMARY="$(cat "$OUT/summary.txt")"
 log "$SUMMARY"
@@ -192,5 +203,8 @@ if [[ "$DRY_RUN" == false ]]; then
     tail -1 "$WORK/lookups.tsv" | cut -f4 > "$STATE/last_timestamp"
 fi
 
-eval "$(echo "$SUMMARY" | tr ' ' '\n' | grep -E '^[a-z_]+=[0-9a-z]+$')"
-notify "Wykonano: $added nowych fiszek w talii $DECK ($lookups wyszukań, $in_anki już było w Anki)."
+eval "$(echo "$SUMMARY" | tr ' ' '\n' | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
+MESSAGE="Wykonano: $added nowych fiszek w talii $DECK ($lookups wyszukań, $in_anki już było w Anki)."
+if [[ "$reordered" != "-1" ]]; then MESSAGE+=" Kolejność ustawiona (AutoReorder)."; fi
+if [[ "$synced_after" != "true" ]]; then MESSAGE+=" UWAGA: synchronizacja po dodaniu nie przeszła — kliknij Sync w Anki."; fi
+notify "$MESSAGE"

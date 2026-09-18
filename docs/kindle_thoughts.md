@@ -16,7 +16,8 @@ Notatki projektowe.
   3. Karty dodawane są automatycznie. `--dry-run` tylko raportuje, a raport z każdego przebiegu trafia do `~/.local/state/kindle-sync/last-run/kindle-sync.tsv`.
 - Kindle w `stem` zapisuje dla nieznanego słowa **czytanie** hasła dopasowanego na początku zaznaczenia (親族会議 → しんぞく, ブリッヂオ → ぶり). Takie dopasowanie liczy się więc tylko wtedy, gdy hasło jest zapisane na początku zaznaczenia.
 - `usage` to okno tekstu, a nie zdanie. Pierwszy lookup w książce ciągnie za sobą stronę tytułową, dlatego zdanie jest wycinane.
-- Sync z AnkiWeb (2.5) nie jest jeszcze robiony.
+- **Sync z AnkiWeb przed i po** (akcja `sync` w AnkiConnect). Jeśli sync przed dodaniem nie przejdzie, przebieg się zatrzymuje i nic nie dodaje. Jeśli nie przejdzie ten po dodaniu, karty są już w kolekcji, a powiadomienie o tym ostrzega.
+- **AutoReorder po dodaniu:** wtyczka sama uruchamia się tylko przy starcie Anki i z menu, a AnkiConnect nie może jej wywołać. Jej algorytm (10 linijek) jest więc powtórzony w `KindleSync.AnkiConnect.reorder`, z ustawieniami czytanymi z konfiguracji wtyczki (`meta.json` nadpisuje `config.json`). Pozycje zapisuje `setSpecificValueOfCard` (`update_card`), więc zmiana synchronizuje się jak każda inna. Sprawdzone: na talii Japanese wynik zgadza się z tym, co zostawiła wtyczka (0 przesunięć). Wtyczka sortuje tylko `deck:Japanese is:new`, więc karty w `test_kindle` ustawi dopiero po przełączeniu talii.
 
 **Cel:** po podłączeniu Kindle do laptopa skrypt:
 1. czyta słowa z Vocabulary Buildera,

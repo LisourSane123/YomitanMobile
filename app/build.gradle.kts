@@ -99,7 +99,7 @@ android {
                     "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields",
                     "skipPlainKana", "skipKatakana",
                     "kindle.lookups", "kindle.deck", "kindle.dryRun", "anki.connect",
-                    "pitch.zip", "kanji.zip", "kindle.settings", "kindle.tts"
+                    "pitch.zip", "kanji.zip", "kindle.settings", "kindle.tts", "kindle.sync", "anki.reorderAddon"
                 )) {
                     System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
                 }

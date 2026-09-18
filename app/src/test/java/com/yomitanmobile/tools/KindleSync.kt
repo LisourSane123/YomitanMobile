@@ -208,6 +208,15 @@ class KindleSync {
         )
 
         // ---- 4. the desktop collection, indexed like the phone's scan -------
+        // Sync first: the duplicate check is only as good as the collection it
+        // reads, and a card added on the phone since the last sync is exactly
+        // the duplicate it would miss. A failure here stops the run — adding
+        // blind is the surprise this is meant to prevent.
+        val sync = System.getProperty("kindle.sync")?.toBooleanStrictOrNull() ?: true
+        if (sync && !dryRun) {
+            anki.call("sync")
+            log("synced before adding")
+        }
         val ankiIndex = anki.collectionIndex()
         log("anki: ${ankiIndex.noteCount} notes indexed")
 
@@ -306,15 +315,64 @@ class KindleSync {
             addedCount = added
         }
 
+        // AutoReorder's own pass, then the second sync so the new cards reach
+        // the phone already in study order.
+        var reordered = -1
+        // Only a sync that was needed and failed is worth a warning.
+        var syncedAfter = true
+        if (!dryRun && addedCount > 0) {
+            reorderConfig()?.let { config ->
+                reordered = anki.reorder(config)
+                log("reorder (${config.search}, by ${config.field}): $reordered cards moved")
+            }
+            if (sync) {
+                syncedAfter = runCatching { anki.call("sync") }
+                    .onFailure { log("sync after adding failed: ${it.message}") }
+                    .isSuccess
+            }
+        }
+
         val file = File(outDir, "kindle-sync.tsv")
         file.writeText(report.toString())
         // A single line the shell wrapper turns into the desktop notification.
         File(outDir, "summary.txt").writeText(
             "lookups=${lookups.size} new=${notes.size} added=$addedCount in_anki=${summary["IN_ANKI"] ?: 0} " +
-                "not_found=${summary["NOT_IN_DICTIONARY"] ?: 0} dry_run=$dryRun\n"
+                "not_found=${summary["NOT_IN_DICTIONARY"] ?: 0} reordered=$reordered " +
+                "synced_after=$syncedAfter dry_run=$dryRun\n"
         )
         log("report written to ${file.absolutePath}")
         println(report)
+    }
+
+    /** What AutoReorder is configured to do, read from the add-on itself. */
+    private data class ReorderConfig(
+        val search: String,
+        val field: String,
+        val reverse: Boolean,
+        val shiftExisting: Boolean
+    )
+
+    /**
+     * AutoReorder's settings, from the add-on's `meta.json` (where Anki keeps
+     * the user's edits) over its `config.json` (the shipped defaults). Null
+     * when the add-on is absent or disabled — then nothing is reordered,
+     * exactly as Anki itself would not.
+     */
+    private fun reorderConfig(): ReorderConfig? {
+        val dir = System.getProperty("anki.reorderAddon").orEmpty().takeIf { it.isNotEmpty() }?.let(::File)
+            ?: return null
+        val meta = File(dir, "meta.json").takeIf { it.isFile }?.let { JSONObject(it.readText()) } ?: JSONObject()
+        if (meta.optBoolean("disabled", false)) return null
+        val defaults = File(dir, "config.json").takeIf { it.isFile }?.let { JSONObject(it.readText()) } ?: JSONObject()
+        val user = meta.optJSONObject("config") ?: JSONObject()
+        fun value(key: String): Any? = if (user.has(key)) user.get(key) else defaults.opt(key)
+        val search = value("search_to_sort") as? String ?: return null
+        return ReorderConfig(
+            search = search,
+            field = value("sort_field") as? String ?: "Frequency",
+            reverse = value("sort_reverse") as? Boolean ?: false,
+            shiftExisting = value("shift_existing") as? Boolean ?: true
+        )
     }
 
     private data class Note(
@@ -515,6 +573,67 @@ class KindleSync {
             call("storeMediaFile", JSONObject().put("filename", file.name).put("path", file.absolutePath))
         }
 
+        /**
+         * AutoReorder's `reorder_cards`, over AnkiConnect. The add-on only runs
+         * when Anki starts or from its Tools menu, and AnkiConnect cannot call
+         * into another add-on, so the ten lines are restated here — same
+         * search, same field, same stable sort (cards in their current order,
+         * an empty or non-numeric field sorts last), and the same
+         * `reposition_new_cards(start 0, step 1, shift_existing)`. Positions
+         * are written with `setSpecificValueOfCard`, which goes through
+         * `update_card`, so the change syncs like any other.
+         *
+         * Returns how many cards changed position; 0 when the order already
+         * holds, which is also when the add-on leaves the collection alone.
+         */
+        fun reorder(config: ReorderConfig): Int {
+            val ids = call("findCards", JSONObject().put("query", config.search)) as JSONArray
+            val cards = cardsInfo((0 until ids.length()).map { ids.getLong(it) })
+                .sortedWith(compareBy<CardPosition> { it.due }.thenBy { it.id })
+            val byFrequency = compareBy<CardPosition> { it.frequency(config.field) }
+            val sorted = cards.sortedWith(if (config.reverse) byFrequency.reversed() else byFrequency)
+            if (sorted.map { it.id } == cards.map { it.id }) return 0
+
+            val updates = ArrayList<Pair<Long, Long>>()
+            if (config.shiftExisting) {
+                // Anki moves every OTHER new card at or past the start out of the way.
+                val others = call("findCards", JSONObject().put("query", "is:new -(${config.search})")) as JSONArray
+                cardsInfo((0 until others.length()).map { others.getLong(it) })
+                    .filter { it.due >= 0 }
+                    .forEach { updates += it.id to it.due + sorted.size }
+            }
+            sorted.forEachIndexed { position, card ->
+                if (card.due != position.toLong()) updates += card.id to position.toLong()
+            }
+            for (chunk in updates.chunked(200)) {
+                val actions = JSONArray()
+                for ((card, due) in chunk) {
+                    actions.put(
+                        JSONObject().put("action", "setSpecificValueOfCard").put(
+                            "params",
+                            JSONObject().put("card", card).put("keys", JSONArray(listOf("due")))
+                                .put("newValues", JSONArray(listOf(due)))
+                        )
+                    )
+                }
+                call("multi", JSONObject().put("actions", actions))
+            }
+            return sorted.withIndex().count { (position, card) -> card.due != position.toLong() }
+        }
+
+        private fun cardsInfo(ids: List<Long>): List<CardPosition> = ids.chunked(500).flatMap { chunk ->
+            val infos = call("cardsInfo", JSONObject().put("cards", JSONArray(chunk))) as JSONArray
+            (0 until infos.length()).map { i ->
+                val info = infos.getJSONObject(i)
+                val fields = info.optJSONObject("fields") ?: JSONObject()
+                CardPosition(
+                    id = info.getLong("cardId"),
+                    due = info.getLong("due"),
+                    fields = fields.keys().asSequence().associateWith { fields.getJSONObject(it).optString("value") }
+                )
+            }
+        }
+
         fun ensureDeck(deck: String) {
             call("createDeck", JSONObject().put("deck", deck))
         }
@@ -537,6 +656,11 @@ class KindleSync {
             } catch (e: Exception) {
                 e.message
             }
+    }
+
+    private data class CardPosition(val id: Long, val due: Long, val fields: Map<String, String>) {
+        /** AutoReorder's get_frequency: the field as an int, anything else last. */
+        fun frequency(field: String): Long = fields[field]?.trim()?.toLongOrNull() ?: Long.MAX_VALUE
     }
 
     private companion object {
