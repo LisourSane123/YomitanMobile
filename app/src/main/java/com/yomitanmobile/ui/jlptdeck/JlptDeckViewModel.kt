@@ -153,6 +153,21 @@ class JlptDeckViewModel @Inject constructor(
             )
     }
 
+    /**
+     * Marks or unmarks a whole batch in one edit.
+     *
+     * The review's bulk buttons act on what its search has narrowed to, which
+     * is the only way a deck of thousands is reviewed in one sitting: "suspend
+     * everything matching 見" has to be one decision, not forty taps. Toggling
+     * each key in turn would also publish a new set forty times over and
+     * recompose the list on each of them.
+     */
+    fun setSuspended(keys: Collection<String>, suspended: Boolean) {
+        if (keys.isEmpty()) return
+        _suspendedKeys.value =
+            if (suspended) _suspendedKeys.value + keys else _suspendedKeys.value - keys.toSet()
+    }
+
     fun clearSuspended() {
         _suspendedKeys.value = emptySet()
     }

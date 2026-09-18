@@ -564,7 +564,8 @@ fun JlptDeckScreen(
                     onToggle = viewModel::toggleSuspended,
                     onSuspendAll = viewModel::suspendAll,
                     onClearSuspended = viewModel::clearSuspended,
-                    onSuspendFirst = viewModel::suspendFirst
+                    onSuspendFirst = viewModel::suspendFirst,
+                    onSetSuspended = viewModel::setSuspended
                 )
 
                 Spacer(Modifier.height(12.dp))
