@@ -1,6 +1,7 @@
 package com.yomitanmobile.domain.usecase
 
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.util.PartsOfSpeechFormatter
 
 /**
  * "Is this word worth a card at all?" — the tag-level rules shared by every
@@ -159,20 +160,7 @@ object WordFilterRules {
      * always no. こと (tagged nothing but `prt`) sailed into the deck as card
      * number one.
      */
-    private fun String.isBadge(): Boolean =
-        all { it.isDigit() } ||
-            this == "⭐" || this == "★" || this == "forms" ||
-            this in PRIORITY_TAGS ||
-            NEWS_RANK.matches(this) ||
-            NF_RANK.matches(this)
-
-    private val PRIORITY_TAGS = setOf(
-        "ichi", "ichi1", "ichi2", "news", "spec", "spec1", "spec2", "gai", "gai1", "gai2"
-    )
-
-    /** JMdict's corpus bands: news1k … news25k, nf01 … nf48. */
-    private val NEWS_RANK = Regex("news\\d+k?")
-    private val NF_RANK = Regex("nf\\d+")
+    private fun String.isBadge(): Boolean = PartsOfSpeechFormatter.isBadgeTag(this)
 
     private fun String.normalizeTag(): String = trim().lowercase()
 }

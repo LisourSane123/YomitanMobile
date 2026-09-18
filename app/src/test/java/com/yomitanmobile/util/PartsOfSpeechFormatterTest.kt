@@ -55,6 +55,42 @@ class PartsOfSpeechFormatterTest {
         assertTrue(result.contains("unknown-tag"))
     }
 
+    /**
+     * The tag strings a PLAIN JMdict import hands over, verbatim. A Jitendex
+     * import drops the badges at parse time, which is why the star reached
+     * some cards and not others.
+     *
+     * ⭐ is U+2B50 — emoji presentation, so it renders in its own colour
+     * whatever the card CSS says, and it was the one thing on the card that
+     * ignored the palette.
+     */
+    @Test
+    fun stripsJmdictBadgesFromPlainImport() {
+        assertEquals("particle", PartsOfSpeechFormatter.format("1 prt, \u2B50 spec"))
+        assertEquals(
+            "godan verb (\u3046), transitive verb",
+            PartsOfSpeechFormatter.format("2 v5u vt, \u2B50 ichi news1k")
+        )
+    }
+
+    @Test
+    fun stripsBothStarGlyphs() {
+        // U+2B50 is what JMdict ships; U+2605 turns up in hand-made banks.
+        assertEquals("noun", PartsOfSpeechFormatter.format("n \u2B50"))
+        assertEquals("noun", PartsOfSpeechFormatter.format("n \u2605"))
+    }
+
+    @Test
+    fun stripsSenseNumbersAndBareCorpusBands() {
+        assertEquals("noun", PartsOfSpeechFormatter.format("1 n ichi news gai spec"))
+        assertEquals("noun", PartsOfSpeechFormatter.format("n news25k"))
+    }
+
+    @Test
+    fun badgeOnlyTagStringResolvesToEmpty() {
+        assertEquals("", PartsOfSpeechFormatter.format("\u2B50 ichi news1k"))
+    }
+
     @Test
     fun emptyInputReturnsEmpty() {
         assertEquals("", PartsOfSpeechFormatter.format(""))

@@ -315,26 +315,55 @@ object PartsOfSpeechFormatter {
         "music" to "muzyka"
     )
 
-    private val FREQUENCY_TAGS = setOf(
-        "ichi1", "ichi2",
-        "news1", "news2",
-        "spec1", "spec2",
-        "gai1", "gai2"
-    )
-
     // Visual / metadata markers that show up in Yomitan termTags but are not
-    // real grammar info. "P" = priority form; the unicode glyphs come from
-    // Jitendex's badge tags. Filtering them keeps the POS chip readable.
+    // real grammar info. "P" = priority form. Filtering them keeps the POS
+    // chip readable. The badge glyphs and corpus bands live in [isBadgeTag],
+    // which the scanner's filters share.
     private val NON_POS_NOISE = setOf(
-        "P", "★", "priority", "form",
+        "P", "priority", "form",
         // kaikki's placeholder when it could not determine a part of speech.
         // Roughly 3% of kty-en-pl entries carry it, and "unknown" printed
         // above a gloss tells the reader nothing.
         "unknown"
     )
 
+    /**
+     * JMdict's corpus-priority badges, as one definition.
+     *
+     * A plain JMdict import hands the parser `definitionTags` + `termTags`
+     * verbatim — "1 prt, ⭐ spec", "2 v5u vt, v5, ⭐ ichi news1k" — while a
+     * Jitendex import drops them at parse time. That is why a star appeared on
+     * SOME cards and not others: it depends on which dictionary supplied the
+     * entry, not on the word.
+     *
+     * ⭐ is U+2B50, which has emoji presentation: it renders in the font's own
+     * colour whatever the card CSS says, so it ignored the card's palette and
+     * pulled the eye off the word. The formatter dropped ★ (U+2605) but not
+     * the one JMdict actually ships.
+     *
+     * There were two copies of this rule — this one, and the scanner's, which
+     * was the complete one. They are one rule now, because a token either is a
+     * part of speech or is not, and both callers are asking that.
+     */
+    fun isBadgeTag(token: String): Boolean {
+        val tag = token.trim().lowercase()
+        if (tag.isEmpty()) return false
+        return tag.all { it.isDigit() } ||
+            tag == "⭐" || tag == "★" || tag == "forms" ||
+            tag in PRIORITY_TAGS ||
+            NEWS_RANK.matches(tag) ||
+            NF_RANK.matches(tag)
+    }
+
+    private val PRIORITY_TAGS = setOf(
+        "ichi", "ichi1", "ichi2", "news", "spec", "spec1", "spec2", "gai", "gai1", "gai2"
+    )
+
+    /** JMdict's corpus bands: news1k … news25k, nf01 … nf48. */
+    private val NEWS_RANK = Regex("news\\d+k?")
+    private val NF_RANK = Regex("nf\\d+")
+
     private val JLPT_REGEX = Regex("""(?i)^jlpt[\s_-]?n?[\s_-]?[1-5]$""")
-    private val NF_REGEX = Regex("""(?i)^nf\d+$""")
     private val SPLIT_REGEX = Regex("""[,;\s]+""")
 
     /**
@@ -440,10 +469,9 @@ object PartsOfSpeechFormatter {
         for (token in SPLIT_REGEX.split(rawTags)) {
             val trimmed = token.trim()
             if (trimmed.isEmpty()) continue
-            if (trimmed in FREQUENCY_TAGS) continue
             if (trimmed in NON_POS_NOISE) continue
+            if (isBadgeTag(trimmed)) continue
             if (JLPT_REGEX.matches(trimmed)) continue
-            if (NF_REGEX.matches(trimmed)) continue
             val label = if (english) {
                 POS_LABELS[trimmed]
             } else {
