@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -90,6 +91,9 @@ import androidx.datastore.preferences.core.edit
 import java.io.File
 import com.yomitanmobile.ui.common.rememberTr
 import com.yomitanmobile.ui.common.LocalIsEnglish
+import com.yomitanmobile.ui.common.SettingsDivider
+import com.yomitanmobile.ui.common.SettingsRow
+import com.yomitanmobile.ui.common.SettingsSectionHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,7 +181,7 @@ fun SettingsScreen(
                     )
                 } else {
                     LazyColumn {
-                        items(installed) { info ->
+                        items(installed, key = { it.id }) { info ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -673,8 +677,10 @@ fun SettingsScreen(
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            // No gap and no outer padding: rows are flush and a hairline
+            // separates them, so a gap here would break every rule in two.
+            // Horizontal padding lives inside the rows instead.
+            contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             // ═══════════════════════════════════════
             // SECTION: Język nauki (Study language)
@@ -682,7 +688,8 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Translate,
-                    title = tr("Język nauki", "Study language")
+                    title = tr("Język nauki", "Study language"),
+                    first = true
                 )
             }
 
@@ -706,7 +713,7 @@ fun SettingsScreen(
             if (!viewModel.studyLanguage.hasJapaneseFeatures) {
                 item {
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer
                         )
@@ -777,7 +784,9 @@ fun SettingsScreen(
             item {
                 Button(
                     onClick = onNavigateToDownload,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
                 ) {
                     Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
@@ -789,7 +798,9 @@ fun SettingsScreen(
                 OutlinedButton(
                     onClick = { filePickerLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed")) },
                     enabled = !isImporting,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
@@ -809,7 +820,7 @@ fun SettingsScreen(
             if (isImporting) {
                 item {
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -848,12 +859,13 @@ fun SettingsScreen(
 
             // Theme mode toggle
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(tr("Motyw", "Theme"), fontWeight = FontWeight.Bold)
+                SettingsBlock {
+                    Column {
+                        Text(
+                            tr("Motyw", "Theme"),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                         Spacer(Modifier.height(12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -925,26 +937,21 @@ fun SettingsScreen(
 
             // Pronunciation archive
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                SettingsBlock {
+                    Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Icons.Default.VolumeUp,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(32.dp)
                             )
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     tr("Archiwum wymowy", "Pronunciation archive"),
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     when {
@@ -1004,26 +1011,23 @@ fun SettingsScreen(
 
             // Anki deck setting
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
+                SettingsBlock {
                     Row(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             Icons.Default.Style,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(32.dp)
                         )
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 tr("Talia Anki", "Anki deck"),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 if (currentDeckName.isNotBlank()) currentDeckName
@@ -1051,12 +1055,12 @@ fun SettingsScreen(
             // nothing to switch and setting it would appear to do something.
             if (viewModel.studyLanguage.hasJapaneseFeatures) {
             item {
-                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                SettingsBlock {
+                    Column {
                         Text(
                             tr("Silnik fiszek", "Card engine"),
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
@@ -1157,26 +1161,21 @@ fun SettingsScreen(
 
             // Daily goal setting
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                SettingsBlock {
+                    Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Icons.Default.EmojiEvents,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(32.dp)
                             )
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
                                     tr("Cel dzienny fiszek", "Daily card goal"),
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     if (dailyGoalCount.toInt() == 0) tr("Wyłączony", "Disabled")
@@ -1256,26 +1255,21 @@ fun SettingsScreen(
 
             // Language selector
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                SettingsBlock {
+                    Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Icons.Default.Language,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(28.dp)
                             )
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
                                     tr("Język aplikacji", "App language"),
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     when (currentLanguage) {
@@ -1383,28 +1377,31 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * The section break and the tappable row both live in `ui/common` now — the
+ * card style screen and the deck generators draw the same list.
+ */
 @Composable
 private fun SectionHeader(
     icon: ImageVector,
-    title: String
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(24.dp),
-            tint = MaterialTheme.colorScheme.primary
+    title: String,
+    first: Boolean = false
+) = SettingsSectionHeader(icon = icon, title = title, first = first)
+
+/**
+ * A setting that needs room — chips, a slider, a pair of buttons.
+ *
+ * Same gutter and same hairline as [SettingsRow], so a compound setting reads
+ * as one more entry in the list instead of a panel dropped into it.
+ */
+@Composable
+private fun SettingsBlock(content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            content = content
         )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
+        SettingsDivider(inset = false)
     }
 }
 
@@ -1414,38 +1411,4 @@ private fun SettingsClickableItem(
     title: String,
     subtitle: String,
     onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(32.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    subtitle,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
+) = SettingsRow(icon = icon, title = title, subtitle = subtitle, onClick = onClick)

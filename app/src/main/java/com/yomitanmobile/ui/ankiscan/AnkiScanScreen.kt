@@ -419,7 +419,7 @@ fun AnkiScanScreen(
                     Divider()
                 }
 
-                items(words) { row ->
+                items(words, key = { it.word }) { row ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

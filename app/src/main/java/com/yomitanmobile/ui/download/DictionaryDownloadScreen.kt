@@ -124,7 +124,8 @@ fun DictionaryDownloadScreen(
         ) {
             val queue by viewModel.queue.collectAsState()
 
-            // Download progress banner
+            // Download progress banner. The one thing that stays pinned: it is
+            // live status, and it shrinks to nothing when nothing is running.
             AnimatedVisibility(
                 visible = downloadProgress != null,
                 enter = expandVertically() + fadeIn(),
@@ -135,202 +136,209 @@ fun DictionaryDownloadScreen(
                 }
             }
 
-            // What is queued, above the catalogue: the user just tapped these
-            // and needs to see that the taps landed.
-            if (queue.isNotEmpty()) {
-                QueueCard(
-                    queue = queue,
-                    onCancel = viewModel::cancelQueued,
-                    onClearFinished = viewModel::clearFinished
-                )
+            val filteredDicts = if (selectedCategory != null) {
+                viewModel.availableDictionaries.filter { it.category == selectedCategory }
+            } else {
+                viewModel.availableDictionaries
+            }
+            val frequencyCount = viewModel.availableDictionaries.count {
+                it.category == DictionaryCategory.FREQUENCY
             }
 
-            // Category filter chips
-            FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)
             ) {
-                FilterChip(
-                    selected = selectedCategory == null,
-                    onClick = { viewModel.selectCategory(null) },
-                    label = { Text(tr("Wszystkie", "All")) }
-                )
-                DictionaryCategory.entries.forEach { category ->
-                    FilterChip(
-                        selected = selectedCategory == category,
-                        onClick = { viewModel.selectCategory(category) },
-                        label = { Text(categoryLabel(category, isEnglish)) },
-                        leadingIcon = {
-                            Icon(
-                                categoryIcon(category),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+
+            // What is queued, above the catalogue: the user just tapped
+            // these and needs to see that the taps landed.
+            if (queue.isNotEmpty()) {
+                item {
+                    QueueCard(
+                        queue = queue,
+                        onCancel = viewModel::cancelQueued,
+                        onClearFinished = viewModel::clearFinished
                     )
                 }
             }
 
-            // Info card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            // Category filter chips
+            item {
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        Icons.Default.CloudDownload,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    FilterChip(
+                        selected = selectedCategory == null,
+                        onClick = { viewModel.selectCategory(null) },
+                        label = { Text(tr("Wszystkie", "All")) }
                     )
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            tr("Pobieranie słowników", "Dictionary downloads"),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            tr(
-                                "Słowniki zostaną pobrane z internetu i zaimportowane offline. Po pobraniu nie potrzebujesz internetu do wyszukiwania.",
-                                "The dictionaries will be downloaded from the internet and imported offline. After that, you do not need the internet to search."
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                    DictionaryCategory.entries.forEach { category ->
+                        FilterChip(
+                            selected = selectedCategory == category,
+                            onClick = { viewModel.selectCategory(category) },
+                            label = { Text(categoryLabel(category, isEnglish)) },
+                            leadingIcon = {
+                                Icon(
+                                    categoryIcon(category),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            // Info card
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.CloudDownload,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                tr("Pobieranie słowników", "Dictionary downloads"),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                tr(
+                                    "Słowniki zostaną pobrane z internetu i zaimportowane offline. Po pobraniu nie potrzebujesz internetu do wyszukiwania.",
+                                    "The dictionaries will be downloaded from the internet and imported offline. After that, you do not need the internet to search."
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(Modifier.height(8.dp)) }
 
             // Download all recommended button. Always enabled: it adds to the
             // queue, and the queue de-duplicates whatever is already in it.
-            Button(
-                onClick = { withNotifications { viewModel.downloadAllRecommended() } },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(tr("Pobierz wszystkie rekomendowane", "Download all recommended"))
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // …and the frequency lists in one go. They are 1-5 MB each and
-            // every one of them is used: the leading list stamps the card and
-            // orders search, the rest fill in the words it does not know, and
-            // the text scanner reads all of them while segmenting.
-            val frequencyCount = viewModel.availableDictionaries.count {
-                it.category == DictionaryCategory.FREQUENCY
-            }
-            // Nothing to offer a learner whose language has no lists.
-            if (frequencyCount > 0) {
-                OutlinedButton(
-                    onClick = { withNotifications { viewModel.downloadAllFrequencyLists() } },
+            item {
+                Button(
+                    onClick = { withNotifications { viewModel.downloadAllRecommended() } },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                 ) {
                     Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        tr(
-                            "Pobierz wszystkie listy częstotliwości ($frequencyCount)",
-                            "Download all frequency lists ($frequencyCount)"
-                        )
-                    )
+                    Text(tr("Pobierz wszystkie rekomendowane", "Download all recommended"))
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            item { Spacer(Modifier.height(8.dp)) }
 
-            // Dictionary list
-            val filteredDicts = if (selectedCategory != null) {
-                viewModel.availableDictionaries.filter { it.category == selectedCategory }
-            } else {
-                viewModel.availableDictionaries
-            }
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 16.dp,
-                    vertical = 8.dp
-                )
-            ) {
-                items(filteredDicts, key = { it.id }) { dictInfo ->
-                    val isInstalled = isDictionaryInstalled(dictInfo, installedDictionaries)
-                    val isMetaDict = dictInfo.category == DictionaryCategory.FREQUENCY ||
-                            dictInfo.category == DictionaryCategory.PITCH_ACCENT
-                    val isCurrentlyDownloading = downloadProgress?.dictionaryId == dictInfo.id
-                    // Already asked for: waiting its turn, or installing now.
-                    // This — and nothing else — is what disables the button.
-                    // Disabling every button while ANY install ran made the
-                    // queue unusable: you could add a second dictionary only
-                    // after the first had finished, which is the one moment a
-                    // queue is not needed. It bit hardest on the frequency
-                    // lists, which is exactly what people pick four of.
-                    val queued = queue.any {
-                        it.info.id == dictInfo.id &&
-                            (it.state == QueueState.WAITING || it.state == QueueState.RUNNING)
-                    }
-
-                    DictionaryDownloadCard(
-                        info = dictInfo,
-                        isInstalled = isInstalled,
-                        isDownloading = isCurrentlyDownloading,
-                        isQueued = queued,
-                        onDownload = { withNotifications { viewModel.downloadDictionary(dictInfo) } },
-                        enabled = !queued,
-                        allowReimport = isMetaDict,
-                        isEnglish = isEnglish
-                    )
-                }
-
+            // …and the frequency lists in one go. They are 1-5 MB each and
+            // every one of them is used: the leading list stamps the card and
+            // orders search, the rest fill in the words it does not know, and
+            // the text scanner reads all of them while segmenting.
+            //
+            // Nothing to offer a learner whose language has no lists.
+            if (frequencyCount > 0) {
                 item {
-                    Spacer(Modifier.height(16.dp))
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                    OutlinedButton(
+                        onClick = { withNotifications { viewModel.downloadAllFrequencyLists() } },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                tr("💡 Wskazówki", "💡 Tips"),
-                                style = MaterialTheme.typography.titleSmall
+                        Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            tr(
+                                "Pobierz wszystkie listy częstotliwości ($frequencyCount)",
+                                "Download all frequency lists ($frequencyCount)"
                             )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                tr(
-                                    "• JMdict (English) – podstawowy słownik, zainstaluj go jako pierwszy\n" +
-                                        "• Frequency – pozwala sortować słowa wg częstości użycia\n" +
-                                        "• Pitch Accent – pokazuje akcent tonalny słów\n" +
-                                        "• Wymowa TTS – automatycznie dostępna przez Google TTS (nie wymaga pobierania)\n" +
-                                        "• Możesz też importować własne słowniki (ZIP) w Ustawieniach",
-                                    "• JMdict (English) - the main dictionary, install it first\n" +
-                                        "• Frequency - lets you sort words by usage frequency\n" +
-                                        "• Pitch Accent - shows word pitch accent patterns\n" +
-                                        "• TTS pronunciation - automatically available via Google TTS (no download needed)\n" +
-                                        "• You can also import your own dictionaries (ZIP) in Settings"
-                                ),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
+                        )
                     }
                 }
+            }
+
+            item { Spacer(Modifier.height(8.dp)) }
+
+            items(filteredDicts, key = { it.id }) { dictInfo ->
+                val isInstalled = isDictionaryInstalled(dictInfo, installedDictionaries)
+                val isMetaDict = dictInfo.category == DictionaryCategory.FREQUENCY ||
+                        dictInfo.category == DictionaryCategory.PITCH_ACCENT
+                val isCurrentlyDownloading = downloadProgress?.dictionaryId == dictInfo.id
+                // Already asked for: waiting its turn, or installing now.
+                // This — and nothing else — is what disables the button.
+                // Disabling every button while ANY install ran made the
+                // queue unusable: you could add a second dictionary only
+                // after the first had finished, which is the one moment a
+                // queue is not needed. It bit hardest on the frequency
+                // lists, which is exactly what people pick four of.
+                val queued = queue.any {
+                    it.info.id == dictInfo.id &&
+                        (it.state == QueueState.WAITING || it.state == QueueState.RUNNING)
+                }
+
+                DictionaryDownloadCard(
+                    info = dictInfo,
+                    isInstalled = isInstalled,
+                    isDownloading = isCurrentlyDownloading,
+                    isQueued = queued,
+                    onDownload = { withNotifications { viewModel.downloadDictionary(dictInfo) } },
+                    enabled = !queued,
+                    allowReimport = isMetaDict,
+                    isEnglish = isEnglish
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            tr("💡 Wskazówki", "💡 Tips"),
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            tr(
+                                "• JMdict (English) – podstawowy słownik, zainstaluj go jako pierwszy\n" +
+                                    "• Frequency – pozwala sortować słowa wg częstości użycia\n" +
+                                    "• Pitch Accent – pokazuje akcent tonalny słów\n" +
+                                    "• Wymowa TTS – automatycznie dostępna przez Google TTS (nie wymaga pobierania)\n" +
+                                    "• Możesz też importować własne słowniki (ZIP) w Ustawieniach",
+                                "• JMdict (English) - the main dictionary, install it first\n" +
+                                    "• Frequency - lets you sort words by usage frequency\n" +
+                                    "• Pitch Accent - shows word pitch accent patterns\n" +
+                                    "• TTS pronunciation - automatically available via Google TTS (no download needed)\n" +
+                                    "• You can also import your own dictionaries (ZIP) in Settings"
+                            ),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
             }
         }
     }
@@ -559,7 +567,7 @@ private fun DictionaryDownloadCard(
 ) {
     val tr = rememberTr()
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isInstalled)
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
