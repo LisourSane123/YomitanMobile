@@ -99,6 +99,73 @@ class AnkiCollectionDedupTest {
         assertFalse(collection.holds(word("帰る", "かえる")))
     }
 
+    /**
+     * The reported case: "I made a deck from a book and it gave me cards for
+     * 綺麗 and 傷つく, which are already in my deck."
+     *
+     * JMdict files every spelling of a word under one sequence, and the deck
+     * holds whichever one its author typed. `MergedWordEntry` cannot supply
+     * the siblings — `mergeEntries` groups by (expression, reading), so
+     * `alternativeExpressions` is structurally always empty — so they are read
+     * from the database by sequence and passed in here. See
+     * `WrittenFormsBySequenceDbTest` for that half.
+     */
+    private fun AnkiCollectionIndex.Index.holdsAnyOf(
+        entry: MergedWordEntry,
+        writtenForms: List<String>
+    ) = containsAny(
+        listOf(entry.primaryExpression) + writtenForms,
+        entry.reading,
+        readingCountsAlone = WordFilterRules.isUsuallyKana(entry)
+    )
+
+    @Test
+    fun `a deck writing the word with the other kanji is not a second word`() {
+        val collection = index("傷付く${sep}きずつく${sep}to be hurt")
+        val entry = word("傷つく", "きずつく", partsOfSpeech = listOf("v5k", "vi"))
+
+        // The headword alone is what the generator used to compare, and it is
+        // why the card came back.
+        assertFalse(collection.holds(entry))
+        assertTrue(collection.holdsAnyOf(entry, listOf("傷つく", "傷付く", "疵つく")))
+    }
+
+    /**
+     * 綺麗 reached the collection by a second route that happened to work: it
+     * is tagged `uk`, so a deck holding きれい in a reading field matched on
+     * the reading alone. Take that route away — a deck whose note is just the
+     * spelling — and the word is missing again, because 奇麗 is a different
+     * string. The spelling path has to carry it on its own.
+     */
+    @Test
+    fun `綺麗 and 奇麗 are one word`() {
+        val spellingOnly = index("奇麗")
+        val entry = word("綺麗", "きれい", usageTags = listOf("usually kana"))
+
+        assertFalse(spellingOnly.holds(entry))
+        assertTrue(spellingOnly.holdsAnyOf(entry, listOf("綺麗", "奇麗")))
+
+        // And with no `uk` tag the reading route is closed even when the deck
+        // does store one — an adjective the dictionary calls kanji-written.
+        val withReading = index("奇麗${sep}きれい${sep}pretty")
+        val notKana = word("綺麗", "きれい", partsOfSpeech = listOf("adj-na"))
+        assertFalse(withReading.holds(notKana))
+        assertTrue(withReading.holdsAnyOf(notKana, listOf("綺麗", "奇麗")))
+    }
+
+    /**
+     * The guard the fix must not cost: written forms come from ONE sequence,
+     * so a homophone never joins the list. Passing them in cannot make 帰る
+     * match a collection holding only 変える.
+     */
+    @Test
+    fun `supplying written forms does not open the homophone door`() {
+        val collection = index("変える${sep}かえる${sep}to change")
+        val entry = word("帰る", "かえる", partsOfSpeech = listOf("v5r", "vi"))
+
+        assertFalse(collection.holdsAnyOf(entry, listOf("帰る", "還る", "歸る")))
+    }
+
     @Test
     fun `a sentence field does not poison the index`() {
         val collection = index("毎日${sep}まいにち${sep}私は毎日野菜を食べる。")

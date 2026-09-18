@@ -10,6 +10,17 @@ data class MergedWordEntry(
     val reading: String,
     val definitions: List<String>,
     val alternativeExpressions: List<String>,
+    /**
+     * The source entry's JMdict sequence, 0 when the dictionary ships none.
+     *
+     * What makes "the same word, spelled differently" answerable. Grouping
+     * here is by (expression, reading) — deliberately, so homographs stay
+     * apart — which means 傷つく and 傷付く are two MergedWordEntry objects and
+     * neither knows about the other. They do share a sequence, and that is the
+     * only thing in the data that says they are one word rather than two
+     * words that rhyme. See `DictionaryRepository.writtenFormsBySequence`.
+     */
+    val sequenceNumber: Int = 0,
     val frequency: Int = 0,
     /** The leading list's own number; "" when it does not know the word. */
     val frequencyValue: String = "",
@@ -197,6 +208,7 @@ data class MergedWordEntry(
                     reading = reading,
                     definitions = allDefinitions,
                     alternativeExpressions = alternatives,
+                    sequenceNumber = primary.sequenceNumber,
                     frequency = bestFrequency,
                     // From a row the leading list knows, preferring the primary.
                     frequencyValue = primary.frequencyValue.ifBlank {

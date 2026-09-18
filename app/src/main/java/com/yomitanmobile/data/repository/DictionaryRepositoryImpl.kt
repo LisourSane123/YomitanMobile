@@ -185,6 +185,26 @@ class DictionaryRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun writtenFormsBySequence(
+        readings: Collection<String>
+    ): Map<Int, List<String>> {
+        if (readings.isEmpty()) return emptyMap()
+        return withContext(Dispatchers.IO) {
+            try {
+                readings.filter { it.isNotBlank() }
+                    .distinct()
+                    .chunked(IN_CLAUSE_CHUNK)
+                    .flatMap { chunk -> dictionaryDao.getEntriesByReadings(chunk, language) }
+                    .filter { it.sequenceNumber > 0 && it.expression.isNotBlank() }
+                    .groupBy { it.sequenceNumber }
+                    .mapValues { (_, rows) -> rows.map { it.expression }.distinct() }
+            } catch (e: Exception) {
+                Log.w(TAG, "writtenFormsBySequence failed (${readings.size} readings)", e)
+                emptyMap()
+            }
+        }
+    }
+
     override suspend fun getSurfaceLexicon(): Set<String> = withContext(Dispatchers.IO) {
         try {
             val expressions = dictionaryDao.getAllExpressions(language)

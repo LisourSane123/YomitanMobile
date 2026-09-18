@@ -267,6 +267,14 @@ class JlptDeckViewModel @Inject constructor(
                 }
                 val storedScan = ankiCollectionStore.storedScanInfo()
 
+                // One query for the whole candidate set, on the indexed
+                // reading column — not one per word.
+                val writtenForms = if (filters.skipAlreadyInAnki) {
+                    repository.writtenFormsBySequence(candidates.map { it.reading })
+                } else {
+                    emptyMap()
+                }
+
                 val minedKeys: Set<String> = if (filters.skipAlreadyMined) {
                     runCatching {
                         exportedWordDao.getAllExports()
@@ -285,10 +293,21 @@ class JlptDeckViewModel @Inject constructor(
                     filters = filters,
                     isInAnki = {
                         index.containsAny(
-                            // Every spelling the entry knows, not just the
-                            // headword: the deck may hold 持ってくる where
-                            // JMdict's primary form is 持って来る.
-                            listOf(it.primaryExpression) + it.alternativeExpressions,
+                            // Every spelling of the word, not just the
+                            // headword the dictionary happens to file it
+                            // under. The deck holds whichever one its author
+                            // typed — 傷付く where JMdict's primary is 傷つく,
+                            // 奇麗 where it is 綺麗 — and the headword-to-
+                            // headword comparison this replaces reported "not
+                            // in your collection" for words already being
+                            // studied. alternativeExpressions is kept in the
+                            // list because TextScanPlanner's `frontedWith`
+                            // puts the original headword there; it is empty
+                            // otherwise, which is the whole reason the
+                            // spellings are read from the database.
+                            listOf(it.primaryExpression) +
+                                it.alternativeExpressions +
+                                writtenForms[it.sequenceNumber].orEmpty(),
                             it.reading,
                             readingCountsAlone = com.yomitanmobile.domain.usecase.WordFilterRules
                                 .isUsuallyKana(it)

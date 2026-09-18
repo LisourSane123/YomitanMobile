@@ -133,6 +133,15 @@ class TextScanViewModel @Inject constructor(
     private var minedKeys: Set<String> = emptySet()
     private var ankiIndex: AnkiCollectionIndex.Index = AnkiCollectionIndex.Index.EMPTY
 
+    /**
+     * Every written form of each resolved word, by JMdict sequence.
+     *
+     * See `DictionaryRepository.writtenFormsBySequence`. Filled once per
+     * analysis, because `recomputePlan` runs on every filter change and this
+     * does not depend on the filters.
+     */
+    private var writtenForms: Map<Int, List<String>> = emptyMap()
+
     private var generationJob: Job? = null
 
     fun setDeckName(name: String) {
@@ -215,6 +224,9 @@ class TextScanViewModel @Inject constructor(
                 scannedWords = tokens
                 totalTokens = tokens.sumOf { it.occurrences }
                 resolvedEntries = resolveEntries(tokens.mapTo(HashSet()) { it.baseForm })
+                writtenForms = repository.writtenFormsBySequence(
+                    resolvedEntries.values.map { it.reading }
+                )
                 sources = documents.map { document ->
                     TextScanSource(
                         fileName = document.fileName,
@@ -267,7 +279,21 @@ class TextScanViewModel @Inject constructor(
             totalTokenCount = totalTokens,
             isInAnki = {
                 ankiIndex.containsAny(
-                    listOf(it.primaryExpression) + it.alternativeExpressions,
+                    // Every spelling of the word, not just the
+                    // headword the dictionary happens to file it
+                    // under. The deck holds whichever one its author
+                    // typed — 傷付く where JMdict's primary is 傷つく,
+                    // 奇麗 where it is 綺麗 — and the headword-to-
+                    // headword comparison this replaces reported "not
+                    // in your collection" for words already being
+                    // studied. alternativeExpressions is kept in the
+                    // list because TextScanPlanner's `frontedWith`
+                    // puts the original headword there; it is empty
+                    // otherwise, which is the whole reason the
+                    // spellings are read from the database.
+                    listOf(it.primaryExpression) +
+                        it.alternativeExpressions +
+                        writtenForms[it.sequenceNumber].orEmpty(),
                     it.reading,
                     readingCountsAlone = com.yomitanmobile.domain.usecase.WordFilterRules
                         .isUsuallyKana(it)

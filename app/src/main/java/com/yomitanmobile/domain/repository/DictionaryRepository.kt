@@ -107,6 +107,32 @@ interface DictionaryRepository {
     suspend fun getEntriesForReadings(readings: List<String>): List<WordEntry>
 
     /**
+     * Every written form of a word, keyed by its JMdict sequence.
+     *
+     * The duplicate check against the AnkiDroid collection asks "do I already
+     * have THIS WORD", and a word is not one string: JMdict files 傷つく,
+     * 傷付く and 疵つく as one entry, 綺麗 and 奇麗 as another. The deck holds
+     * whichever one its author typed, and comparing headword to headword
+     * reported "you do not have it" for words the reader had been studying for
+     * months — which is what put them back in a generated deck.
+     *
+     * `MergedWordEntry.alternativeExpressions` cannot answer this and never
+     * could: `mergeEntries` groups by (expression, reading), so a group holds
+     * exactly one spelling and the list is always empty. The spellings are a
+     * fact about the database, so they are read from it.
+     *
+     * Looked up by READING, because `reading` is indexed and `sequence_number`
+     * is not — then grouped by sequence, which is what keeps homophones apart.
+     * こうえん matches 公園 and 講演 on the reading; they carry different
+     * sequences, so owning one never marks the other as known.
+     *
+     * Entries with no sequence (a dictionary that ships none) are left out
+     * rather than guessed at: the caller then compares the headword alone,
+     * exactly as before.
+     */
+    suspend fun writtenFormsBySequence(readings: Collection<String>): Map<Int, List<String>>
+
+    /**
      * Same lookup restricted to one installed dictionary. Used by the
      * monolingual (JP-JP) card engine, which must read the definition from the
      * dictionary the user picked, not from whichever one matched first.
