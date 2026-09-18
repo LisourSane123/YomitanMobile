@@ -88,7 +88,7 @@ android {
             // on the JVM classpath.
             isIncludeAndroidResources = true
             all {
-                // The offline harnesses (BookScanHarness) hold a whole Yomitan
+                // The offline harnesses (BookScanHarness, KindleSync) hold a whole Yomitan
                 // dictionary in memory; the 512 MB default cannot.
                 it.maxHeapSize = "6g"
                 // Gradle's -D lands on the Gradle JVM, not on the test worker.
@@ -97,7 +97,8 @@ android {
                 for (key in listOf(
                     "book.paths", "dict.zip", "freq.zip", "out.dir",
                     "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields",
-                    "skipPlainKana", "skipKatakana"
+                    "skipPlainKana", "skipKatakana",
+                    "kindle.lookups", "kindle.deck", "kindle.dryRun", "anki.connect"
                 )) {
                     System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
                 }

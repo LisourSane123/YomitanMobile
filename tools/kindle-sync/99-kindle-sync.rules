@@ -1,0 +1,4 @@
+# Plugging in a Kindle (Amazon/Lab126, vendor 1949) starts the USER service
+# kindle-sync.service. A plain RUN+= would run as root and be killed after a
+# few seconds; SYSTEMD_USER_WANTS hands it to the logged-in user's systemd.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1949", TAG+="systemd", ENV{SYSTEMD_USER_WANTS}+="kindle-sync.service"

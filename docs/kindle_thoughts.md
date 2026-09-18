@@ -1,6 +1,19 @@
 # Kindle Vocabulary Builder → Anki (laptop, Arch Linux)
 
-Notatki projektowe. Nic z tego nie jest jeszcze zaimplementowane.
+Notatki projektowe.
+
+**Stan (2026-09-18): pierwsza wersja działa, na razie do talii `test_kindle`.**
+
+- `tools/kindle-sync/kindle-sync.sh`: wykrywa Kindle, kopiuje `vocab.db`, zrzuca nowe lookupy do TSV, sprawdza, czy działa AnkiConnect (w razie potrzeby uruchamia Anki), wysyła powiadomienie.
+- `app/src/test/.../tools/KindleSync.kt`: cała logika na kodzie apki (deconjugator, `ScanEntryResolver`, `AnkiNoteFieldIndexer` na całej kolekcji desktopowej, `AnkiCardCreator.createAnkiCard`). Działa tak jak `BookScanHarness`, czyli jako test Gradle z `-D…`, pod Robolectrikiem, bo `AnkiCardCreator` wymaga `Context`. Moduł `:core` (sekcja 1) nadal jest do zrobienia. Obecny sposób omija go bez kopiowania reguł.
+- `tools/kindle-sync/install.sh` + `99-kindle-sync.rules`: auto-start po podłączeniu (usługa użytkownika systemd + reguła udev, ta druga wymaga sudo).
+- Odpowiedzi na otwarte pytania:
+  1. Paperwhite `1949:9981` to **MTP**, nie pamięć USB. Na KDE urządzenie trzyma kio-worker Dolphina, więc libmtp (`mtp-getfile`) dostaje „device busy”. Plik ściągamy przez `kioclient copy mtp:/…`, a `gio` i zamontowana pamięć USB są fallbackiem.
+  2. AnkiConnect działa.
+  3. Karty dodawane są automatycznie. `--dry-run` tylko raportuje, a raport z każdego przebiegu trafia do `~/.local/state/kindle-sync/last-run/kindle-sync.tsv`.
+- Kindle w `stem` zapisuje dla nieznanego słowa **czytanie** hasła dopasowanego na początku zaznaczenia (親族会議 → しんぞく, ブリッヂオ → ぶり). Takie dopasowanie liczy się więc tylko wtedy, gdy hasło jest zapisane na początku zaznaczenia.
+- `usage` to okno tekstu, a nie zdanie. Pierwszy lookup w książce ciągnie za sobą stronę tytułową, dlatego zdanie jest wycinane.
+- Sync z AnkiWeb (2.5) nie jest jeszcze robiony.
 
 **Cel:** po podłączeniu Kindle do laptopa skrypt:
 1. czyta słowa z Vocabulary Buildera,
