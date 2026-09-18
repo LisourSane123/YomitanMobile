@@ -12,21 +12,27 @@
 #   --all       ignore the last-run marker and process every lookup
 #   --deck      target deck (default: test_kindle)
 #   --wait      how long to wait for the Kindle to appear (default: 0)
+#   --vocab     use this vocab.db instead of the Kindle's (testing)
 #
 # Environment: KINDLE_SYNC_DICT (Jitendex zip), KINDLE_SYNC_FREQ (frequency
-# zip), KINDLE_SYNC_REPO (checkout of YomitanMobile).
+# zip), KINDLE_SYNC_PITCH, KINDLE_SYNC_KANJI, KINDLE_SYNC_REPO (checkout of
+# YomitanMobile). The phone's card style is read from
+# ~/.local/share/kindle-sync/settings.json (an app backup's settings.json),
+# refreshed automatically whenever the phone is reachable over adb.
 set -euo pipefail
 
 DECK=test_kindle
 DRY_RUN=false
 ALL=false
 WAIT=0
+VOCAB=
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=true ;;
         --all) ALL=true ;;
         --deck) DECK="$2"; shift ;;
         --wait) WAIT="$2"; shift ;;
+        --vocab) VOCAB="$2"; shift ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -35,14 +41,21 @@ done
 REPO="${KINDLE_SYNC_REPO:-$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)}"
 DICT="${KINDLE_SYNC_DICT:-$HOME/yomitan-dicts/jitendex-yomitan.zip}"
 FREQ="${KINDLE_SYNC_FREQ:-$HOME/yomitan-dicts/JPDB_v2.2_Frequency.zip}"
+PITCH="${KINDLE_SYNC_PITCH:-$HOME/yomitan-dicts/kanjium_pitch_accents.zip}"
+KANJI="${KINDLE_SYNC_KANJI:-$HOME/yomitan-dicts/KANJIDIC_english.zip}"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}/kindle-sync"
+TTS_PYTHON="$DATA/venv/bin/python"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/kindle-sync"
 ANKI_CONNECT="${KINDLE_SYNC_ANKI:-http://127.0.0.1:8765}"
-mkdir -p "$STATE"
+mkdir -p "$STATE" "$DATA"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 log() { echo "[kindle-sync] $*" >&2; }
 notify() { command -v notify-send >/dev/null && notify-send -a "Kindle → Anki" "Kindle → Anki" "$1" || true; }
+# The one message a run ends with, success or not — the service is silent
+# otherwise.
+fail() { log "$1"; notify "Nie wykonano: $1"; exit 1; }
 
 # ---- 1. find the Kindle and copy vocab.db --------------------------------
 # Older Kindles are USB mass storage (mounted by udisks); newer ones, the
@@ -85,10 +98,9 @@ copy_vocab() {
 }
 
 deadline=$((SECONDS + WAIT))
-until copy_vocab; do
+until { [[ -n "$VOCAB" ]] && cp "$VOCAB" "$WORK/vocab.db"; } || copy_vocab; do
     if (( SECONDS >= deadline )); then
-        log "no Kindle found (or vocab.db unreadable)"
-        exit 1
+        fail "nie znaleziono Kindle (albo vocab.db jest nieczytelny)"
     fi
     sleep 3
 done
@@ -114,8 +126,26 @@ sqlite3 -readonly -separator $'\t' "$WORK/vocab.db" "
 COUNT=$(wc -l < "$WORK/lookups.tsv")
 log "$COUNT new lookups since $SINCE"
 if (( COUNT == 0 )); then
-    notify "Brak nowych słów w Vocabulary Builderze."
+    notify "Wykonano: brak nowych słów w Vocabulary Builderze."
     exit 0
+fi
+
+# ---- 2b. the phone's card style ------------------------------------------
+# The app's backups live in its external files dir, which adb can read.
+ADB="$(command -v adb || echo "$HOME/Android/Sdk/platform-tools/adb")"
+if [[ -x "$ADB" ]] && "$ADB" get-state >/dev/null 2>&1; then
+    BACKUPS=/sdcard/Android/data/com.yomitanmobile/files/yomitan_backups
+    LATEST="$("$ADB" shell "ls -1d $BACKUPS/*/ 2>/dev/null | sort | tail -1" | tr -d '\r')"
+    if [[ -n "$LATEST" ]] && "$ADB" pull "${LATEST%/}/settings.json" "$DATA/settings.json.new" >/dev/null 2>&1; then
+        mv "$DATA/settings.json.new" "$DATA/settings.json"
+        log "phone settings refreshed from $LATEST"
+    fi
+fi
+
+# ---- 2c. Open JTalk for the Audio field (once, into a venv) ----------------
+if [[ ! -x "$TTS_PYTHON" ]] || ! "$TTS_PYTHON" -c 'import pyopenjtalk' 2>/dev/null; then
+    log "installing pyopenjtalk into $DATA/venv"
+    python3 -m venv "$DATA/venv" && "$DATA/venv/bin/pip" install -q pyopenjtalk >&2 || log "pyopenjtalk unavailable, cards go without audio"
 fi
 
 # ---- 3. Anki must be answering ---------------------------------------------
@@ -130,9 +160,7 @@ if ! curl -s -m 3 "$ANKI_CONNECT" -d '{"action":"version","version":6}' | grep -
     done
 fi
 if ! curl -s -m 3 "$ANKI_CONNECT" -d '{"action":"version","version":6}' | grep -q '"result"'; then
-    log "AnkiConnect is not answering on $ANKI_CONNECT"
-    notify "Anki (AnkiConnect) nie odpowiada — nic nie dodano."
-    exit 1
+    fail "Anki (AnkiConnect) nie odpowiada, nic nie dodano"
 fi
 
 # ---- 4. the app's pipeline -------------------------------------------------
@@ -143,15 +171,17 @@ rm -f "$OUT/summary.txt"
     -Dkindle.lookups="$WORK/lookups.tsv" \
     -Ddict.zip="$DICT" \
     -Dfreq.zip="$FREQ" \
+    -Dpitch.zip="$PITCH" \
+    -Dkanji.zip="$KANJI" \
+    -Dkindle.settings="$DATA/settings.json" \
+    -Dkindle.tts="$TTS_PYTHON:$REPO/tools/kindle-sync/tts.py" \
     -Dkindle.deck="$DECK" \
     -Dkindle.dryRun="$DRY_RUN" \
     -Danki.connect="$ANKI_CONNECT" \
-    -Dout.dir="$OUT") >&2
+    -Dout.dir="$OUT") >&2 || true
 
 if [[ ! -f "$OUT/summary.txt" ]]; then
-    log "KindleSync produced no summary (see the Gradle output above)"
-    notify "Błąd synchronizacji — szczegóły w logu."
-    exit 1
+    fail "błąd przetwarzania, szczegóły: journalctl --user -u kindle-sync"
 fi
 SUMMARY="$(cat "$OUT/summary.txt")"
 log "$SUMMARY"
@@ -163,4 +193,4 @@ if [[ "$DRY_RUN" == false ]]; then
 fi
 
 eval "$(echo "$SUMMARY" | tr ' ' '\n' | grep -E '^[a-z_]+=[0-9a-z]+$')"
-notify "Kindle: $lookups nowych wyszukań, $new fiszek do talii $DECK, $in_anki już w Anki."
+notify "Wykonano: $added nowych fiszek w talii $DECK ($lookups wyszukań, $in_anki już było w Anki)."

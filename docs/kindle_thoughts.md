@@ -6,7 +6,10 @@ Notatki projektowe.
 
 - `tools/kindle-sync/kindle-sync.sh`: wykrywa Kindle, kopiuje `vocab.db`, zrzuca nowe lookupy do TSV, sprawdza, czy działa AnkiConnect (w razie potrzeby uruchamia Anki), wysyła powiadomienie.
 - `app/src/test/.../tools/KindleSync.kt`: cała logika na kodzie apki (deconjugator, `ScanEntryResolver`, `AnkiNoteFieldIndexer` na całej kolekcji desktopowej, `AnkiCardCreator.createAnkiCard`). Działa tak jak `BookScanHarness`, czyli jako test Gradle z `-D…`, pod Robolectrikiem, bo `AnkiCardCreator` wymaga `Context`. Moduł `:core` (sekcja 1) nadal jest do zrobienia. Obecny sposób omija go bez kopiowania reguł.
-- `tools/kindle-sync/install.sh` + `99-kindle-sync.rules`: auto-start po podłączeniu (usługa użytkownika systemd + reguła udev, ta druga wymaga sudo).
+- `tools/kindle-sync/install.sh` → `kindle-watch.service`: usługa użytkownika, która słucha `udevadm monitor` i po podłączeniu urządzenia o vendor ID 1949 uruchamia jeden przebieg. Nie wymaga roota. Reguła udev z `SYSTEMD_USER_WANTS` z sekcji 2.1 wymagała pliku w `/etc`, więc z niej zrezygnowałem. Przez cały przebieg nic się nie wyświetla, na końcu przychodzi jedno powiadomienie „Wykonano: …” albo „Nie wykonano: …”.
+- **Karty na poziomie telefonu:** te same zip-y co w katalogu apki (kanjium pitch, KANJIDIC), pola budowane przez `AnkiCardCreator.rebuildFields` (losowa czcionka, wykres akcentu, rozbiór kanji), lokalizacja `pl` w Robolectricu, żeby etykiety były po polsku.
+  - Ustawienia stylu pochodzą z `settings.json` backupu apki (`~/.local/share/kindle-sync/settings.json`). Kopia odświeża się przez adb za każdym razem, gdy telefon jest podłączony. Bez niej czcionki są odczytywane z ostatnich 300 kart telefonu. To jedyne ustawienie stylu, które trafia do pól karty, bo reszta siedzi w CSS note type'a, a ten synchronizuje telefon.
+  - Audio: androidowego TTS na laptopie nie ma, więc zastępuje go Open JTalk (`pyopenjtalk` w venv, `tools/kindle-sync/tts.py`). Dostaje zapis słowa, gdy jego odczyt zgadza się z czytaniem ze słownika, a w przeciwnym razie samo czytanie.
 - Odpowiedzi na otwarte pytania:
   1. Paperwhite `1949:9981` to **MTP**, nie pamięć USB. Na KDE urządzenie trzyma kio-worker Dolphina, więc libmtp (`mtp-getfile`) dostaje „device busy”. Plik ściągamy przez `kioclient copy mtp:/…`, a `gio` i zamontowana pamięć USB są fallbackiem.
   2. AnkiConnect działa.

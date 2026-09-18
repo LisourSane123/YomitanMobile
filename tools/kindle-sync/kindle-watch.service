@@ -1,0 +1,11 @@
+[Unit]
+Description=Kindle Vocabulary Builder → Anki: run on plug-in
+After=graphical-session.target
+
+[Service]
+ExecStart=@SCRIPT@
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

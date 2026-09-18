@@ -98,7 +98,8 @@ android {
                     "book.paths", "dict.zip", "freq.zip", "out.dir",
                     "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields",
                     "skipPlainKana", "skipKatakana",
-                    "kindle.lookups", "kindle.deck", "kindle.dryRun", "anki.connect"
+                    "kindle.lookups", "kindle.deck", "kindle.dryRun", "anki.connect",
+                    "pitch.zip", "kanji.zip", "kindle.settings", "kindle.tts"
                 )) {
                     System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
                 }

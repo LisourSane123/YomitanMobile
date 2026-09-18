@@ -1,8 +1,0 @@
-[Unit]
-Description=Kindle Vocabulary Builder → Anki (test_kindle)
-
-[Service]
-Type=oneshot
-# --wait: the MTP storage appears a few seconds after the USB device does.
-ExecStart=@SCRIPT@ --wait 90 --deck test_kindle
-TimeoutStartSec=15min

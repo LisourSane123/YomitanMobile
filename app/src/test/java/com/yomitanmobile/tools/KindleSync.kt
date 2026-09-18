@@ -6,7 +6,18 @@ import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.anki.AnkiCollectionIndex
 import com.yomitanmobile.data.anki.AnkiNoteFieldIndexer
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.yomitanmobile.data.local.entity.DictionaryEntry
+import com.yomitanmobile.data.local.entity.KanjiEntry
+import com.yomitanmobile.data.settings.readCardStylePreferences
 import com.yomitanmobile.data.mapper.toDomain
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.data.settings.LanguageSettings
@@ -55,14 +66,26 @@ import java.net.URL
  *   -Dkindle.lookups=/path/lookups.tsv \
  *   -Ddict.zip=/path/jitendex-yomitan.zip \
  *   -Dfreq.zip=/path/JPDB_frequency.zip \
+ *   -Dpitch.zip=/path/kanjium_pitch_accents.zip \
+ *   -Dkanji.zip=/path/KANJIDIC_english.zip \
+ *   -Dkindle.settings=/path/settings.json \
+ *   -Dkindle.tts=/path/python:/path/tts.py \
  *   -Dkindle.deck=test_kindle [-Dkindle.dryRun=true] [-Dout.dir=/path/report]
  * ```
+ *
+ * Everything past the dictionary is optional and exists to make the card the
+ * phone's card: the same pitch and kanji dictionaries the app's catalogue
+ * installs, the phone's own card-style settings (the `settings.json` of an app
+ * backup), and a recording for the Audio field — the phone's TTS voice is not
+ * on a laptop, so Open JTalk stands in (`tools/kindle-sync/tts.py`).
  *
  * TSV columns (tab-separated, no header): word, stem, usage, timestamp (ms),
  * book title.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+// Polish, like the phone: the part-of-speech line and the usage tags on the
+// card are localised from the device locale.
+@Config(sdk = [33], qualifiers = "pl")
 class KindleSync {
 
     private data class Lookup(
@@ -116,6 +139,16 @@ class KindleSync {
 
         // ---- 3. dictionary + frequency, streamed from the zips --------------
         val parser = YomitanDictionaryParser()
+        // Pitch is keyed by the written form alone, as DictionaryDao's
+        // updatePitchAccent stores it on the phone.
+        val pitch = HashMap<String, String>()
+        System.getProperty("pitch.zip").orEmpty().takeIf { it.isNotEmpty() }?.let { zip ->
+            parser.parseFromZipStreaming(
+                inputStream = File(zip).inputStream().buffered(),
+                onBatch = { _, _ -> },
+                onMetaBatch = { _, pitches -> pitch.putAll(pitches) }
+            )
+        }
         val ranks = HashMap<String, MutableList<Pair<String, Int>>>()
         if (freqZip.isNotEmpty()) {
             parser.parseFromZipStreaming(
@@ -144,8 +177,11 @@ class KindleSync {
                         // One list installed here, so it is the leading one:
                         // its number is what the card's Frequency field carries.
                         val rank = rankOf(entry.expression, entry.reading)
-                        out += entry.copy(frequency = rank).toDomain()
-                            .copy(frequencyValue = if (rank > 0) rank.toString() else "")
+                        val domain = entry.copy(frequency = rank).toDomain()
+                        out += domain.copy(
+                            frequencyValue = if (rank > 0) rank.toString() else "",
+                            pitchAccent = domain.pitchAccent.ifBlank { pitch[entry.expression].orEmpty() }
+                        )
                     }
                 }
             )
@@ -218,19 +254,42 @@ class KindleSync {
         val creator = AnkiCardCreator(context, LanguageSettings(context))
         val profile = CardProfile.JAPANESE
         // Kindle lookups are all about the sentence they were made in, so the
-        // front-context slot is on regardless of the card-style default —
+        // front-context slot is on regardless of the card-style setting —
         // the same override the text scanner makes.
-        val style = CardStylePreferences(showFrontContextSentence = true)
+        val style = phoneStyle(anki).copy(showFrontContextSentence = true)
+        log("style: random fonts ${if (style.randomFontsEnabled) style.randomFonts else "off"}")
+
+        // Kanji breakdown, from the same KANJIDIC the phone installs.
+        val kanjiWanted = toAdd.values.flatMapTo(HashSet()) { (entry, _) ->
+            entry.primaryExpression.filter { JapaneseTokenizer.isKanji(it) }.map(Char::toString)
+        }
+        val kanji = HashMap<String, KanjiEntry>()
+        System.getProperty("kanji.zip").orEmpty().takeIf { it.isNotEmpty() && kanjiWanted.isNotEmpty() }?.let { zip ->
+            parser.parseFromZipStreaming(
+                inputStream = File(zip).inputStream().buffered(),
+                onBatch = { _, _ -> },
+                onKanjiBatch = { batch, _ -> batch.filter { it.kanji in kanjiWanted }.forEach { kanji[it.kanji] = it } }
+            )
+        }
+
+        val audio = if (dryRun) emptyMap() else speak(toAdd.values.map { it.first }, outDir)
         val notes = toAdd.values.map { (entry, lookup) ->
             val word = entry.toWordEntry().copy(
                 exampleSentence = sentenceFor(lookup, entry),
                 exampleSentenceTranslation = ""
             )
-            val fields = creator.createAnkiCard(word, stylePrefs = style).toFieldArray(profile)
+            val kanjiData = entry.primaryExpression.filter { JapaneseTokenizer.isKanji(it) }
+                .map(Char::toString).distinct().mapNotNull { kanji[it] }
+            // rebuildFields is the phone's own "every field of a card" path:
+            // random font, pitch diagram, kanji breakdown included.
+            val fields = profile.fieldNames.zip(creator.rebuildFields(word, style, kanjiData)).toMap().toMutableMap()
+            val recording = audio[entry.primaryExpression to entry.reading]
+            if (recording != null) fields["Audio"] = "[sound:${recording.name}]"
             val tags = listOf("yomitan-mobile", "kindle", slug(lookup.book)).filter { it.isNotEmpty() }
-            Triple(entry.primaryExpression, profile.fieldNames.zip(fields).toMap(), tags)
+            Note(entry.primaryExpression, fields, tags, recording)
         }
 
+        var addedCount = 0
         if (dryRun || notes.isEmpty()) {
             log(if (dryRun) "dry run: ${notes.size} cards would be added to $deck" else "nothing new")
         } else {
@@ -238,22 +297,101 @@ class KindleSync {
             val model = anki.ensureModel(profile, css, front, back)
             anki.ensureDeck(deck)
             var added = 0
-            for ((word, fields, tags) in notes) {
-                val error = anki.addNote(deck, model, fields, tags)
-                if (error == null) added++ else log("not added: $word — $error")
+            for (note in notes) {
+                note.recording?.let { anki.storeMedia(it) }
+                val error = anki.addNote(deck, model, note.fields, note.tags)
+                if (error == null) added++ else log("not added: ${note.word} — $error")
             }
             log("added $added of ${notes.size} cards to $deck (note type $model)")
+            addedCount = added
         }
 
         val file = File(outDir, "kindle-sync.tsv")
         file.writeText(report.toString())
         // A single line the shell wrapper turns into the desktop notification.
         File(outDir, "summary.txt").writeText(
-            "lookups=${lookups.size} new=${notes.size} in_anki=${summary["IN_ANKI"] ?: 0} " +
+            "lookups=${lookups.size} new=${notes.size} added=$addedCount in_anki=${summary["IN_ANKI"] ?: 0} " +
                 "not_found=${summary["NOT_IN_DICTIONARY"] ?: 0} dry_run=$dryRun\n"
         )
         log("report written to ${file.absolutePath}")
         println(report)
+    }
+
+    private data class Note(
+        val word: String,
+        val fields: Map<String, String>,
+        val tags: List<String>,
+        val recording: File?
+    )
+
+    /**
+     * The phone's card style. An app backup's `settings.json` is the real
+     * thing — it is read through [readCardStylePreferences], the one path the
+     * phone itself uses, so every validation on it applies here too. Without
+     * one, the fonts are read off the cards the phone wrote most recently:
+     * random fonts are the only style setting that lands in a note's FIELDS
+     * (everything else is the note type's CSS, which the phone keeps in sync
+     * itself and this tool does not touch).
+     */
+    private fun phoneStyle(anki: AnkiConnect): CardStylePreferences {
+        val settings = System.getProperty("kindle.settings").orEmpty().let(::File)
+        if (settings.isFile) {
+            log("style: from ${settings.path}")
+            return readCardStylePreferences(preferencesFromBackup(settings.readText()))
+        }
+        val fonts = anki.recentFrontFonts()
+        return if (fonts.isEmpty()) CardStylePreferences()
+        else CardStylePreferences(randomFontsEnabled = true, randomFonts = fonts)
+    }
+
+    /** BackupManager's `{ key: { "t": type, "v": value } }` back into DataStore preferences. */
+    private fun preferencesFromBackup(text: String): Preferences {
+        val root = JSONObject(text)
+        val prefs = mutablePreferencesOf()
+        for (name in root.keys()) {
+            val entry = root.optJSONObject(name) ?: continue
+            runCatching {
+                when (entry.optString("t")) {
+                    "bool" -> prefs[booleanPreferencesKey(name)] = entry.getBoolean("v")
+                    "int" -> prefs[intPreferencesKey(name)] = entry.getInt("v")
+                    "long" -> prefs[longPreferencesKey(name)] = entry.getLong("v")
+                    "float" -> prefs[floatPreferencesKey(name)] = entry.getDouble("v").toFloat()
+                    "double" -> prefs[doublePreferencesKey(name)] = entry.getDouble("v")
+                    "string" -> prefs[stringPreferencesKey(name)] = entry.getString("v")
+                    "stringset" -> prefs[stringSetPreferencesKey(name)] =
+                        entry.getJSONArray("v").let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
+                }
+            }
+        }
+        return prefs
+    }
+
+    /**
+     * One recording per word, keyed by (expression, reading). The file name is
+     * derived from the word, so a rerun reuses what Anki already holds.
+     */
+    private fun speak(entries: List<MergedWordEntry>, outDir: File): Map<Pair<String, String>, File> {
+        val tts = System.getProperty("kindle.tts").orEmpty().split(':')
+        if (tts.size != 2 || entries.isEmpty()) return emptyMap()
+        val dir = File(outDir, "audio").apply { mkdirs() }
+        val wanted = entries.associate { entry ->
+            val key = entry.primaryExpression to entry.reading
+            val hash = java.security.MessageDigest.getInstance("SHA-1")
+                .digest("${key.first}|${key.second}".toByteArray())
+                .joinToString("") { "%02x".format(it) }.take(16)
+            key to File(dir, "yomitan_kindle_$hash.mp3")
+        }
+        val missing = wanted.filterValues { !it.isFile }
+        if (missing.isNotEmpty()) {
+            val process = ProcessBuilder(tts[0], tts[1]).redirectErrorStream(false).start()
+            process.outputStream.bufferedWriter().use { w ->
+                for ((key, file) in missing) w.write("${file.absolutePath}\t${key.first}\t${key.second}\n")
+            }
+            process.inputStream.bufferedReader().readText()
+            val err = process.errorStream.bufferedReader().readText()
+            if (process.waitFor() != 0) log("tts failed: ${err.takeLast(500)}")
+        }
+        return wanted.filterValues { it.isFile }.also { log("audio: ${it.size} of ${entries.size} words") }
     }
 
     /**
@@ -358,6 +496,25 @@ class KindleSync {
             return name
         }
 
+        /**
+         * The fonts the phone's random-font setting put on its most recent
+         * cards (`<span style="font-family: 'X'">` in Front).
+         */
+        fun recentFrontFonts(): Set<String> {
+            val ids = call("findNotes", JSONObject().put("query", "\"note:${CardProfile.JAPANESE.modelName}*\" -tag:kindle")) as JSONArray
+            val recent = (0 until ids.length()).map { ids.getLong(it) }.sorted().takeLast(300)
+            if (recent.isEmpty()) return emptySet()
+            val infos = call("notesInfo", JSONObject().put("notes", JSONArray(recent))) as JSONArray
+            return (0 until infos.length()).flatMapTo(LinkedHashSet()) { i ->
+                val front = infos.getJSONObject(i).optJSONObject("fields")?.optJSONObject("Front")?.optString("value").orEmpty()
+                FONT.findAll(front).map { it.groupValues[1] }.toList()
+            }
+        }
+
+        fun storeMedia(file: File) {
+            call("storeMediaFile", JSONObject().put("filename", file.name).put("path", file.absolutePath))
+        }
+
         fun ensureDeck(deck: String) {
             call("createDeck", JSONObject().put("deck", deck))
         }
@@ -383,6 +540,8 @@ class KindleSync {
     }
 
     private companion object {
+        val FONT = Regex("font-family: '([^']+)'")
+
         /**
          * A run of text up to and including its sentence end. Whitespace ends
          * one too: Kindle joins paragraphs with " 　", and the title page and
