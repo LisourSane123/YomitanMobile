@@ -294,7 +294,7 @@ class KindleSync {
             val fields = profile.fieldNames.zip(creator.rebuildFields(word, style, kanjiData)).toMap().toMutableMap()
             val recording = audio[entry.primaryExpression to entry.reading]
             if (recording != null) fields["Audio"] = "[sound:${recording.name}]"
-            val tags = listOf("yomitan-mobile", "kindle", slug(lookup.book)).filter { it.isNotEmpty() }
+            val tags = listOf("yomitan-mobile", "from_kindle", slug(lookup.book)).filter { it.isNotEmpty() }
             Note(entry.primaryExpression, fields, tags, recording)
         }
 
@@ -559,7 +559,7 @@ class KindleSync {
          * cards (`<span style="font-family: 'X'">` in Front).
          */
         fun recentFrontFonts(): Set<String> {
-            val ids = call("findNotes", JSONObject().put("query", "\"note:${CardProfile.JAPANESE.modelName}*\" -tag:kindle")) as JSONArray
+            val ids = call("findNotes", JSONObject().put("query", "\"note:${CardProfile.JAPANESE.modelName}*\" -tag:from_kindle -tag:kindle")) as JSONArray
             val recent = (0 until ids.length()).map { ids.getLong(it) }.sorted().takeLast(300)
             if (recent.isEmpty()) return emptySet()
             val infos = call("notesInfo", JSONObject().put("notes", JSONArray(recent))) as JSONArray
