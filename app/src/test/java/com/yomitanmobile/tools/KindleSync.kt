@@ -3,6 +3,7 @@ package com.yomitanmobile.tools
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yomitanmobile.data.anki.AnkiCardCreator
+import com.yomitanmobile.data.audio.AudioKeys
 import com.yomitanmobile.data.anki.AnkiCollectionIndex
 import com.yomitanmobile.data.anki.AnkiNoteFieldIndexer
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
@@ -485,22 +486,73 @@ class KindleSync {
     private data class Spoken(val expression: String, val reading: String, val pitch: String)
 
     /**
-     * One recording per word, keyed by (expression, reading). The file name is
-     * derived from the word and the engine, so a rerun reuses what Anki
-     * already holds, while a new engine gets new names — AnkiDroid caches
-     * media by name and would keep playing the old voice.
+     * The user's pronunciation archive, indexed the way the phone indexes it:
+     * [AudioKeys] reads each path, and a lookup takes the best priority (a
+     * spelling+reading pair, then a spelling, then a bare reading), ties to
+     * the first file walked — `ORDER BY priority, id` in AudioFileDao.
+     */
+    private class Archive(root: File) {
+        private val best = HashMap<String, Pair<Int, File>>()
+        val fileCount: Int
+
+        init {
+            var files = 0
+            root.walkTopDown()
+                .filter { it.isFile && AUDIO_EXTENSIONS.any { ext -> it.name.endsWith(ext, ignoreCase = true) } }
+                .forEach { file ->
+                    files++
+                    for ((key, priority) in AudioKeys.keysFor(file.name, file.parentFile?.name.orEmpty())) {
+                        val existing = best[key]
+                        if (existing == null || priority < existing.first) best[key] = priority to file
+                    }
+                }
+            fileCount = files
+        }
+
+        fun find(expression: String, reading: String): File? =
+            AudioKeys.lookupKeys(expression, reading).mapNotNull { best[it] }.minByOrNull { it.first }?.second
+    }
+
+    private val archive: Archive? by lazy {
+        System.getProperty("audio.archive").orEmpty().let(::File).takeIf { it.isDirectory }
+            ?.let(::Archive)?.also { log("audio archive: ${it.fileCount} files") }
+    }
+
+    /**
+     * One recording per word, keyed by (expression, reading): the user's
+     * archive when it has the word — a native speaker beats any synthesiser —
+     * and TTS otherwise. The file name is derived from the word and the
+     * source, so a rerun reuses what Anki already holds, while a better source
+     * gets a new name — AnkiDroid caches media by name and would keep playing
+     * the old recording.
      */
     private fun speak(entries: List<Spoken>, outDir: File): Map<Pair<String, String>, File> {
-        val tts = System.getProperty("kindle.tts").orEmpty().split(':')
-        if (tts.size != 2 || entries.isEmpty()) return emptyMap()
+        if (entries.isEmpty()) return emptyMap()
         val dir = File(outDir, "audio").apply { mkdirs() }
         val byKey = entries.associateBy { it.expression to it.reading }
-        val wanted = byKey.keys.associateWith { key ->
+        fun target(key: Pair<String, String>, source: String): File {
             val hash = java.security.MessageDigest.getInstance("SHA-1")
                 .digest("${key.first}|${key.second}".toByteArray())
                 .joinToString("") { "%02x".format(it) }.take(16)
-            File(dir, "yomitan_kindle_${AUDIO_ENGINE}_$hash.mp3")
+            return File(dir, "yomitan_kindle_${source}_$hash.mp3")
         }
+
+        val result = HashMap<Pair<String, String>, File>()
+        var fromArchive = 0
+        for (key in byKey.keys) {
+            val recording = archive?.find(key.first, key.second) ?: continue
+            val out = target(key, ARCHIVE_SOURCE)
+            // Same loudness as the TTS files, so the two kinds sit side by side.
+            if (out.isFile || ffmpeg(recording, out)) {
+                result[key] = out
+                fromArchive++
+            }
+        }
+        if (archive != null) log("audio: $fromArchive of ${byKey.size} words from the archive")
+
+        val tts = System.getProperty("kindle.tts").orEmpty().split(':')
+        if (tts.size != 2) return result
+        val wanted = (byKey.keys - result.keys).associateWith { target(it, AUDIO_ENGINE) }
         val missing = wanted.filterValues { !it.isFile }
         if (missing.isNotEmpty()) {
             // stderr to a file: VOICEVOX logs there, and a full pipe nobody
@@ -515,8 +567,21 @@ class KindleSync {
             process.inputStream.bufferedReader().readText()
             if (process.waitFor() != 0) log("tts failed: ${ttsLog.readText().takeLast(500)}")
         }
-        return wanted.filterValues { it.isFile }.also { log("audio: ${it.size} of ${entries.size} words") }
+        result += wanted.filterValues { it.isFile }
+        log("audio: ${result.size} of ${byKey.size} words")
+        return result
     }
+
+    private fun ffmpeg(input: File, output: File): Boolean = runCatching {
+        ProcessBuilder(
+            "ffmpeg", "-v", "error", "-y", "-i", input.absolutePath,
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "44100", "-ac", "1",
+            "-codec:a", "libmp3lame", "-q:a", "3", output.absolutePath
+        ).redirectErrorStream(true).start().let { process ->
+            process.inputStream.readBytes()
+            process.waitFor() == 0 && output.isFile
+        }
+    }.getOrDefault(false)
 
     /**
      * The sentence the word was looked up in. Kindle's `usage` is a window of
@@ -732,6 +797,8 @@ class KindleSync {
     private companion object {
         /** Bumped whenever the recordings change voice; part of every file name. */
         const val AUDIO_ENGINE = "vv"
+        const val ARCHIVE_SOURCE = "ar"
+        val AUDIO_EXTENSIONS = listOf(".mp3", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".flac")
         val TAGS = Regex("<[^>]*>")
 
         val FONT = Regex("font-family: '([^']+)'")

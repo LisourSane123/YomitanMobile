@@ -53,6 +53,9 @@ PITCH="${KINDLE_SYNC_PITCH:-$HOME/yomitan-dicts/kanjium_pitch_accents.zip}"
 KANJI="${KINDLE_SYNC_KANJI:-$HOME/yomitan-dicts/KANJIDIC_english.zip}"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}/kindle-sync"
 TTS_PYTHON="$DATA/venv/bin/python"
+# A folder of native recordings (local-audio-yomichan, a Forvo dump…), used
+# before any TTS. File names are read the way the phone reads them.
+AUDIO_ARCHIVE="${KINDLE_SYNC_AUDIO:-$DATA/audio-archive}"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/kindle-sync"
 ANKI_CONNECT="${KINDLE_SYNC_ANKI:-http://127.0.0.1:8765}"
 mkdir -p "$STATE" "$DATA"
@@ -200,6 +203,7 @@ if [[ "$REFRESH_AUDIO" == true ]]; then
         -Dkindle.refreshAudio=true \
         -Dpitch.zip="$PITCH" \
         -Dkindle.tts="$TTS_PYTHON:$REPO/tools/kindle-sync/tts.py" \
+        -Daudio.archive="$AUDIO_ARCHIVE" \
         -Dkindle.sync="$SYNC" \
         -Danki.connect="$ANKI_CONNECT" \
         -Dout.dir="$OUT") >&2 || true
@@ -218,6 +222,7 @@ fi
     -Dkanji.zip="$KANJI" \
     -Dkindle.settings="$DATA/settings.json" \
     -Dkindle.tts="$TTS_PYTHON:$REPO/tools/kindle-sync/tts.py" \
+    -Daudio.archive="$AUDIO_ARCHIVE" \
     -Dkindle.deck="$DECK" \
     -Dkindle.dryRun="$DRY_RUN" \
     -Dkindle.sync="$SYNC" \
