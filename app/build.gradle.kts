@@ -40,6 +40,10 @@ android {
 
     }
 
+    sourceSets {
+        getByName("main").jniLibs.srcDir(rootProject.file(".voicevox/jniLibs"))
+    }
+
     signingConfigs {
         create("release") {
             val storeFilePath = keystoreProperties.getProperty("storeFile")
@@ -99,7 +103,7 @@ android {
                     "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields",
                     "skipPlainKana", "skipKatakana",
                     "kindle.lookups", "kindle.deck", "kindle.dryRun", "anki.connect",
-                    "pitch.zip", "kanji.zip", "kindle.settings", "kindle.tts", "kindle.sync", "anki.reorderAddon", "kindle.refreshAudio", "audio.archive"
+                    "pitch.zip", "kanji.zip", "kindle.settings", "kindle.sync", "anki.reorderAddon", "kindle.refreshAudio", "audio.archive", "voicevox.root", "voicevox.onnxruntime"
                 )) {
                     System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
                 }
@@ -209,6 +213,13 @@ dependencies {
 
     // AnkiDroid API
     implementation("com.github.ankidroid:Anki-Android:api-v1.1.0")
+
+    // VOICEVOX: neural Japanese TTS for card audio. The Android AAR carries the
+    // JNI bindings; ONNX Runtime comes from .voicevox/jniLibs (see
+    // settings.gradle.kts). The desktop jar is for the JVM tools (KindleSync),
+    // which run the same speaker code on a laptop.
+    implementation("jp.hiroshiba.voicevoxcore:voicevoxcore-android:0.17.0")
+    testImplementation("jp.hiroshiba.voicevoxcore:voicevoxcore:0.17.0")
 
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.0.0")

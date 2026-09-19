@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.audio.AudioKeys
+import com.yomitanmobile.data.audio.voicevox.VoicevoxAssets
+import com.yomitanmobile.data.audio.voicevox.VoicevoxSpeaker
 import com.yomitanmobile.data.anki.AnkiCollectionIndex
 import com.yomitanmobile.data.anki.AnkiNoteFieldIndexer
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
@@ -70,15 +72,16 @@ import java.net.URL
  *   -Dpitch.zip=/path/kanjium_pitch_accents.zip \
  *   -Dkanji.zip=/path/KANJIDIC_english.zip \
  *   -Dkindle.settings=/path/settings.json \
- *   -Dkindle.tts=/path/python:/path/tts.py \
+ *   -Dvoicevox.root=/path/voicevox/core -Dvoicevox.onnxruntime=/path/libvoicevox_onnxruntime.so \
  *   -Dkindle.deck=test_kindle [-Dkindle.dryRun=true] [-Dout.dir=/path/report]
  * ```
  *
  * Everything past the dictionary is optional and exists to make the card the
  * phone's card: the same pitch and kanji dictionaries the app's catalogue
  * installs, the phone's own card-style settings (the `settings.json` of an app
- * backup), and a recording for the Audio field — the phone's TTS voice is not
- * on a laptop, so Open JTalk stands in (`tools/kindle-sync/tts.py`).
+ * backup), and a recording for the Audio field from [VoicevoxSpeaker] — the
+ * class the phone uses for the same field, run here through VOICEVOX's
+ * desktop bindings.
  *
  * TSV columns (tab-separated, no header): word, stem, usage, timestamp (ms),
  * book title.
@@ -550,27 +553,53 @@ class KindleSync {
         }
         if (archive != null) log("audio: $fromArchive of ${byKey.size} words from the archive")
 
-        val tts = System.getProperty("kindle.tts").orEmpty().split(':')
-        if (tts.size != 2) return result
         val wanted = (byKey.keys - result.keys).associateWith { target(it, AUDIO_ENGINE) }
         val missing = wanted.filterValues { !it.isFile }
         if (missing.isNotEmpty()) {
-            // stderr to a file: VOICEVOX logs there, and a full pipe nobody
-            // reads would stall the synthesis.
-            val ttsLog = File(dir, "tts.log")
-            val process = ProcessBuilder(tts[0], tts[1]).redirectError(ttsLog).start()
-            process.outputStream.bufferedWriter().use { w ->
+            val speaker = speaker()
+            if (speaker == null) {
+                log("audio: VOICEVOX not installed, ${missing.size} words go without a recording")
+            } else {
                 for ((key, file) in missing) {
-                    w.write("${file.absolutePath}\t${key.first}\t${key.second}\t${byKey.getValue(key).pitch}\n")
+                    val spoken = byKey.getValue(key)
+                    runCatching {
+                        val wav = File(dir, file.name + ".wav")
+                        wav.writeBytes(speaker.wav(spoken.expression, spoken.reading, spoken.pitch))
+                        // Already normalised by the speaker; only encoded here.
+                        encodeMp3(wav, file)
+                        wav.delete()
+                    }.onFailure { log("tts failed for ${key.first}: ${it.message}") }
                 }
             }
-            process.inputStream.bufferedReader().readText()
-            if (process.waitFor() != 0) log("tts failed: ${ttsLog.readText().takeLast(500)}")
         }
         result += wanted.filterValues { it.isFile }
         log("audio: ${result.size} of ${byKey.size} words")
         return result
     }
+
+    private var voicevox: VoicevoxSpeaker? = null
+
+    /** Built once per run: loading the models is the slow part. */
+    private fun speaker(): VoicevoxSpeaker? {
+        voicevox?.let { return it }
+        val root = System.getProperty("voicevox.root").orEmpty().let(::File)
+        val runtime = System.getProperty("voicevox.onnxruntime").orEmpty()
+        if (runtime.isEmpty() || !VoicevoxAssets.isInstalled(root)) return null
+        return runCatching { VoicevoxSpeaker(runtime, root) }
+            .onFailure { log("VOICEVOX failed to load: ${it.message}") }
+            .getOrNull()
+            .also { voicevox = it }
+    }
+
+    private fun encodeMp3(input: File, output: File): Boolean = runCatching {
+        ProcessBuilder(
+            "ffmpeg", "-v", "error", "-y", "-i", input.absolutePath,
+            "-ar", "44100", "-codec:a", "libmp3lame", "-q:a", "3", output.absolutePath
+        ).redirectErrorStream(true).start().let { process ->
+            process.inputStream.readBytes()
+            process.waitFor() == 0 && output.isFile
+        }
+    }.getOrDefault(false)
 
     private fun ffmpeg(input: File, output: File): Boolean = runCatching {
         ProcessBuilder(

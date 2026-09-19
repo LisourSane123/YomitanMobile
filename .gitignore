@@ -72,3 +72,6 @@ Thumbs.db
 
 # Kotlin
 *.kotlin_module
+
+# VOICEVOX bindings and ONNX Runtime, fetched by settings.gradle.kts
+.voicevox/

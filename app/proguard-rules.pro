@@ -75,3 +75,9 @@
     public static *** d(...);
     public static *** i(...);
 }
+
+# VOICEVOX: JNI calls back into these classes by name, and AudioQuery /
+# AccentPhrase / Mora are (de)serialised with Gson.
+-keep class jp.hiroshiba.voicevoxcore.** { *; }
+-dontwarn jakarta.**
+-dontwarn javax.annotation.**

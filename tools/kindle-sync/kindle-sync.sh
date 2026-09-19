@@ -52,7 +52,9 @@ FREQ="${KINDLE_SYNC_FREQ:-$HOME/yomitan-dicts/JPDB_v2.2_Frequency.zip}"
 PITCH="${KINDLE_SYNC_PITCH:-$HOME/yomitan-dicts/kanjium_pitch_accents.zip}"
 KANJI="${KINDLE_SYNC_KANJI:-$HOME/yomitan-dicts/KANJIDIC_english.zip}"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}/kindle-sync"
-TTS_PYTHON="$DATA/venv/bin/python"
+# VOICEVOX as its own downloader lays it out (models/vvms, dict, onnxruntime).
+VOICEVOX="${KINDLE_SYNC_VOICEVOX:-$DATA/voicevox/core}"
+VOICEVOX_RUNTIME="$(ls "$VOICEVOX"/onnxruntime/lib/libvoicevox_onnxruntime.so* 2>/dev/null | head -1 || true)"
 # A folder of native recordings (local-audio-yomichan, a Forvo dump…), used
 # before any TTS. File names are read the way the phone reads them.
 AUDIO_ARCHIVE="${KINDLE_SYNC_AUDIO:-$DATA/audio-archive}"
@@ -156,21 +158,11 @@ if [[ "$REFRESH_AUDIO" == false ]]; then
     fi
 fi
 
-# ---- 2c. the voice for the Audio field (once, into a venv) -----------------
-# VOICEVOX is the voice; Open JTalk is the fallback tts.py drops to when the
-# VOICEVOX files are missing. The VOICEVOX models come with terms of use that
-# have to be accepted by a person, so they are not fetched here — see
-# docs/kindle_thoughts.md for the one-time download.
-if [[ ! -x "$TTS_PYTHON" ]] || ! "$TTS_PYTHON" -c 'import pyopenjtalk' 2>/dev/null; then
-    log "installing pyopenjtalk into $DATA/venv"
-    python3 -m venv "$DATA/venv" && "$DATA/venv/bin/pip" install -q pyopenjtalk >&2 || log "pyopenjtalk unavailable, cards go without audio"
-fi
-if ! "$TTS_PYTHON" -c 'import voicevox_core' 2>/dev/null; then
-    "$DATA/venv/bin/pip" install -q \
-        https://github.com/VOICEVOX/voicevox_core/releases/download/0.17.0/voicevox_core-0.17.0-cp310-abi3-manylinux_2_34_x86_64.whl >&2 \
-        || log "voicevox_core unavailable, Open JTalk will speak"
-fi
-[[ -d "$DATA/voicevox/core/models" ]] || log "VOICEVOX models missing ($DATA/voicevox/core), Open JTalk will speak"
+# ---- 2c. the voice for the Audio field ------------------------------------
+# VOICEVOX's models come with terms of use that a person has to accept, so
+# they are not fetched here — docs/kindle_thoughts.md has the one-time step.
+# Without them the cards are made without audio rather than not at all.
+[[ -n "$VOICEVOX_RUNTIME" && -d "$VOICEVOX/models/vvms" ]] || log "VOICEVOX missing in $VOICEVOX, cards go without audio"
 
 # ---- 3. Anki must be answering ---------------------------------------------
 if ! curl -s -m 3 "$ANKI_CONNECT" -d '{"action":"version","version":6}' | grep -q '"result"'; then
@@ -202,7 +194,8 @@ if [[ "$REFRESH_AUDIO" == true ]]; then
     (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync.refreshAudio" --rerun \
         -Dkindle.refreshAudio=true \
         -Dpitch.zip="$PITCH" \
-        -Dkindle.tts="$TTS_PYTHON:$REPO/tools/kindle-sync/tts.py" \
+        -Dvoicevox.root="$VOICEVOX" \
+        -Dvoicevox.onnxruntime="$VOICEVOX_RUNTIME" \
         -Daudio.archive="$AUDIO_ARCHIVE" \
         -Dkindle.sync="$SYNC" \
         -Danki.connect="$ANKI_CONNECT" \
@@ -221,7 +214,8 @@ fi
     -Dpitch.zip="$PITCH" \
     -Dkanji.zip="$KANJI" \
     -Dkindle.settings="$DATA/settings.json" \
-    -Dkindle.tts="$TTS_PYTHON:$REPO/tools/kindle-sync/tts.py" \
+    -Dvoicevox.root="$VOICEVOX" \
+    -Dvoicevox.onnxruntime="$VOICEVOX_RUNTIME" \
     -Daudio.archive="$AUDIO_ARCHIVE" \
     -Dkindle.deck="$DECK" \
     -Dkindle.dryRun="$DRY_RUN" \
