@@ -83,6 +83,7 @@ class TextScanViewModel @Inject constructor(
     private val monolingualCardResolver: MonolingualCardResolver,
     private val exportedWordDao: ExportedWordDao,
     private val audioPlayer: AudioPlayer,
+    private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice,
     private val apkgWriter: com.yomitanmobile.data.anki.ApkgWriter,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
@@ -427,7 +428,7 @@ class TextScanViewModel @Inject constructor(
                     storedStyle
                 }
                 val tts = if (filters.generateAudio) audioPlayer.ensureTts() else null
-                if (filters.generateAudio && tts == null) {
+                if (filters.generateAudio && tts == null && !voicevox.isActive()) {
                     _events.emit(TextScanEvent.AudioUnavailable)
                 }
                 val deck = _deckName.value.trim().ifBlank { DEFAULT_DECK }
@@ -502,7 +503,7 @@ class TextScanViewModel @Inject constructor(
                 // started here, otherwise getTts() is null and the audio
                 // switch silently does nothing.
                 val tts = if (filters.generateAudio) audioPlayer.ensureTts() else null
-                if (filters.generateAudio && tts == null) {
+                if (filters.generateAudio && tts == null && !voicevox.isActive()) {
                     _events.emit(TextScanEvent.AudioUnavailable)
                 }
                 val deck = _deckName.value.trim().ifBlank { DEFAULT_DECK }

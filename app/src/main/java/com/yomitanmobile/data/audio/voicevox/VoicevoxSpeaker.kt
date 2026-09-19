@@ -23,7 +23,7 @@ import java.security.MessageDigest
 class VoicevoxSpeaker(onnxruntime: String, root: File) : Closeable {
 
     private val synthesizer: Synthesizer
-    private val models = ArrayList<VoiceModelFile>()
+    private val loaded = ArrayList<java.util.UUID>()
 
     init {
         val runtime = Onnxruntime.loadOnce().filename(onnxruntime).perform()
@@ -31,8 +31,13 @@ class VoicevoxSpeaker(onnxruntime: String, root: File) : Closeable {
             .build()
         for (model in VoicevoxAssets.MODELS) {
             val file = VoiceModelFile(File(VoicevoxAssets.modelsDir(root), model.fileName).absolutePath)
-            synthesizer.loadVoiceModel(file).perform()
-            models += file
+            try {
+                synthesizer.loadVoiceModel(file).perform()
+                loaded += file.id
+            } finally {
+                // The synthesizer holds what it loaded; the open file is not needed after.
+                file.close()
+            }
         }
     }
 
@@ -57,9 +62,14 @@ class VoicevoxSpeaker(onnxruntime: String, root: File) : Closeable {
         return WavLoudness.normalize(synthesizer.synthesis(query, style).perform())
     }
 
+    /**
+     * Unloads the models. The synthesizer itself has no close — only a
+     * finalizer — so this is what gives the memory back when a caller is done.
+     */
+    @Synchronized
     override fun close() {
-        models.forEach { runCatching { it.close() } }
-        models.clear()
+        loaded.forEach { runCatching { synthesizer.unloadVoiceModel(it) } }
+        loaded.clear()
     }
 
     companion object {

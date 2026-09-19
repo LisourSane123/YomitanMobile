@@ -99,6 +99,7 @@ class DetailViewModel @Inject constructor(
     private val ankiCardCreator: AnkiCardCreator,
     private val audioPlayer: AudioPlayer,
     private val audioArchive: com.yomitanmobile.data.audio.AudioArchive,
+    private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice,
     private val sentenceDao: SentenceDao,
     private val aiSummaryService: AiSummaryService,
     private val exportedWordDao: ExportedWordDao,
@@ -568,7 +569,8 @@ class DetailViewModel @Inject constructor(
 
     /**
      * Pronunciation, best source first: a file the dictionary shipped, then a
-     * recording from the user's archive, then the synthesiser.
+     * recording from the user's archive, then VOICEVOX (the same recording the
+     * card gets), then the system synthesiser.
      *
      * TTS is last on purpose — it reads a headword with no context and picks a
      * plausible reading rather than the right one, which is exactly the word
@@ -586,7 +588,12 @@ class DetailViewModel @Inject constructor(
             val match = runCatching {
                 audioArchive.find(merged.primaryExpression, merged.reading)
             }.getOrNull()
-            if (match != null) audioPlayer.playUri(match.uri)
+            if (match != null) {
+                audioPlayer.playUri(match.uri)
+                return@launch
+            }
+            val synthesised = voicevox.wav(merged.primaryExpression, merged.reading, merged.pitchAccent)
+            if (synthesised != null) audioPlayer.playAudioFile(synthesised.path)
             else audioPlayer.playWord(textToSpeak)
         }
     }

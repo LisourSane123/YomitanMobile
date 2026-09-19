@@ -73,6 +73,7 @@ class JlptDeckViewModel @Inject constructor(
     private val exportedWordDao: ExportedWordDao,
     private val jlptTagDao: JlptTagDao,
     private val audioPlayer: AudioPlayer,
+    private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice,
     private val apkgWriter: com.yomitanmobile.data.anki.ApkgWriter,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
@@ -346,7 +347,7 @@ class JlptDeckViewModel @Inject constructor(
                 val stylePrefs = readCardStylePreferences(appContext.dataStore.data.first())
                 val wantsAudio = _filters.value.generateAudio
                 val tts = if (wantsAudio) audioPlayer.ensureTts() else null
-                if (wantsAudio && tts == null) {
+                if (wantsAudio && tts == null && !voicevox.isActive()) {
                     _events.emit(JlptDeckEvent.AudioUnavailable)
                 }
                 val deck = _deckName.value.trim().ifBlank { defaultDeckName(plan.level) }
@@ -416,7 +417,7 @@ class JlptDeckViewModel @Inject constructor(
                 // genuinely has no usable voice, and the user is told.
                 val wantsAudio = _filters.value.generateAudio
                 val tts = if (wantsAudio) audioPlayer.ensureTts() else null
-                if (wantsAudio && tts == null) {
+                if (wantsAudio && tts == null && !voicevox.isActive()) {
                     _events.emit(JlptDeckEvent.AudioUnavailable)
                 }
                 val deck = _deckName.value.trim().ifBlank { defaultDeckName(plan.level) }

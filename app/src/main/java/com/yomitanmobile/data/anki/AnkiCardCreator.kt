@@ -41,7 +41,12 @@ class AnkiCardCreator(
      * The user's pronunciation archive, asked before the synthesiser. Null in
      * the tests that only build HTML.
      */
-    private val audioArchive: com.yomitanmobile.data.audio.AudioArchive? = null
+    private val audioArchive: com.yomitanmobile.data.audio.AudioArchive? = null,
+    /**
+     * The VOICEVOX voice, asked after the archive and before the system TTS.
+     * Null in the tests that only build HTML.
+     */
+    private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice? = null
 ) {
 
     /**
@@ -1537,9 +1542,29 @@ class AnkiCardCreator(
     ): String {
         val archived = archiveAudio(entry, media)
         if (archived.isNotEmpty()) return archived
+        val synthesised = voicevoxAudio(entry, media)
+        if (synthesised.isNotEmpty()) return synthesised
         if (tts == null) return ""
         applyRandomVoice(tts, stylePrefs)
         return generateTtsAudio(entry.reading.ifBlank { entry.expression }, tts, media)
+    }
+
+    /**
+     * VOICEVOX's recording of [entry], already handed to [media]. Said from
+     * the reading with the entry's own pitch accent, so the recording matches
+     * the pitch diagram on the same card. The file is the voice's cache entry
+     * and is never deleted here: the package writer reads it later, and the
+     * detail screen plays the same file.
+     */
+    private suspend fun voicevoxAudio(entry: WordEntry, media: MediaSink): String {
+        val voice = voicevox ?: return ""
+        return try {
+            val file = voice.wav(entry.expression, entry.reading, entry.pitchAccent) ?: return ""
+            media.add(file, file.name)
+        } catch (e: Exception) {
+            android.util.Log.w("AnkiCardCreator", "VOICEVOX audio for ${entry.expression} failed", e)
+            ""
+        }
     }
 
     /** The archive's recording for [entry], already handed to [media]. */

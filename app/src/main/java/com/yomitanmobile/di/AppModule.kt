@@ -26,9 +26,10 @@ object AppModule {
     fun provideAnkiCardCreator(
         @ApplicationContext context: Context,
         languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
-        audioArchive: com.yomitanmobile.data.audio.AudioArchive
+        audioArchive: com.yomitanmobile.data.audio.AudioArchive,
+        voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice
     ): AnkiCardCreator {
-        return AnkiCardCreator(context, languageSettings, audioArchive)
+        return AnkiCardCreator(context, languageSettings, audioArchive, voicevox)
     }
 
     @Provides

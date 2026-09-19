@@ -79,6 +79,7 @@ class DetailViewModelFuriganaTest {
             db.audioFileDao(),
             com.yomitanmobile.data.settings.AudioArchiveSettings(context)
         ),
+        voicevox = com.yomitanmobile.data.audio.voicevox.VoicevoxVoice(context),
         sentenceDao = db.sentenceDao(),
         aiSummaryService = AiSummaryService(),
         exportedWordDao = db.exportedWordDao(),

@@ -70,8 +70,36 @@ class SettingsViewModel @Inject constructor(
     getDictionariesUseCase: GetDictionariesUseCase,
     exportedWordDao: ExportedWordDao,
     private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
-    private val audioArchive: com.yomitanmobile.data.audio.AudioArchive
+    private val audioArchive: com.yomitanmobile.data.audio.AudioArchive,
+    private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice,
+    private val audioPlayer: com.yomitanmobile.data.audio.AudioPlayer
 ) : ViewModel() {
+
+    // ── VOICEVOX voice ───────────────────────────────────────────────────
+
+    val voicevoxState: StateFlow<com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State> = voicevox.state
+
+    val voicevoxEnabled: StateFlow<Boolean> = voicevox.enabled
+        .catch { emit(true) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /** Starts the download; it runs on the voice's own scope, so leaving the screen does not stop it. */
+    fun installVoicevox() = voicevox.install()
+
+    fun setVoicevoxEnabled(value: Boolean) {
+        viewModelScope.launch { voicevox.setEnabled(value) }
+    }
+
+    fun uninstallVoicevox() {
+        viewModelScope.launch { voicevox.uninstall() }
+    }
+
+    /** A word with a known accent, so the sample shows what the voice is for. */
+    fun previewVoicevox() {
+        viewModelScope.launch {
+            voicevox.wav("日本語", "にほんご", "0")?.let { audioPlayer.playAudioFile(it.path) }
+        }
+    }
 
     // ── Pronunciation archive ────────────────────────────────────────────
 

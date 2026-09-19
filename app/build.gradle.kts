@@ -34,6 +34,12 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // VOICEVOX's natives are ~25 MB per ABI. Phones are arm64; an x86_64
+        // emulator simply gets no VOICEVOX and falls back to the system TTS
+        // (VoicevoxVoice catches the missing library).
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -111,6 +117,12 @@ android {
         }
     }
     packaging {
+        // Compressed in the APK and extracted at install: ONNX Runtime alone
+        // is 18 MB stored, about a third of that compressed, and it is the
+        // download that users feel.
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }

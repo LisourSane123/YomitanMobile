@@ -99,6 +99,58 @@ class DictionaryDownloadManager(
             "release-assets.githubusercontent.com"
         )
 
+        /**
+         * An open connection to [urlString], redirects followed by hand so
+         * that every hop is held to the host allowlist — GitHub release
+         * downloads bounce through two other hosts before the bytes arrive.
+         * Shared by dictionary downloads and the VOICEVOX voice download, so
+         * both are bound by the same rules.
+         */
+        fun openAllowed(urlString: String): HttpURLConnection {
+            if (!isAllowedDownloadUrl(urlString)) {
+                throw Exception("Niedozwolony adres pobierania")
+            }
+            var currentUrl = urlString
+            var redirectCount = 0
+            while (redirectCount < MAX_REDIRECTS) {
+                val connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 30_000
+                    readTimeout = 120_000
+                    instanceFollowRedirects = false
+                    setRequestProperty("User-Agent", "YomitanMobile/1.0")
+                    setRequestProperty("Accept", "application/octet-stream")
+                }
+
+                val responseCode = connection.responseCode
+                if (responseCode in 300..399) {
+                    val newUrl = connection.getHeaderField("Location")
+                    connection.disconnect()
+                    if (newUrl.isNullOrBlank()) throw Exception("Redirect without Location header")
+                    currentUrl = resolveRedirectUrl(currentUrl, newUrl)
+                    if (!isAllowedDownloadUrl(currentUrl)) {
+                        throw Exception("Redirect do niedozwolonego hosta")
+                    }
+                    redirectCount++
+                    continue
+                }
+
+                if (responseCode != HttpURLConnection.HTTP_OK) {
+                    connection.disconnect()
+                    throw Exception("HTTP $responseCode: ${connection.responseMessage}")
+                }
+                return connection
+            }
+            throw Exception("Too many redirects ($MAX_REDIRECTS) for URL: $urlString")
+        }
+
+        private fun resolveRedirectUrl(baseUrl: String, locationHeader: String): String {
+            return if (locationHeader.startsWith("http", ignoreCase = true)) {
+                locationHeader
+            } else {
+                URL(URL(baseUrl), locationHeader).toString()
+            }
+        }
+
         internal fun isAllowedDownloadUrl(url: String): Boolean {
             return try {
                 val parsed = URL(url)
@@ -355,45 +407,7 @@ class DictionaryDownloadManager(
     ) = withContext(Dispatchers.IO) {
         var connection: HttpURLConnection? = null
         try {
-            if (!isAllowedDownloadUrl(urlString)) {
-                throw Exception("Niedozwolony adres pobierania")
-            }
-
-            var currentUrl = urlString
-            var redirectCount = 0
-
-            // Follow redirects manually (GitHub releases use redirects)
-            while (redirectCount < MAX_REDIRECTS) {
-                connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 30_000
-                    readTimeout = 120_000
-                    instanceFollowRedirects = false
-                    setRequestProperty("User-Agent", "YomitanMobile/1.0")
-                    setRequestProperty("Accept", "application/octet-stream")
-                }
-
-                val responseCode = connection.responseCode
-                if (responseCode in 300..399) {
-                    val newUrl = connection.getHeaderField("Location")
-                    connection.disconnect()
-                    if (newUrl.isNullOrBlank()) throw Exception("Redirect without Location header")
-                    currentUrl = resolveRedirectUrl(currentUrl, newUrl)
-                    if (!isAllowedDownloadUrl(currentUrl)) {
-                        throw Exception("Redirect do niedozwolonego hosta")
-                    }
-                    redirectCount++
-                    continue
-                }
-
-                if (responseCode != HttpURLConnection.HTTP_OK) {
-                    throw Exception("HTTP $responseCode: ${connection.responseMessage}")
-                }
-                break
-            }
-
-            if (redirectCount >= MAX_REDIRECTS) {
-                throw Exception("Too many redirects ($MAX_REDIRECTS) for URL: $urlString")
-            }
+            connection = openAllowed(urlString)
 
             val totalBytes = connection?.contentLengthLong ?: -1L
             if (totalBytes > MAX_DOWNLOAD_BYTES) {
@@ -427,14 +441,6 @@ class DictionaryDownloadManager(
 
         } finally {
             connection?.disconnect()
-        }
-    }
-
-    private fun resolveRedirectUrl(baseUrl: String, locationHeader: String): String {
-        return if (locationHeader.startsWith("http", ignoreCase = true)) {
-            locationHeader
-        } else {
-            URL(URL(baseUrl), locationHeader).toString()
         }
     }
 

@@ -102,6 +102,8 @@ class MainActivity : ComponentActivity() {
         val CARD_RANDOM_FONTS_ENABLED = booleanPreferencesKey("card_random_fonts_enabled")
         val CARD_RANDOM_FONTS = stringSetPreferencesKey("card_random_fonts")
         val TTS_RANDOM_VOICES_ENABLED = booleanPreferencesKey("tts_random_voices_enabled")
+        /** Card audio and the detail screen's play button use VOICEVOX when its voice is installed. */
+        val TTS_VOICEVOX_ENABLED = booleanPreferencesKey("tts_voicevox_enabled")
         val TTS_RANDOM_VOICES = stringSetPreferencesKey("tts_random_voices")
         val CARD_SHOW_SECTION_DIVIDERS = booleanPreferencesKey("card_show_section_dividers")
         val CARD_SHOW_WORD_DIVIDER = booleanPreferencesKey("card_show_word_divider")

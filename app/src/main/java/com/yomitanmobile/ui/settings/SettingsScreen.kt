@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.Subtitles
@@ -253,6 +254,10 @@ fun SettingsScreen(
     val audioArchiveFiles by viewModel.audioArchiveFiles.collectAsState()
     val audioArchiveLabel by viewModel.audioArchiveLabel.collectAsState()
     val audioArchiveIndexing by viewModel.audioArchiveIndexing.collectAsState()
+    val voicevoxState by viewModel.voicevoxState.collectAsState()
+    val voicevoxEnabled by viewModel.voicevoxEnabled.collectAsState()
+    var showVoicevoxTerms by remember { mutableStateOf(false) }
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val audioArchivePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri -> uri?.let(viewModel::indexAudioArchive) }
@@ -623,6 +628,13 @@ fun SettingsScreen(
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
+                                "Głos wymowy (jeśli pobrany): ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.CREDIT}, silnik VOICEVOX CORE (MIT).",
+                                "Pronunciation voice (if downloaded): ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.CREDIT}, VOICEVOX CORE engine (MIT)."
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            tr(
                                 "Tatoeba Project (CC-BY 2.0 FR) dla przykładowych zdań (jeśli zaimportowane).",
                                 "Tatoeba Project (CC-BY 2.0 FR) for example sentences (if imported)."
                             )
@@ -632,6 +644,44 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showLicensesDialog = false }) { Text(tr("Zamknij", "Close")) }
+            }
+        )
+    }
+
+    if (showVoicevoxTerms) {
+        AlertDialog(
+            onDismissRequest = { showVoicevoxTerms = false },
+            title = { Text(tr("Głos VOICEVOX — regulamin", "VOICEVOX voice — terms")) },
+            text = {
+                Column {
+                    Text(
+                        tr(
+                            "Pobierane są modele głosów VOICEVOX i słownik wymowy Open JTalk, razem około " +
+                                "${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MB, z GitHuba.\n\n" +
+                                "Regulamin głosów pozwala używać nagrań do nauki, pod warunkiem podpisu: " +
+                                "„VOICEVOX Nemo” (dowolny użytek) i „VOICEVOX:No.7” (tylko niekomercyjnie). " +
+                                "Nagrania z fiszek zostają u ciebie — przy publikowaniu ich trzeba podać ten podpis.",
+                            "This downloads the VOICEVOX voice models and the Open JTalk pronunciation dictionary, about " +
+                                "${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MB, from GitHub.\n\n" +
+                                "The voice terms allow the recordings for study, with credit: " +
+                                "\"VOICEVOX Nemo\" (any use) and \"VOICEVOX:No.7\" (non-commercial only). " +
+                                "Card recordings stay with you — publishing them requires that credit."
+                        ),
+                        fontSize = 14.sp
+                    )
+                    TextButton(onClick = { uriHandler.openUri(com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TERMS_URL) }) {
+                        Text(tr("Pełny regulamin (TERMS.txt)", "Full terms (TERMS.txt)"))
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showVoicevoxTerms = false
+                    viewModel.installVoicevox()
+                }) { Text(tr("Akceptuję i pobieram", "Accept and download")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showVoicevoxTerms = false }) { Text(tr("Anuluj", "Cancel")) }
             }
         )
     }
@@ -995,6 +1045,96 @@ fun SettingsScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // VOICEVOX voice
+            item {
+                SettingsBlock {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.RecordVoiceOver,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    tr("Głos VOICEVOX", "VOICEVOX voice"),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    when (val state = voicevoxState) {
+                                        is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Installed -> tr(
+                                            "Neuronowy głos japoński, offline. Mówi czytanie z akcentem z karty. " +
+                                                "Używany po archiwum wymowy, przed systemowym TTS.",
+                                            "Neural Japanese voice, offline. Says the reading with the card's accent. " +
+                                                "Used after the pronunciation archive, before the system TTS."
+                                        )
+                                        is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Downloading -> tr(
+                                            "Pobieranie… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB",
+                                            "Downloading… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB"
+                                        )
+                                        is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Failed -> tr(
+                                            "Pobieranie nie powiodło się: ${state.message}",
+                                            "Download failed: ${state.message}"
+                                        )
+                                        else -> tr(
+                                            "Dużo lepszy od systemowego TTS: neuronowy, offline, z akcentem z karty. " +
+                                                "Wymaga pobrania ok. ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MB.",
+                                            "Far better than the system TTS: neural, offline, with the card's accent. " +
+                                                "Needs a download of about ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MB."
+                                        )
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (voicevoxState is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Installed) {
+                                androidx.compose.material3.Switch(
+                                    checked = voicevoxEnabled,
+                                    onCheckedChange = viewModel::setVoicevoxEnabled
+                                )
+                            }
+                        }
+                        val downloading = voicevoxState as? com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Downloading
+                        if (downloading != null) {
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = (downloading.done.toFloat() / downloading.total.coerceAtLeast(1)).coerceIn(0f, 1f),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            when (voicevoxState) {
+                                is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Installed -> {
+                                    Button(onClick = viewModel::previewVoicevox, enabled = voicevoxEnabled) {
+                                        Text(tr("Odsłuchaj", "Listen"))
+                                    }
+                                    OutlinedButton(onClick = viewModel::uninstallVoicevox) {
+                                        Text(tr("Usuń", "Remove"))
+                                    }
+                                }
+                                is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Downloading -> Unit
+                                else -> Button(onClick = { showVoicevoxTerms = true }) {
+                                    Text(
+                                        if (voicevoxState is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Failed)
+                                            tr("Spróbuj ponownie", "Try again")
+                                        else tr("Pobierz głos", "Download the voice")
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.CREDIT,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
