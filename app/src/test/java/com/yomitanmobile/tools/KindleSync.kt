@@ -141,14 +141,7 @@ class KindleSync {
         val parser = YomitanDictionaryParser()
         // Pitch is keyed by the written form alone, as DictionaryDao's
         // updatePitchAccent stores it on the phone.
-        val pitch = HashMap<String, String>()
-        System.getProperty("pitch.zip").orEmpty().takeIf { it.isNotEmpty() }?.let { zip ->
-            parser.parseFromZipStreaming(
-                inputStream = File(zip).inputStream().buffered(),
-                onBatch = { _, _ -> },
-                onMetaBatch = { _, pitches -> pitch.putAll(pitches) }
-            )
-        }
+        val pitch = loadPitch(parser)
         val ranks = HashMap<String, MutableList<Pair<String, Int>>>()
         if (freqZip.isNotEmpty()) {
             parser.parseFromZipStreaming(
@@ -281,7 +274,10 @@ class KindleSync {
             )
         }
 
-        val audio = if (dryRun) emptyMap() else speak(toAdd.values.map { it.first }, outDir)
+        val audio = if (dryRun) emptyMap() else speak(
+            toAdd.values.map { (entry, _) -> Spoken(entry.primaryExpression, entry.reading, entry.pitchAccent) },
+            outDir
+        )
         val notes = toAdd.values.map { (entry, lookup) ->
             val word = entry.toWordEntry().copy(
                 exampleSentence = sentenceFor(lookup, entry),
@@ -425,29 +421,99 @@ class KindleSync {
     }
 
     /**
-     * One recording per word, keyed by (expression, reading). The file name is
-     * derived from the word, so a rerun reuses what Anki already holds.
+     * Re-records the Audio field of every card this tool made (`tag:from_kindle`)
+     * with the current engine, in place: `updateNoteFields` keeps the note,
+     * its cards and their review history. For when the voice gets better —
+     * Open JTalk → VOICEVOX, or a pronunciation archive later.
+     *
+     * ```
+     * tools/kindle-sync/kindle-sync.sh --refresh-audio
+     * ```
      */
-    private fun speak(entries: List<MergedWordEntry>, outDir: File): Map<Pair<String, String>, File> {
+    @Test
+    fun refreshAudio() = runBlocking {
+        Assume.assumeTrue(
+            "kindle-sync: pass -Dkindle.refreshAudio=true",
+            System.getProperty("kindle.refreshAudio") == "true"
+        )
+        val anki = AnkiConnect(System.getProperty("anki.connect") ?: "http://127.0.0.1:8765")
+        val outDir = File(System.getProperty("out.dir") ?: "build/kindle-sync").apply { mkdirs() }
+        val sync = System.getProperty("kindle.sync")?.toBooleanStrictOrNull() ?: true
+        if (sync) anki.call("sync")
+
+        val infos = anki.call("notesInfo", JSONObject().put("query", "tag:from_kindle")) as JSONArray
+        val notes = (0 until infos.length()).map { infos.getJSONObject(it) }.map { info ->
+            val fields = info.getJSONObject("fields")
+            fun field(name: String) = fields.optJSONObject(name)?.optString("value").orEmpty()
+            // Front carries the random-font span; the word is its text.
+            Triple(info.getLong("noteId"), TAGS.replace(field("Front"), "").trim(), TAGS.replace(field("Reading"), "").trim())
+        }
+        val pitch = loadPitch(YomitanDictionaryParser())
+        val audio = speak(notes.map { (_, word, reading) -> Spoken(word, reading, pitch[word].orEmpty()) }, outDir)
+        var refreshed = 0
+        for ((id, word, reading) in notes) {
+            val recording = audio[word to reading] ?: continue
+            anki.storeMedia(recording)
+            anki.call(
+                "updateNoteFields",
+                JSONObject().put("note", JSONObject().put("id", id).put("fields", JSONObject().put("Audio", "[sound:${recording.name}]")))
+            )
+            refreshed++
+        }
+        val syncedAfter = !sync || runCatching { anki.call("sync") }.isSuccess
+        log("audio refreshed on $refreshed of ${notes.size} notes")
+        File(outDir, "summary.txt").writeText("refreshed=$refreshed notes=${notes.size} synced_after=$syncedAfter\n")
+    }
+
+    /**
+     * Pitch positions by written form, as DictionaryDao's updatePitchAccent
+     * stores them on the phone.
+     */
+    private suspend fun loadPitch(parser: YomitanDictionaryParser): Map<String, String> {
+        val pitch = HashMap<String, String>()
+        System.getProperty("pitch.zip").orEmpty().takeIf { it.isNotEmpty() }?.let { zip ->
+            parser.parseFromZipStreaming(
+                inputStream = File(zip).inputStream().buffered(),
+                onBatch = { _, _ -> },
+                onMetaBatch = { _, pitches -> pitch.putAll(pitches) }
+            )
+        }
+        return pitch
+    }
+
+    /** What the TTS is asked to say: the reading, with the accent to say it in. */
+    private data class Spoken(val expression: String, val reading: String, val pitch: String)
+
+    /**
+     * One recording per word, keyed by (expression, reading). The file name is
+     * derived from the word and the engine, so a rerun reuses what Anki
+     * already holds, while a new engine gets new names — AnkiDroid caches
+     * media by name and would keep playing the old voice.
+     */
+    private fun speak(entries: List<Spoken>, outDir: File): Map<Pair<String, String>, File> {
         val tts = System.getProperty("kindle.tts").orEmpty().split(':')
         if (tts.size != 2 || entries.isEmpty()) return emptyMap()
         val dir = File(outDir, "audio").apply { mkdirs() }
-        val wanted = entries.associate { entry ->
-            val key = entry.primaryExpression to entry.reading
+        val byKey = entries.associateBy { it.expression to it.reading }
+        val wanted = byKey.keys.associateWith { key ->
             val hash = java.security.MessageDigest.getInstance("SHA-1")
                 .digest("${key.first}|${key.second}".toByteArray())
                 .joinToString("") { "%02x".format(it) }.take(16)
-            key to File(dir, "yomitan_kindle_$hash.mp3")
+            File(dir, "yomitan_kindle_${AUDIO_ENGINE}_$hash.mp3")
         }
         val missing = wanted.filterValues { !it.isFile }
         if (missing.isNotEmpty()) {
-            val process = ProcessBuilder(tts[0], tts[1]).redirectErrorStream(false).start()
+            // stderr to a file: VOICEVOX logs there, and a full pipe nobody
+            // reads would stall the synthesis.
+            val ttsLog = File(dir, "tts.log")
+            val process = ProcessBuilder(tts[0], tts[1]).redirectError(ttsLog).start()
             process.outputStream.bufferedWriter().use { w ->
-                for ((key, file) in missing) w.write("${file.absolutePath}\t${key.first}\t${key.second}\n")
+                for ((key, file) in missing) {
+                    w.write("${file.absolutePath}\t${key.first}\t${key.second}\t${byKey.getValue(key).pitch}\n")
+                }
             }
             process.inputStream.bufferedReader().readText()
-            val err = process.errorStream.bufferedReader().readText()
-            if (process.waitFor() != 0) log("tts failed: ${err.takeLast(500)}")
+            if (process.waitFor() != 0) log("tts failed: ${ttsLog.readText().takeLast(500)}")
         }
         return wanted.filterValues { it.isFile }.also { log("audio: ${it.size} of ${entries.size} words") }
     }
@@ -664,6 +730,10 @@ class KindleSync {
     }
 
     private companion object {
+        /** Bumped whenever the recordings change voice; part of every file name. */
+        const val AUDIO_ENGINE = "vv"
+        val TAGS = Regex("<[^>]*>")
+
         val FONT = Regex("font-family: '([^']+)'")
 
         /**

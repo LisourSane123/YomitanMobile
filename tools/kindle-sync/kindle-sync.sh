@@ -14,6 +14,9 @@
 #   --wait      how long to wait for the Kindle to appear (default: 0)
 #   --vocab     use this vocab.db instead of the Kindle's (testing)
 #   --no-sync   skip the AnkiWeb sync before and after (on by default)
+#   --refresh-audio
+#               re-record the Audio field of every from_kindle card with the
+#               current voice, in place (review history kept); no Kindle needed
 #
 # Environment: KINDLE_SYNC_DICT (Jitendex zip), KINDLE_SYNC_FREQ (frequency
 # zip), KINDLE_SYNC_PITCH, KINDLE_SYNC_KANJI, KINDLE_SYNC_REPO (checkout of
@@ -28,6 +31,7 @@ ALL=false
 WAIT=0
 VOCAB=
 SYNC=true
+REFRESH_AUDIO=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=true ;;
@@ -36,6 +40,7 @@ while [[ $# -gt 0 ]]; do
         --wait) WAIT="$2"; shift ;;
         --vocab) VOCAB="$2"; shift ;;
         --no-sync) SYNC=false ;;
+        --refresh-audio) REFRESH_AUDIO=true ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -100,56 +105,69 @@ copy_vocab() {
     return 1
 }
 
-deadline=$((SECONDS + WAIT))
-until { [[ -n "$VOCAB" ]] && cp "$VOCAB" "$WORK/vocab.db"; } || copy_vocab; do
-    if (( SECONDS >= deadline )); then
-        fail "nie znaleziono Kindle (albo vocab.db jest nieczytelny)"
+# --refresh-audio works on cards already in Anki: no Kindle, no lookups.
+if [[ "$REFRESH_AUDIO" == false ]]; then
+    deadline=$((SECONDS + WAIT))
+    until { [[ -n "$VOCAB" ]] && cp "$VOCAB" "$WORK/vocab.db"; } || copy_vocab; do
+        if (( SECONDS >= deadline )); then
+            fail "nie znaleziono Kindle (albo vocab.db jest nieczytelny)"
+        fi
+        sleep 3
+    done
+    # Keep the last copy around: it is the evidence when a card looks wrong.
+    cp "$WORK/vocab.db" "$STATE/vocab.last.db"
+    log "vocab.db copied"
+
+    # ---- 2. the lookups since the last run -------------------------------------
+    SINCE=0
+    if [[ "$ALL" == false && -f "$STATE/last_timestamp" ]]; then
+        SINCE="$(cat "$STATE/last_timestamp")"
     fi
-    sleep 3
-done
-# Keep the last copy around: it is the evidence when a card looks wrong.
-cp "$WORK/vocab.db" "$STATE/vocab.last.db"
-log "vocab.db copied"
+    # Tabs and newlines inside the sentence would break the TSV.
+    sqlite3 -readonly -separator $'\t' "$WORK/vocab.db" "
+        SELECT w.word, w.stem,
+               replace(replace(replace(l.usage, char(9), ' '), char(10), ' '), char(13), ' '),
+               l.timestamp, coalesce(b.title, '')
+        FROM LOOKUPS l
+        JOIN WORDS w ON w.id = l.word_key
+        LEFT JOIN BOOK_INFO b ON b.id = l.book_key
+        WHERE w.lang = 'ja' AND l.timestamp > $SINCE
+        ORDER BY l.timestamp;" > "$WORK/lookups.tsv"
+    COUNT=$(wc -l < "$WORK/lookups.tsv")
+    log "$COUNT new lookups since $SINCE"
+    if (( COUNT == 0 )); then
+        notify "Wykonano: brak nowych słów w Vocabulary Builderze."
+        exit 0
+    fi
 
-# ---- 2. the lookups since the last run -------------------------------------
-SINCE=0
-if [[ "$ALL" == false && -f "$STATE/last_timestamp" ]]; then
-    SINCE="$(cat "$STATE/last_timestamp")"
-fi
-# Tabs and newlines inside the sentence would break the TSV.
-sqlite3 -readonly -separator $'\t' "$WORK/vocab.db" "
-    SELECT w.word, w.stem,
-           replace(replace(replace(l.usage, char(9), ' '), char(10), ' '), char(13), ' '),
-           l.timestamp, coalesce(b.title, '')
-    FROM LOOKUPS l
-    JOIN WORDS w ON w.id = l.word_key
-    LEFT JOIN BOOK_INFO b ON b.id = l.book_key
-    WHERE w.lang = 'ja' AND l.timestamp > $SINCE
-    ORDER BY l.timestamp;" > "$WORK/lookups.tsv"
-COUNT=$(wc -l < "$WORK/lookups.tsv")
-log "$COUNT new lookups since $SINCE"
-if (( COUNT == 0 )); then
-    notify "Wykonano: brak nowych słów w Vocabulary Builderze."
-    exit 0
-fi
-
-# ---- 2b. the phone's card style ------------------------------------------
-# The app's backups live in its external files dir, which adb can read.
-ADB="$(command -v adb || echo "$HOME/Android/Sdk/platform-tools/adb")"
-if [[ -x "$ADB" ]] && "$ADB" get-state >/dev/null 2>&1; then
-    BACKUPS=/sdcard/Android/data/com.yomitanmobile/files/yomitan_backups
-    LATEST="$("$ADB" shell "ls -1d $BACKUPS/*/ 2>/dev/null | sort | tail -1" | tr -d '\r')"
-    if [[ -n "$LATEST" ]] && "$ADB" pull "${LATEST%/}/settings.json" "$DATA/settings.json.new" >/dev/null 2>&1; then
-        mv "$DATA/settings.json.new" "$DATA/settings.json"
-        log "phone settings refreshed from $LATEST"
+    # ---- 2b. the phone's card style ------------------------------------------
+    # The app's backups live in its external files dir, which adb can read.
+    ADB="$(command -v adb || echo "$HOME/Android/Sdk/platform-tools/adb")"
+    if [[ -x "$ADB" ]] && "$ADB" get-state >/dev/null 2>&1; then
+        BACKUPS=/sdcard/Android/data/com.yomitanmobile/files/yomitan_backups
+        LATEST="$("$ADB" shell "ls -1d $BACKUPS/*/ 2>/dev/null | sort | tail -1" | tr -d '\r')"
+        if [[ -n "$LATEST" ]] && "$ADB" pull "${LATEST%/}/settings.json" "$DATA/settings.json.new" >/dev/null 2>&1; then
+            mv "$DATA/settings.json.new" "$DATA/settings.json"
+            log "phone settings refreshed from $LATEST"
+        fi
     fi
 fi
 
-# ---- 2c. Open JTalk for the Audio field (once, into a venv) ----------------
+# ---- 2c. the voice for the Audio field (once, into a venv) -----------------
+# VOICEVOX is the voice; Open JTalk is the fallback tts.py drops to when the
+# VOICEVOX files are missing. The VOICEVOX models come with terms of use that
+# have to be accepted by a person, so they are not fetched here — see
+# docs/kindle_thoughts.md for the one-time download.
 if [[ ! -x "$TTS_PYTHON" ]] || ! "$TTS_PYTHON" -c 'import pyopenjtalk' 2>/dev/null; then
     log "installing pyopenjtalk into $DATA/venv"
     python3 -m venv "$DATA/venv" && "$DATA/venv/bin/pip" install -q pyopenjtalk >&2 || log "pyopenjtalk unavailable, cards go without audio"
 fi
+if ! "$TTS_PYTHON" -c 'import voicevox_core' 2>/dev/null; then
+    "$DATA/venv/bin/pip" install -q \
+        https://github.com/VOICEVOX/voicevox_core/releases/download/0.17.0/voicevox_core-0.17.0-cp310-abi3-manylinux_2_34_x86_64.whl >&2 \
+        || log "voicevox_core unavailable, Open JTalk will speak"
+fi
+[[ -d "$DATA/voicevox/core/models" ]] || log "VOICEVOX models missing ($DATA/voicevox/core), Open JTalk will speak"
 
 # ---- 3. Anki must be answering ---------------------------------------------
 if ! curl -s -m 3 "$ANKI_CONNECT" -d '{"action":"version","version":6}' | grep -q '"result"'; then
@@ -176,6 +194,22 @@ done
 OUT="$STATE/last-run"
 mkdir -p "$OUT"
 rm -f "$OUT/summary.txt"
+
+if [[ "$REFRESH_AUDIO" == true ]]; then
+    (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync.refreshAudio" --rerun \
+        -Dkindle.refreshAudio=true \
+        -Dpitch.zip="$PITCH" \
+        -Dkindle.tts="$TTS_PYTHON:$REPO/tools/kindle-sync/tts.py" \
+        -Dkindle.sync="$SYNC" \
+        -Danki.connect="$ANKI_CONNECT" \
+        -Dout.dir="$OUT") >&2 || true
+    [[ -f "$OUT/summary.txt" ]] || fail "nie udało się odświeżyć audio, szczegóły w logu"
+    eval "$(tr ' ' '\n' < "$OUT/summary.txt" | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
+    MESSAGE="Wykonano: nowe audio w $refreshed z $notes fiszek from_kindle."
+    if [[ "$synced_after" != "true" ]]; then MESSAGE+=" UWAGA: synchronizacja nie przeszła — kliknij Sync w Anki."; fi
+    notify "$MESSAGE"
+    exit 0
+fi
 (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync" --rerun \
     -Dkindle.lookups="$WORK/lookups.tsv" \
     -Ddict.zip="$DICT" \
