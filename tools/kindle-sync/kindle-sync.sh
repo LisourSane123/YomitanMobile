@@ -10,13 +10,19 @@
 #
 #   --dry-run   only report what would be added
 #   --all       ignore the last-run marker and process every lookup
-#   --deck      target deck (default: test_kindle)
+#   --deck      target deck (default: Japanese). It has to sit inside what
+#               AutoReorder is configured to sort (its `search_to_sort`,
+#               `deck:Japanese is:new` here) or the new cards are never put in
+#               frequency order — and, with `shift_existing` on, are pushed
+#               behind the whole existing new queue. A subdeck counts.
 #   --wait      how long to wait for the Kindle to appear (default: 0)
 #   --vocab     use this vocab.db instead of the Kindle's (testing)
 #   --no-sync   skip the AnkiWeb sync before and after (on by default)
 #   --refresh-audio
 #               re-record the Audio field of every from_kindle card with the
 #               current voice, in place (review history kept); no Kindle needed
+#   --pull-settings
+#               only copy the phone's card style over adb and exit (see below)
 #
 # Environment: KINDLE_SYNC_DICT (Jitendex zip), KINDLE_SYNC_FREQ (frequency
 # zip), KINDLE_SYNC_PITCH, KINDLE_SYNC_KANJI, KINDLE_SYNC_REPO (checkout of
@@ -25,13 +31,14 @@
 # refreshed automatically whenever the phone is reachable over adb.
 set -euo pipefail
 
-DECK=test_kindle
+DECK=Japanese
 DRY_RUN=false
 ALL=false
 WAIT=0
 VOCAB=
 SYNC=true
 REFRESH_AUDIO=false
+PULL_SETTINGS=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=true ;;
@@ -41,6 +48,7 @@ while [[ $# -gt 0 ]]; do
         --vocab) VOCAB="$2"; shift ;;
         --no-sync) SYNC=false ;;
         --refresh-audio) REFRESH_AUDIO=true ;;
+        --pull-settings) PULL_SETTINGS=true ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -79,20 +87,26 @@ copy_vocab() {
     local dest="$WORK/vocab.db" dir
     for dir in /run/media/"$USER"/Kindle /media/"$USER"/Kindle /run/media/"$USER"/*/ /media/"$USER"/*/; do
         if [[ -f "$dir/system/vocabulary/vocab.db" ]]; then
-            cp "$dir/system/vocabulary/vocab.db" "$dest" && return 0
+            cp "$dir/system/vocabulary/vocab.db" "$dest" && { log "vocab.db from $dir (mass storage)"; return 0; }
         fi
     done
     if command -v kioclient >/dev/null; then
         local device
         device="$(kioclient ls mtp:/ 2>/dev/null | grep -i kindle | head -1 || true)"
         if [[ -n "$device" ]]; then
-            local storage
+            local storage path
             while IFS= read -r storage; do
                 [[ -z "$storage" || "$storage" == "." ]] && continue
-                if kioclient --noninteractive copy \
-                    "mtp:/$device/$storage/system/vocabulary/vocab.db" "file://$dest" 2>/dev/null; then
-                    return 0
-                fi
+                # Storage names have spaces in them ("Internal Storage"), and
+                # whether a KIO url wants them raw or encoded is not something
+                # to find out on the one evening the Kindle is plugged in.
+                for path in "mtp:/$device/$storage/system/vocabulary/vocab.db" \
+                            "mtp:/${device// /%20}/${storage// /%20}/system/vocabulary/vocab.db"; do
+                    if kioclient --noninteractive copy "$path" "file://$dest" 2>/dev/null; then
+                        log "vocab.db from $path (kio)"
+                        return 0
+                    fi
+                done
             done < <(kioclient ls "mtp:/$device" 2>/dev/null)
         fi
     fi
@@ -102,20 +116,85 @@ copy_vocab() {
         if [[ -n "$root" ]]; then
             gio mount "$root" 2>/dev/null || true
             local storage
+            # Whatever the device calls its storage, rather than a guess at it.
+            while IFS= read -r storage; do
+                [[ -z "$storage" ]] && continue
+                gio copy "${storage%/}/system/vocabulary/vocab.db" "$dest" 2>/dev/null &&
+                    { log "vocab.db from $storage (gio)"; return 0; }
+            done < <(gio list "$root" -u 2>/dev/null)
             for storage in "Internal Storage" "Internal%20Storage"; do
-                gio copy "${root}${storage}/system/vocabulary/vocab.db" "$dest" 2>/dev/null && return 0
+                gio copy "${root}${storage}/system/vocabulary/vocab.db" "$dest" 2>/dev/null &&
+                    { log "vocab.db from ${root}${storage} (gio)"; return 0; }
             done
         fi
     fi
     return 1
 }
 
+# A Kindle on the USB bus, by the vendor id the udev watcher matches on. Tells
+# "no Kindle here" apart from "a Kindle that will not hand over vocab.db",
+# which are two different things to do something about.
+kindle_on_usb() {
+    local id
+    for id in /sys/bus/usb/devices/*/idVendor; do
+        [[ -r "$id" && "$(cat "$id")" == 1949 ]] && return 0
+    done
+    return 1
+}
+
+# ---- 1b. the phone's card style -------------------------------------------
+# The app's backups live in its external files dir, which adb can read. A
+# phone that is not plugged in is the normal case during a Kindle run, so this
+# never fails the run — it says which step did not happen and leaves the
+# settings.json of the last successful pull in place, which is still the
+# phone's style. Every branch logs: a style silently guessed from old cards is
+# how the fonts drift apart between the two collections.
+pull_phone_settings() {
+    local adb backups latest
+    adb="$(command -v adb || echo "$HOME/Android/Sdk/platform-tools/adb")"
+    if [[ ! -x "$adb" ]]; then
+        log "phone settings: no adb (install android-tools or the platform-tools)"
+        return 1
+    fi
+    if ! "$adb" get-state >/dev/null 2>&1; then
+        log "phone settings: no phone over adb, keeping $([[ -f "$DATA/settings.json" ]] && echo "the last pull" || echo "none")"
+        return 1
+    fi
+    backups=/sdcard/Android/data/com.yomitanmobile/files/yomitan_backups
+    latest="$("$adb" shell "ls -1d $backups/*/ 2>/dev/null | sort | tail -1" | tr -d '\r')"
+    if [[ -z "$latest" ]]; then
+        log "phone settings: no backup in $backups — make one in the app (Ustawienia → kopia zapasowa)"
+        return 1
+    fi
+    if ! "$adb" pull "${latest%/}/settings.json" "$DATA/settings.json.new" >/dev/null 2>&1; then
+        log "phone settings: ${latest%/}/settings.json could not be pulled"
+        rm -f "$DATA/settings.json.new"
+        return 1
+    fi
+    mv "$DATA/settings.json.new" "$DATA/settings.json"
+    log "phone settings refreshed from $latest"
+}
+
+# --pull-settings is that step on its own: run it once with the phone plugged
+# in, and every later Kindle run uses the style it left behind.
+if [[ "$PULL_SETTINGS" == true ]]; then
+    if pull_phone_settings; then
+        notify "Wykonano: styl fiszek pobrany z telefonu."
+    else
+        fail "nie pobrano stylu z telefonu, szczegóły w logu"
+    fi
+    exit 0
+fi
+
 # --refresh-audio works on cards already in Anki: no Kindle, no lookups.
 if [[ "$REFRESH_AUDIO" == false ]]; then
     deadline=$((SECONDS + WAIT))
     until { [[ -n "$VOCAB" ]] && cp "$VOCAB" "$WORK/vocab.db"; } || copy_vocab; do
         if (( SECONDS >= deadline )); then
-            fail "nie znaleziono Kindle (albo vocab.db jest nieczytelny)"
+            if kindle_on_usb; then
+                fail "Kindle jest podłączony, ale nie udało się odczytać vocab.db (odblokuj ekran, sprawdź tryb USB)"
+            fi
+            fail "nie znaleziono Kindle"
         fi
         sleep 3
     done
@@ -145,17 +224,7 @@ if [[ "$REFRESH_AUDIO" == false ]]; then
         exit 0
     fi
 
-    # ---- 2b. the phone's card style ------------------------------------------
-    # The app's backups live in its external files dir, which adb can read.
-    ADB="$(command -v adb || echo "$HOME/Android/Sdk/platform-tools/adb")"
-    if [[ -x "$ADB" ]] && "$ADB" get-state >/dev/null 2>&1; then
-        BACKUPS=/sdcard/Android/data/com.yomitanmobile/files/yomitan_backups
-        LATEST="$("$ADB" shell "ls -1d $BACKUPS/*/ 2>/dev/null | sort | tail -1" | tr -d '\r')"
-        if [[ -n "$LATEST" ]] && "$ADB" pull "${LATEST%/}/settings.json" "$DATA/settings.json.new" >/dev/null 2>&1; then
-            mv "$DATA/settings.json.new" "$DATA/settings.json"
-            log "phone settings refreshed from $LATEST"
-        fi
-    fi
+    pull_phone_settings || true
 fi
 
 # ---- 2c. the voice for the Audio field ------------------------------------
@@ -230,14 +299,25 @@ fi
 SUMMARY="$(cat "$OUT/summary.txt")"
 log "$SUMMARY"
 log "report: $OUT/kindle-sync.tsv"
-
-# The marker only moves when cards were really written.
-if [[ "$DRY_RUN" == false ]]; then
-    tail -1 "$WORK/lookups.tsv" | cut -f4 > "$STATE/last_timestamp"
-fi
-
 eval "$(echo "$SUMMARY" | tr ' ' '\n' | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
+
+# The marker moves only when the lookups were really dealt with: cards were
+# written, or there was nothing to write (everything already in Anki, filtered
+# or not in the dictionary). A run that planned cards and added none — Anki
+# refused the note type, the media write failed — must be repeatable, and
+# without this the words were gone until the next --all.
+if [[ "$DRY_RUN" == false ]] && (( added > 0 || new == 0 )); then
+    tail -1 "$WORK/lookups.tsv" | cut -f4 > "$STATE/last_timestamp"
+elif [[ "$DRY_RUN" == false ]]; then
+    log "marker not moved: $new cards planned, $added added — the run repeats next time"
+fi
 MESSAGE="Wykonano: $added nowych fiszek w talii $DECK ($lookups wyszukań, $in_anki już było w Anki)."
+if [[ "$DRY_RUN" == false ]] && (( added == 0 && new > 0 )); then
+    MESSAGE="Nie wykonano: $new fiszek do dodania, żadna nie weszła — spróbuję ponownie przy następnym podłączeniu."
+fi
 if [[ "$reordered" != "-1" ]]; then MESSAGE+=" Kolejność ustawiona (AutoReorder)."; fi
+if [[ "$reorder_covers" == "false" ]]; then
+    MESSAGE+=" UWAGA: AutoReorder nie obejmuje talii $DECK — nowe fiszki nie są ułożone wg częstości."
+fi
 if [[ "$synced_after" != "true" ]]; then MESSAGE+=" UWAGA: synchronizacja po dodaniu nie przeszła — kliknij Sync w Anki."; fi
 notify "$MESSAGE"

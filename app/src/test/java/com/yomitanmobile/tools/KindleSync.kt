@@ -318,12 +318,30 @@ class KindleSync {
         // AutoReorder's own pass, then the second sync so the new cards reach
         // the phone already in study order.
         var reordered = -1
+        // Whether AutoReorder's search covers the deck just written to: "na"
+        // when the add-on is absent. A deck outside its `search_to_sort` is
+        // the silent half of this tool — the cards are added, the order is
+        // never applied to them, and nothing says so.
+        var reorderCovers = "na"
         // Only a sync that was needed and failed is worth a warning.
         var syncedAfter = true
         if (!dryRun && addedCount > 0) {
             reorderConfig()?.let { config ->
-                reordered = anki.reorder(config)
-                log("reorder (${config.search}, by ${config.field}): $reordered cards moved")
+                val mine = anki.countCards("\"deck:$deck\" is:new")
+                val covered = anki.countCards("\"deck:$deck\" is:new (${config.search})")
+                reorderCovers = (mine > 0 && covered == mine).toString()
+                if (reorderCovers == "true") {
+                    reordered = anki.reorder(config)
+                    log("reorder (${config.search}, by ${config.field}): $reordered cards moved")
+                } else {
+                    // Reordering anyway would be worse than doing nothing:
+                    // shift_existing moves every OTHER new card — these ones —
+                    // behind the whole sorted queue.
+                    log(
+                        "not reordering: AutoReorder sorts \"${config.search}\", which covers " +
+                            "$covered of $mine new cards in $deck. Put the deck inside that search."
+                    )
+                }
             }
             if (sync) {
                 syncedAfter = runCatching { anki.call("sync") }
@@ -338,7 +356,7 @@ class KindleSync {
         File(outDir, "summary.txt").writeText(
             "lookups=${lookups.size} new=${notes.size} added=$addedCount in_anki=${summary["IN_ANKI"] ?: 0} " +
                 "not_found=${summary["NOT_IN_DICTIONARY"] ?: 0} reordered=$reordered " +
-                "synced_after=$syncedAfter dry_run=$dryRun\n"
+                "reorder_covers=$reorderCovers synced_after=$syncedAfter dry_run=$dryRun\n"
         )
         log("report written to ${file.absolutePath}")
         println(report)
@@ -780,6 +798,10 @@ class KindleSync {
             }
             return sorted.withIndex().count { (position, card) -> card.due != position.toLong() }
         }
+
+        /** How many cards a search matches. */
+        fun countCards(query: String): Int =
+            (call("findCards", JSONObject().put("query", query)) as JSONArray).length()
 
         private fun cardsInfo(ids: List<Long>): List<CardPosition> = ids.chunked(500).flatMap { chunk ->
             val infos = call("cardsInfo", JSONObject().put("cards", JSONArray(chunk))) as JSONArray
