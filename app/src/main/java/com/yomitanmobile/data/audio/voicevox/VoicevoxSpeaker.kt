@@ -51,11 +51,12 @@ class VoicevoxSpeaker(onnxruntime: String, root: File) : Closeable {
     fun wav(expression: String, reading: String, pitch: String): ByteArray {
         val style = voiceFor(expression, reading)
         val kana = AccentKana.accented(reading, pitch)
-        val query = if (kana != null) {
-            synthesizer.createAudioQueryFromKana(kana, style)
-        } else {
-            synthesizer.createAudioQuery(reading.ifBlank { expression }, style)
-        }
+        // A mora the notation does not know is refused outright, and a word
+        // with no recording is worse than a word said with the engine's own
+        // guess at the accent — so a refusal falls back to the text instead of
+        // reaching the caller. [AccentKana.spellable] is what keeps this rare.
+        val query = kana?.let { runCatching { synthesizer.createAudioQueryFromKana(it, style) }.getOrNull() }
+            ?: synthesizer.createAudioQuery(reading.ifBlank { expression }, style)
         // A single word needs no lead-in or tail of silence.
         query.prePhonemeLength = 0.05
         query.postPhonemeLength = 0.1

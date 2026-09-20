@@ -299,6 +299,12 @@ fi
 SUMMARY="$(cat "$OUT/summary.txt")"
 log "$SUMMARY"
 log "report: $OUT/kindle-sync.tsv"
+# What the pipeline itself said. Gradle swallows a test's stdout, so this file
+# is the only place a per-word failure (a word the voice refused, a note Anki
+# would not take) is ever written down.
+grep -E "not added|no recording|tts failed|not reordering|failed" "$OUT/run.log" 2>/dev/null | while IFS= read -r line; do
+    log "$line"
+done
 eval "$(echo "$SUMMARY" | tr ' ' '\n' | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
 
 # The marker moves only when the lookups were really dealt with: cards were

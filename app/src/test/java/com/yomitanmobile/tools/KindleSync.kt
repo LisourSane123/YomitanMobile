@@ -112,6 +112,7 @@ class KindleSync {
         val deck = System.getProperty("kindle.deck") ?: "test_kindle"
         val dryRun = System.getProperty("kindle.dryRun")?.toBooleanStrictOrNull() ?: false
         val outDir = File(System.getProperty("out.dir") ?: "build/kindle-sync").apply { mkdirs() }
+        logFile = File(outDir, "run.log").apply { writeText("") }
         val anki = AnkiConnect(System.getProperty("anki.connect") ?: "http://127.0.0.1:8765")
 
         // ---- 1. lookups, in the order they were made -------------------------
@@ -460,6 +461,7 @@ class KindleSync {
         )
         val anki = AnkiConnect(System.getProperty("anki.connect") ?: "http://127.0.0.1:8765")
         val outDir = File(System.getProperty("out.dir") ?: "build/kindle-sync").apply { mkdirs() }
+        logFile = File(outDir, "run.log").apply { writeText("") }
         val sync = System.getProperty("kindle.sync")?.toBooleanStrictOrNull() ?: true
         if (sync) anki.call("sync")
 
@@ -592,6 +594,7 @@ class KindleSync {
         }
         result += wanted.filterValues { it.isFile }
         log("audio: ${result.size} of ${byKey.size} words")
+        (byKey.keys - result.keys).forEach { log("audio: no recording for ${it.first} (${it.second})") }
         return result
     }
 
@@ -660,7 +663,19 @@ class KindleSync {
     private fun slug(title: String): String =
         title.trim().replace(Regex("[\\s　]+"), "_").replace(Regex("[\"'`]"), "").take(60)
 
-    private fun log(message: String) = println("[kindle-sync] $message")
+    /**
+     * Gradle does not forward a test's stdout, so every line this class
+     * printed died inside the build — including "tts failed for X", which is
+     * why a card with no recording had to be diagnosed from the absence of a
+     * file. The run's log is written next to its report instead.
+     */
+    private var logFile: File? = null
+
+    private fun log(message: String) {
+        val line = "[kindle-sync] $message"
+        println(line)
+        logFile?.runCatching { appendText(line + "\n") }
+    }
 
     /** The few AnkiConnect actions this needs. */
     private class AnkiConnect(private val endpoint: String) {
