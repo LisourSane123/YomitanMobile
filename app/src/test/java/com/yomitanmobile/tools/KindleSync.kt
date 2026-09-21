@@ -534,9 +534,14 @@ class KindleSync {
                         val pitch: String = "") {
             val changed get() = after.filter { (k, v) -> before[k] != v }.keys
         }
+        // Words the user asked to keep exactly as they are — a meaning written
+        // in English by hand is invisible to RefreshMerge's own test.
+        val excluded = System.getProperty("kindle.refreshExclude").orEmpty()
+            .split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         val plans = notes.map { (id, current) ->
             val word = plain(current["Front"].orEmpty())
             val reading = plain(current["Reading"].orEmpty())
+            if (word in excluded) return@map Plan(id, word, reading, "EXCLUDED", current, current)
             val found = entries[word to reading] ?: if (reading.isEmpty()) {
                 entries.filterKeys { it.first == word }.values.flatten().takeIf { it.isNotEmpty() }
             } else null
@@ -584,7 +589,8 @@ class KindleSync {
                 .put("before", JSONObject(p.changed.associateWith { p.before[it].orEmpty() }))
                 .put("after", JSONObject(p.changed.associateWith { p.after[it].orEmpty() })))
         }.toString())
-        final.filter { it.status != "FOUND" }.forEach { log("skipped, not in the dictionary with its reading: ${it.word} (${it.reading})") }
+        final.filter { it.status == "NOT_IN_DICTIONARY" }.forEach { log("skipped, not in the dictionary with its reading: ${it.word} (${it.reading})") }
+        final.filter { it.status == "EXCLUDED" }.forEach { log("excluded on request: ${it.word}") }
         log("found ${final.count { it.status == "FOUND" }}, not in dictionary ${final.count { it.status != "FOUND" }}")
         log("would change ${toWrite.size} notes; fields: $fieldCounts")
         log("frequency labels: $labelsBefore before, $labelsAfter after")

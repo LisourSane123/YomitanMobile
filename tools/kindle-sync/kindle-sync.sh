@@ -28,6 +28,9 @@
 #               today, in place (review history kept): the Frequency rank, pitch,
 #               kanji breakdown, missing audio. With --dry-run it only reports,
 #               in refresh.tsv and refresh-sample.tsv. No Kindle needed.
+#   --exclude WORD
+#               with --refresh-cards: leave the note whose front is WORD
+#               exactly as it is (repeatable)
 #
 # Environment: KINDLE_SYNC_DICT (Jitendex zip), KINDLE_SYNC_FREQ (frequency
 # zip), KINDLE_SYNC_PITCH, KINDLE_SYNC_KANJI, KINDLE_SYNC_REPO (checkout of
@@ -45,6 +48,7 @@ SYNC=true
 REFRESH_AUDIO=false
 PULL_SETTINGS=false
 REFRESH_CARDS=false
+EXCLUDE=
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=true ;;
@@ -56,6 +60,7 @@ while [[ $# -gt 0 ]]; do
         --refresh-audio) REFRESH_AUDIO=true ;;
         --pull-settings) PULL_SETTINGS=true ;;
         --refresh-cards) REFRESH_CARDS=true ;;
+        --exclude) EXCLUDE="${EXCLUDE:+$EXCLUDE,}$2"; shift ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -280,6 +285,7 @@ if [[ "$REFRESH_CARDS" == true ]]; then
     pull_phone_settings || true
     (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync.refreshCards" --rerun \
         -Dkindle.refreshCards=true \
+        -Dkindle.refreshExclude="$EXCLUDE" \
         -Ddict.zip="$DICT" \
         -Dfreq.zip="$FREQ" \
         -Dpitch.zip="$PITCH" \
