@@ -28,6 +28,9 @@
 #               today, in place (review history kept): the Frequency rank, pitch,
 #               kanji breakdown, missing audio. With --dry-run it only reports,
 #               in refresh.tsv and refresh-sample.tsv. No Kindle needed.
+#   --restyle   rewrite the note type's CSS and templates to the current design
+#               with the phone's style, then apply AutoReorder; notes are not
+#               touched. With --dry-run it only writes old/new files to compare.
 #   --exclude WORD
 #               with --refresh-cards: leave the note whose front is WORD
 #               exactly as it is (repeatable)
@@ -48,6 +51,7 @@ SYNC=true
 REFRESH_AUDIO=false
 PULL_SETTINGS=false
 REFRESH_CARDS=false
+RESTYLE=false
 EXCLUDE=
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -60,6 +64,7 @@ while [[ $# -gt 0 ]]; do
         --refresh-audio) REFRESH_AUDIO=true ;;
         --pull-settings) PULL_SETTINGS=true ;;
         --refresh-cards) REFRESH_CARDS=true ;;
+        --restyle) RESTYLE=true ;;
         --exclude) EXCLUDE="${EXCLUDE:+$EXCLUDE,}$2"; shift ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
@@ -207,7 +212,7 @@ fi
 
 # --refresh-audio and --refresh-cards work on cards already in Anki: no Kindle,
 # no lookups.
-if [[ "$REFRESH_AUDIO" == false && "$REFRESH_CARDS" == false ]]; then
+if [[ "$REFRESH_AUDIO" == false && "$REFRESH_CARDS" == false && "$RESTYLE" == false ]]; then
     deadline=$((SECONDS + WAIT))
     until { [[ -n "$VOCAB" ]] && cp "$VOCAB" "$WORK/vocab.db"; } || copy_vocab; do
         if (( SECONDS >= deadline )); then
@@ -279,6 +284,28 @@ OUT="$STATE/last-run"
 mkdir -p "$OUT"
 rm -f "$OUT/summary.txt"
 
+if [[ "$RESTYLE" == true ]]; then
+    pull_phone_settings || true
+    (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync.restyle" --rerun \
+        -Dkindle.restyle=true \
+        -Dkindle.settings="$DATA/settings.json" \
+        -Dkindle.dryRun="$DRY_RUN" \
+        -Dkindle.sync="$SYNC" \
+        -Danki.reorderAddon="$REORDER_ADDON" \
+        -Danki.connect="$ANKI_CONNECT" \
+        -Dout.dir="$OUT") >&2 || true
+    [[ -f "$OUT/summary.txt" ]] || fail "zmiana wyglądu nie powiodła się, szczegóły w $OUT/run.log"
+    cat "$OUT/run.log" >&2
+    eval "$(tr ' ' '\n' < "$OUT/summary.txt" | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
+    if [[ "$dry_run" == true ]]; then
+        notify "Podgląd wyglądu gotowy: $OUT/restyle-*"
+    elif [[ "$verified" == true ]]; then
+        notify "Wykonano: nowy wygląd fiszek; przestawiono $reordered nowych kart (AutoReorder)."
+    else
+        fail "zapis wyglądu nie zgadza się z odczytem, szczegóły w $OUT/run.log"
+    fi
+    exit 0
+fi
 if [[ "$REFRESH_CARDS" == true ]]; then
     # The card style is part of what gets rebuilt, so take the phone's if it
     # is plugged in.

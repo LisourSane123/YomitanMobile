@@ -637,6 +637,83 @@ class KindleSync {
         )
     }
 
+    /**
+     * The note type's look brought up to what the app writes today: CSS and
+     * templates from [AnkiCardCreator.packageStyling] with the phone's style,
+     * the same call a new note type is created with. Notes are not touched;
+     * changing a template's text is not a schema change, so a normal sync
+     * carries it. Then AutoReorder's pass, because a refresh that turned tier
+     * labels into ranks leaves the new-card queue in the old order.
+     *
+     * ```
+     * tools/kindle-sync/kindle-sync.sh --restyle [--dry-run]
+     * ```
+     * The dry run writes the current and the new CSS/templates to the out dir.
+     */
+    @Test
+    fun restyle() = runBlocking {
+        Assume.assumeTrue("kindle-sync: pass -Dkindle.restyle=true", System.getProperty("kindle.restyle") == "true")
+        val dryRun = System.getProperty("kindle.dryRun")?.toBooleanStrictOrNull() ?: false
+        val sync = System.getProperty("kindle.sync")?.toBooleanStrictOrNull() ?: true
+        val outDir = File(System.getProperty("out.dir") ?: "build/kindle-sync").apply { mkdirs() }
+        logFile = File(outDir, "run.log").apply { writeText("") }
+        val anki = AnkiConnect(System.getProperty("anki.connect") ?: "http://127.0.0.1:8765")
+        val profile = CardProfile.JAPANESE
+        val model = profile.modelName
+
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val creator = AnkiCardCreator(context, LanguageSettings(context))
+        val (css, front, back) = creator.packageStyling(phoneStyle(anki))
+
+        val currentCss = (anki.call("modelStyling", JSONObject().put("modelName", model)) as JSONObject).optString("css")
+        val templates = anki.call("modelTemplates", JSONObject().put("modelName", model)) as JSONObject
+        check(templates.length() == 1) { "$model has ${templates.length()} templates, expected one" }
+        val cardName = templates.keys().next()
+        val current = templates.getJSONObject(cardName)
+        File(outDir, "restyle-current.css").writeText(currentCss)
+        File(outDir, "restyle-current-front.html").writeText(current.optString("Front"))
+        File(outDir, "restyle-current-back.html").writeText(current.optString("Back"))
+        File(outDir, "restyle-new.css").writeText(css)
+        File(outDir, "restyle-new-front.html").writeText(front)
+        File(outDir, "restyle-new-back.html").writeText(back)
+
+        // A template naming a field the type lacks prints "{{Field}}" on the card.
+        val fields = (anki.call("modelFieldNames", JSONObject().put("modelName", model)) as JSONArray)
+            .let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
+        val referenced = FIELD_REF.findAll(front + back).map { it.groupValues[1].substringAfterLast(':').trim() }
+            .filter { it.isNotEmpty() && it !in SPECIAL_FIELDS }.toSet()
+        val unknown = referenced - fields
+        check(unknown.isEmpty()) { "templates name fields $model does not have: $unknown" }
+
+        val cssChanged = css != currentCss
+        val frontChanged = front != current.optString("Front")
+        val backChanged = back != current.optString("Back")
+        log("css ${currentCss.length} → ${css.length} chars (${if (cssChanged) "changed" else "same"}), " +
+            "front ${if (frontChanged) "changed" else "same"}, back ${if (backChanged) "changed" else "same"}; " +
+            "fields referenced: ${referenced.sorted()}")
+
+        var verified = false
+        var reordered = -1
+        if (!dryRun) {
+            anki.call("updateModelStyling", JSONObject().put("model", JSONObject().put("name", model).put("css", css)))
+            anki.call("updateModelTemplates", JSONObject().put("model", JSONObject().put("name", model)
+                .put("templates", JSONObject().put(cardName, JSONObject().put("Front", front).put("Back", back)))))
+            val nowCss = (anki.call("modelStyling", JSONObject().put("modelName", model)) as JSONObject).optString("css")
+            val now = (anki.call("modelTemplates", JSONObject().put("modelName", model)) as JSONObject).getJSONObject(cardName)
+            verified = nowCss == css && now.optString("Front") == front && now.optString("Back") == back
+            log("written, read back ${if (verified) "equal" else "DIFFERENT"}")
+            reorderConfig()?.let { config ->
+                reordered = anki.reorder(config)
+                log("reorder (${config.search}, by ${config.field}): $reordered cards moved")
+            }
+        }
+        val syncedAfter = dryRun || !sync || runCatching { anki.call("sync") }.isSuccess
+        File(outDir, "summary.txt").writeText(
+            "css_changed=$cssChanged front_changed=$frontChanged back_changed=$backChanged " +
+                "verified=$verified reordered=$reordered synced_after=$syncedAfter dry_run=$dryRun\n"
+        )
+    }
+
     private fun plain(html: String): String = TAGS.replace(html.replace(Regex("\\[sound:[^]]*]"), ""), "")
         .replace("&nbsp;", " ").trim()
 
@@ -1083,6 +1160,10 @@ class KindleSync {
         val TAGS = Regex("<[^>]*>")
 
         val FONT = Regex("font-family: '([^']+)'")
+
+        /** `{{Field}}`, `{{#Field}}`, `{{/Field}}`, `{{^Field}}`, `{{furigana:Field}}`. */
+        val FIELD_REF = Regex("""\{\{[#/^]?([^}]+)}}""")
+        val SPECIAL_FIELDS = setOf("FrontSide", "Tags", "Type", "Deck", "Subdeck", "Card", "CardFlag", "CardID")
 
         /**
          * A run of text up to and including its sentence end. Whitespace ends
