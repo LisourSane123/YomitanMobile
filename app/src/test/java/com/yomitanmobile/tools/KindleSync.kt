@@ -175,6 +175,7 @@ class KindleSync {
         // blind is the surprise this is meant to prevent.
         val sync = System.getProperty("kindle.sync")?.toBooleanStrictOrNull() ?: true
         if (sync && !dryRun) {
+            progress("Synchronizuję z AnkiWeb, żeby sprawdzić, co już masz…")
             anki.call("sync")
             log("synced before adding")
         }
@@ -218,6 +219,10 @@ class KindleSync {
         val summary = report.lineSequence().drop(1).filter { it.isNotBlank() }
             .groupingBy { it.split('\t')[1] }.eachCount()
         log("plan: $summary")
+        progress(
+            "Z ${lookups.size} wyszukań: ${toAdd.size} nowych słów, ${summary["IN_ANKI"] ?: 0} już w Anki" +
+                if (toAdd.isEmpty()) "." else " — tworzę fiszki…"
+        )
 
         // ---- 6. cards ---------------------------------------------------------
         val context: Context = ApplicationProvider.getApplicationContext()
@@ -242,6 +247,7 @@ class KindleSync {
             )
         }
 
+        if (!dryRun && toAdd.isNotEmpty()) progress("Nagrywam wymowę dla ${toAdd.size} słów…")
         val audio = if (dryRun) emptyMap() else speak(
             toAdd.values.map { (entry, _) -> Spoken(entry.primaryExpression, entry.reading, entry.pitchAccent) },
             outDir
@@ -267,6 +273,7 @@ class KindleSync {
         if (dryRun || notes.isEmpty()) {
             log(if (dryRun) "dry run: ${notes.size} cards would be added to $deck" else "nothing new")
         } else {
+            progress("Dodaję ${notes.size} fiszek do talii $deck…")
             val (css, front, back) = creator.packageStyling(style)
             val model = anki.ensureModel(profile, css, front, back)
             anki.ensureDeck(deck)
@@ -301,6 +308,7 @@ class KindleSync {
                 val covered = anki.countCards("\"deck:$deck\" is:new (${config.search})")
                 reorderCovers = (mine > 0 && covered == mine).toString()
                 if (reorderCovers == "true") {
+                    progress("Układam kolejność nowych kart (AutoReorder)…")
                     reordered = anki.reorder(config)
                     log("reorder (${config.search}, by ${config.field}): $reordered cards moved")
                 } else {
@@ -314,6 +322,7 @@ class KindleSync {
                 }
             }
             if (sync) {
+                progress("Synchronizuję z AnkiWeb…")
                 syncedAfter = runCatching { anki.call("sync") }
                     .onFailure { log("sync after adding failed: ${it.message}") }
                     .isSuccess
@@ -1011,6 +1020,25 @@ class KindleSync {
      * file. The run's log is written next to its report instead.
      */
     private var logFile: File? = null
+
+    /**
+     * A step of the run, in the log and in the desktop notification
+     * kindle-sync.sh opened for it (`-Dkindle.notifyFile` holds its id), so
+     * the one bubble on screen keeps saying what is happening.
+     */
+    private fun progress(message: String) {
+        log(message)
+        val file = System.getProperty("kindle.notifyFile").orEmpty().takeIf { it.isNotEmpty() }?.let(::File) ?: return
+        runCatching {
+            val id = file.takeIf { it.isFile }?.readText()?.trim().orEmpty()
+            val command = mutableListOf("notify-send", "-a", "Kindle → Anki", "-p")
+            if (id.isNotEmpty()) command += listOf("-r", id)
+            command += listOf("Kindle → Anki", message)
+            val process = ProcessBuilder(command).redirectErrorStream(true).start()
+            val printed = process.inputStream.bufferedReader().readText().trim()
+            if (process.waitFor() == 0 && printed.all { it.isDigit() } && printed.isNotEmpty()) file.writeText(printed)
+        }
+    }
 
     private fun log(message: String) {
         val line = "[kindle-sync] $message"

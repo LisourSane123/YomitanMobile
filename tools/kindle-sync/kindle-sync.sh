@@ -90,9 +90,23 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 log() { echo "[kindle-sync] $*" >&2; }
-notify() { command -v notify-send >/dev/null && notify-send -a "Kindle → Anki" "Kindle → Anki" "$1" || true; }
-# The one message a run ends with, success or not — the service is silent
-# otherwise.
+# One desktop notification per run, rewritten in place at every step — the
+# Kindle is plugged in and nothing on it says what the laptop is doing, so the
+# bubble does: Kindle found, words read, cards made, synced. Its id lives in
+# the run's work dir, where the Kotlin half (-Dkindle.notifyFile) finds it and
+# keeps writing into the same bubble.
+NOTIFY_ID_FILE="$WORK/notify.id"
+notify() {
+    command -v notify-send >/dev/null || return 0
+    local id
+    id="$(cat "$NOTIFY_ID_FILE" 2>/dev/null || true)"
+    id="$(notify-send -a "Kindle → Anki" -p ${id:+-r "$id"} "Kindle → Anki" "$1" 2>/dev/null)" &&
+        echo "$id" > "$NOTIFY_ID_FILE"
+    return 0
+}
+# A step along the way: in the log and in the bubble.
+progress() { log "$1"; notify "$1"; }
+# The message a run ends with when it fails.
 fail() { log "$1"; notify "Nie wykonano: $1"; exit 1; }
 
 # ---- 1. find the Kindle and copy vocab.db --------------------------------
@@ -213,6 +227,11 @@ fi
 # --refresh-audio and --refresh-cards work on cards already in Anki: no Kindle,
 # no lookups.
 if [[ "$REFRESH_AUDIO" == false && "$REFRESH_CARDS" == false && "$RESTYLE" == false ]]; then
+    if [[ -n "$VOCAB" ]]; then
+        progress "Czytam słówka z pliku $(basename "$VOCAB")…"
+    else
+        progress "Wykryto Kindle — odczytuję słówka z Vocabulary Buildera…"
+    fi
     deadline=$((SECONDS + WAIT))
     until { [[ -n "$VOCAB" ]] && cp "$VOCAB" "$WORK/vocab.db"; } || copy_vocab; do
         if (( SECONDS >= deadline )); then
@@ -244,6 +263,9 @@ if [[ "$REFRESH_AUDIO" == false && "$REFRESH_CARDS" == false && "$RESTYLE" == fa
         ORDER BY l.timestamp;" > "$WORK/lookups.tsv"
     COUNT=$(wc -l < "$WORK/lookups.tsv")
     log "$COUNT new lookups since $SINCE"
+    if (( COUNT > 0 )); then
+        progress "Odczytano słówka: $COUNT nowych wyszukań od ostatniego razu."
+    fi
     if (( COUNT == 0 )); then
         notify "Wykonano: brak nowych słów w Vocabulary Builderze."
         exit 0
@@ -261,7 +283,7 @@ fi
 # ---- 3. Anki must be answering ---------------------------------------------
 if ! curl -s -m 3 "$ANKI_CONNECT" -d '{"action":"version","version":6}' | grep -q '"result"'; then
     if command -v anki >/dev/null && ! pgrep -x anki >/dev/null && ! pgrep -f '/usr/bin/anki' >/dev/null; then
-        log "starting Anki"
+        progress "Uruchamiam Anki…"
         (setsid anki >/dev/null 2>&1 &)
     fi
     for _ in $(seq 1 40); do
@@ -327,7 +349,7 @@ if [[ "$REFRESH_CARDS" == true ]]; then
         -Dout.dir="$OUT") >&2 || true
     [[ -f "$OUT/summary.txt" ]] || fail "odświeżanie fiszek nie powiodło się, szczegóły w $OUT/run.log"
     log "$(cat "$OUT/summary.txt")"
-    grep -E "not updated|verify failed|no recording|failed" "$OUT/run.log" 2>/dev/null | while IFS= read -r line; do log "$line"; done
+    grep -E "not updated|verify failed|no recording|failed" "$OUT/run.log" 2>/dev/null | while IFS= read -r line; do log "$line"; done || true
     eval "$(tr ' ' '\n' < "$OUT/summary.txt" | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
     if [[ "$dry_run" == true ]]; then
         notify "Podgląd: $to_change z $notes fiszek do odświeżenia ($not_found pominiętych). Raport: $OUT/refresh.tsv"
@@ -357,6 +379,7 @@ if [[ "$REFRESH_AUDIO" == true ]]; then
 fi
 (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync" --rerun \
     -Dkindle.lookups="$WORK/lookups.tsv" \
+    -Dkindle.notifyFile="$NOTIFY_ID_FILE" \
     -Ddict.zip="$DICT" \
     -Dfreq.zip="$FREQ" \
     -Dpitch.zip="$PITCH" \
@@ -380,10 +403,12 @@ log "$SUMMARY"
 log "report: $OUT/kindle-sync.tsv"
 # What the pipeline itself said. Gradle swallows a test's stdout, so this file
 # is the only place a per-word failure (a word the voice refused, a note Anki
-# would not take) is ever written down.
+# would not take) is ever written down. `|| true`: a clean run has nothing to
+# find, grep then exits 1, and under `set -eo pipefail` that ended the script
+# right here — before the last-run marker and the closing notification.
 grep -E "not added|no recording|tts failed|not reordering|failed|duplicate after sync" "$OUT/run.log" 2>/dev/null | while IFS= read -r line; do
     log "$line"
-done
+done || true
 eval "$(echo "$SUMMARY" | tr ' ' '\n' | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
 
 # The marker moves only when the lookups were really dealt with: cards were
@@ -397,6 +422,9 @@ elif [[ "$DRY_RUN" == false ]]; then
     log "marker not moved: $new cards planned, $added added — the run repeats next time"
 fi
 MESSAGE="Wykonano: $added nowych fiszek w talii $DECK ($lookups wyszukań, $in_anki już było w Anki)."
+if [[ "$DRY_RUN" == true ]]; then
+    MESSAGE="Podgląd (nic nie dodano): $new nowych fiszek do dodania ($lookups wyszukań, $in_anki już w Anki)."
+fi
 if [[ "$DRY_RUN" == false ]] && (( added == 0 && new > 0 )); then
     MESSAGE="Nie wykonano: $new fiszek do dodania, żadna nie weszła — spróbuję ponownie przy następnym podłączeniu."
 fi
