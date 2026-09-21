@@ -11,16 +11,14 @@ LOCK="${XDG_RUNTIME_DIR:-/tmp}/kindle-sync.lock"
 
 # Amazon/Lab126. The same id the udev events carry.
 VENDOR=1949
-# The deck the cards land in. It has to sit inside AutoReorder's
-# `search_to_sort` (`deck:Japanese is:new`) or the new cards are never put in
-# frequency order — kindle-sync.sh says so in the notification when it does
-# not. Drop the flag to use the script's default (Japanese) once the test deck
-# has served its purpose.
-DECK=Japanese::kindle_test
 
+# The cards go to kindle-sync.sh's default deck, Japanese — the one
+# AutoReorder sorts (`deck:Japanese is:new`), so they arrive in frequency
+# order. A deck outside that search would never be ordered; kindle-sync.sh
+# says so in the notification if it ever is.
 run() {
     # flock -n: a second plug event while a run is going is dropped.
-    flock -n "$LOCK" "$HERE/kindle-sync.sh" --wait 90 --deck "$DECK" &
+    flock -n "$LOCK" "$HERE/kindle-sync.sh" --wait 90 &
 }
 
 # A Kindle already plugged in when the service starts — after a reboot with the

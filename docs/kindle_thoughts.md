@@ -2,7 +2,7 @@
 
 Notatki projektowe.
 
-**Stan (2026-09-20): działa; talia testowa `Japanese::kindle_test`, docelowo `Japanese` (domyślna w skrypcie). Talia musi leżeć wewnątrz wyszukiwania AutoReordera, inaczej nowe karty nigdy nie zostaną ułożone wg częstości.**
+**Stan (2026-09-21): działa na docelowej talii `Japanese` (domyślna w skrypcie; testy szły do `Japanese::kindle_test`). Talia musi leżeć wewnątrz wyszukiwania AutoReordera, inaczej nowe karty nigdy nie zostaną ułożone wg częstości.**
 
 - `tools/kindle-sync/kindle-sync.sh`: wykrywa Kindle, kopiuje `vocab.db`, zrzuca nowe lookupy do TSV, sprawdza, czy działa AnkiConnect (w razie potrzeby uruchamia Anki), wysyła powiadomienie.
 - `app/src/test/.../tools/KindleSync.kt`: cała logika na kodzie apki (deconjugator, `ScanEntryResolver`, `AnkiNoteFieldIndexer` na całej kolekcji desktopowej, `AnkiCardCreator.createAnkiCard`). Działa tak jak `BookScanHarness`, czyli jako test Gradle z `-D…`, pod Robolectrikiem, bo `AnkiCardCreator` wymaga `Context`. Moduł `:core` (sekcja 1) nadal jest do zrobienia. Obecny sposób omija go bez kopiowania reguł.
