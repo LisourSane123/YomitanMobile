@@ -164,7 +164,14 @@ pull_phone_settings() {
         return 1
     fi
     if ! "$adb" get-state >/dev/null 2>&1; then
-        log "phone settings: no phone over adb, keeping $([[ -f "$DATA/settings.json" ]] && echo "the last pull" || echo "none")"
+        # A plugged-in phone that has not accepted this computer yet is listed
+        # as "unauthorized" — a different fix from "not plugged in", and the
+        # one people hit first.
+        if "$adb" devices 2>/dev/null | grep -q "unauthorized"; then
+            log "phone settings: the phone is plugged in but has not allowed USB debugging — accept the prompt on its screen"
+        else
+            log "phone settings: no phone over adb, keeping $([[ -f "$DATA/settings.json" ]] && echo "the last pull" || echo "none")"
+        fi
         return 1
     fi
     backups=/sdcard/Android/data/com.yomitanmobile/files/yomitan_backups
