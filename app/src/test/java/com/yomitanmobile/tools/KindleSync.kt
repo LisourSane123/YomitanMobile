@@ -263,6 +263,7 @@ class KindleSync {
         }
 
         var addedCount = 0
+        val addedNotes = ArrayList<Note>()
         if (dryRun || notes.isEmpty()) {
             log(if (dryRun) "dry run: ${notes.size} cards would be added to $deck" else "nothing new")
         } else {
@@ -273,7 +274,12 @@ class KindleSync {
             for (note in notes) {
                 note.recording?.let { anki.storeMedia(it) }
                 val error = anki.addNote(deck, model, note.fields, note.tags)
-                if (error == null) added++ else log("not added: ${note.word} — $error")
+                if (error == null) {
+                    added++
+                    addedNotes += note
+                } else {
+                    log("not added: ${note.word} — $error")
+                }
             }
             log("added $added of ${notes.size} cards to $deck (note type $model)")
             addedCount = added
@@ -314,13 +320,26 @@ class KindleSync {
             }
         }
 
+        // The duplicate check above ran against the collection as it was
+        // after the FIRST sync. A word the phone mined and sent in the
+        // meantime arrives with the second one, and only now can the two be
+        // seen side by side. Reported, never deleted: both cards may already
+        // be on the phone, and which one to keep is the user's call.
+        val duplicatesAfter = if (!dryRun && sync && syncedAfter && addedNotes.isNotEmpty()) {
+            anki.duplicatesOf(addedNotes.map { it.word to plain(it.fields["Reading"].orEmpty()) })
+                .onEach { log("duplicate after sync: $it — the phone added it during this run") }
+        } else {
+            emptyList()
+        }
+
         val file = File(outDir, "kindle-sync.tsv")
         file.writeText(report.toString())
         // A single line the shell wrapper turns into the desktop notification.
         File(outDir, "summary.txt").writeText(
             "lookups=${lookups.size} new=${notes.size} added=$addedCount in_anki=${summary["IN_ANKI"] ?: 0} " +
                 "not_found=${summary["NOT_IN_DICTIONARY"] ?: 0} reordered=$reordered " +
-                "reorder_covers=$reorderCovers synced_after=$syncedAfter dry_run=$dryRun\n"
+                "reorder_covers=$reorderCovers synced_after=$syncedAfter " +
+                "duplicates_after=${duplicatesAfter.size} dry_run=$dryRun\n"
         )
         log("report written to ${file.absolutePath}")
         println(report)
@@ -718,6 +737,36 @@ class KindleSync {
         .replace("&nbsp;", " ").trim()
 
     /**
+     * Read-only: which notes matching an Anki search have a word some OTHER
+     * note holds too — the same rule the post-sync check uses.
+     *
+     * ```
+     * ./gradlew :app:testDebugUnitTest --tests "*KindleSync.checkDuplicates" \
+     *   -Dkindle.checkDuplicates='tag:from_kindle'
+     * ```
+     */
+    @Test
+    fun checkDuplicates() {
+        val query = System.getProperty("kindle.checkDuplicates").orEmpty()
+        Assume.assumeTrue("kindle-sync: pass -Dkindle.checkDuplicates=<anki search>", query.isNotEmpty())
+        val outDir = File(System.getProperty("out.dir") ?: "build/kindle-sync").apply { mkdirs() }
+        logFile = File(outDir, "run.log").apply { writeText("") }
+        val anki = AnkiConnect(System.getProperty("anki.connect") ?: "http://127.0.0.1:8765")
+        val ids = anki.call("findNotes", JSONObject().put("query", query)) as JSONArray
+        val words = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).flatMap { chunk ->
+            val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk))) as JSONArray
+            (0 until infos.length()).map { i ->
+                val fields = infos.getJSONObject(i).getJSONObject("fields")
+                plain(fields.optJSONObject("Front")?.optString("value").orEmpty()) to
+                    plain(fields.optJSONObject("Reading")?.optString("value").orEmpty())
+            }
+        }.distinct()
+        val duplicates = anki.duplicatesOf(words)
+        log("checked ${words.size} words matching '$query': ${duplicates.size} held by more than one note ${duplicates}")
+        File(outDir, "summary.txt").writeText("checked=${words.size} duplicates=${duplicates.size}\n")
+    }
+
+    /**
      * Pitch positions by written form, as DictionaryDao's updatePitchAccent
      * stores them on the phone.
      */
@@ -1104,6 +1153,30 @@ class KindleSync {
                 call("multi", JSONObject().put("actions", actions))
             }
             return sorted.withIndex().count { (position, card) -> card.due != position.toLong() }
+        }
+
+        /**
+         * The words among [words] that more than one note now holds, by the
+         * rule every duplicate check here uses: a whole field, indexed by
+         * [AnkiNoteFieldIndexer], found through the same search the phone's
+         * live check runs.
+         */
+        fun duplicatesOf(words: List<Pair<String, String>>): List<String> = words.mapNotNull { (word, reading) ->
+            val search = AnkiCollectionIndex.liveSearch(listOf(word), reading) ?: return@mapNotNull null
+            val ids = call("findNotes", JSONObject().put("query", search)) as JSONArray
+            val key = AnkiNoteFieldIndexer.normalizeKey(word)
+            val holding = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).sumOf { chunk ->
+                val infos = call("notesInfo", JSONObject().put("notes", JSONArray(chunk))) as JSONArray
+                (0 until infos.length()).count { i ->
+                    val fields = infos.getJSONObject(i).optJSONObject("fields") ?: return@count false
+                    val ordered = fields.keys().asSequence().map { fields.getJSONObject(it) }
+                        .sortedBy { it.optInt("order") }.joinToString("\u001f") { it.optString("value") }
+                    val keys = HashSet<String>()
+                    AnkiNoteFieldIndexer.collectKeysFromNote(ordered, keys)
+                    key in keys
+                }
+            }
+            word.takeIf { holding > 1 }
         }
 
         /** How many cards a search matches. */

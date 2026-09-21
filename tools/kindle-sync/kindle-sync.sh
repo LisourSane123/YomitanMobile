@@ -381,7 +381,7 @@ log "report: $OUT/kindle-sync.tsv"
 # What the pipeline itself said. Gradle swallows a test's stdout, so this file
 # is the only place a per-word failure (a word the voice refused, a note Anki
 # would not take) is ever written down.
-grep -E "not added|no recording|tts failed|not reordering|failed" "$OUT/run.log" 2>/dev/null | while IFS= read -r line; do
+grep -E "not added|no recording|tts failed|not reordering|failed|duplicate after sync" "$OUT/run.log" 2>/dev/null | while IFS= read -r line; do
     log "$line"
 done
 eval "$(echo "$SUMMARY" | tr ' ' '\n' | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
@@ -401,6 +401,9 @@ if [[ "$DRY_RUN" == false ]] && (( added == 0 && new > 0 )); then
     MESSAGE="Nie wykonano: $new fiszek do dodania, żadna nie weszła — spróbuję ponownie przy następnym podłączeniu."
 fi
 if [[ "$reordered" != "-1" ]]; then MESSAGE+=" Kolejność ustawiona (AutoReorder)."; fi
+if [[ "${duplicates_after:-0}" != "0" ]]; then
+    MESSAGE+=" UWAGA: $duplicates_after słów jest teraz w Anki dwa razy — telefon dodał je w trakcie; lista w $OUT/run.log."
+fi
 if [[ "$reorder_covers" == "false" ]]; then
     MESSAGE+=" UWAGA: AutoReorder nie obejmuje talii $DECK — nowe fiszki nie są ułożone wg częstości."
 fi

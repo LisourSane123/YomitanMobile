@@ -239,6 +239,9 @@ class TextScanViewModel @Inject constructor(
                 }
 
                 _analysisStage.value = STAGE_COMPARING
+                // A fresh scan, not the stored one: see JlptDeckViewModel —
+                // a stale copy recreates every card added since it was taken.
+                ankiCollectionStore.refresh()
                 val index = ankiCollectionStore.asIndex()
                 ankiScanUnavailable = !index.available
                 ankiIndex = index

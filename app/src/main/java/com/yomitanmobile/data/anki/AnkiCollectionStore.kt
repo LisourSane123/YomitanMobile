@@ -214,6 +214,23 @@ class AnkiCollectionStore @Inject constructor(
             .containsAny(expressions, reading, readingCountsAlone)
     }
 
+    /**
+     * The check to run right before writing ONE card: AnkiDroid asked
+     * directly ([AnkiCollectionIndex.liveContainsAny]), the stored copy only
+     * when it cannot answer.
+     *
+     * [containsAny] alone is only as current as the last scan, and an empty
+     * store answers "no" to everything — so after a reinstall, before a first
+     * scan, or for a card added since from another device, mining let the word
+     * through a second time. The live question costs one provider query.
+     */
+    suspend fun containsAnyNow(
+        expressions: List<String>,
+        reading: String,
+        readingCountsAlone: Boolean = false
+    ): Boolean = index.liveContainsAny(expressions, reading, readingCountsAlone)
+        ?: containsAny(expressions, reading, readingCountsAlone)
+
     /** Non-suspending variant for callers that already loaded the set. */
     suspend fun asIndex(): AnkiCollectionIndex.Index {
         val words = words()

@@ -255,13 +255,17 @@ class JlptDeckViewModel @Inject constructor(
                 val filters = _filters.value
                 val candidates = collectCandidates(level)
 
-                // Read the stored scan rather than sweeping the collection
-                // again: the scan screen owns that (it needs the permission
-                // prompt and takes seconds), and reusing its result means the
-                // generator and the mining screen agree on what "already have
-                // it" means. An empty store degrades to "not checked", which
-                // the plan reports — never to silently skipping nothing.
+                // Rescan first. The stored copy is only as current as the
+                // last time someone ran the scan screen, and a deck generated
+                // against a stale one recreates every card added since — from
+                // the phone's mining, the Kindle tool, another device. A
+                // generator writes into the collection, so it has the
+                // permission a scan needs, and a few seconds is nothing next
+                // to a deck of duplicates. A scan AnkiDroid refuses keeps the
+                // previous result, and an empty store still degrades to "not
+                // checked", which the plan reports.
                 val index = if (filters.skipAlreadyInAnki) {
+                    ankiCollectionStore.refresh()
                     ankiCollectionStore.asIndex()
                 } else {
                     AnkiCollectionIndex.Index.EMPTY

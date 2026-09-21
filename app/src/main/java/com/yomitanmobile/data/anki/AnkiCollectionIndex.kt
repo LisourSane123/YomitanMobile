@@ -190,6 +190,41 @@ class AnkiCollectionIndex @Inject constructor(
     }
 
     /**
+     * Whether AnkiDroid holds a note for this word RIGHT NOW — asked of the
+     * collection itself, not of the stored scan.
+     *
+     * The stored scan is only as current as the last time the user ran it,
+     * and an empty one means "not checked": after a reinstall, before the first
+     * scan, or for a card added since (from another device, from the desktop,
+     * by hand) mining let the word through, and one real collection ended up
+     * with seven words mined twice. A single word is cheap to ask about
+     * directly: [liveSearch] fetches the few notes that could hold it, and the
+     * same [AnkiNoteFieldIndexer] + [Index.containsAny] the full scan uses
+     * decides, so "a duplicate" means exactly what it means everywhere else.
+     *
+     * @return true / false when AnkiDroid answered; null when it could not
+     * (no permission, a search the provider rejected, or a candidate set too
+     * large to be sure of an absence) — the caller then falls back to the
+     * stored scan rather than to "no duplicate".
+     */
+    suspend fun liveContainsAny(
+        expressions: List<String>,
+        reading: String,
+        readingCountsAlone: Boolean = false
+    ): Boolean? = withContext(Dispatchers.IO) {
+        if (!hasPermission()) return@withContext null
+        val search = liveSearch(expressions, reading) ?: return@withContext null
+        val scan = scanNotes(search, LIVE_MAX_NOTES) ?: return@withContext null
+        val found = scan.index.containsAny(expressions, reading, readingCountsAlone)
+        when {
+            found -> true
+            // A cut-off sweep can prove presence, never absence.
+            scan.truncated -> null
+            else -> false
+        }
+    }
+
+    /**
      * The words whose cards are MATURE — interval of three weeks or more, and
      * not suspended.
      *
@@ -337,18 +372,63 @@ class AnkiCollectionIndex @Inject constructor(
         return listOfNotNull(deckSearch, ALL_NOTES_SEARCH, "", null)
     }
 
-    private companion object {
-        const val TAG = "AnkiCollectionIndex"
+    companion object {
+        private const val TAG = "AnkiCollectionIndex"
+
+        /**
+         * A live check reads at most this many notes. A word common enough to
+         * appear in more (a one-kana particle in every example sentence) gets
+         * a null answer instead of a guess.
+         */
+        private const val LIVE_MAX_NOTES = 5_000
+
+        /**
+         * The Anki search [liveContainsAny] runs, or null when there is
+         * nothing to search for.
+         *
+         * Anki's search matches raw field text, and a deck may hold the word
+         * as ruby — 持[も]って 来[く]る — where "持って来る" is not a
+         * substring. So a spelling with kanji is searched as its kanji, each
+         * required (`("持" "来")`), which every ruby and plain form of it
+         * contains; a kana spelling, and the reading, as themselves. The
+         * indexer then decides on whole fields, so the breadth only costs a
+         * few more notes read.
+         */
+        internal fun liveSearch(expressions: List<String>, reading: String): String? {
+            val clauses = LinkedHashSet<String>()
+            for (raw in expressions + reading) {
+                val word = AnkiNoteFieldIndexer.normalizeKey(raw)
+                if (word.isEmpty()) continue
+                val kanji = word.filter { AnkiNoteFieldIndexer.isKanji(it) }.toSet()
+                clauses += if (kanji.isEmpty()) {
+                    quote(word)
+                } else {
+                    kanji.joinToString(" ", prefix = "(", postfix = ")") { quote(it.toString()) }
+                }
+            }
+            return clauses.takeIf { it.isNotEmpty() }?.joinToString(" OR ")
+        }
+
+        /** An Anki search term matching [text] literally anywhere in a field. */
+        private fun quote(text: String): String {
+            // Inside quotes Anki still reads * and _ as wildcards and \ as an
+            // escape; a dictionary word never contains them, but a stray one
+            // must not widen the search.
+            val escaped = text.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("*", "\\*").replace("_", "\\_")
+            return "\"$escaped\""
+        }
+
         /** Anki search that matches every note in the collection. */
-        const val ALL_NOTES_SEARCH = "deck:*"
+        private const val ALL_NOTES_SEARCH = "deck:*"
 
         /**
          * Anki's own definition of a mature card: an interval of 21 days or
          * more. Suspended cards are excluded — a suspended card is one the
          * user took out of rotation, whatever its interval says.
          */
-        const val MATURE_SEARCH = "prop:ivl>=21 -is:suspended"
+        private const val MATURE_SEARCH = "prop:ivl>=21 -is:suspended"
         /** Safety valve for very large collections. */
-        const val MAX_NOTES = 200_000
+        private const val MAX_NOTES = 200_000
     }
 }

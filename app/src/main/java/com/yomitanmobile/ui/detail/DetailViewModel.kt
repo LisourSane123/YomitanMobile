@@ -649,11 +649,11 @@ class DetailViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Second guard: a card may exist in AnkiDroid without ever
-                // passing through this app (Core, Kaishi, an older setup). The
-                // stored collection scan knows about those; an empty store just
-                // means "not scanned" and lets the export through.
-                if (isInScannedCollection(safeExpression, safeReading)) {
+                // Second guard, and the one that decides: a card may exist
+                // in AnkiDroid without ever passing through this app (Core,
+                // Kaishi, the Kindle tool, another deck, a reinstall that
+                // emptied exported_words). AnkiDroid is asked directly.
+                if (isInCollection(safeExpression, safeReading)) {
                     _events.emit(DetailEvent.AlreadyInCollection(safeExpression))
                     return@launch
                 }
@@ -719,11 +719,11 @@ class DetailViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Second guard: a card may exist in AnkiDroid without ever
-                // passing through this app (Core, Kaishi, an older setup). The
-                // stored collection scan knows about those; an empty store just
-                // means "not scanned" and lets the export through.
-                if (isInScannedCollection(safeExpression, safeReading)) {
+                // Second guard, and the one that decides: a card may exist
+                // in AnkiDroid without ever passing through this app (Core,
+                // Kaishi, the Kindle tool, another deck, a reinstall that
+                // emptied exported_words). AnkiDroid is asked directly.
+                if (isInCollection(safeExpression, safeReading)) {
                     _events.emit(DetailEvent.AlreadyInCollection(safeExpression))
                     return@launch
                 }
@@ -745,7 +745,7 @@ class DetailViewModel @Inject constructor(
         return reading.trim().ifBlank { expression.trim() }
     }
 
-    private suspend fun isInScannedCollection(expression: String, reading: String): Boolean =
+    private suspend fun isInCollection(expression: String, reading: String): Boolean =
         runCatching {
             // Same rule as the bulk generators: for a word normally written in
             // kana the reading identifies it, because that is the form a deck
@@ -758,7 +758,7 @@ class DetailViewModel @Inject constructor(
             // 持ってくる holds the card the user would otherwise mine again as
             // 持って来る.
             val spellings = listOf(expression) + entry?.alternativeExpressions.orEmpty()
-            ankiCollectionStore.containsAny(spellings, reading, usuallyKana)
+            ankiCollectionStore.containsAnyNow(spellings, reading, usuallyKana)
         }
             .getOrElse {
                 Log.w(logTag, "Collection duplicate check failed; allowing the export", it)
@@ -928,6 +928,13 @@ class DetailViewModel @Inject constructor(
                     }.onFailure { exception ->
                         Log.e(logTag, "Failed to persist export metadata", exception)
                     }
+                    // The stored scan is what the bulk generators read; it
+                    // has to know about a mined word too, or the next deck
+                    // generated offers it again.
+                    ankiCollectionStore.addWords(
+                        listOf(safeExpression, safeReading).filter { it.isNotBlank() },
+                        source = MINED_SOURCE
+                    )
 
                     _events.emit(DetailEvent.AnkiExportSuccess(noteId))
                 },
@@ -952,5 +959,10 @@ class DetailViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         audioPlayer.stopPlayback()
+    }
+
+    private companion object {
+        /** How a mined word is labelled in the stored scan, which lists where each word came from. */
+        const val MINED_SOURCE = "Yomitan Mobile (wydobyte)"
     }
 }
