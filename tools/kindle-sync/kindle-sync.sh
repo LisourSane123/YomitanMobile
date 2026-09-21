@@ -23,6 +23,11 @@
 #               current voice, in place (review history kept); no Kindle needed
 #   --pull-settings
 #               only copy the phone's card style over adb and exit (see below)
+#   --refresh-cards
+#               bring every Yomitan-Mobile-v8 note up to what the app writes
+#               today, in place (review history kept): the Frequency rank, pitch,
+#               kanji breakdown, missing audio. With --dry-run it only reports,
+#               in refresh.tsv and refresh-sample.tsv. No Kindle needed.
 #
 # Environment: KINDLE_SYNC_DICT (Jitendex zip), KINDLE_SYNC_FREQ (frequency
 # zip), KINDLE_SYNC_PITCH, KINDLE_SYNC_KANJI, KINDLE_SYNC_REPO (checkout of
@@ -39,6 +44,7 @@ VOCAB=
 SYNC=true
 REFRESH_AUDIO=false
 PULL_SETTINGS=false
+REFRESH_CARDS=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY_RUN=true ;;
@@ -49,6 +55,7 @@ while [[ $# -gt 0 ]]; do
         --no-sync) SYNC=false ;;
         --refresh-audio) REFRESH_AUDIO=true ;;
         --pull-settings) PULL_SETTINGS=true ;;
+        --refresh-cards) REFRESH_CARDS=true ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -186,8 +193,9 @@ if [[ "$PULL_SETTINGS" == true ]]; then
     exit 0
 fi
 
-# --refresh-audio works on cards already in Anki: no Kindle, no lookups.
-if [[ "$REFRESH_AUDIO" == false ]]; then
+# --refresh-audio and --refresh-cards work on cards already in Anki: no Kindle,
+# no lookups.
+if [[ "$REFRESH_AUDIO" == false && "$REFRESH_CARDS" == false ]]; then
     deadline=$((SECONDS + WAIT))
     until { [[ -n "$VOCAB" ]] && cp "$VOCAB" "$WORK/vocab.db"; } || copy_vocab; do
         if (( SECONDS >= deadline )); then
@@ -259,6 +267,37 @@ OUT="$STATE/last-run"
 mkdir -p "$OUT"
 rm -f "$OUT/summary.txt"
 
+if [[ "$REFRESH_CARDS" == true ]]; then
+    # The card style is part of what gets rebuilt, so take the phone's if it
+    # is plugged in.
+    pull_phone_settings || true
+    (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync.refreshCards" --rerun \
+        -Dkindle.refreshCards=true \
+        -Ddict.zip="$DICT" \
+        -Dfreq.zip="$FREQ" \
+        -Dpitch.zip="$PITCH" \
+        -Dkanji.zip="$KANJI" \
+        -Dkindle.settings="$DATA/settings.json" \
+        -Dvoicevox.root="$VOICEVOX" \
+        -Dvoicevox.onnxruntime="$VOICEVOX_RUNTIME" \
+        -Daudio.archive="$AUDIO_ARCHIVE" \
+        -Dkindle.dryRun="$DRY_RUN" \
+        -Dkindle.sync="$SYNC" \
+        -Danki.connect="$ANKI_CONNECT" \
+        -Dout.dir="$OUT") >&2 || true
+    [[ -f "$OUT/summary.txt" ]] || fail "odświeżanie fiszek nie powiodło się, szczegóły w $OUT/run.log"
+    log "$(cat "$OUT/summary.txt")"
+    grep -E "not updated|verify failed|no recording|failed" "$OUT/run.log" 2>/dev/null | while IFS= read -r line; do log "$line"; done
+    eval "$(tr ' ' '\n' < "$OUT/summary.txt" | grep -E '^[a-z_]+=-?[0-9a-z]+$')"
+    if [[ "$dry_run" == true ]]; then
+        notify "Podgląd: $to_change z $notes fiszek do odświeżenia ($not_found pominiętych). Raport: $OUT/refresh.tsv"
+    else
+        MESSAGE="Wykonano: odświeżono $updated z $to_change fiszek (sprawdzone: $verified)."
+        if [[ "$synced_after" != "true" ]]; then MESSAGE+=" UWAGA: synchronizacja nie przeszła — kliknij Sync w Anki."; fi
+        notify "$MESSAGE"
+    fi
+    exit 0
+fi
 if [[ "$REFRESH_AUDIO" == true ]]; then
     (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync.refreshAudio" --rerun \
         -Dkindle.refreshAudio=true \

@@ -99,10 +99,11 @@ class AnkiNoteRefresher @Inject constructor(
      *
      * Two rules keep it from destroying work the app cannot regenerate:
      *
-     *  • A field the rebuild leaves EMPTY keeps whatever the note already had.
-     *    The AI summary costs an API call per card and the front-context
-     *    sentence came out of a book the app no longer has; both would
-     *    otherwise be silently erased.
+     *  • The fields that belong to the note — the front's spelling and font,
+     *    the sentence the word was mined from, the AI summary — are kept
+     *    whenever they hold anything, and a field the rebuild leaves empty
+     *    keeps its old value. [RefreshMerge] has the rule and why "empty keeps
+     *    old" alone was not enough.
      *  • A note whose word is in no installed dictionary is left alone
      *    entirely, rather than rewritten from a blank entry.
      *
@@ -178,7 +179,7 @@ class AnkiNoteRefresher @Inject constructor(
     }
 
     /**
-     * The new value per field, falling back to what the note already held.
+     * The new value per field, by [RefreshMerge]'s rule.
      *
      * Indexed by the NOTE TYPE's field list, not ours: the array handed to the
      * provider has to be in that type's own order and length.
@@ -188,11 +189,12 @@ class AnkiNoteRefresher @Inject constructor(
         rebuilt: Array<String>,
         noteTypeFields: List<String>,
         profileFields: Array<String>
-    ): Array<String> = Array(noteTypeFields.size) { index ->
-        val name = noteTypeFields[index]
-        val ours = profileFields.indexOf(name)
-        val fresh = if (ours >= 0) rebuilt.getOrNull(ours).orEmpty() else ""
-        if (fresh.isNotBlank()) fresh else current.getOrNull(index).orEmpty()
+    ): Array<String> {
+        val currentByName = LinkedHashMap<String, String>()
+        noteTypeFields.forEachIndexed { index, name -> currentByName[name] = current.getOrNull(index).orEmpty() }
+        val rebuiltByName = profileFields.withIndex().associate { (index, name) -> name to rebuilt.getOrNull(index).orEmpty() }
+        val merged = RefreshMerge.merge(currentByName, rebuiltByName)
+        return Array(noteTypeFields.size) { index -> merged[noteTypeFields[index]].orEmpty() }
     }
 
     /** The dictionary entry behind a card's front, or null. */

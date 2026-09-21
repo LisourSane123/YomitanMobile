@@ -3,6 +3,7 @@ package com.yomitanmobile.tools
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yomitanmobile.data.anki.AnkiCardCreator
+import com.yomitanmobile.data.anki.RefreshMerge
 import com.yomitanmobile.data.audio.AudioKeys
 import com.yomitanmobile.data.audio.voicevox.VoicevoxAssets
 import com.yomitanmobile.data.audio.voicevox.VoicevoxSpeaker
@@ -144,47 +145,9 @@ class KindleSync {
 
         // ---- 3. dictionary + frequency, streamed from the zips --------------
         val parser = YomitanDictionaryParser()
-        // Pitch is keyed by the written form alone, as DictionaryDao's
-        // updatePitchAccent stores it on the phone.
-        val pitch = loadPitch(parser)
-        val ranks = HashMap<String, MutableList<Pair<String, Int>>>()
-        if (freqZip.isNotEmpty()) {
-            parser.parseFromZipStreaming(
-                inputStream = File(freqZip).inputStream().buffered(),
-                onBatch = { _, _ -> },
-                onMetaBatch = { updates: List<FrequencyUpdate>, _ ->
-                    for (u in updates) {
-                        if (u.frequency <= 0) continue
-                        ranks.getOrPut(u.expression) { ArrayList(2) }.add(u.reading.orEmpty() to u.frequency)
-                    }
-                }
-            )
-        }
-        fun rankOf(expression: String, reading: String): Int =
-            ranks[expression].orEmpty()
-                .filter { it.first.isEmpty() || it.first == reading }
-                .minOfOrNull { it.second } ?: 0
-
-        suspend fun collect(expressions: Set<String>, readings: Set<String>): List<WordEntry> {
-            val out = ArrayList<WordEntry>()
-            parser.parseFromZipStreaming(
-                inputStream = File(dictZip).inputStream().buffered(),
-                onBatch = { entries: List<DictionaryEntry>, _ ->
-                    for (entry in entries) {
-                        if (entry.expression !in expressions && entry.reading !in readings) continue
-                        // One list installed here, so it is the leading one:
-                        // its number is what the card's Frequency field carries.
-                        val rank = rankOf(entry.expression, entry.reading)
-                        val domain = entry.copy(frequency = rank).toDomain()
-                        out += domain.copy(
-                            frequencyValue = if (rank > 0) rank.toString() else "",
-                            pitchAccent = domain.pitchAccent.ifBlank { pitch[entry.expression].orEmpty() }
-                        )
-                    }
-                }
-            )
-            return out
-        }
+        val dictionary = Dictionary.load(parser, dictZip, freqZip, loadPitch(parser))
+        suspend fun collect(expressions: Set<String>, readings: Set<String>): List<WordEntry> =
+            dictionary.collect(expressions, readings)
         val firstPass = collect(needed, needed)
         val secondPass = HashMap<String, List<WordEntry>>()
         val resolved = ScanEntryResolver.resolve(
@@ -490,6 +453,188 @@ class KindleSync {
     }
 
     /**
+     * Brings every note of the current note type up to what the app writes
+     * today, in place: `updateNoteFields` keeps the note, its cards and their
+     * review history. What it is for is the collection the app's older
+     * versions left behind — a tier label ("★★★ Top 1K") where the Frequency
+     * field should hold a rank, no pitch diagram, no kanji breakdown.
+     *
+     * The field rule is [RefreshMerge]'s, the same one the phone's refresh
+     * uses: the front, the mined sentence and the AI summary are the note's and
+     * are kept; a label in Frequency is replaced by the rank, or cleared.
+     * A note whose word the dictionary does not list WITH ITS READING is left
+     * alone entirely — a homophone's definition is worse than an old card.
+     *
+     * The front-context slot is not filled on cards that never had one: a
+     * sentence appearing on the front of a card already in review changes the
+     * question it asks, which is not what a refresh is for.
+     *
+     * ```
+     * tools/kindle-sync/kindle-sync.sh --refresh-cards [--dry-run]
+     * ```
+     * A dry run writes `refresh.tsv` (every note, what would change) and
+     * `refresh-sample.tsv` (full before/after of a few notes) and touches nothing.
+     */
+    @Test
+    fun refreshCards() = runBlocking {
+        Assume.assumeTrue(
+            "kindle-sync: pass -Dkindle.refreshCards=true",
+            System.getProperty("kindle.refreshCards") == "true"
+        )
+        val dictZip = System.getProperty("dict.zip").orEmpty()
+        check(dictZip.isNotEmpty()) { "pass -Ddict.zip" }
+        val dryRun = System.getProperty("kindle.dryRun")?.toBooleanStrictOrNull() ?: false
+        val sync = System.getProperty("kindle.sync")?.toBooleanStrictOrNull() ?: true
+        val outDir = File(System.getProperty("out.dir") ?: "build/kindle-sync").apply { mkdirs() }
+        logFile = File(outDir, "run.log").apply { writeText("") }
+        val anki = AnkiConnect(System.getProperty("anki.connect") ?: "http://127.0.0.1:8765")
+        val profile = CardProfile.JAPANESE
+        if (sync && !dryRun) anki.call("sync")
+
+        // ---- the notes --------------------------------------------------------
+        val ids = anki.call("findNotes", JSONObject().put("query", "\"note:${profile.modelName}\"")) as JSONArray
+        val notes = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).flatMap { chunk ->
+            val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk))) as JSONArray
+            (0 until infos.length()).map { i ->
+                val info = infos.getJSONObject(i)
+                val fields = info.getJSONObject("fields")
+                val ordered = fields.keys().asSequence()
+                    .map { it to fields.getJSONObject(it) }
+                    .sortedBy { it.second.optInt("order") }
+                    .associateTo(LinkedHashMap()) { (name, f) -> name to f.optString("value") }
+                info.getLong("noteId") to ordered
+            }
+        }
+        log("notes: ${notes.size} of ${profile.modelName}")
+
+        // ---- their dictionary entries -----------------------------------------
+        val parser = YomitanDictionaryParser()
+        val dictionary = Dictionary.load(parser, dictZip, System.getProperty("freq.zip").orEmpty(), loadPitch(parser))
+        val words = notes.map { (_, f) -> plain(f["Front"].orEmpty()) }.filter { it.isNotEmpty() }.toSet()
+        val entries = dictionary.collect(words, emptySet()).groupBy { it.expression to it.reading }
+
+        val style = phoneStyle(anki).copy(showFrontContextSentence = false)
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val creator = AnkiCardCreator(context, LanguageSettings(context))
+
+        val kanjiWanted = words.flatMapTo(HashSet()) { w -> w.filter { JapaneseTokenizer.isKanji(it) }.map(Char::toString) }
+        val kanji = HashMap<String, KanjiEntry>()
+        System.getProperty("kanji.zip").orEmpty().takeIf { it.isNotEmpty() }?.let { zip ->
+            parser.parseFromZipStreaming(
+                inputStream = File(zip).inputStream().buffered(),
+                onBatch = { _, _ -> },
+                onKanjiBatch = { batch, _ -> batch.filter { it.kanji in kanjiWanted }.forEach { kanji[it.kanji] = it } }
+            )
+        }
+
+        // ---- decide ------------------------------------------------------------
+        data class Plan(val id: Long, val word: String, val reading: String, val status: String,
+                        val before: Map<String, String>, val after: Map<String, String>,
+                        /** The accent positions, for the voice — not the diagram in the field. */
+                        val pitch: String = "") {
+            val changed get() = after.filter { (k, v) -> before[k] != v }.keys
+        }
+        val plans = notes.map { (id, current) ->
+            val word = plain(current["Front"].orEmpty())
+            val reading = plain(current["Reading"].orEmpty())
+            val found = entries[word to reading] ?: if (reading.isEmpty()) {
+                entries.filterKeys { it.first == word }.values.flatten().takeIf { it.isNotEmpty() }
+            } else null
+            if (word.isEmpty() || found == null) {
+                return@map Plan(id, word, reading, "NOT_IN_DICTIONARY", current, current)
+            }
+            val merged = MergedWordEntry.mergeEntries(found).first()
+            val kanjiData = merged.primaryExpression.filter { JapaneseTokenizer.isKanji(it) }
+                .map(Char::toString).distinct().mapNotNull { kanji[it] }
+            val rebuilt = profile.fieldNames.zip(creator.rebuildFields(merged.toWordEntry(), style, kanjiData)).toMap()
+            Plan(id, word, reading, "FOUND", current, RefreshMerge.merge(current, rebuilt), merged.pitchAccent)
+        }
+
+        // Audio only where a card has none: a recording already on a card is
+        // the user's (an archive file, an earlier voice) and --refresh-audio
+        // exists for replacing those on purpose.
+        val needAudio = plans.filter { it.status == "FOUND" && it.after["Audio"].isNullOrBlank() }
+        val audio = if (dryRun || needAudio.isEmpty()) emptyMap() else speak(
+            needAudio.map { Spoken(it.word, it.reading, it.pitch) },
+            outDir
+        )
+        val final = plans.map { plan ->
+            val rec = audio[plan.word to plan.reading] ?: return@map plan
+            plan.copy(after = LinkedHashMap(plan.after).apply { put("Audio", "[sound:${rec.name}]") })
+        }
+
+        // ---- report ------------------------------------------------------------
+        val fieldCounts = final.flatMap { it.changed }.groupingBy { it }.eachCount()
+        val labelsBefore = final.count { !RefreshMerge.isPlainRank(it.before["Frequency"].orEmpty()) && it.before["Frequency"].orEmpty().isNotBlank() }
+        val labelsAfter = final.count { !RefreshMerge.isPlainRank(it.after["Frequency"].orEmpty()) && it.after["Frequency"].orEmpty().isNotBlank() }
+        val toWrite = final.filter { it.changed.isNotEmpty() }
+        File(outDir, "refresh.tsv").writeText(buildString {
+            appendLine("note\tstatus\tword\treading\tfrequency before\tfrequency after\tchanged fields")
+            for (p in final) appendLine("${p.id}\t${p.status}\t${p.word}\t${p.reading}\t${p.before["Frequency"]}\t${p.after["Frequency"]}\t${p.changed.joinToString(",")}")
+        })
+        File(outDir, "refresh-sample.tsv").writeText(buildString {
+            appendLine("note\tword\tfield\tbefore\tafter")
+            for (p in toWrite.shuffled(java.util.Random(7)).take(12)) for (f in p.changed) {
+                appendLine("${p.id}\t${p.word}\t$f\t${p.before[f].orEmpty().replace('\t', ' ').replace('\n', ' ')}\t${p.after[f].orEmpty().replace('\t', ' ').replace('\n', ' ')}")
+            }
+        })
+        // Everything a reviewer needs to judge a change, not only the dozen above.
+        File(outDir, "refresh-full.json").writeText(JSONArray().apply {
+            for (p in toWrite) put(JSONObject().put("id", p.id).put("word", p.word).put("reading", p.reading)
+                .put("before", JSONObject(p.changed.associateWith { p.before[it].orEmpty() }))
+                .put("after", JSONObject(p.changed.associateWith { p.after[it].orEmpty() })))
+        }.toString())
+        final.filter { it.status != "FOUND" }.forEach { log("skipped, not in the dictionary with its reading: ${it.word} (${it.reading})") }
+        log("found ${final.count { it.status == "FOUND" }}, not in dictionary ${final.count { it.status != "FOUND" }}")
+        log("would change ${toWrite.size} notes; fields: $fieldCounts")
+        log("frequency labels: $labelsBefore before, $labelsAfter after")
+
+        // ---- write -------------------------------------------------------------
+        var updated = 0
+        var verified = 0
+        if (!dryRun) {
+            audio.values.forEach { anki.storeMedia(it) }
+            for (chunk in toWrite.chunked(100)) {
+                val actions = JSONArray()
+                for (p in chunk) {
+                    val fields = JSONObject()
+                    for (f in p.changed) fields.put(f, p.after[f].orEmpty())
+                    actions.put(JSONObject().put("action", "updateNoteFields")
+                        .put("params", JSONObject().put("note", JSONObject().put("id", p.id).put("fields", fields))))
+                }
+                val results = anki.call("multi", JSONObject().put("actions", actions)) as JSONArray
+                for (i in 0 until results.length()) {
+                    val r = results.opt(i)
+                    val error = (r as? JSONObject)?.opt("error")
+                    if (error == null || error == JSONObject.NULL) updated++ else log("not updated: ${chunk[i].word} — $error")
+                }
+            }
+            // Read back what was written: the result of a multi says the call
+            // ran, not that the note now holds what was meant.
+            for (chunk in toWrite.chunked(500)) {
+                val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk.map { it.id }))) as JSONArray
+                for (i in 0 until infos.length()) {
+                    val fields = infos.getJSONObject(i).getJSONObject("fields")
+                    val p = chunk[i]
+                    if (p.changed.all { f -> fields.optJSONObject(f)?.optString("value") == p.after[f] }) verified++
+                    else log("verify failed: ${p.word}")
+                }
+            }
+            log("updated $updated of ${toWrite.size}, verified $verified")
+        }
+        val syncedAfter = dryRun || !sync || updated == 0 || runCatching { anki.call("sync") }.isSuccess
+        File(outDir, "summary.txt").writeText(
+            "notes=${final.size} found=${final.count { it.status == "FOUND" }} " +
+                "not_found=${final.count { it.status != "FOUND" }} to_change=${toWrite.size} " +
+                "updated=$updated verified=$verified labels_before=$labelsBefore labels_after=$labelsAfter " +
+                "audio_added=${audio.size} synced_after=$syncedAfter dry_run=$dryRun\n"
+        )
+    }
+
+    private fun plain(html: String): String = TAGS.replace(html.replace(Regex("\\[sound:[^]]*]"), ""), "")
+        .replace("&nbsp;", " ").trim()
+
+    /**
      * Pitch positions by written form, as DictionaryDao's updatePitchAccent
      * stores them on the phone.
      */
@@ -503,6 +648,70 @@ class KindleSync {
             )
         }
         return pitch
+    }
+
+    /**
+     * The term dictionary, the frequency list and the pitch dictionary, read
+     * the way the phone stores them — shared by the sync and the refresh so a
+     * refreshed card is built from exactly the data a new one would be.
+     */
+    private class Dictionary private constructor(
+        private val parser: YomitanDictionaryParser,
+        private val dictZip: String,
+        private val ranks: Map<String, List<Pair<String, Int>>>,
+        /** Pitch by written form, as DictionaryDao's updatePitchAccent keys it. */
+        private val pitch: Map<String, String>
+    ) {
+        fun rankOf(expression: String, reading: String): Int =
+            ranks[expression].orEmpty()
+                .filter { it.first.isEmpty() || it.first == reading }
+                .minOfOrNull { it.second } ?: 0
+
+        /** Every entry whose written form is in [expressions] or reading in [readings]. */
+        suspend fun collect(expressions: Set<String>, readings: Set<String>): List<WordEntry> {
+            val out = ArrayList<WordEntry>()
+            parser.parseFromZipStreaming(
+                inputStream = File(dictZip).inputStream().buffered(),
+                onBatch = { entries: List<DictionaryEntry>, _ ->
+                    for (entry in entries) {
+                        if (entry.expression !in expressions && entry.reading !in readings) continue
+                        // One list installed here, so it is the leading one:
+                        // its number is what the card's Frequency field carries.
+                        val rank = rankOf(entry.expression, entry.reading)
+                        val domain = entry.copy(frequency = rank).toDomain()
+                        out += domain.copy(
+                            frequencyValue = if (rank > 0) rank.toString() else "",
+                            pitchAccent = domain.pitchAccent.ifBlank { pitch[entry.expression].orEmpty() }
+                        )
+                    }
+                }
+            )
+            return out
+        }
+
+        companion object {
+            suspend fun load(
+                parser: YomitanDictionaryParser,
+                dictZip: String,
+                freqZip: String,
+                pitch: Map<String, String>
+            ): Dictionary {
+                val ranks = HashMap<String, MutableList<Pair<String, Int>>>()
+                if (freqZip.isNotEmpty()) {
+                    parser.parseFromZipStreaming(
+                        inputStream = File(freqZip).inputStream().buffered(),
+                        onBatch = { _, _ -> },
+                        onMetaBatch = { updates: List<FrequencyUpdate>, _ ->
+                            for (u in updates) {
+                                if (u.frequency <= 0) continue
+                                ranks.getOrPut(u.expression) { ArrayList(2) }.add(u.reading.orEmpty() to u.frequency)
+                            }
+                        }
+                    )
+                }
+                return Dictionary(parser, dictZip, ranks, pitch)
+            }
+        }
     }
 
     /** What the TTS is asked to say: the reading, with the accent to say it in. */
