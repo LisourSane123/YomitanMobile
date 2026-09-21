@@ -37,7 +37,8 @@ import javax.inject.Singleton
 class AudioArchive @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: AudioFileDao,
-    private val settings: AudioArchiveSettings
+    private val settings: AudioArchiveSettings,
+    private val nativePack: NativeAudioPack
 ) {
 
     /** A file that pronounces the word asked for. */
@@ -94,17 +95,25 @@ class AudioArchive @Inject constructor(
     }
 
     /**
-     * The best recording for a word, or null when the archive has none.
+     * The best recording of a person saying the word, or null when there is
+     * none — the caller then synthesises one.
      *
-     * Matching is deliberately generous about script: an archive that spells a
-     * loanword's file in hiragana still answers for a katakana headword.
+     * The user's own folder first: they chose it. Then the native-speaker
+     * pack ([NativeAudioPack]), when it is installed. Every caller that wants
+     * a word said comes through here, so this order is the app's order.
+     *
+     * Matching in the folder is deliberately generous about script: an
+     * archive that spells a loanword's file in hiragana still answers for a
+     * katakana headword.
      */
     suspend fun find(expression: String, reading: String): Match? =
         withContext(Dispatchers.IO) {
             val keys = AudioKeys.lookupKeys(expression, reading)
             if (keys.isEmpty()) return@withContext null
-            val row = runCatching { dao.findBest(keys) }.getOrNull() ?: return@withContext null
-            Match(Uri.parse(row.uri), row.fileName)
+            runCatching { dao.findBest(keys) }.getOrNull()?.let { row ->
+                return@withContext Match(Uri.parse(row.uri), row.fileName)
+            }
+            nativePack.find(expression, reading)?.let { file -> Match(Uri.fromFile(file), file.name) }
         }
 
     /**
@@ -227,7 +236,19 @@ internal object AudioKeys {
     /** Keys for one file, with their priorities. */
     fun keysFor(fileName: String, parentName: String): List<Pair<String, Int>> {
         val base = fileName.substringBeforeLast('.')
-        val pieces = (splitPieces(base) + splitPieces(parentName))
+        return keysForPieces(splitPieces(base) + splitPieces(parentName))
+    }
+
+    /**
+     * Keys for a recording whose word is KNOWN rather than read off a file
+     * name — a pack that ships a word list beside romanised file names.
+     * Same keys, same priorities as a file called `expression_reading`.
+     */
+    fun keysForWord(expression: String, reading: String): List<Pair<String, Int>> =
+        keysForPieces(listOf(expression, reading))
+
+    private fun keysForPieces(raw: List<String>): List<Pair<String, Int>> {
+        val pieces = raw
             .map { it.trim() }
             .filter { it.isNotEmpty() && isJapanese(it) }
             .distinct()
@@ -298,7 +319,10 @@ internal object AudioKeys {
         KanaScript.isHiragana(it) || KanaScript.isKatakana(it) || isKanji(it)
     }
 
-    private fun hasKanji(value: String) = value.any { isKanji(it) }
+    fun hasKanji(value: String) = value.any { isKanji(it) }
+
+    /** A spelling+reading key, as [keysFor] and [lookupKeys] build them. */
+    fun isPairKey(key: String) = '\t' in key
 
     private fun isKanji(ch: Char) = ch in '一'..'鿿'
 }

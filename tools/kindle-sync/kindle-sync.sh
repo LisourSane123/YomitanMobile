@@ -31,6 +31,11 @@
 #   --restyle   rewrite the note type's CSS and templates to the current design
 #               with the phone's style, then apply AutoReorder; notes are not
 #               touched. With --dry-run it only writes old/new files to compare.
+#   --install-native-audio
+#               download Kanji alive's native-speaker recordings (CC BY 4.0,
+#               ~74 MB, SHA-256-pinned) — the same pack the phone offers; from
+#               then on every card's audio is a native speaker where one
+#               recorded the word, VOICEVOX otherwise. No Kindle needed.
 #   --exclude WORD
 #               with --refresh-cards: leave the note whose front is WORD
 #               exactly as it is (repeatable)
@@ -51,6 +56,7 @@ SYNC=true
 REFRESH_AUDIO=false
 PULL_SETTINGS=false
 REFRESH_CARDS=false
+INSTALL_NATIVE=false
 RESTYLE=false
 EXCLUDE=
 while [[ $# -gt 0 ]]; do
@@ -64,6 +70,7 @@ while [[ $# -gt 0 ]]; do
         --refresh-audio) REFRESH_AUDIO=true ;;
         --pull-settings) PULL_SETTINGS=true ;;
         --refresh-cards) REFRESH_CARDS=true ;;
+        --install-native-audio) INSTALL_NATIVE=true ;;
         --restyle) RESTYLE=true ;;
         --exclude) EXCLUDE="${EXCLUDE:+$EXCLUDE,}$2"; shift ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -83,6 +90,9 @@ VOICEVOX_RUNTIME="$(ls "$VOICEVOX"/onnxruntime/lib/libvoicevox_onnxruntime.so* 2
 # A folder of native recordings (local-audio-yomichan, a Forvo dump…), used
 # before any TTS. File names are read the way the phone reads them.
 AUDIO_ARCHIVE="${KINDLE_SYNC_AUDIO:-$DATA/audio-archive}"
+# Native speakers (Kanji alive), after the user's own archive and before
+# VOICEVOX — the phone's order. Installed by --install-native-audio.
+NATIVE_AUDIO="${KINDLE_SYNC_NATIVE_AUDIO:-$DATA/native-audio/kanjialive}"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/kindle-sync"
 ANKI_CONNECT="${KINDLE_SYNC_ANKI:-http://127.0.0.1:8765}"
 mkdir -p "$STATE" "$DATA"
@@ -224,6 +234,23 @@ if [[ "$PULL_SETTINGS" == true ]]; then
     exit 0
 fi
 
+# --install-native-audio needs neither the Kindle nor Anki.
+if [[ "$INSTALL_NATIVE" == true ]]; then
+    progress "Pobieram nagrania native speakerów (Kanji alive, ok. 74 MB)…"
+    rm -f "$STATE/last-run/summary.txt"
+    mkdir -p "$STATE/last-run"
+    (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync.installNativeAudio" --rerun \
+        -Dkindle.installNativeAudio=true \
+        -Dnative.audio="$NATIVE_AUDIO" \
+        -Dkindle.notifyFile="$NOTIFY_ID_FILE" \
+        -Dout.dir="$STATE/last-run") >&2 || true
+    if grep -q "installed=true" "$STATE/last-run/summary.txt" 2>/dev/null; then
+        notify "Wykonano: nagrania native speakerów zainstalowane. Nowe fiszki z Kindle dostaną je przed VOICEVOX."
+        exit 0
+    fi
+    fail "nie udało się zainstalować nagrań native speakerów, szczegóły w $STATE/last-run/run.log"
+fi
+
 # --refresh-audio and --refresh-cards work on cards already in Anki: no Kindle,
 # no lookups.
 if [[ "$REFRESH_AUDIO" == false && "$REFRESH_CARDS" == false && "$RESTYLE" == false ]]; then
@@ -343,6 +370,7 @@ if [[ "$REFRESH_CARDS" == true ]]; then
         -Dvoicevox.root="$VOICEVOX" \
         -Dvoicevox.onnxruntime="$VOICEVOX_RUNTIME" \
         -Daudio.archive="$AUDIO_ARCHIVE" \
+        -Dnative.audio="$NATIVE_AUDIO" \
         -Dkindle.dryRun="$DRY_RUN" \
         -Dkindle.sync="$SYNC" \
         -Danki.connect="$ANKI_CONNECT" \
@@ -367,6 +395,7 @@ if [[ "$REFRESH_AUDIO" == true ]]; then
         -Dvoicevox.root="$VOICEVOX" \
         -Dvoicevox.onnxruntime="$VOICEVOX_RUNTIME" \
         -Daudio.archive="$AUDIO_ARCHIVE" \
+        -Dnative.audio="$NATIVE_AUDIO" \
         -Dkindle.sync="$SYNC" \
         -Danki.connect="$ANKI_CONNECT" \
         -Dout.dir="$OUT") >&2 || true
@@ -388,6 +417,7 @@ fi
     -Dvoicevox.root="$VOICEVOX" \
     -Dvoicevox.onnxruntime="$VOICEVOX_RUNTIME" \
     -Daudio.archive="$AUDIO_ARCHIVE" \
+    -Dnative.audio="$NATIVE_AUDIO" \
     -Dkindle.deck="$DECK" \
     -Dkindle.dryRun="$DRY_RUN" \
     -Dkindle.sync="$SYNC" \

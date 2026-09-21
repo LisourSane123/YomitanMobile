@@ -254,6 +254,7 @@ fun SettingsScreen(
     val audioArchiveFiles by viewModel.audioArchiveFiles.collectAsState()
     val audioArchiveLabel by viewModel.audioArchiveLabel.collectAsState()
     val audioArchiveIndexing by viewModel.audioArchiveIndexing.collectAsState()
+    val nativeAudioState by viewModel.nativeAudioState.collectAsState()
     val voicevoxState by viewModel.voicevoxState.collectAsState()
     val voicevoxEnabled by viewModel.voicevoxEnabled.collectAsState()
     var showVoicevoxTerms by remember { mutableStateOf(false) }
@@ -625,6 +626,13 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.height(4.dp))
                         Text("JMdict/Kanjidic (EDRDG - Electronic Dictionary Research and Development Group)")
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            tr(
+                                "Nagrania native speakerów (jeśli pobrane): ${com.yomitanmobile.data.audio.KanjiAlive.CREDIT}.",
+                                "Native-speaker recordings (if downloaded): ${com.yomitanmobile.data.audio.KanjiAlive.CREDIT}."
+                            )
+                        )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
@@ -1049,6 +1057,97 @@ fun SettingsScreen(
                 }
             }
 
+            // Native-speaker recordings — before VOICEVOX on screen because
+            // they come before it in AudioArchive.find.
+            item {
+                SettingsBlock {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.RecordVoiceOver,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    tr("Nagrania native speakerów", "Native-speaker recordings"),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    when (val state = nativeAudioState) {
+                                        is com.yomitanmobile.data.audio.NativeAudioPack.State.Installed -> tr(
+                                            "Zainstalowane. Ponad 10 000 słów czytanych przez Japończyków — " +
+                                                "używane wszędzie przed głosem syntetycznym: przy odsłuchu, " +
+                                                "na nowych fiszkach i w generatorach talii.",
+                                            "Installed. Over 10,000 words read by native Japanese speakers — " +
+                                                "used everywhere before a synthesised voice: playback, new cards " +
+                                                "and the deck generators."
+                                        )
+                                        is com.yomitanmobile.data.audio.NativeAudioPack.State.Downloading -> tr(
+                                            "Pobieranie… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB",
+                                            "Downloading… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB"
+                                        )
+                                        is com.yomitanmobile.data.audio.NativeAudioPack.State.Failed -> tr(
+                                            "Pobieranie nie powiodło się: ${state.message}",
+                                            "Download failed: ${state.message}"
+                                        )
+                                        else -> tr(
+                                            "Ponad 10 000 słów czytanych przez Japończyków (kobiety i mężczyźni), " +
+                                                "na wolnej licencji. Słowo, którego nie ma w nagraniach, dalej " +
+                                                "mówi VOICEVOX lub systemowy TTS. Pobranie ok. " +
+                                                "${com.yomitanmobile.data.audio.KanjiAlive.AUDIO_ZIP_BYTES / 1_000_000} MB.",
+                                            "Over 10,000 words read by native Japanese speakers (women and men), " +
+                                                "freely licensed. A word they do not cover is still said by " +
+                                                "VOICEVOX or the system TTS. A download of about " +
+                                                "${com.yomitanmobile.data.audio.KanjiAlive.AUDIO_ZIP_BYTES / 1_000_000} MB."
+                                        )
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        val nativeDownloading = nativeAudioState as? com.yomitanmobile.data.audio.NativeAudioPack.State.Downloading
+                        if (nativeDownloading != null) {
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = (nativeDownloading.done.toFloat() / nativeDownloading.total.coerceAtLeast(1)).coerceIn(0f, 1f),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            when (nativeAudioState) {
+                                is com.yomitanmobile.data.audio.NativeAudioPack.State.Installed -> {
+                                    Button(onClick = viewModel::previewNativeAudio) {
+                                        Text(tr("Odsłuchaj", "Listen"))
+                                    }
+                                    OutlinedButton(onClick = viewModel::uninstallNativeAudio) {
+                                        Text(tr("Usuń", "Remove"))
+                                    }
+                                }
+                                is com.yomitanmobile.data.audio.NativeAudioPack.State.Downloading -> Unit
+                                else -> Button(onClick = viewModel::installNativeAudio) {
+                                    Text(
+                                        if (nativeAudioState is com.yomitanmobile.data.audio.NativeAudioPack.State.Failed)
+                                            tr("Spróbuj ponownie", "Try again")
+                                        else tr("Pobierz nagrania", "Download the recordings")
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            com.yomitanmobile.data.audio.KanjiAlive.CREDIT,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             // VOICEVOX voice
             item {
                 SettingsBlock {
@@ -1071,9 +1170,9 @@ fun SettingsScreen(
                                     when (val state = voicevoxState) {
                                         is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Installed -> tr(
                                             "Neuronowy głos japoński, offline. Mówi czytanie z akcentem z karty. " +
-                                                "Używany po archiwum wymowy, przed systemowym TTS.",
+                                                "Używany dla słów bez nagrania native speakera, przed systemowym TTS.",
                                             "Neural Japanese voice, offline. Says the reading with the card's accent. " +
-                                                "Used after the pronunciation archive, before the system TTS."
+                                                "Used for words no native speaker recorded, before the system TTS."
                                         )
                                         is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Downloading -> tr(
                                             "Pobieranie… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB",

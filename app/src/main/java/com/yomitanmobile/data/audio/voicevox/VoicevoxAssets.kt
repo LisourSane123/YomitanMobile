@@ -1,8 +1,8 @@
 package com.yomitanmobile.data.audio.voicevox
 
+import com.yomitanmobile.data.download.VerifiedDownload
 import java.io.File
 import java.io.InputStream
-import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
 
 /**
@@ -86,14 +86,14 @@ object VoicevoxAssets {
         for (model in MODELS) {
             val target = File(modelsDir(root), model.fileName)
             if (target.length() != model.bytes) {
-                download(model.url, model.sha256, target, open) { onProgress(done + it, TOTAL_BYTES) }
+                VerifiedDownload.download(model.url, model.sha256, target, open) { onProgress(done + it, TOTAL_BYTES) }
             }
             done += model.bytes
             onProgress(done, TOTAL_BYTES)
         }
         if (!File(dictionaryDir(root), "sys.dic").isFile) {
             val archive = File(root, "$DICTIONARY_NAME.tar.gz")
-            download(DICTIONARY_URL, DICTIONARY_SHA256, archive, open) { onProgress(done + it, TOTAL_BYTES) }
+            VerifiedDownload.download(DICTIONARY_URL, DICTIONARY_SHA256, archive, open) { onProgress(done + it, TOTAL_BYTES) }
             val staging = File(root, "dict.partial").apply { deleteRecursively(); mkdirs() }
             GZIPInputStream(archive.inputStream().buffered()).use { untar(it, staging) }
             val dictParent = File(root, "dict").apply { mkdirs() }
@@ -110,44 +110,6 @@ object VoicevoxAssets {
     /** Removes everything [install] put under [root]. */
     fun uninstall(root: File) {
         root.deleteRecursively()
-    }
-
-    private fun download(
-        url: String,
-        sha256: String,
-        target: File,
-        open: (String) -> InputStream,
-        onBytes: (Long) -> Unit
-    ) {
-        target.parentFile?.mkdirs()
-        val partial = File(target.path + ".partial")
-        val digest = MessageDigest.getInstance("SHA-256")
-        open(url).use { input ->
-            partial.outputStream().use { output ->
-                val buffer = ByteArray(1 shl 16)
-                var total = 0L
-                var lastReport = 0L
-                while (true) {
-                    if (Thread.currentThread().isInterrupted) throw InterruptedException()
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    output.write(buffer, 0, read)
-                    digest.update(buffer, 0, read)
-                    total += read
-                    if (total - lastReport > (1 shl 20)) {
-                        onBytes(total)
-                        lastReport = total
-                    }
-                }
-            }
-        }
-        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        if (actual != sha256) {
-            partial.delete()
-            error("$url: checksum $actual, expected $sha256")
-        }
-        target.delete()
-        if (!partial.renameTo(target)) error("could not move $partial into place")
     }
 
     /**

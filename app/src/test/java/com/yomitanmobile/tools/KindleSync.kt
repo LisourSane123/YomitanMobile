@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.anki.RefreshMerge
 import com.yomitanmobile.data.audio.AudioKeys
+import com.yomitanmobile.data.audio.KanjiAlive
+import com.yomitanmobile.data.audio.NativeAudioIndex
 import com.yomitanmobile.data.audio.voicevox.VoicevoxAssets
 import com.yomitanmobile.data.audio.voicevox.VoicevoxSpeaker
 import com.yomitanmobile.data.anki.AnkiCollectionIndex
@@ -912,16 +914,22 @@ class KindleSync {
 
         val result = HashMap<Pair<String, String>, File>()
         var fromArchive = 0
+        var fromNative = 0
         for (key in byKey.keys) {
-            val recording = archive?.find(key.first, key.second) ?: continue
-            val out = target(key, ARCHIVE_SOURCE)
+            // The phone's order (AudioArchive.find): the user's own folder,
+            // then the native-speaker pack, and only then a synthesised voice.
+            val (recording, source) = archive?.find(key.first, key.second)?.let { it to ARCHIVE_SOURCE }
+                ?: nativeRecording(key.first, key.second)?.let { it to NATIVE_SOURCE }
+                ?: continue
+            val out = target(key, source)
             // Same loudness as the TTS files, so the two kinds sit side by side.
             if (out.isFile || ffmpeg(recording, out)) {
                 result[key] = out
-                fromArchive++
+                if (source == ARCHIVE_SOURCE) fromArchive++ else fromNative++
             }
         }
         if (archive != null) log("audio: $fromArchive of ${byKey.size} words from the archive")
+        if (nativeIndex != null) log("audio: $fromNative of ${byKey.size} words from native speakers (${KanjiAlive.CREDIT})")
 
         val wanted = (byKey.keys - result.keys).associateWith { target(it, AUDIO_ENGINE) }
         val missing = wanted.filterValues { !it.isFile }
@@ -946,6 +954,59 @@ class KindleSync {
         log("audio: ${result.size} of ${byKey.size} words")
         (byKey.keys - result.keys).forEach { log("audio: no recording for ${it.first} (${it.second})") }
         return result
+    }
+
+    /** The native-speaker pack, when installed (kindle-sync.sh --install-native-audio). */
+    private val nativeRoot: File? by lazy {
+        System.getProperty("native.audio").orEmpty().let(::File).takeIf { KanjiAlive.isInstalled(it) }
+    }
+    private val nativeIndex: NativeAudioIndex? by lazy { nativeRoot?.let { KanjiAlive.loadIndex(it) } }
+
+    private fun nativeRecording(expression: String, reading: String): File? {
+        val root = nativeRoot ?: return null
+        val name = nativeIndex?.find(expression, reading) ?: return null
+        return KanjiAlive.file(root, name).takeIf { it.isFile }
+    }
+
+    /**
+     * Installs the native-speaker pack on the desktop — the same install the
+     * phone runs, SHA-256 pins included — so Kindle cards get the recordings
+     * phone cards get.
+     *
+     * ```
+     * tools/kindle-sync/kindle-sync.sh --install-native-audio
+     * ```
+     */
+    @Test
+    fun installNativeAudio() {
+        val root = System.getProperty("native.audio").orEmpty()
+        Assume.assumeTrue(
+            "kindle-sync: pass -Dkindle.installNativeAudio=true -Dnative.audio=<dir>",
+            System.getProperty("kindle.installNativeAudio") == "true" && root.isNotEmpty()
+        )
+        val outDir = File(System.getProperty("out.dir") ?: "build/kindle-sync").apply { mkdirs() }
+        logFile = File(outDir, "run.log").apply { writeText("") }
+        var lastMb = -1L
+        KanjiAlive.install(
+            File(root),
+            open = { url ->
+                (URL(url).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 30_000
+                    readTimeout = 120_000
+                    setRequestProperty("User-Agent", "YomitanMobile-KindleSync/1.0")
+                }.inputStream
+            },
+            onProgress = { done, total ->
+                val mb = done / 10_000_000
+                if (mb != lastMb) {
+                    lastMb = mb
+                    progress("Pobieram nagrania native speakerów: ${done / 1_000_000} / ${total / 1_000_000} MB…")
+                }
+            }
+        )
+        val index = KanjiAlive.loadIndex(File(root))
+        log("native recordings installed in $root: ${index?.size ?: 0} keys")
+        File(outDir, "summary.txt").writeText("installed=${index != null} keys=${index?.size ?: 0}\n")
     }
 
     private var voicevox: VoicevoxSpeaker? = null
@@ -1257,6 +1318,7 @@ class KindleSync {
         /** Bumped whenever the recordings change voice; part of every file name. */
         const val AUDIO_ENGINE = "vv"
         const val ARCHIVE_SOURCE = "ar"
+        const val NATIVE_SOURCE = "na"
         val AUDIO_EXTENSIONS = listOf(".mp3", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".flac")
         val TAGS = Regex("<[^>]*>")
 

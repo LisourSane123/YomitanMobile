@@ -72,8 +72,27 @@ class SettingsViewModel @Inject constructor(
     private val languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
     private val audioArchive: com.yomitanmobile.data.audio.AudioArchive,
     private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice,
+    private val nativeAudio: com.yomitanmobile.data.audio.NativeAudioPack,
     private val audioPlayer: com.yomitanmobile.data.audio.AudioPlayer
 ) : ViewModel() {
+
+    // ── Native-speaker recordings ────────────────────────────────────────
+
+    val nativeAudioState: StateFlow<com.yomitanmobile.data.audio.NativeAudioPack.State> = nativeAudio.state
+
+    /** Starts the download; it runs on the pack's own scope, so leaving the screen does not stop it. */
+    fun installNativeAudio() = nativeAudio.install()
+
+    fun uninstallNativeAudio() {
+        viewModelScope.launch { nativeAudio.uninstall() }
+    }
+
+    /** One of the recordings, so the user hears what was installed. */
+    fun previewNativeAudio() {
+        viewModelScope.launch {
+            nativeAudio.find("一番", "いちばん")?.let { audioPlayer.playAudioFile(it.path) }
+        }
+    }
 
     // ── VOICEVOX voice ───────────────────────────────────────────────────
 

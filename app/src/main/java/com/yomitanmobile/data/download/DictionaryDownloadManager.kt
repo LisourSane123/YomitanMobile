@@ -96,7 +96,10 @@ class DictionaryDownloadManager(
             "raw.githubusercontent.com",
             "objects.githubusercontent.com",
             "github-releases.githubusercontent.com",
-            "release-assets.githubusercontent.com"
+            "release-assets.githubusercontent.com",
+            // Kanji alive's native-speaker recordings (CC BY 4.0): the one
+            // zip, SHA-256-pinned in KanjiAlive, served without redirects.
+            "media.kanjialive.com"
         )
 
         /**
