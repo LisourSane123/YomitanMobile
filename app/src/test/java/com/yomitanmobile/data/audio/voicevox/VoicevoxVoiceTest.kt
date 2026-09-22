@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,5 +31,14 @@ class VoicevoxVoiceTest {
         val voice = VoicevoxVoice(context)
         voice.setEnabled(false)
         assertFalse(VoicevoxVoice(context).isActive())
+    }
+
+    @Test
+    fun `an English or Spanish word is never handed to the Japanese voice`() {
+        assertTrue(VoicevoxVoice.speaksJapanese("たべる"))
+        assertTrue(VoicevoxVoice.speaksJapanese("食べる"))
+        assertTrue(VoicevoxVoice.speaksJapanese("コーヒー"))
+        assertFalse(VoicevoxVoice.speaksJapanese("house"))
+        assertFalse(VoicevoxVoice.speaksJapanese("niño"))
     }
 }

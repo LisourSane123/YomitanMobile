@@ -107,6 +107,12 @@ class VoicevoxVoice @Inject constructor(
      */
     suspend fun wav(expression: String, reading: String, pitch: String): File? {
         if (!isActive()) return null
+        // A Japanese voice. Nothing stopped it from being handed an English or
+        // Spanish word once installed — the detail screen and every card of
+        // those languages asked it first and got the word read as Japanese
+        // syllables. A word with no kana or kanji goes to the system TTS,
+        // which speaks the study language.
+        if (!speaksJapanese(reading) && !speaksJapanese(expression)) return null
         return withContext(Dispatchers.IO) {
             val file = File(cache, "yomitan_vv_${key(expression, reading, pitch)}.wav")
             if (file.isFile && file.length() > 0) return@withContext file
@@ -156,6 +162,11 @@ class VoicevoxVoice @Inject constructor(
             .joinToString("") { "%02x".format(it) }.take(16)
 
     companion object {
+        /** Whether VOICEVOX can say [text] at all: it holds kana or kanji. */
+        internal fun speaksJapanese(text: String): Boolean = text.any { ch ->
+            ch in '\u3040'..'\u30ff' || ch in '\u4e00'..'\u9fff' || ch == '々'
+        }
+
         private const val TAG = "VoicevoxVoice"
         private const val IDLE_RELEASE_MS = 60_000L
     }
