@@ -51,6 +51,9 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "yo
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @javax.inject.Inject
+    lateinit var languageSettings: com.yomitanmobile.data.settings.LanguageSettings
+
     private var sharedSearchQuery: String? by mutableStateOf(null)
 
     // Bumped on every incoming share/PROCESS_TEXT intent. A shared query is
@@ -223,7 +226,10 @@ class MainActivity : ComponentActivity() {
                 // Every `tr(pl, en)` literal in the app reads this. Nothing
                 // provided it, so the default (`false`) stood everywhere and an
                 // English device saw a Polish interface.
-                CompositionLocalProvider(LocalIsEnglish provides isEnglishUi()) {
+                CompositionLocalProvider(
+                    LocalIsEnglish provides isEnglishUi(),
+                    com.yomitanmobile.ui.common.LocalStudyLanguage provides languageSettings.current
+                ) {
                     Surface(modifier = Modifier.fillMaxSize()) {
                         lastCrash?.let { trace ->
                             CrashReportDialog(trace = trace, onDismiss = { lastCrash = null })

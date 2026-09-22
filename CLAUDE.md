@@ -83,8 +83,10 @@ Anything a screen runs on entry must be off the main thread. `AnkiCardCreator.ge
 - Mode is auto-detected from the script per keystroke; there is deliberately NO user-facing mode toggle (the app should figure out intent itself). Romaji input is covered automatically by the EN-mode fallback, which converts the query to hiragana and merges those results in. `SearchViewModel.toggleSearchMode()` + `manualModeOverride` + the ROMAJI enum value survive as internal, tested machinery, but no UI calls them.
 - Debounce is 100 ms in `SearchViewModel`; results are merged via `MergedWordEntry.mergeEntries()` which groups by `(expression, reading)` key.
 
-### JLPT deck generator
+### Level deck generator (JLPT for Japanese, CEFR for English)
 `JlptDeckScreen` → `JlptDeckViewModel` → `JlptDeckPlanner` (pure, `domain/usecase/`) → `AnkiCardCreator.exportBatchToAnki()`.
+
+The scale is `LevelScale.forLanguage()` (`domain/model/StudyLevel.kt`): which levels exist, what each is called, the deck's default name and the tag on its cards. Japanese keeps exactly what it had — "JLPT N5", `jlpt-n5` — so decks made before stay findable; English gets A1…C2, "CEFR A1", `cefr-a1`, and no built-in word list (the curated `JlptVocabulary` is JLPT's). `JlptTagDao.countForLevel` is per language, because the numbers overlap: CEFR B2 and JLPT N3 are both 3. `ToolsScreen` offers the generator only for a language that has a scale, and the text scanner and kanji browser only for Japanese (`LocalStudyLanguage`, provided once in `MainActivity` beside `LocalIsEnglish`).
 
 Builds a whole JLPT level as cards without mining. Candidates are the union of dictionary entries tagged with the level (`jlpt_level` column, fed from `jlpt_tags`) and `JlptVocabulary.wordsForLevel()` resolved against the installed dictionaries. The built-in list is curated and deliberately small (844 words across all five levels), so **deck completeness comes from the `JLPT Vocab Tags` meta dictionary** (~8000 words, in `AvailableDictionaries`); when no installed dictionary tags the selected level, `JlptDeckScreen` says so upfront rather than after an empty analysis.
 

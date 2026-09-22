@@ -17,6 +17,13 @@ import com.yomitanmobile.util.LocaleHelper
  */
 val LocalIsEnglish = compositionLocalOf { false }
 
+/**
+ * The language being STUDIED (not the interface language above) — what decides
+ * whether a screen offers JLPT or CEFR, a kanji browser or none. Provided once
+ * in MainActivity; it only changes with a restart (LanguageSettings).
+ */
+val LocalStudyLanguage = compositionLocalOf { com.yomitanmobile.domain.model.AppLanguage.DEFAULT }
+
 /** Reads the device configuration; provide it once, at the top of the tree. */
 @Composable
 @ReadOnlyComposable

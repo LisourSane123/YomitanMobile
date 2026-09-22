@@ -46,3 +46,38 @@ object StudyLevel {
         AppLanguage.SPANISH -> null
     }
 }
+
+/**
+ * A level scale as the deck generator works in it: which levels exist, what
+ * each is called, and what a generated card is tagged with. Japanese keeps
+ * exactly the names and tags it always had ("JLPT N5", `jlpt-n5`), so decks
+ * made before stay findable in Anki.
+ */
+enum class LevelScale(
+    val displayName: String,
+    /** Easiest first — the order the level chips are drawn in. */
+    val levels: List<Int>,
+    /** The catalogue entry that supplies the tags, named when none are installed. */
+    val tagDictionaryName: String
+) {
+    JLPT("JLPT", listOf(5, 4, 3, 2, 1), "JLPT Vocab Tags"),
+    CEFR("CEFR", listOf(6, 5, 4, 3, 2, 1), "CEFR-J (EN A1–B2)");
+
+    fun label(level: Int): String = when (this) {
+        JLPT -> "N$level"
+        CEFR -> CefrLevel.fromDbValue(level)?.label ?: "?"
+    }
+
+    fun deckName(level: Int): String = "$displayName ${label(level)}"
+
+    fun tag(level: Int): String = "${displayName.lowercase()}-${label(level).lowercase()}"
+
+    companion object {
+        /** The scale a study language is taught by, or null when the app has none for it. */
+        fun forLanguage(language: AppLanguage): LevelScale? = when (language) {
+            AppLanguage.JAPANESE -> JLPT
+            AppLanguage.ENGLISH -> CEFR
+            AppLanguage.SPANISH -> null
+        }
+    }
+}

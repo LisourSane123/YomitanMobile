@@ -95,6 +95,18 @@ class CefrLevelImportDbTest {
         assertEquals(CefrLevel.B2.dbValue, level("Adviser", "en"))
         // Jitendex's OK is not the English word: no level from this list.
         assertEquals(0, level("OK", "ja"))
+
+        // What the deck generator asks for, in English mode: every A1 word.
+        LanguageSettings(ApplicationProvider.getApplicationContext()).setLanguage(AppLanguage.ENGLISH)
+        val englishRepo = DictionaryRepositoryImpl(
+            dictionaryDao = db.dictionaryDao(), dictionaryInfoDao = db.dictionaryInfoDao(), kanjiDao = db.kanjiDao(),
+            frequencyDao = db.frequencyDao(), jlptTagDao = db.jlptTagDao(), parser = YomitanDictionaryParser(), database = db,
+            languageSettings = LanguageSettings(ApplicationProvider.getApplicationContext()).apply { loadBlocking() },
+            frequencySettings = FrequencySettings(ApplicationProvider.getApplicationContext())
+        )
+        val a1 = englishRepo.getEntriesByJlptLevel(CefrLevel.A1.dbValue).map { it.expression }.toSet()
+        assertEquals(setOf("house", "light"), a1)
+        LanguageSettings(ApplicationProvider.getApplicationContext()).setLanguage(AppLanguage.JAPANESE)
     }
 
     @Test

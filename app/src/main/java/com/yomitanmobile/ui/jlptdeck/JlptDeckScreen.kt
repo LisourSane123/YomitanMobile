@@ -1,5 +1,7 @@
 package com.yomitanmobile.ui.jlptdeck
 
+import com.yomitanmobile.domain.model.LevelScale
+
 import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -61,7 +63,7 @@ import com.yomitanmobile.ui.common.SectionTitle
 import com.yomitanmobile.ui.common.ToggleRow
 
 /**
- * Bulk deck generator: turns a whole JLPT level into cards styled exactly like
+ * Bulk deck generator: turns a whole JLPT (Japanese) or CEFR (English) level into cards styled exactly like
  * the ones the detail screen exports, with a dry run first so the user sees
  * what would be created (and what was filtered out) before anything is
  * written to AnkiDroid.
@@ -83,6 +85,8 @@ fun JlptDeckScreen(
     val withAnkiPermission = rememberAnkiPermissionGate()
 
     val level by viewModel.level.collectAsState()
+    // JLPT for Japanese, CEFR for English — every level name below reads it.
+    val scale = viewModel.scale
     val filters by viewModel.filters.collectAsState()
     val deckName by viewModel.deckName.collectAsState()
     val isAnalyzing by viewModel.isAnalyzing.collectAsState()
@@ -147,7 +151,7 @@ fun JlptDeckScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Talia JLPT", "JLPT deck")) },
+                title = { Text(tr("Talia ${scale.displayName}", "${scale.displayName} deck")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
@@ -165,9 +169,9 @@ fun JlptDeckScreen(
         ) {
             Text(
                 tr(
-                    "Tworzy gotową talię ze wszystkich słów wybranego poziomu JLPT — bez kopania słowo po słowie. " +
+                    "Tworzy gotową talię ze wszystkich słów wybranego poziomu ${scale.displayName} — bez kopania słowo po słowie. " +
                         "Fiszki mają dokładnie ten sam wygląd, co eksport ze szczegółów słowa.",
-                    "Builds a ready deck from every word of the chosen JLPT level — no word-by-word mining. " +
+                    "Builds a ready deck from every word of the chosen ${scale.displayName} level — no word-by-word mining. " +
                         "The cards use exactly the same styling as a single export from the detail screen."
                 ),
                 fontSize = 13.sp,
@@ -178,11 +182,11 @@ fun JlptDeckScreen(
 
             SectionTitle(tr("Poziom", "Level"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                JlptDeckViewModel.LEVELS.forEach { candidate ->
+                scale.levels.forEach { candidate ->
                     FilterChip(
                         selected = level == candidate,
                         onClick = { viewModel.setLevel(candidate) },
-                        label = { Text("N$candidate") }
+                        label = { Text(scale.label(candidate)) }
                     )
                 }
             }
@@ -201,13 +205,15 @@ fun JlptDeckScreen(
                 ) {
                     Text(
                         tr(
-                            "Żaden zainstalowany słownik nie oznacza słów poziomem N$level. " +
-                                "Talia powstanie tylko z wbudowanej, krótkiej listy — zainstaluj " +
-                                "słownik „JLPT Vocab Tags” z ekranu pobierania słowników, aby " +
+                            "Żaden zainstalowany słownik nie oznacza słów poziomem ${scale.label(level)}. " +
+                                (if (scale == LevelScale.JLPT) "Talia powstanie tylko z wbudowanej, krótkiej listy — zainstaluj "
+                                else "Talia będzie pusta — zainstaluj ") +
+                                "słownik „${scale.tagDictionaryName}” z ekranu pobierania słowników, aby " +
                                 "dostać pełny poziom.",
-                            "No installed dictionary tags words with level N$level. The deck " +
-                                "would be built from the short built-in list only — install the " +
-                                "“JLPT Vocab Tags” dictionary from the dictionary download screen " +
+                            "No installed dictionary tags words with level ${scale.label(level)}. " +
+                                (if (scale == LevelScale.JLPT) "The deck would be built from the short built-in list only — install the "
+                                else "The deck would be empty — install the ") +
+                                "“${scale.tagDictionaryName}” dictionary from the dictionary download screen " +
                                 "to get the full level."
                         ),
                         fontSize = 13.sp,
@@ -418,8 +424,8 @@ fun JlptDeckScreen(
                         )
                         Text(
                             tr(
-                                "Kandydatów na poziomie N${currentPlan.level}: ${currentPlan.candidateCount}",
-                                "Candidates at level N${currentPlan.level}: ${currentPlan.candidateCount}"
+                                "Kandydatów na poziomie ${scale.label(currentPlan.level)}: ${currentPlan.candidateCount}",
+                                "Candidates at level ${scale.label(currentPlan.level)}: ${currentPlan.candidateCount}"
                             ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -474,10 +480,10 @@ fun JlptDeckScreen(
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 tr(
-                                    "Żadne zainstalowane słowniki nie mają słów z tego poziomu. Pobierz Jitendex " +
-                                        "albo słownik „JLPT Vocab Tags” z ekranu pobierania słowników.",
-                                    "None of the installed dictionaries cover this level. Download Jitendex or the " +
-                                        "“JLPT Vocab Tags” dictionary from the dictionary download screen."
+                                    "Żadne zainstalowane słowniki nie mają słów z tego poziomu. Pobierz " +
+                                        "słownik „${scale.tagDictionaryName}” z ekranu pobierania słowników.",
+                                    "None of the installed dictionaries cover this level. Download the " +
+                                        "“${scale.tagDictionaryName}” dictionary from the dictionary download screen."
                                 ),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.error
@@ -585,7 +591,7 @@ fun JlptDeckScreen(
                 OutlinedButton(
                     onClick = {
                         fileLauncher.launch(
-                            "${deckName.trim().ifBlank { "JLPT N${currentPlan.level}" }}.apkg"
+                            "${deckName.trim().ifBlank { scale.deckName(currentPlan.level) }}.apkg"
                         )
                     },
                     enabled = currentPlan.selectedCount > 0 && !busy,
@@ -607,9 +613,9 @@ fun JlptDeckScreen(
 
                 Text(
                     tr(
-                        "Karty dostają tagi yomitan-mobile i jlpt-n${currentPlan.level}, więc łatwo je w Anki odnaleźć lub usunąć. " +
+                        "Karty dostają tagi yomitan-mobile i ${scale.tag(currentPlan.level)}, więc łatwo je w Anki odnaleźć lub usunąć. " +
                             "Nie są liczone w statystykach kopania.",
-                        "Cards are tagged yomitan-mobile and jlpt-n${currentPlan.level}, so they are easy to find or delete in Anki. " +
+                        "Cards are tagged yomitan-mobile and ${scale.tag(currentPlan.level)}, so they are easy to find or delete in Anki. " +
                             "They are not counted in the mining statistics."
                     ),
                     fontSize = 12.sp,

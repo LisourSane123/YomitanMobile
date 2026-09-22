@@ -63,17 +63,23 @@ fun ToolsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+            // What exists for the language being studied: the level decks are
+            // JLPT or CEFR, and the text scanner and the kanji browser are
+            // Japanese machinery — shown for English they led to screens
+            // that could only fail.
+            val studyLanguage = com.yomitanmobile.ui.common.LocalStudyLanguage.current
+            val scale = com.yomitanmobile.domain.model.LevelScale.forLanguage(studyLanguage)
             SectionLabel(tr("Tworzenie fiszek", "Building cards"))
-            ToolCard(
+            if (scale != null) ToolCard(
                 icon = Icons.Default.School,
-                title = tr("Generator talii JLPT", "JLPT deck generator"),
+                title = tr("Generator talii ${scale.displayName}", "${scale.displayName} deck generator"),
                 subtitle = tr(
                     "Cały poziom naraz, bez kopania słowo po słowie.",
                     "A whole level at once, without mining word by word."
                 ),
                 onClick = onNavigateToJlptDeck
             )
-            ToolCard(
+            if (studyLanguage.hasJapaneseFeatures) ToolCard(
                 icon = Icons.Default.MenuBook,
                 title = tr("Fiszki z napisów lub książki", "Cards from subtitles or a book"),
                 subtitle = tr(
@@ -109,7 +115,7 @@ fun ToolsScreen(
                 subtitle = tr("Przeglądaj i zarządzaj słownikami", "Browse and manage dictionaries"),
                 onClick = onNavigateToDictionaries
             )
-            ToolCard(
+            if (studyLanguage.hasJapaneseFeatures) ToolCard(
                 icon = Icons.Default.Translate,
                 title = tr("Kanji", "Kanji"),
                 subtitle = tr(

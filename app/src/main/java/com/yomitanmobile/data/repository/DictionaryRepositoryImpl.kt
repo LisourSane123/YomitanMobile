@@ -144,7 +144,9 @@ class DictionaryRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getEntriesByJlptLevel(level: Int): List<WordEntry> {
-        if (level !in 1..5) return emptyList()
+        // 1..5 is JLPT, 1..6 CEFR (A1 = 6) — see CefrLevel; the language
+        // filter below decides which scale a row's number is on.
+        if (level !in 1..6) return emptyList()
         return withContext(Dispatchers.IO) {
             try {
                 dictionaryDao.getEntriesByJlptLevel(level, language).map { it.toDomain() }

@@ -75,18 +75,32 @@ class JlptDeckViewModel @Inject constructor(
     private val audioPlayer: AudioPlayer,
     private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice,
     private val apkgWriter: com.yomitanmobile.data.anki.ApkgWriter,
+    languageSettings: com.yomitanmobile.data.settings.LanguageSettings,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val logTag = "JlptDeckViewModel"
 
-    private val _level = MutableStateFlow(5)
+    /**
+     * The level scale of the language being studied: JLPT for Japanese, CEFR
+     * for English. Everything that names a level — the chips, the deck name,
+     * the tags on the cards — goes through it.
+     */
+    private val language = languageSettings.current
+    val scale: com.yomitanmobile.domain.model.LevelScale =
+        com.yomitanmobile.domain.model.LevelScale.forLanguage(language)
+            ?: com.yomitanmobile.domain.model.LevelScale.JLPT
+
+    /** Note-type label the scan screen shows for generated words. */
+    private val generatedSource = "Yomitan Mobile (${scale.displayName})"
+
+    private val _level = MutableStateFlow(scale.levels.first())
     val level: StateFlow<Int> = _level.asStateFlow()
 
     private val _filters = MutableStateFlow(JlptDeckFilters())
     val filters: StateFlow<JlptDeckFilters> = _filters.asStateFlow()
 
-    private val _deckName = MutableStateFlow(defaultDeckName(5))
+    private val _deckName = MutableStateFlow(scale.deckName(scale.levels.first()))
     val deckName: StateFlow<String> = _deckName.asStateFlow()
 
     private val _isAnalyzing = MutableStateFlow(false)
@@ -210,7 +224,7 @@ class JlptDeckViewModel @Inject constructor(
 
     private fun refreshTaggedWordCount(level: Int) {
         viewModelScope.launch {
-            _taggedWordCount.value = runCatching { jlptTagDao.countForLevel(level) }
+            _taggedWordCount.value = runCatching { jlptTagDao.countForLevel(level, language.entryTag) }
                 .getOrElse {
                     Log.w(logTag, "Counting JLPT tags failed", it)
                     null
@@ -222,10 +236,10 @@ class JlptDeckViewModel @Inject constructor(
         if (level == _level.value) return
         _level.value = level
         // Keep the deck name in sync as long as the user hasn't renamed it.
-        if (_deckName.value == defaultDeckName(_level.value) || _deckName.value.isBlank() ||
-            LEVELS.any { _deckName.value == defaultDeckName(it) }
+        if (_deckName.value == scale.deckName(_level.value) || _deckName.value.isBlank() ||
+            scale.levels.any { _deckName.value == scale.deckName(it) }
         ) {
-            _deckName.value = defaultDeckName(level)
+            _deckName.value = scale.deckName(level)
         }
         _plan.value = null
         refreshTaggedWordCount(level)
@@ -354,7 +368,7 @@ class JlptDeckViewModel @Inject constructor(
                 if (wantsAudio && tts == null && !voicevox.isActive()) {
                     _events.emit(JlptDeckEvent.AudioUnavailable)
                 }
-                val deck = _deckName.value.trim().ifBlank { defaultDeckName(plan.level) }
+                val deck = _deckName.value.trim().ifBlank { scale.deckName(plan.level) }
                 val entries = monolingualCardResolver.apply(plan.selected.map { it.toWordEntry() })
                 val marks = _suspendedKeys.value
 
@@ -424,7 +438,7 @@ class JlptDeckViewModel @Inject constructor(
                 if (wantsAudio && tts == null && !voicevox.isActive()) {
                     _events.emit(JlptDeckEvent.AudioUnavailable)
                 }
-                val deck = _deckName.value.trim().ifBlank { defaultDeckName(plan.level) }
+                val deck = _deckName.value.trim().ifBlank { scale.deckName(plan.level) }
 
                 // One batched lookup rewrites the whole deck when the JP-JP
                 // engine is on; a no-op otherwise.
@@ -489,7 +503,7 @@ class JlptDeckViewModel @Inject constructor(
                                 entries.flatMap {
                                     listOf(it.expression, it.reading)
                                 }.filter { it.isNotBlank() },
-                                source = GENERATED_SOURCE
+                                source = generatedSource
                             )
                         }
                         _events.emit(
@@ -545,7 +559,12 @@ class JlptDeckViewModel @Inject constructor(
     private suspend fun collectCandidates(level: Int): List<MergedWordEntry> {
         val tagged = repository.getEntriesByJlptLevel(level)
 
-        val builtIn = JlptVocabulary.wordsForLevel(level)
+        // The curated list is JLPT's; English has only its tag lists.
+        val builtIn = if (scale == com.yomitanmobile.domain.model.LevelScale.JLPT) {
+            JlptVocabulary.wordsForLevel(level)
+        } else {
+            emptyList()
+        }
         val alreadyCovered = tagged.mapTo(HashSet()) { matchKey(it.expression, it.reading) }
         val missing = builtIn.filterNot { (expression, reading) ->
             matchKey(expression, reading) in alreadyCovered
@@ -592,14 +611,12 @@ class JlptDeckViewModel @Inject constructor(
     }
 
     private fun tagsForLevel(level: Int): Set<String> =
-        setOf("yomitan-mobile", "jlpt-n$level", "auto-generated")
+        setOf("yomitan-mobile", scale.tag(level), "auto-generated")
 
     /** The key a word is marked under while reviewing; see `previewKeyOf`. */
     private fun markKey(entry: WordEntry): String = "${entry.expression}\t${entry.reading}"
 
     companion object {
-        /** Note-type label the scan screen shows for generated words. */
-        private const val GENERATED_SOURCE = "Yomitan Mobile (JLPT)"
 
         /**
          * Carried by cards the user marked as known when they are written
@@ -608,8 +625,6 @@ class JlptDeckViewModel @Inject constructor(
          */
         const val SUSPEND_TAG = "yomitan-suspend"
 
-        val LEVELS = listOf(5, 4, 3, 2, 1)
 
-        fun defaultDeckName(level: Int): String = "JLPT N$level"
     }
 }

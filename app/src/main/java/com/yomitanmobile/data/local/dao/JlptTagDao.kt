@@ -25,7 +25,17 @@ interface JlptTagDao {
     @Query("SELECT COUNT(*) FROM jlpt_tags")
     suspend fun count(): Int
 
-    /** How many words the stored tags cover per level — used by the deck UI. */
-    @Query("SELECT COUNT(DISTINCT expression) FROM jlpt_tags WHERE level = :level")
-    suspend fun countForLevel(level: Int): Int
+    /**
+     * How many words the stored tags of ONE language cover at a level — used
+     * by the deck UI. Per language because JLPT and CEFR share the numbers
+     * (CEFR B2 is stored as 3, JLPT N3 too).
+     */
+    @Query(
+        """
+        SELECT COUNT(DISTINCT t.expression) FROM jlpt_tags t
+        WHERE t.level = :level
+          AND COALESCE((SELECT d.language FROM dictionaries d WHERE d.name = t.dictionary LIMIT 1), 'ja') = :language
+        """
+    )
+    suspend fun countForLevel(level: Int, language: String): Int
 }
