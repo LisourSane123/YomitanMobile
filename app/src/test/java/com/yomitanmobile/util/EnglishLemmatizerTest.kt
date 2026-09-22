@@ -1,6 +1,7 @@
 package com.yomitanmobile.util
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -71,5 +72,52 @@ class EnglishLemmatizerTest {
         assertTrue(EnglishLemmatizer.analyze("go").isEmpty())
         assertTrue(EnglishLemmatizer.analyze("12s").isEmpty())
         assertTrue(EnglishLemmatizer.analyze("").isEmpty())
+    }
+
+    @Test
+    fun `irregular plurals the dictionary has no headword for reach their noun`() {
+        assertEquals("child", EnglishLemmatizer.analyze("children").first())
+        assertEquals("woman", EnglishLemmatizer.analyze("women").first())
+        assertEquals("tooth", EnglishLemmatizer.analyze("teeth").first())
+        assertEquals("mouse", EnglishLemmatizer.analyze("mice").first())
+        assertEquals("criterion", EnglishLemmatizer.analyze("criteria").first())
+        assertEquals("crisis", EnglishLemmatizer.analyze("crises").first())
+        assertEquals("cactus", EnglishLemmatizer.analyze("cacti").first())
+    }
+
+    @Test
+    fun `irregular verbs and comparatives offer their base first`() {
+        assertEquals("go", EnglishLemmatizer.analyze("went").first())
+        assertEquals("write", EnglishLemmatizer.analyze("written").first())
+        assertEquals(listOf("good", "well"), EnglishLemmatizer.analyze("better").take(2))
+        assertEquals(listOf("be"), EnglishLemmatizer.analyze("been").take(1))
+    }
+
+    @Test
+    fun `a form that is two words' form offers both`() {
+        // leaves: the plural of leaf, and "leave" + s.
+        val leaves = EnglishLemmatizer.analyze("leaves")
+        assertTrue(leaves.toString(), "leaf" in leaves && "leave" in leaves)
+        val bases = EnglishLemmatizer.analyze("bases")
+        assertTrue(bases.toString(), "basis" in bases && "base" in bases)
+    }
+
+    @Test
+    fun `no suffix rule offers a real word that is the wrong one`() {
+        // The rules a table replaced would have said belief, safe, indium.
+        assertTrue("belief" !in EnglishLemmatizer.analyze("believes"))
+        assertTrue("safe" !in EnglishLemmatizer.analyze("saves"))
+        assertTrue("indium" !in EnglishLemmatizer.analyze("india"))
+    }
+
+    @Test
+    fun `the table parses verbs and nouns into form to base`() {
+        val parsed = EnglishLemmatizer.parseIrregular(
+            "# nouns\nmen man\naxes axis,axe\n# verbs: base past participle\nget got got,gotten\n"
+        )
+        assertEquals(listOf("man"), parsed["men"])
+        assertEquals(listOf("axis", "axe"), parsed["axes"])
+        assertEquals(listOf("get"), parsed["gotten"])
+        assertTrue("get" !in parsed)
     }
 }
