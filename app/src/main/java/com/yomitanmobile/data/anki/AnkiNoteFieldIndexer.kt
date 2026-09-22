@@ -78,10 +78,56 @@ internal object AnkiNoteFieldIndexer {
 
     /** Adds every indexable word of one note's raw `flds` blob to [out]. */
     fun collectKeysFromNote(flds: String, out: MutableSet<String>) {
-        for (field in flds.split(FIELD_SEPARATOR)) {
+        val fields = flds.split(FIELD_SEPARATOR)
+        for (field in fields) {
             collectKeys(field, out)
         }
+        fields.firstOrNull()?.let { collectLatinHeadword(it, out) }
     }
+
+    /**
+     * An English (or Spanish) word, from the note's FIRST field only.
+     *
+     * Everything above indexes Japanese and throws Latin text away, so an
+     * English word was never "already in Anki" — the duplicate check could
+     * not stop an English card at all. Latin text cannot be read the Japanese
+     * way, "any short field": the meanings on a Japanese card are short Latin
+     * fields too ("dog" beside 犬), and indexing them would block the English
+     * card for "dog" because of a Japanese one. The first field is what Anki's
+     * own duplicate check compares, and it is the word on every vocabulary
+     * note type — the front of an English deck, never the gloss of a Japanese
+     * one, whose first field is Japanese.
+     *
+     * Keyed like the Japanese keys ([normalizeKey]) and lowercased; no key a
+     * Japanese word produces contains a Latin letter, so the two never meet.
+     */
+    private fun collectLatinHeadword(rawField: String, out: MutableSet<String>) {
+        var text = SOUND_OR_IMAGE.replace(rawField, " ")
+        text = BLOCK_TAG.replace(text, "\n")
+        text = HTML_TAG.replace(text, " ")
+        text = text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", "\"")
+        for (piece in text.split(LIST_SEPARATOR)) {
+            val word = piece.trim()
+            if (word.isEmpty() || word.length > MAX_RAW_FIELD_LENGTH) continue
+            if (word.split(WHITESPACE).count { it.isNotBlank() } > MAX_LATIN_WORDS) continue
+            if (!isLatinWord(word)) continue
+            val key = latinKey(word)
+            if (key.isNotEmpty()) out.add(key)
+        }
+    }
+
+    /** A headword of up to [MAX_LATIN_WORDS] words ("ice cream"); a phrase past that is prose. */
+    private const val MAX_LATIN_WORDS = 4
+
+    /** Latin letters (accents included), with the spaces, hyphens and apostrophes words carry. */
+    fun isLatinWord(value: String): Boolean =
+        value.any { it.isLetter() } && value.all { ch ->
+            (ch.isLetter() && Character.UnicodeScript.of(ch.code) == Character.UnicodeScript.LATIN) ||
+                ch == ' ' || ch == '-' || ch == '\'' || ch == '’' || ch == '.'
+        }
+
+    /** The key a Latin word is indexed and looked up under. */
+    fun latinKey(value: String): String = normalizeKey(value).lowercase()
 
     /** Convenience for tests and one-off callers. */
     fun keysFromNote(flds: String): Set<String> =

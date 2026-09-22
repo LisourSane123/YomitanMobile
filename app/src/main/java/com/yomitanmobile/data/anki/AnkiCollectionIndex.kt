@@ -75,6 +75,11 @@ class AnkiCollectionIndex @Inject constructor(
             readingCountsAlone: Boolean = false
         ): Boolean {
             if (!available) return false
+            // An English or Spanish word: its note's first field is the only
+            // place it is indexed (see AnkiNoteFieldIndexer), under its
+            // lowercased spelling. No reading rule applies to it.
+            val latin = expressions.filter { AnkiNoteFieldIndexer.isLatinWord(it) }
+            if (latin.isNotEmpty() && latin.any { AnkiNoteFieldIndexer.latinKey(it) in keys }) return true
             val read = AnkiNoteFieldIndexer.normalizeKey(reading)
             val spellings = expressions
                 .map { AnkiNoteFieldIndexer.normalizeKey(it) }

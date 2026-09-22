@@ -1,6 +1,7 @@
 package com.yomitanmobile.data.anki
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -59,10 +60,19 @@ class AnkiNoteFieldIndexerTest {
     }
 
     @Test
-    fun ignoresLatinAndEmptyFields() {
+    fun ignoresLatinAndEmptyFieldsBesideTheWord() {
+        // A Japanese note's English gloss and tags are not words it holds.
+        val keys = AnkiNoteFieldIndexer.keysFromNote(note("時間", "time", "", "  ", "N5"))
+
+        assertEquals(setOf("時間"), keys)
+    }
+
+    @Test
+    fun aLatinFirstFieldIsTheEnglishWordAndNothingElse() {
+        // An English deck: the first field is its word (see LatinDuplicateTest).
         val keys = AnkiNoteFieldIndexer.keysFromNote(note("time", "", "  ", "N5"))
 
-        assertTrue(keys.isEmpty())
+        assertEquals(setOf("time"), keys)
     }
 
     @Test
