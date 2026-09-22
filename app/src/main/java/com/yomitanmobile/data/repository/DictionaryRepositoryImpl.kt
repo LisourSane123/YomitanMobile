@@ -615,10 +615,7 @@ class DictionaryRepositoryImpl @Inject constructor(
             Log.w(TAG, "Re-applying stored JLPT levels failed", e)
         }
         try {
-            dictionaryDao.applyFrequenciesFromTable(
-                leadingDictionary = leadingFrequencyDictionary(),
-                strict = if (frequencySettings.strictLeading()) 1 else 0
-            )
+            rollupFrequencies()
         } catch (e: Exception) {
             Log.w(TAG, "Re-applying stored frequencies failed", e)
         }
@@ -682,23 +679,41 @@ class DictionaryRepositoryImpl @Inject constructor(
         frequencyDao.observeListSettings()
 
     /**
-     * The list the user put first in the frequency-priority order, or "" when
-     * they have not chosen one — in which case the rollup falls back to the
-     * best rank across every installed list.
+     * The frequency rollup, once per study language that has anything
+     * installed: that language's rows, that language's lists, and the list
+     * leading THAT language's order. A list counts words of one language, so
+     * a Japanese row must never take a number from an English list — which a
+     * single rollup over every list did the moment one was installed.
+     *
+     * Each pass is one statement over the term table, so a language costs a
+     * pass only when it has dictionaries; a Japanese-only install runs
+     * exactly the one pass it always ran.
      */
-    private suspend fun leadingFrequencyDictionary(): String =
-        frequencySettings.leadingDictionary(frequencyDao.observeDictionaries().first())
+    private suspend fun rollupFrequencies() {
+        val strict = if (frequencySettings.strictLeading()) 1 else 0
+        // A language needs a pass when it has term rows to stamp — or a list
+        // whose numbers are stamped on rows and have to come off when it goes.
+        val languages = (dictionaryInfoDao.installedLanguages() + frequencyDao.listLanguages()).distinct()
+        for (tag in languages) {
+            val language = AppLanguage.entries.firstOrNull { it.entryTag == tag } ?: continue
+            val lists = frequencyDao.observeDictionariesFor(tag).first()
+            dictionaryDao.applyFrequenciesFromTable(
+                language = tag,
+                leadingDictionary = frequencySettings.leadingDictionary(language, lists),
+                dictionaries = lists,
+                strict = strict
+            )
+        }
+    }
 
     /**
      * Re-rolls `dictionary_entries.frequency` after the user changes which
-     * list leads. One statement over the whole table, so it runs off the main
-     * thread and reports when it is done rather than blocking the screen.
+     * list leads. One statement per language over the whole table, so it runs
+     * off the main thread and reports when it is done rather than blocking
+     * the screen.
      */
     override suspend fun reapplyFrequencies() = withContext(Dispatchers.IO) {
-        dictionaryDao.applyFrequenciesFromTable(
-            leadingDictionary = leadingFrequencyDictionary(),
-            strict = if (frequencySettings.strictLeading()) 1 else 0
-        )
+        rollupFrequencies()
     }
 
     override suspend fun getFrequencies(expression: String, reading: String): List<WordFrequencyInfo> {

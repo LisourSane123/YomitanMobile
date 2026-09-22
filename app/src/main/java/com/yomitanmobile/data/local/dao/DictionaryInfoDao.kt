@@ -28,4 +28,8 @@ interface DictionaryInfoDao {
 
     @Query("DELETE FROM dictionaries WHERE name = :name")
     suspend fun deleteByName(name: String)
+
+    /** Study languages that have anything installed — each gets its own frequency rollup. */
+    @Query("SELECT DISTINCT language FROM dictionaries")
+    suspend fun installedLanguages(): List<String>
 }

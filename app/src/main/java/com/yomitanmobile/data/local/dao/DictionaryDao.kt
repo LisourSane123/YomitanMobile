@@ -489,11 +489,20 @@ interface DictionaryDao {
      * Two statements rather than one: the first clears `frequency_value` on
      * rows that no list covers any more (a deleted list, a new leading list),
      * which the EXISTS of the second never reaches.
+     *
+     * One LANGUAGE per call: only that language's rows are touched, and only
+     * that language's [dictionaries] are read — a Japanese row must not take
+     * a rank from an English list, nor the other way round.
      */
     @androidx.room.Transaction
-    suspend fun applyFrequenciesFromTable(leadingDictionary: String, strict: Int) {
-        clearOrphanedFrequencyValues()
-        applyFrequencyRollup(leadingDictionary, strict)
+    suspend fun applyFrequenciesFromTable(
+        language: String,
+        leadingDictionary: String,
+        dictionaries: List<String>,
+        strict: Int
+    ) {
+        clearOrphanedFrequencyValues(language, dictionaries)
+        applyFrequencyRollup(language, leadingDictionary, dictionaries, strict)
     }
 
     /** False right after the 21→22 migration, before the first rollup. */
@@ -503,15 +512,16 @@ interface DictionaryDao {
     @Query(
         """
         UPDATE dictionary_entries SET frequency_value = ''
-        WHERE frequency_value != '' AND NOT EXISTS (
+        WHERE language = :language AND frequency_value != '' AND NOT EXISTS (
             SELECT 1 FROM word_frequencies f
             WHERE f.expression = dictionary_entries.expression
               AND (f.reading = dictionary_entries.reading OR f.reading = '')
               AND f.position > 0
+              AND f.dictionary IN (:dictionaries)
         )
         """
     )
-    suspend fun clearOrphanedFrequencyValues()
+    suspend fun clearOrphanedFrequencyValues(language: String, dictionaries: List<String>)
 
     @Query(
         """
@@ -523,6 +533,7 @@ interface DictionaryDao {
               AND f.expression = dictionary_entries.expression
               AND (f.reading = dictionary_entries.reading OR f.reading = '')
               AND f.position > 0
+              AND f.dictionary IN (:dictionaries)
             ORDER BY f.reading = '' , f.position
             LIMIT 1
         ), ''),
@@ -534,6 +545,7 @@ interface DictionaryDao {
                   AND f.expression = dictionary_entries.expression
                   AND (f.reading = dictionary_entries.reading OR f.reading = '')
                   AND f.position > 0
+                  AND f.dictionary IN (:dictionaries)
             ),
             -- Strict: a word the leading list does not know is unranked
             -- rather than borrowing another list's standing.
@@ -543,16 +555,23 @@ interface DictionaryDao {
                 WHERE f.expression = dictionary_entries.expression
                   AND (f.reading = dictionary_entries.reading OR f.reading = '')
                   AND f.position > 0
+                  AND f.dictionary IN (:dictionaries)
             ),
             frequency
         )
-        WHERE EXISTS (
+        WHERE language = :language AND EXISTS (
             SELECT 1 FROM word_frequencies f
             WHERE f.expression = dictionary_entries.expression
               AND (f.reading = dictionary_entries.reading OR f.reading = '')
               AND f.position > 0
+              AND f.dictionary IN (:dictionaries)
         )
         """
     )
-    suspend fun applyFrequencyRollup(leadingDictionary: String, strict: Int)
+    suspend fun applyFrequencyRollup(
+        language: String,
+        leadingDictionary: String,
+        dictionaries: List<String>,
+        strict: Int
+    )
 }

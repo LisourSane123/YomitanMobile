@@ -106,7 +106,7 @@ class FrequencyDirectionDbTest {
     @Test
     fun `the leading list's own number lands on the entry, its position orders it`() = runBlocking {
         insertCountedList()
-        FrequencySettings(ApplicationProvider.getApplicationContext()).setOrder(listOf(listName))
+        FrequencySettings(ApplicationProvider.getApplicationContext()).setOrder(com.yomitanmobile.domain.model.AppLanguage.JAPANESE, listOf(listName))
 
         repo.classifyUnknownFrequencyLists()
         repo.reapplyFrequencies()
@@ -120,7 +120,7 @@ class FrequencyDirectionDbTest {
     fun `a word the leading list does not know carries no leading number`() = runBlocking {
         insertCountedList()
         db.frequencyDao().insertAll(listOf(WordFrequency("語1", "ご1", "JPDBv2", 7, "7")))
-        FrequencySettings(ApplicationProvider.getApplicationContext()).setOrder(listOf("JPDBv2", listName))
+        FrequencySettings(ApplicationProvider.getApplicationContext()).setOrder(com.yomitanmobile.domain.model.AppLanguage.JAPANESE, listOf("JPDBv2", listName))
 
         repo.classifyUnknownFrequencyLists()
         repo.reapplyFrequencies()

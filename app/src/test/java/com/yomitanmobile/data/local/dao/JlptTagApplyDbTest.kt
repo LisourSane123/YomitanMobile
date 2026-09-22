@@ -138,7 +138,7 @@ class JlptTagApplyDbTest {
         )
         // Rows a term (re-)import just wrote: no frequency of their own.
         dao.insertAll(listOf(entry("学校", "がっこう", frequency = 0)))
-        dao.applyFrequenciesFromTable(leadingDictionary = "", strict = 0)
+        dao.applyFrequenciesFromTable(language = "ja", leadingDictionary = "", dictionaries = LISTS, strict = 0)
 
         val best = dao.getEntriesByExpressions(listOf("学校"), "ja").single().frequency
         assertEquals(812, best)
@@ -164,7 +164,7 @@ class JlptTagApplyDbTest {
             )
         )
 
-        dao.applyFrequenciesFromTable(leadingDictionary = "CEJC-LUW", strict = 0)
+        dao.applyFrequenciesFromTable(language = "ja", leadingDictionary = "CEJC-LUW", dictionaries = LISTS, strict = 0)
 
         assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
         assertEquals("400", dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequencyValue)
@@ -192,7 +192,7 @@ class JlptTagApplyDbTest {
             )
         )
 
-        dao.applyFrequenciesFromTable(leadingDictionary = "CEJC-LUW", strict = 1)
+        dao.applyFrequenciesFromTable(language = "ja", leadingDictionary = "CEJC-LUW", dictionaries = LISTS, strict = 1)
 
         assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
         assertEquals(0, dao.getEntriesByExpressions(listOf("朕"), "ja").single().frequency)
@@ -208,8 +208,13 @@ class JlptTagApplyDbTest {
             )
         )
 
-        dao.applyFrequenciesFromTable(leadingDictionary = "", strict = 0)
+        dao.applyFrequenciesFromTable(language = "ja", leadingDictionary = "", dictionaries = LISTS, strict = 0)
 
         assertEquals(400, dao.getEntriesByExpressions(listOf("喋る"), "ja").single().frequency)
+    }
+
+    private companion object {
+        /** Every list these tests install — all Japanese. */
+        val LISTS = listOf("BCCWJ", "CEJC-LUW", "JPDB")
     }
 }

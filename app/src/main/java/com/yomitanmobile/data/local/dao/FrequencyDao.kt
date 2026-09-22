@@ -134,7 +134,44 @@ interface FrequencyDao {
     @Query("UPDATE word_frequencies SET dictionary = :newName WHERE dictionary = :oldName")
     suspend fun updateDictionaryName(oldName: String, newName: String)
 
-    /** Distinct list names that actually carry frequency data, for the settings UI. */
+    /**
+     * Distinct list names that actually carry frequency data, EVERY language.
+     * For questions that are about the lists as files ("is anything
+     * installed", "which ones are unclassified") — anything about ranks wants
+     * [observeDictionariesFor].
+     */
     @Query("SELECT DISTINCT dictionary FROM word_frequencies ORDER BY dictionary")
     fun observeDictionaries(): Flow<List<String>>
+
+    /**
+     * The lists of ONE study language. Which list leads, the order of the
+     * rank chips and the rollup onto term rows are all per language: a list
+     * counts words of one language, and a single shared order let an English
+     * list lead Japanese cards (or JPDB lead English ones) and empty them.
+     *
+     * The language is the one recorded for the list at import; a list with
+     * no `dictionaries` row predates languages and is Japanese.
+     */
+    @Query(
+        """
+        SELECT DISTINCT f.dictionary FROM word_frequencies f
+        WHERE COALESCE(
+            (SELECT d.language FROM dictionaries d WHERE d.name = f.dictionary LIMIT 1),
+            'ja'
+        ) = :language
+        ORDER BY f.dictionary
+        """
+    )
+    fun observeDictionariesFor(language: String): Flow<List<String>>
+
+    /** The study languages the installed lists belong to, by the same rule as [observeDictionariesFor]. */
+    @Query(
+        """
+        SELECT DISTINCT COALESCE(
+            (SELECT d.language FROM dictionaries d WHERE d.name = f.dictionary LIMIT 1),
+            'ja'
+        ) FROM (SELECT DISTINCT dictionary FROM word_frequencies) f
+        """
+    )
+    suspend fun listLanguages(): List<String>
 }

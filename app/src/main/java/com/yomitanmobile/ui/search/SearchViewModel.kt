@@ -332,7 +332,10 @@ class SearchViewModel @Inject constructor(
     ): List<MergedWordEntry> {
         if (entries.isEmpty()) return entries
         return runCatching {
-            val leading = frequencySettings.leadingDictionary(frequencyDao.observeDictionaries().first())
+            val leading = frequencySettings.leadingDictionary(
+                appLanguage,
+                frequencyDao.observeDictionariesFor(appLanguage.entryTag).first()
+            )
             if (leading.isBlank()) return entries
             val higherIsBetter = frequencyDao.getListSetting(leading)?.higherIsBetter ?: false
             val expressions = entries.map { it.primaryExpression }.filter { it.isNotBlank() }.distinct()

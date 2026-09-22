@@ -408,10 +408,10 @@ class DetailViewModel @Inject constructor(
             runCatching {
                 val raw = repository.getFrequencies(expression, reading)
                 val prefs = appContext.dataStore.data.first()
-                val priority = frequencySettings.resolveOrder(
-                    frequencySettings.order(),
-                    frequencyDao.observeDictionaries().first()
-                )
+                // This language's lists only: the chips, the star and the
+                // number on the card all speak for the language being studied.
+                val installed = frequencyDao.observeDictionariesFor(studyLanguage.entryTag).first()
+                val priority = frequencySettings.resolveOrder(frequencySettings.order(studyLanguage), installed)
                 val showAll = prefs[MainActivity.FREQUENCY_SHOW_ALL] ?: true
                 val leading = priority.firstOrNull().orEmpty()
                 _leadingDictionary.value = leading
@@ -424,7 +424,7 @@ class DetailViewModel @Inject constructor(
                 _entry.value = _entry.value?.let { current ->
                     if (current.primaryId == merged.primaryId) current.copy(frequencyValue = leadingValue) else current
                 }
-                WordFrequencyInfo.order(raw, priority, showAll)
+                WordFrequencyInfo.order(raw.filter { it.dictionary in installed }, priority, showAll)
             }.onSuccess { _frequencies.value = it }
                 .onFailure { exception ->
                     _frequencies.value = emptyList()
@@ -453,10 +453,10 @@ class DetailViewModel @Inject constructor(
      */
     fun makeLeading(dictionary: String) {
         viewModelScope.launch {
-            val installed = frequencyDao.observeDictionaries().first()
-            val current = frequencySettings.resolveOrder(frequencySettings.order(), installed)
+            val installed = frequencyDao.observeDictionariesFor(studyLanguage.entryTag).first()
+            val current = frequencySettings.resolveOrder(frequencySettings.order(studyLanguage), installed)
             if (current.firstOrNull() == dictionary || dictionary !in installed) return@launch
-            frequencySettings.setOrder(listOf(dictionary) + current.filter { it != dictionary })
+            frequencySettings.setOrder(studyLanguage, listOf(dictionary) + current.filter { it != dictionary })
             frequencyRecomputer.reapply()
             loadFrequencies()
         }
