@@ -538,7 +538,9 @@ private fun WordDetailContent(
                         Text(freqLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Medium)
                     }
                 }
-                val jlptLevel = JlptLevelUtil.fromDbValue(entry.jlptLevel)
+                // JLPT or CEFR, by the language being studied: they share the
+                // stored column, so it is never read directly (StudyLevel).
+                val jlptLevel = com.yomitanmobile.domain.model.StudyLevel.badge(studyLanguage, entry.jlptLevel)
                 // The classifier-derived category chip was removed at
                 // the user's request — the JLPT and lookup-count badges
                 // stay because they directly help the learner judge a
@@ -549,7 +551,7 @@ private fun WordDetailContent(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (jlptLevel != null) {
                         Text(
-                            text = "JLPT ${jlptLevel.label}",
+                            text = "${jlptLevel.scale} ${jlptLevel.label}",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = androidx.compose.ui.graphics.Color.White,

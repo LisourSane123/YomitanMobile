@@ -238,6 +238,7 @@ fun SearchScreen(
                                 // verbatim in the definition text.
                                 highlightQuery = if (searchMode == SearchMode.ENGLISH) query else "",
                                 isEnglish = isEnglish,
+                                studyLanguage = viewModel.appLanguage,
                                 onClick = {
                                     viewModel.onWordClicked(entry)
                                     onWordClick(entry.primaryId)
@@ -467,6 +468,7 @@ private fun MergedWordEntryCard(
     entry: MergedWordEntry,
     highlightQuery: String,
     isEnglish: Boolean,
+    studyLanguage: AppLanguage,
     onClick: () -> Unit
 ) {
     val tr = rememberTr()
@@ -579,7 +581,9 @@ private fun MergedWordEntryCard(
                     )
                 }
             }
-            val jlptLevel = JlptLevelUtil.fromDbValue(entry.jlptLevel)
+            // The level on the scale of the language being studied — JLPT or
+            // CEFR share the stored column, so it is never read directly.
+            val jlptLevel = com.yomitanmobile.domain.model.StudyLevel.badge(studyLanguage, entry.jlptLevel)
             if (jlptLevel != null) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(

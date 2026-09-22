@@ -630,6 +630,13 @@ fun SettingsScreen(
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
+                                "Poziomy CEFR (jeśli pobrane): The CEFR-J Wordlist Version 1.5, Yukio Tono, Tokyo University of Foreign Studies; Octanove Vocabulary Profile C1/C2, CC BY-SA 4.0.",
+                                "CEFR levels (if downloaded): The CEFR-J Wordlist Version 1.5, Yukio Tono, Tokyo University of Foreign Studies; Octanove Vocabulary Profile C1/C2, CC BY-SA 4.0."
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            tr(
                                 "Częstość słów angielskich i hiszpańskich (jeśli pobrana): wordfreq (Robyn Speer) oraz FrequencyWords (Hermit Dave, z OpenSubtitles 2018), CC BY-SA 4.0.",
                                 "English and Spanish word frequency (if downloaded): wordfreq (Robyn Speer) and FrequencyWords (Hermit Dave, from OpenSubtitles 2018), CC BY-SA 4.0."
                             )

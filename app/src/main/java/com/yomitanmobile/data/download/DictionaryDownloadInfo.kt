@@ -29,10 +29,10 @@ data class DictionaryDownloadInfo(
     /**
      * Set when the file is NOT a Yomitan dictionary but a frequency list in
      * its publisher's own format; it is converted into one before import
-     * ([FrequencyListConverter]), under [name] as its title — the name the
+     * ([ListFormat]), under [name] as its title — the name the
      * catalogue then recognises as installed. Null for a Yomitan zip.
      */
-    val convertFrom: FrequencyListConverter.Format? = null,
+    val convertFrom: ListFormat? = null,
     /** The credit the list's licence asks for, written into its index.json. */
     val attribution: String = ""
 )
@@ -266,7 +266,7 @@ object AvailableDictionaries {
         sha256 = "dffae8066b78dce0a6667cf5f58e567054f902674667090a7ac8a8a44628b05c",
         language = "EN",
         studyLanguage = AppLanguage.ENGLISH,
-        convertFrom = FrequencyListConverter.Format.WORDFREQ_MSGPACK,
+        convertFrom = ListFormat.WORDFREQ_MSGPACK,
         attribution = WORDFREQ_CREDIT
     )
 
@@ -281,7 +281,7 @@ object AvailableDictionaries {
         sha256 = "5351ff405b1126ef555791dd4d9798a48e3e9a501a9fc481a9da957752cfb458",
         language = "EN",
         studyLanguage = AppLanguage.ENGLISH,
-        convertFrom = FrequencyListConverter.Format.SUBTITLE_COUNTS,
+        convertFrom = ListFormat.SUBTITLE_COUNTS,
         attribution = FREQUENCY_WORDS_CREDIT
     )
 
@@ -296,7 +296,7 @@ object AvailableDictionaries {
         sha256 = "14f326b4f68d517f9b8b99c1e26ef56a508d2dc8d0ee7a9e6e8732ddab1aa65e",
         language = "ES",
         studyLanguage = AppLanguage.SPANISH,
-        convertFrom = FrequencyListConverter.Format.WORDFREQ_MSGPACK,
+        convertFrom = ListFormat.WORDFREQ_MSGPACK,
         attribution = WORDFREQ_CREDIT
     )
 
@@ -311,8 +311,50 @@ object AvailableDictionaries {
         sha256 = "dcff3ad4316192f4dc4ff7d26e637c6ff314ef1ca0f3f720c5649018a71056c0",
         language = "ES",
         studyLanguage = AppLanguage.SPANISH,
-        convertFrom = FrequencyListConverter.Format.SUBTITLE_COUNTS,
+        convertFrom = ListFormat.SUBTITLE_COUNTS,
         attribution = FREQUENCY_WORDS_CREDIT
+    )
+
+    // ── CEFR levels for English ──────────────────────────────────────────
+    //
+    // The levels a learner of English is taught by (A1 first words … C2
+    // mastery), for the level badge and the deck generator — what JLPT is to
+    // Japanese. Real, researcher-assigned lists, not levels guessed from
+    // frequency: the CEFR-J Wordlist (A1–B2; free with citation, © Tono
+    // Laboratory, TUFS) and the Octanove Vocabulary Profile (C1–C2, CC BY-SA
+    // 4.0), both from the Open Language Profiles repository, pinned to its
+    // commit. 98% and 93% of their words are English-Polish headwords.
+    private const val CEFR_DATA =
+        "https://raw.githubusercontent.com/openlanguageprofiles/olp-en-cefrj/d4e45b75b38f27b30dfc5c44d8c571aec7e7092f"
+
+    val cefrjEn = DictionaryDownloadInfo(
+        id = "cefrj_en",
+        name = "CEFR-J (EN A1–B2)",
+        descriptionPl = "Poziomy CEFR (A1–B2) dla 7 800 angielskich słów, opracowane przez badaczy (CEFR-J, Tokyo University of Foreign Studies). Odznaka poziomu przy słowie i generator talii według poziomu.",
+        descriptionEn = "CEFR levels (A1-B2) for 7,800 English words, assigned by researchers (CEFR-J, Tokyo University of Foreign Studies). A level badge on each word and a deck generator by level.",
+        category = DictionaryCategory.FREQUENCY,
+        url = "$CEFR_DATA/cefrj-vocabulary-profile-1.5.csv",
+        fileSize = "~230 KB",
+        sha256 = "b0dd3c635f1c9a4fdf1490c7e5b7c48e8bbe55b652ad0c9860a95f98e10ae498",
+        language = "EN",
+        studyLanguage = AppLanguage.ENGLISH,
+        convertFrom = ListFormat.CEFR_CSV,
+        attribution = "The CEFR-J Wordlist Version 1.5. Compiled by Yukio Tono, Tokyo University of Foreign Studies (Tono Laboratory)"
+    )
+
+    val octanoveEn = DictionaryDownloadInfo(
+        id = "octanove_en",
+        name = "Octanove (EN C1–C2)",
+        descriptionPl = "Poziomy CEFR C1–C2 dla 2 100 angielskich słów zaawansowanych — dopełnienie CEFR-J.",
+        descriptionEn = "CEFR levels C1-C2 for 2,100 advanced English words — the complement to CEFR-J.",
+        category = DictionaryCategory.FREQUENCY,
+        url = "$CEFR_DATA/octanove-vocabulary-profile-c1c2-1.0.csv",
+        fileSize = "~46 KB",
+        sha256 = "18c33a407f2f89f7b8de9671c6d45fe3ea0bce45e7d2d7dcaab48d73e0f7b380",
+        language = "EN",
+        studyLanguage = AppLanguage.ENGLISH,
+        convertFrom = ListFormat.CEFR_CSV,
+        attribution = "Octanove Vocabulary Profile C1/C2 1.0 (Octanove Labs), CC BY-SA 4.0"
     )
 
     /**
@@ -357,6 +399,8 @@ object AvailableDictionaries {
         wiktionaryEnIpa,
         wordfreqEn,
         openSubtitlesEn,
+        cefrjEn,
+        octanoveEn,
         wordfreqEs,
         openSubtitlesEs,
         jlptVocab,
@@ -498,7 +542,7 @@ object AvailableDictionaries {
     fun recommendedFor(language: AppLanguage): List<DictionaryDownloadInfo> =
         when (language) {
             AppLanguage.JAPANESE -> recommended
-            AppLanguage.ENGLISH -> listOf(wiktionaryEnPl, wiktionaryEnIpa, wordfreqEn)
+            AppLanguage.ENGLISH -> listOf(wiktionaryEnPl, wiktionaryEnIpa, wordfreqEn, cefrjEn, octanoveEn)
             AppLanguage.SPANISH -> listOf(wiktionaryEsEn, wiktionaryEsIpa, wordfreqEs)
         }
 

@@ -406,14 +406,6 @@ interface DictionaryDao {
     // level in the same source. The lower tier wins (5 = N5 = easiest): the
     // word should be learned at the earliest level it appears in, which is
     // also the rule MergedWordEntry.mergeEntries applies when grouping.
-    @Query(
-        """
-        UPDATE dictionary_entries SET jlpt_level = :level
-        WHERE expression = :expression AND reading = :reading AND jlpt_level < :level
-        """
-    )
-    suspend fun updateJlptLevelWithReading(expression: String, reading: String, level: Int)
-
     /**
      * Entries for a set of words from ONE dictionary. Feeds the monolingual
      * card engine, which must read the definition from a specific installed
@@ -433,21 +425,6 @@ interface DictionaryDao {
         dictionaryName: String
     ): List<DictionaryEntry>
 
-    @Query("UPDATE dictionary_entries SET jlpt_level = :level WHERE expression = :expression AND jlpt_level < :level")
-    suspend fun updateJlptLevelByExpression(expression: String, level: Int)
-
-    @androidx.room.Transaction
-    suspend fun updateJlptLevelBatch(batch: List<JlptUpdate>) {
-        for (update in batch) {
-            val reading = update.reading?.trim().orEmpty()
-            if (reading.isNotBlank()) {
-                updateJlptLevelWithReading(update.expression, reading, update.level)
-            } else {
-                updateJlptLevelByExpression(update.expression, update.level)
-            }
-        }
-    }
-
     /**
      * Re-applies every stored JLPT tag onto the term rows in one statement.
      *
@@ -458,6 +435,10 @@ interface DictionaryDao {
      *
      * A tag row with an empty reading matches on the expression alone; MAX
      * picks the easiest level when several tags cover the same word.
+     *
+     * A tag only reaches rows of its own list's language: JLPT and CEFR share
+     * the column (see CefrLevel), and without this the CEFR tag of "OK" landed
+     * on Jitendex's "OK" as a JLPT level no such scale has.
      */
     @Query(
         """
@@ -465,11 +446,15 @@ interface DictionaryDao {
             SELECT MAX(t.level) FROM jlpt_tags t
             WHERE t.expression = dictionary_entries.expression
               AND (t.reading = dictionary_entries.reading OR t.reading = '')
+              AND COALESCE((SELECT d.language FROM dictionaries d WHERE d.name = t.dictionary LIMIT 1), 'ja')
+                  = dictionary_entries.language
         ), 0))
         WHERE EXISTS (
             SELECT 1 FROM jlpt_tags t
             WHERE t.expression = dictionary_entries.expression
               AND (t.reading = dictionary_entries.reading OR t.reading = '')
+              AND COALESCE((SELECT d.language FROM dictionaries d WHERE d.name = t.dictionary LIMIT 1), 'ja')
+                  = dictionary_entries.language
         )
         """
     )

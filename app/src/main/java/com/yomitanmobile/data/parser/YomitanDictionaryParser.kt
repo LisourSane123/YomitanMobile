@@ -617,6 +617,9 @@ class YomitanDictionaryParser @Inject constructor() {
     }
 
     private fun jlptLabelToLevel(label: String): Int {
+        // A CEFR list tags English words the same way ("A1"…"C2"), stored on
+        // the same column in CefrLevel's convention — higher is easier.
+        com.yomitanmobile.domain.model.CefrLevel.fromLabel(label)?.let { return it.dbValue }
         // Accept "N1"…"N5" (any case) or just "1"…"5".
         val cleaned = label.trim().lowercase().removePrefix("n").trim()
         val n = cleaned.toIntOrNull() ?: return 0

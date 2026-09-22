@@ -361,14 +361,13 @@ class DictionaryDownloadManager(
                     // below expect.
                     verifySha256(tempFile, info.sha256)
                     info.convertFrom?.let { format ->
-                        val words = tempFile.inputStream().use { FrequencyListConverter.rankedWords(format, it) }
                         tempFile.writeBytes(
-                            FrequencyListConverter.toYomitanZip(
+                            format.toYomitanZip(
+                                file = tempFile,
                                 title = info.name,
                                 revision = info.sha256.orEmpty().take(12),
                                 sourceLanguage = info.studyLanguage.entryTag,
-                                attribution = info.attribution,
-                                words = words
+                                attribution = info.attribution
                             )
                         )
                     }

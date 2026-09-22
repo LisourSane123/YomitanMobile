@@ -434,10 +434,13 @@ class DictionaryRepositoryImpl @Inject constructor(
                 },
                 onJlptBatch = { jlptUpdates ->
                     if (jlptUpdates.isNotEmpty()) {
-                        // Persist first, apply second. The table is the source
-                        // of truth: term rows lose their jlpt_level on every
-                        // re-import, and a tag dictionary installed before its
-                        // term dictionary would have nothing to update at all.
+                        // Persisted only. The table is the source of truth:
+                        // term rows lose their jlpt_level on every re-import,
+                        // a tag dictionary installed before its term dictionary
+                        // has nothing to update, and the rollup after the
+                        // import (applyJlptLevelsFromTags) is what knows which
+                        // language a tag is for — writing rows from here put a
+                        // CEFR level on a Japanese row of the same spelling.
                         jlptTagDao.insertAll(
                             jlptUpdates.map { u ->
                                 JlptTag(
@@ -448,7 +451,6 @@ class DictionaryRepositoryImpl @Inject constructor(
                                 )
                             }
                         )
-                        dictionaryDao.updateJlptLevelBatch(jlptUpdates)
                         totalJlptUpdates += jlptUpdates.size
                     }
                 }
