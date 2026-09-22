@@ -344,8 +344,24 @@ class DictionaryDownloadManager(
                     )
 
                     downloadFile(info.url, tempFile, info)
-                    verifyZipSignature(tempFile)
+                    // The checksum is of the file as published; a list in its
+                    // publisher's format is only then turned into a Yomitan
+                    // dictionary, which is what the zip check and the import
+                    // below expect.
                     verifySha256(tempFile, info.sha256)
+                    info.convertFrom?.let { format ->
+                        val words = tempFile.inputStream().use { FrequencyListConverter.rankedWords(format, it) }
+                        tempFile.writeBytes(
+                            FrequencyListConverter.toYomitanZip(
+                                title = info.name,
+                                revision = info.sha256.orEmpty().take(12),
+                                sourceLanguage = info.studyLanguage.entryTag,
+                                attribution = info.attribution,
+                                words = words
+                            )
+                        )
+                    }
+                    verifyZipSignature(tempFile)
 
                     // Phase 2: Import
                     _currentDownload.value = _currentDownload.value?.copy(

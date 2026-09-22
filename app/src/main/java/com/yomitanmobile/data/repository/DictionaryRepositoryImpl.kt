@@ -523,27 +523,10 @@ class DictionaryRepositoryImpl @Inject constructor(
                 }
             }
 
-            // Roll the stored meta tables back down onto the term rows. Needed
-            // in both directions:
-            //  • a term import writes rows with jlpt_level = 0 / frequency = 0
-            //    (a plain JMdict carries neither) and replaces rows that had
-            //    the meta data applied to them,
-            //  • a meta import may have arrived BEFORE the term dictionary it
-            //    describes, so its per-row updates matched nothing.
-            // Without this the JLPT deck generator silently drops to zero
-            // candidates depending only on install order.
-            // Before the rollup: the list's direction decides its positions,
-            // and the rollup reads positions.
-            if (totalFreqUpdates > 0) {
-                try {
-                    classifyFrequencyList(dictionaryNameFromBatch)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Classifying the imported frequency list failed", e)
-                }
-            }
-
-            reapplyStoredMeta()
-
+            // The dictionary's row goes in BEFORE the rollup: the rollup reads
+            // each list's language from it, and a list without a row is taken
+            // for Japanese — so an English list imported last would sit out
+            // the English pass until something rolled up again.
             // Clean up any previous DictionaryInfo for this dictionary (both meta and regular)
             val existingInfo = dictionaryInfoDao.getByName(dictionaryNameFromBatch)
             if (existingInfo != null) {
@@ -565,6 +548,27 @@ class DictionaryRepositoryImpl @Inject constructor(
                     language = effectiveLanguage.entryTag
                 )
             )
+
+            // Roll the stored meta tables back down onto the term rows. Needed
+            // in both directions:
+            //  • a term import writes rows with jlpt_level = 0 / frequency = 0
+            //    (a plain JMdict carries neither) and replaces rows that had
+            //    the meta data applied to them,
+            //  • a meta import may have arrived BEFORE the term dictionary it
+            //    describes, so its per-row updates matched nothing.
+            // Without this the JLPT deck generator silently drops to zero
+            // candidates depending only on install order.
+            // Before the rollup: the list's direction decides its positions,
+            // and the rollup reads positions.
+            if (totalFreqUpdates > 0) {
+                try {
+                    classifyFrequencyList(dictionaryNameFromBatch)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Classifying the imported frequency list failed", e)
+                }
+            }
+
+            reapplyStoredMeta()
 
             ImportResult(
                 success = true,

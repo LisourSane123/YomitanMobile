@@ -25,7 +25,16 @@ data class DictionaryDownloadInfo(
      * a Japanese learner is never shown an English Wiktionary and vice
      * versa. Every pre-existing entry teaches Japanese, hence the default.
      */
-    val studyLanguage: AppLanguage = AppLanguage.JAPANESE
+    val studyLanguage: AppLanguage = AppLanguage.JAPANESE,
+    /**
+     * Set when the file is NOT a Yomitan dictionary but a frequency list in
+     * its publisher's own format; it is converted into one before import
+     * ([FrequencyListConverter]), under [name] as its title — the name the
+     * catalogue then recognises as installed. Null for a Yomitan zip.
+     */
+    val convertFrom: FrequencyListConverter.Format? = null,
+    /** The credit the list's licence asks for, written into its index.json. */
+    val attribution: String = ""
 )
 
 fun DictionaryDownloadInfo.localizedDescription(isEnglish: Boolean): String {
@@ -228,11 +237,90 @@ object AvailableDictionaries {
         studyLanguage = AppLanguage.SPANISH
     )
 
+    // ── Frequency lists for English and Spanish ──────────────────────────
+    //
+    // None exists in Yomitan's format — the ecosystem is Japanese — so these
+    // are the publishers' own files, converted on install
+    // (FrequencyListConverter). Two registers per language, the way JPDB and
+    // BCCWJ are for Japanese: wordfreq is the balanced one (Wikipedia, books,
+    // subtitles, news, social media) and covers 82% of the English-Polish
+    // Wiktionary's simple headwords; the OpenSubtitles counts are spoken
+    // language, 50 000 words. Both CC BY-SA 4.0. Pinned to commits.
+    private const val WORDFREQ_DATA =
+        "https://raw.githubusercontent.com/rspeer/wordfreq/912caf64b657478d1dff1138efdc078947d54bb1/wordfreq/data"
+    private const val FREQUENCY_WORDS_DATA =
+        "https://raw.githubusercontent.com/hermitdave/FrequencyWords/525f9b560de45753a5ea01069454e72e9aa541c6/content/2018"
+    private const val WORDFREQ_CREDIT =
+        "wordfreq (Robyn Speer, doi:10.5281/zenodo.7199437), CC BY-SA 4.0"
+    private const val FREQUENCY_WORDS_CREDIT =
+        "FrequencyWords (Hermit Dave) from OpenSubtitles 2018 (opensubtitles.org), CC BY-SA 4.0"
+
+    val wordfreqEn = DictionaryDownloadInfo(
+        id = "wordfreq_en",
+        name = "wordfreq (EN)",
+        descriptionPl = "Częstość słów angielskich z wielu źródeł naraz: Wikipedia, książki, napisy, wiadomości, media społecznościowe. 320 000 słów, rangę ma 82% haseł słownika. Numer trafia na fiszkę i układa wyszukiwanie. Zalecana.",
+        descriptionEn = "English word frequency from many sources at once: Wikipedia, books, subtitles, news, social media. 320,000 words; 82% of the dictionary's headwords get a rank. The number goes on the card and orders search. Recommended.",
+        category = DictionaryCategory.FREQUENCY,
+        url = "$WORDFREQ_DATA/large_en.msgpack.gz",
+        fileSize = "~1,5 MB",
+        sha256 = "dffae8066b78dce0a6667cf5f58e567054f902674667090a7ac8a8a44628b05c",
+        language = "EN",
+        studyLanguage = AppLanguage.ENGLISH,
+        convertFrom = FrequencyListConverter.Format.WORDFREQ_MSGPACK,
+        attribution = WORDFREQ_CREDIT
+    )
+
+    val openSubtitlesEn = DictionaryDownloadInfo(
+        id = "opensubtitles_en",
+        name = "OpenSubtitles (EN)",
+        descriptionPl = "Częstość słów w napisach do filmów i seriali — angielski mówiony. 50 000 słów. Dobra, jeśli uczysz się głównie ze słuchu.",
+        descriptionEn = "Word frequency in film and TV subtitles — spoken English. 50,000 words. Good if you learn mostly by listening.",
+        category = DictionaryCategory.FREQUENCY,
+        url = "$FREQUENCY_WORDS_DATA/en/en_50k.txt",
+        fileSize = "~0,6 MB",
+        sha256 = "5351ff405b1126ef555791dd4d9798a48e3e9a501a9fc481a9da957752cfb458",
+        language = "EN",
+        studyLanguage = AppLanguage.ENGLISH,
+        convertFrom = FrequencyListConverter.Format.SUBTITLE_COUNTS,
+        attribution = FREQUENCY_WORDS_CREDIT
+    )
+
+    val wordfreqEs = DictionaryDownloadInfo(
+        id = "wordfreq_es",
+        name = "wordfreq (ES)",
+        descriptionPl = "Częstość słów hiszpańskich z wielu źródeł naraz: Wikipedia, książki, napisy, wiadomości, media społecznościowe. Numer trafia na fiszkę i układa wyszukiwanie. Zalecana.",
+        descriptionEn = "Spanish word frequency from many sources at once: Wikipedia, books, subtitles, news, social media. The number goes on the card and orders search. Recommended.",
+        category = DictionaryCategory.FREQUENCY,
+        url = "$WORDFREQ_DATA/large_es.msgpack.gz",
+        fileSize = "~1,6 MB",
+        sha256 = "14f326b4f68d517f9b8b99c1e26ef56a508d2dc8d0ee7a9e6e8732ddab1aa65e",
+        language = "ES",
+        studyLanguage = AppLanguage.SPANISH,
+        convertFrom = FrequencyListConverter.Format.WORDFREQ_MSGPACK,
+        attribution = WORDFREQ_CREDIT
+    )
+
+    val openSubtitlesEs = DictionaryDownloadInfo(
+        id = "opensubtitles_es",
+        name = "OpenSubtitles (ES)",
+        descriptionPl = "Częstość słów w napisach do filmów i seriali — hiszpański mówiony. 50 000 słów.",
+        descriptionEn = "Word frequency in film and TV subtitles — spoken Spanish. 50,000 words.",
+        category = DictionaryCategory.FREQUENCY,
+        url = "$FREQUENCY_WORDS_DATA/es/es_50k.txt",
+        fileSize = "~0,7 MB",
+        sha256 = "dcff3ad4316192f4dc4ff7d26e637c6ff314ef1ca0f3f720c5649018a71056c0",
+        language = "ES",
+        studyLanguage = AppLanguage.SPANISH,
+        convertFrom = FrequencyListConverter.Format.SUBTITLE_COUNTS,
+        attribution = FREQUENCY_WORDS_CREDIT
+    )
+
     /**
      * Everything on offer, in the order the download screen draws it.
      *
-     * Exactly THREE frequency lists live here, one per register, and that is
-     * a decision rather than a state of the port:
+     * Exactly THREE Japanese frequency lists live here, one per register,
+     * and that is a decision rather than a state of the port (English and
+     * Spanish get two each, above):
      *
      *   • JPDB — anime, manga, light novels and visual novels. The default,
      *     and the one in [recommended].
@@ -267,6 +355,10 @@ object AvailableDictionaries {
         wiktionaryEsEs,
         wiktionaryEnEn,
         wiktionaryEnIpa,
+        wordfreqEn,
+        openSubtitlesEn,
+        wordfreqEs,
+        openSubtitlesEs,
         jlptVocab,
         jmdict,
         wiktionaryJaJa,
@@ -406,8 +498,8 @@ object AvailableDictionaries {
     fun recommendedFor(language: AppLanguage): List<DictionaryDownloadInfo> =
         when (language) {
             AppLanguage.JAPANESE -> recommended
-            AppLanguage.ENGLISH -> listOf(wiktionaryEnPl, wiktionaryEnIpa)
-            AppLanguage.SPANISH -> listOf(wiktionaryEsEn, wiktionaryEsIpa)
+            AppLanguage.ENGLISH -> listOf(wiktionaryEnPl, wiktionaryEnIpa, wordfreqEn)
+            AppLanguage.SPANISH -> listOf(wiktionaryEsEn, wiktionaryEsIpa, wordfreqEs)
         }
 
     /**

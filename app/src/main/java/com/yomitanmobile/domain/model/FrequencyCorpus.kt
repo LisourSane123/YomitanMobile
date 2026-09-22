@@ -18,6 +18,8 @@ object FrequencyCorpus {
 
     private val BY_KEY: List<Pair<String, Label>> = listOf(
         "jpdb" to Label("anime, visual novele, light novele", "anime, visual novels, light novels"),
+        "wordfreq" to Label("wiele źródeł: Wikipedia, książki, napisy, wiadomości", "many sources: Wikipedia, books, subtitles, news"),
+        "opensubtitles" to Label("napisy filmowe i serialowe — język mówiony", "film and TV subtitles — spoken language"),
         "bccwj" to Label("prasa, książki, teksty formalne", "news, books, formal writing"),
         "cejc" to Label("rozmowy codzienne", "everyday conversation"),
         "csj" to Label("mowa spontaniczna, wykłady", "spontaneous speech, lectures"),

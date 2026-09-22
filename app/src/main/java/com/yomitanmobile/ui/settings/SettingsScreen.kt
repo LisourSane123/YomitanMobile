@@ -629,6 +629,13 @@ fun SettingsScreen(
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
+                                "Częstość słów angielskich i hiszpańskich (jeśli pobrana): wordfreq (Robyn Speer) oraz FrequencyWords (Hermit Dave, z OpenSubtitles 2018), CC BY-SA 4.0.",
+                                "English and Spanish word frequency (if downloaded): wordfreq (Robyn Speer) and FrequencyWords (Hermit Dave, from OpenSubtitles 2018), CC BY-SA 4.0."
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            tr(
                                 "Nagrania native speakerów (jeśli pobrane): ${com.yomitanmobile.data.audio.KanjiAlive.CREDIT}.",
                                 "Native-speaker recordings (if downloaded): ${com.yomitanmobile.data.audio.KanjiAlive.CREDIT}."
                             )
