@@ -119,6 +119,15 @@ progress() { log "$1"; notify "$1"; }
 # The message a run ends with when it fails.
 fail() { log "$1"; notify "Nie wykonano: $1"; exit 1; }
 
+# kioclient is a Qt application, and Qt aborts when it finds no display —
+# which is exactly what a user service started at boot has, a few seconds
+# before the desktop session exports DISPLAY/WAYLAND_DISPLAY. Every retry of
+# the copy loop then dumped core, and KDE showed a crash dialog for each one.
+# Copying a file needs no window: `offscreen` never looks for a display.
+# stderr goes to a file, so a failed run can say what KIO said.
+KIO_ERR="$WORK/kio.err"
+kio() { QT_QPA_PLATFORM=offscreen kioclient "$@" 2>>"$KIO_ERR"; }
+
 # ---- 1. find the Kindle and copy vocab.db --------------------------------
 # Older Kindles are USB mass storage (mounted by udisks); newer ones, the
 # 2021+ Paperwhite included, are MTP only. On KDE the MTP device is held by
@@ -133,7 +142,7 @@ copy_vocab() {
     done
     if command -v kioclient >/dev/null; then
         local device
-        device="$(kioclient ls mtp:/ 2>/dev/null | grep -i kindle | head -1 || true)"
+        device="$(kio ls mtp:/ | grep -i kindle | head -1 || true)"
         if [[ -n "$device" ]]; then
             local storage path
             while IFS= read -r storage; do
@@ -143,12 +152,12 @@ copy_vocab() {
                 # to find out on the one evening the Kindle is plugged in.
                 for path in "mtp:/$device/$storage/system/vocabulary/vocab.db" \
                             "mtp:/${device// /%20}/${storage// /%20}/system/vocabulary/vocab.db"; do
-                    if kioclient --noninteractive copy "$path" "file://$dest" 2>/dev/null; then
+                    if kio --noninteractive copy "$path" "file://$dest"; then
                         log "vocab.db from $path (kio)"
                         return 0
                     fi
                 done
-            done < <(kioclient ls "mtp:/$device" 2>/dev/null)
+            done < <(kio ls "mtp:/$device")
         fi
     fi
     if command -v gio >/dev/null; then
@@ -263,7 +272,9 @@ if [[ "$REFRESH_AUDIO" == false && "$REFRESH_CARDS" == false && "$RESTYLE" == fa
     until { [[ -n "$VOCAB" ]] && cp "$VOCAB" "$WORK/vocab.db"; } || copy_vocab; do
         if (( SECONDS >= deadline )); then
             if kindle_on_usb; then
-                fail "Kindle jest podłączony, ale nie udało się odczytać vocab.db (odblokuj ekran, sprawdź tryb USB)"
+                # What KIO itself said, rather than a guess at the cause.
+                [[ -s "$KIO_ERR" ]] && log "kioclient said: $(tail -3 "$KIO_ERR" | tr '\n' ' ')"
+                fail "Kindle jest podłączony, ale nie udało się odczytać vocab.db (odblokuj ekran, sprawdź tryb USB; szczegóły: journalctl --user -u kindle-watch)"
             fi
             fail "nie znaleziono Kindle"
         fi

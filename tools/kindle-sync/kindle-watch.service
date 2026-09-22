@@ -1,6 +1,12 @@
 [Unit]
 Description=Kindle Vocabulary Builder → Anki: run on plug-in
+# Part of the desktop session, not of the bare user manager: started at boot,
+# the service came up four seconds before the session exported its display,
+# and a run needs the session for its notifications (and, before it ran
+# kioclient offscreen, for the copy itself). A Kindle already plugged in when
+# the session starts is still caught — kindle-watch.sh checks at startup.
 After=graphical-session.target
+PartOf=graphical-session.target
 
 [Service]
 ExecStart=@SCRIPT@
@@ -8,4 +14,4 @@ Restart=on-failure
 RestartSec=10
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
