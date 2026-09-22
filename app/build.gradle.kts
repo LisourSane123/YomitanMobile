@@ -109,7 +109,7 @@ android {
                     "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields",
                     "skipPlainKana", "skipKatakana",
                     "kindle.lookups", "kindle.deck", "kindle.dryRun", "anki.connect",
-                    "pitch.zip", "kanji.zip", "kindle.settings", "kindle.sync", "anki.reorderAddon", "kindle.refreshAudio", "kindle.refreshCards", "kindle.refreshExclude", "kindle.restyle", "kindle.checkDuplicates", "kindle.notifyFile", "kindle.installNativeAudio", "native.audio", "freq.src.dir", "ka.dir", "audio.archive", "voicevox.root", "voicevox.onnxruntime"
+                    "pitch.zip", "kanji.zip", "kindle.settings", "kindle.sync", "anki.reorderAddon", "kindle.refreshAudio", "kindle.refreshCards", "kindle.refreshExclude", "kindle.restyle", "kindle.checkDuplicates", "kindle.notifyFile", "kindle.installNativeAudio", "native.audio", "ll.live", "ll.tsv", "freq.src.dir", "ka.dir", "audio.archive", "voicevox.root", "voicevox.onnxruntime"
                 )) {
                     System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
                 }

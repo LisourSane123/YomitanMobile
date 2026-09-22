@@ -38,7 +38,8 @@ class AudioArchive @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dao: AudioFileDao,
     private val settings: AudioArchiveSettings,
-    private val nativePack: NativeAudioPack
+    private val nativePack: NativeAudioPack,
+    private val linguaLibre: LinguaLibreAudio
 ) {
 
     /** A file that pronounces the word asked for. */
@@ -99,8 +100,10 @@ class AudioArchive @Inject constructor(
      * none — the caller then synthesises one.
      *
      * The user's own folder first: they chose it. Then the native-speaker
-     * pack ([NativeAudioPack]), when it is installed. Every caller that wants
-     * a word said comes through here, so this order is the app's order.
+     * recordings, when switched on — Kanji alive for Japanese
+     * ([NativeAudioPack]), Lingua Libre for English and Spanish
+     * ([LinguaLibreAudio]). Every caller that wants a word said comes through
+     * here, so this order is the app's order.
      *
      * Matching in the folder is deliberately generous about script: an
      * archive that spells a loanword's file in hiragana still answers for a
@@ -113,7 +116,8 @@ class AudioArchive @Inject constructor(
             runCatching { dao.findBest(keys) }.getOrNull()?.let { row ->
                 return@withContext Match(Uri.parse(row.uri), row.fileName)
             }
-            nativePack.find(expression, reading)?.let { file -> Match(Uri.fromFile(file), file.name) }
+            val native = nativePack.find(expression, reading) ?: linguaLibre.find(expression)
+            native?.let { file -> Match(Uri.fromFile(file), file.name) }
         }
 
     /**

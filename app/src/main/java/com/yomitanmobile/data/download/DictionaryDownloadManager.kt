@@ -99,8 +99,19 @@ class DictionaryDownloadManager(
             "release-assets.githubusercontent.com",
             // Kanji alive's native-speaker recordings (CC BY 4.0): the one
             // zip, SHA-256-pinned in KanjiAlive, served without redirects.
-            "media.kanjialive.com"
+            "media.kanjialive.com",
+            // Lingua Libre (CC BY-SA 4.0): the index from its SPARQL endpoint,
+            // each recording from Commons, which redirects to its file server.
+            "lingualibre.org",
+            "commons.wikimedia.org",
+            "upload.wikimedia.org"
         )
+
+        /**
+         * Wikimedia asks every client to say who it is, and rate-limits the
+         * anonymous ones hard; a bare product name is the kind it throttles.
+         */
+        private const val USER_AGENT = "YomitanMobile/1.0 (Android language-study app)"
 
         /**
          * An open connection to [urlString], redirects followed by hand so
@@ -109,7 +120,7 @@ class DictionaryDownloadManager(
          * Shared by dictionary downloads and the VOICEVOX voice download, so
          * both are bound by the same rules.
          */
-        fun openAllowed(urlString: String): HttpURLConnection {
+        fun openAllowed(urlString: String, accept: String = "application/octet-stream"): HttpURLConnection {
             if (!isAllowedDownloadUrl(urlString)) {
                 throw Exception("Niedozwolony adres pobierania")
             }
@@ -120,8 +131,8 @@ class DictionaryDownloadManager(
                     connectTimeout = 30_000
                     readTimeout = 120_000
                     instanceFollowRedirects = false
-                    setRequestProperty("User-Agent", "YomitanMobile/1.0")
-                    setRequestProperty("Accept", "application/octet-stream")
+                    setRequestProperty("User-Agent", USER_AGENT)
+                    setRequestProperty("Accept", accept)
                 }
 
                 val responseCode = connection.responseCode

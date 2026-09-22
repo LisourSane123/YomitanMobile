@@ -78,7 +78,8 @@ class DetailViewModelFuriganaTest {
             context,
             db.audioFileDao(),
             com.yomitanmobile.data.settings.AudioArchiveSettings(context),
-            com.yomitanmobile.data.audio.NativeAudioPack(context)
+            com.yomitanmobile.data.audio.NativeAudioPack(context),
+            com.yomitanmobile.data.audio.LinguaLibreAudio(context, LanguageSettings(context))
         ),
         voicevox = com.yomitanmobile.data.audio.voicevox.VoicevoxVoice(context),
         sentenceDao = db.sentenceDao(),

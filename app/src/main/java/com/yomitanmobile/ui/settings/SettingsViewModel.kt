@@ -73,8 +73,28 @@ class SettingsViewModel @Inject constructor(
     private val audioArchive: com.yomitanmobile.data.audio.AudioArchive,
     private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice,
     private val nativeAudio: com.yomitanmobile.data.audio.NativeAudioPack,
+    private val linguaLibre: com.yomitanmobile.data.audio.LinguaLibreAudio,
     private val audioPlayer: com.yomitanmobile.data.audio.AudioPlayer
 ) : ViewModel() {
+
+    // ── Lingua Libre (English, Spanish) ──────────────────────────────────
+
+    val linguaLibreState: StateFlow<com.yomitanmobile.data.audio.LinguaLibreAudio.State> = linguaLibre.state
+
+    /** Downloads the index on the pack's own scope; recordings come later, one per word. */
+    fun installLinguaLibre() = linguaLibre.install()
+
+    fun uninstallLinguaLibre() {
+        viewModelScope.launch { linguaLibre.uninstall() }
+    }
+
+    /** A common word of the language being studied — it fetches one recording to play. */
+    fun previewLinguaLibre() {
+        viewModelScope.launch {
+            val word = if (studyLanguage == com.yomitanmobile.domain.model.AppLanguage.SPANISH) "hola" else "hello"
+            linguaLibre.find(word)?.let { audioPlayer.playAudioFile(it.path) }
+        }
+    }
 
     // ── Native-speaker recordings ────────────────────────────────────────
 

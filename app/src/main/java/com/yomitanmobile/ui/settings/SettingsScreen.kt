@@ -255,6 +255,7 @@ fun SettingsScreen(
     val audioArchiveLabel by viewModel.audioArchiveLabel.collectAsState()
     val audioArchiveIndexing by viewModel.audioArchiveIndexing.collectAsState()
     val nativeAudioState by viewModel.nativeAudioState.collectAsState()
+    val linguaLibreState by viewModel.linguaLibreState.collectAsState()
     val voicevoxState by viewModel.voicevoxState.collectAsState()
     val voicevoxEnabled by viewModel.voicevoxEnabled.collectAsState()
     var showVoicevoxTerms by remember { mutableStateOf(false) }
@@ -631,6 +632,13 @@ fun SettingsScreen(
                             tr(
                                 "Częstość słów angielskich i hiszpańskich (jeśli pobrana): wordfreq (Robyn Speer) oraz FrequencyWords (Hermit Dave, z OpenSubtitles 2018), CC BY-SA 4.0.",
                                 "English and Spanish word frequency (if downloaded): wordfreq (Robyn Speer) and FrequencyWords (Hermit Dave, from OpenSubtitles 2018), CC BY-SA 4.0."
+                            )
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            tr(
+                                "Nagrania native speakerów dla angielskiego i hiszpańskiego (jeśli włączone): ${com.yomitanmobile.data.audio.LinguaLibre.CREDIT}.",
+                                "Native-speaker recordings for English and Spanish (if switched on): ${com.yomitanmobile.data.audio.LinguaLibre.CREDIT}."
                             )
                         )
                         Spacer(Modifier.height(8.dp))
@@ -1065,8 +1073,9 @@ fun SettingsScreen(
             }
 
             // Native-speaker recordings — before VOICEVOX on screen because
-            // they come before it in AudioArchive.find.
-            item {
+            // they come before it in AudioArchive.find. Kanji alive for
+            // Japanese; Lingua Libre for English and Spanish, below.
+            if (viewModel.studyLanguage == AppLanguage.JAPANESE) item {
                 SettingsBlock {
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1148,6 +1157,89 @@ fun SettingsScreen(
                         }
                         Text(
                             com.yomitanmobile.data.audio.KanjiAlive.CREDIT,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (linguaLibreState !is com.yomitanmobile.data.audio.LinguaLibreAudio.State.NotOffered) item {
+                SettingsBlock {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.RecordVoiceOver,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    tr("Nagrania native speakerów", "Native-speaker recordings"),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    when (val state = linguaLibreState) {
+                                        is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Installed -> tr(
+                                            "Włączone. Słowo nagrane przez native speakera odtwarza się i trafia na fiszkę " +
+                                                "przed głosem syntetycznym. Każde nagranie pobiera się raz, przy pierwszym " +
+                                                "użyciu słowa — potrzebny jest wtedy internet.",
+                                            "On. A word a native speaker recorded is played and put on the card before " +
+                                                "any synthesised voice. Each recording is fetched once, the first time the " +
+                                                "word is used — that needs the internet."
+                                        )
+                                        is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Installing -> tr(
+                                            "Pobieranie spisu nagrań…",
+                                            "Downloading the list of recordings…"
+                                        )
+                                        is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Failed -> tr(
+                                            "Nie udało się pobrać spisu: ${state.message}",
+                                            "Could not download the list: ${state.message}"
+                                        )
+                                        else -> tr(
+                                            "Słowa czytane przez native speakerów z projektu Lingua Libre: dla angielskiego " +
+                                                "98% z tysiąca najczęstszych słów. Włączenie pobiera sam spis (kilka MB); " +
+                                                "nagranie ściąga się przy pierwszym użyciu słowa i zostaje w telefonie.",
+                                            "Words read by native speakers, from Lingua Libre: for English, 98% of the " +
+                                                "thousand commonest words. Switching on downloads the list only (a few MB); " +
+                                                "a recording is fetched the first time its word is used and kept."
+                                        )
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        if (linguaLibreState is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Installing) {
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            when (linguaLibreState) {
+                                is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Installed -> {
+                                    Button(onClick = viewModel::previewLinguaLibre) {
+                                        Text(tr("Odsłuchaj", "Listen"))
+                                    }
+                                    OutlinedButton(onClick = viewModel::uninstallLinguaLibre) {
+                                        Text(tr("Wyłącz", "Switch off"))
+                                    }
+                                }
+                                is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Installing -> Unit
+                                else -> Button(onClick = viewModel::installLinguaLibre) {
+                                    Text(
+                                        if (linguaLibreState is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Failed)
+                                            tr("Spróbuj ponownie", "Try again")
+                                        else tr("Włącz nagrania", "Switch on")
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            com.yomitanmobile.data.audio.LinguaLibre.CREDIT,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
