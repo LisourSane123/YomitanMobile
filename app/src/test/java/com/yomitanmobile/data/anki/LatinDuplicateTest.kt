@@ -45,4 +45,25 @@ class LatinDuplicateTest {
     fun `Spanish letters are Latin too`() {
         assertTrue("niño" in AnkiNoteFieldIndexer.keysFromNote("niño${sep}child"))
     }
+
+    @Test
+    fun `an inflected form is found through the word the collection holds`() {
+        val index = AnkiCollectionIndex.Index(setOf("make", "child", "study", "moth"), 4, available = true)
+        assertTrue(index.containsAny(listOf("made"), "made"))
+        assertTrue(index.containsAny(listOf("makes"), "makes"))
+        assertTrue(index.containsAny(listOf("making"), "making"))
+        assertTrue(index.containsAny(listOf("children"), "children"))
+        assertTrue(index.containsAny(listOf("studies"), "studies"))
+        // The -er rule answers "moth" for "mother": a card for mother must
+        // still be made by a collection that happens to hold moth.
+        assertFalse(index.containsAny(listOf("mother"), "mother"))
+        assertFalse(index.containsAny(listOf("makeshift"), "makeshift"))
+    }
+
+    @Test
+    fun `the live search asks Anki about the base form too`() {
+        val search = AnkiCollectionIndex.liveSearch(listOf("made"), "made").orEmpty()
+        assertTrue(search, "\"make\"" in search)
+        assertTrue(search, "\"made\"" in search)
+    }
 }

@@ -19,6 +19,10 @@ import com.yomitanmobile.util.JapaneseTokenizer
  * Each became a card whose back said "⟶ああ". Following the arrow makes the
  * occurrence count for the word itself, which the stoplist, the Anki check and
  * the frequency cut then judge like any other.
+ *
+ * Spanish arrives at the same place by a different road: there the DICTIONARY
+ * files every conjugation as an entry pointing at its lemma, so the redirect
+ * step is what conjugation rules would have been ([FormOf]).
  */
 object ScanEntryResolver {
 
@@ -61,6 +65,11 @@ object ScanEntryResolver {
 
     /** Where a redirect entry points, or null for an ordinary entry. */
     fun redirectTarget(entry: MergedWordEntry): Target? {
+        // Spanish says it in a machine-readable way: an inflected form is an
+        // entry pointing at its lemma (see [FormOf]). Following it is what
+        // makes a scan count 「hablando」, 「hablé」 and 「hablaron」 as uses of
+        // hablar, and put one card in the deck instead of three.
+        FormOf.baseOf(entry)?.let { return Target(it, "") }
         // Jitendex ships the arrow plus a second gloss naming it:
         // ["⟶爺ちゃん", "爺ちゃん (redirected from じーちゃん)"].
         val glosses = entry.definitions.filter { it.isNotBlank() }

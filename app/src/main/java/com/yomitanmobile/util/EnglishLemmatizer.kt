@@ -33,6 +33,9 @@ object EnglishLemmatizer {
     /** Longest first, so the most specific suffix rule gets its turn. */
     private val SUFFIXES = listOf("iest", "ies", "ied", "est", "ing", "ed", "er", "es", "s")
 
+    /** [SUFFIXES] without the comparatives; see [inflectionBases]. */
+    private val INFLECTION_SUFFIXES = SUFFIXES - setOf("iest", "est", "er")
+
     /**
      * Base-form candidates for [word], most likely first, never including
      * the input itself (the caller always searches that separately).
@@ -40,7 +43,25 @@ object EnglishLemmatizer {
      * Capped like the deconjugator's candidate list: each candidate costs a
      * parallel query, and beyond a handful they are noise.
      */
-    fun analyze(word: String, limit: Int = 8): List<String> {
+    fun analyze(word: String, limit: Int = 8): List<String> = candidates(word, SUFFIXES, limit)
+
+    /**
+     * The same, minus the comparative rules — for callers that ACT on a
+     * candidate instead of merely searching it.
+     *
+     * A wrong candidate costs a search nothing: it matches no headword and
+     * disappears. It costs a duplicate check a card: the `-er` rule answers
+     * "moth" for "mother", "broth" for "brother", "mast" for "master" and
+     * "cove" for "cover" — all real words — so a collection holding any of
+     * them would have swallowed the card for the longer word. Nothing else
+     * in the list produces a real word that is not genuinely the base, so
+     * only the comparatives come out; the curated irregular table keeps its
+     * own (better → good), because those were checked one by one.
+     */
+    fun inflectionBases(word: String, limit: Int = 8): List<String> =
+        candidates(word, INFLECTION_SUFFIXES, limit)
+
+    private fun candidates(word: String, suffixes: List<String>, limit: Int): List<String> {
         val normalized = word.trim().lowercase()
         if (normalized.length < 3) return emptyList()
         if (!normalized.all { it.isLetter() || it == '-' || it == '\'' }) return emptyList()
@@ -48,7 +69,7 @@ object EnglishLemmatizer {
         val candidates = LinkedHashSet<String>()
         IRREGULAR[normalized]?.let { candidates.addAll(it) }
 
-        for (suffix in SUFFIXES) {
+        for (suffix in suffixes) {
             if (!normalized.endsWith(suffix)) continue
             val stem = normalized.dropLast(suffix.length)
             if (stem.length < 2) continue

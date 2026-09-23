@@ -757,7 +757,14 @@ class DetailViewModel @Inject constructor(
             // All of the entry's written forms: a deck that spells the word
             // 持ってくる holds the card the user would otherwise mine again as
             // 持って来る.
-            val spellings = listOf(expression) + entry?.alternativeExpressions.orEmpty()
+            // …plus the lemma, when the word being mined is an inflected form.
+            // A Spanish dictionary answers "hablando" with an entry that says
+            // "hablar (gerund)", and a collection holding hablar already
+            // teaches this. English asks the same question from the other
+            // side, inside the index (EnglishLemmatizer).
+            val spellings = listOf(expression) +
+                entry?.alternativeExpressions.orEmpty() +
+                listOfNotNull(entry?.let { com.yomitanmobile.domain.usecase.FormOf.baseOf(it) })
             ankiCollectionStore.containsAnyNow(spellings, reading, usuallyKana)
         }
             .getOrElse {

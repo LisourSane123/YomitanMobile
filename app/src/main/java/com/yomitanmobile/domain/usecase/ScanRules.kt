@@ -243,7 +243,7 @@ class LatinScanRules(private val language: AppLanguage) : ScanRules {
         words: List<ScanToken>,
         entries: Map<String, MergedWordEntry>
     ): Pair<List<ScanToken>, Map<String, MergedWordEntry>> {
-        if (language != AppLanguage.ENGLISH) return words to entries
+        if (language != AppLanguage.ENGLISH) return mergeSpanishForms(words, entries)
         // The text's own spelling of each word, by lowercase key: "Miss" and
         // "miss" are one word, and a base is looked up without its capital.
         val present = HashMap<String, String>(words.size)
@@ -270,6 +270,32 @@ class LatinScanRules(private val language: AppLanguage) : ScanRules {
         }
         for ((word, base) in index.toList()) {
             if (base in index) index.remove(word)
+        }
+        return TextScanPlanner.mergeOnto(words, entries, index)
+    }
+
+    /**
+     * The same job for Spanish, done by the dictionary instead of by rules.
+     *
+     * [ScanEntryResolver] has already replaced a conjugated form's entry with
+     * its lemma's (hablando → hablar, dijo → decir), so a token whose entry is
+     * headed by another word IS that word, whatever the text spelled it. All
+     * that is left is to say so, which then makes the counts add up and puts
+     * the lemma on the card front — a card fronted "hablando" teaches a form,
+     * not a verb.
+     *
+     * No plausibility guard here and none needed: this is not a guess from
+     * letters, it is what the entry says about itself.
+     */
+    private fun mergeSpanishForms(
+        words: List<ScanToken>,
+        entries: Map<String, MergedWordEntry>
+    ): Pair<List<ScanToken>, Map<String, MergedWordEntry>> {
+        val index = HashMap<String, String>()
+        for (token in words) {
+            val headword = entries[token.baseForm]?.primaryExpression ?: continue
+            if (headword.isBlank() || headword.equals(token.baseForm, ignoreCase = true)) continue
+            index[token.baseForm] = headword
         }
         return TextScanPlanner.mergeOnto(words, entries, index)
     }
@@ -399,13 +425,18 @@ private val SPANISH_FUNCTION_WORDS = setOf(
     "el", "la", "los", "las", "lo", "un", "una", "unos", "unas", "del", "al",
     "este", "esta", "esto", "estos", "estas", "ese", "esa", "eso", "esos", "esas",
     "aquel", "aquella", "aquello", "aquellos", "aquellas", "cada", "todo", "toda",
+    // The demonstratives written with the accent older texts use, and the
+    // relative "cuanto": Don Quijote used éste 220 times, cuanto 349, mí 502
+    // and vos 212, and every one of them was a card.
+    "éste", "ésta", "éstos", "éstas", "ése", "ésa", "ésos", "ésas", "aquél", "aquélla",
+    "cuanto", "cuanta", "cuantos", "cuantas", "cuánto", "cuánta", "cuántos", "cuántas",
     "todos", "todas", "otro", "otra", "otros", "otras", "mismo", "misma", "mismos",
     "mismas", "mucho", "mucha", "muchos", "muchas", "poco", "poca", "pocos", "pocas",
     "tanto", "tanta", "tantos", "tantas", "alguno", "alguna", "algunos", "algunas",
     "ninguno", "ninguna", "cualquier", "cualquiera", "demás", "varios", "varias",
     // pronouns
-    "yo", "me", "mi", "mis", "mío", "mía", "conmigo", "tú", "te", "tu", "tus", "tuyo",
-    "tuya", "contigo", "usted", "ustedes", "él", "ella", "ello", "le", "les", "se",
+    "yo", "me", "mi", "mí", "mis", "mío", "mía", "conmigo", "tú", "te", "ti", "tu", "tus", "tuyo",
+    "tuya", "contigo", "usted", "ustedes", "vos", "él", "ella", "ello", "le", "les", "se",
     "su", "sus", "suyo", "suya", "consigo", "nosotros", "nosotras", "nos", "nuestro",
     "nuestra", "nuestros", "nuestras", "vosotros", "vosotras", "os", "vuestro",
     "vuestra", "ellos", "ellas", "quien", "quién", "quienes", "que", "qué", "cual",

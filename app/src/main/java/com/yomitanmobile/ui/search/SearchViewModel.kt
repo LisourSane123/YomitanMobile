@@ -16,6 +16,7 @@ import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import com.yomitanmobile.util.DeconjugationCandidate
 import com.yomitanmobile.domain.model.AppLanguage
+import com.yomitanmobile.domain.usecase.FormOf
 import com.yomitanmobile.util.EnglishLemmatizer
 import com.yomitanmobile.util.JapaneseDeconjugator
 import com.yomitanmobile.util.JlptVocabulary
@@ -84,6 +85,35 @@ class SearchViewModel @Inject constructor(
      * collected.
      */
     val appLanguage: AppLanguage = languageSettings.current
+
+    /**
+     * The lemma entries behind the inflected forms a search just found.
+     *
+     * Typing "hablando" into a Spanish dictionary finds exactly one thing: an
+     * entry whose whole content is "hablar (gerund)". That answers what the
+     * form is, and leaves the user one tap short of the word they would put on
+     * a card — which is the word they were actually looking up. So the lemma
+     * is fetched and listed right under the form.
+     *
+     * English needs none of this: its forms go the other way round, through
+     * [EnglishLemmatizer] before the query, because kty-en-pl writes its
+     * form-of senses as Polish prose no rule can read. See [FormOf].
+     */
+    private suspend fun lemmasOf(results: List<WordEntry>, query: String): List<WordEntry> {
+        if (appLanguage.hasJapaneseFeatures) return emptyList()
+        val bases = results.asSequence()
+            .mapNotNull { FormOf.baseOf(it) }
+            .filter { !it.equals(query.trim(), ignoreCase = true) }
+            .distinct()
+            .take(MAX_LEMMA_LOOKUPS)
+            .toList()
+        if (bases.isEmpty()) return emptyList()
+        return runCatching {
+            searchDictionaryUseCase
+                .invokeWithAlternatives(query = bases.first(), alternatives = bases.drop(1))
+                .first()
+        }.getOrDefault(emptyList())
+    }
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -201,6 +231,7 @@ class SearchViewModel @Inject constructor(
                             // definition.
                             val mergedById = LinkedHashMap<Long, WordEntry>()
                             headwordResults.forEach { mergedById.putIfAbsent(it.id, it) }
+                            lemmasOf(headwordResults, q).forEach { mergedById.putIfAbsent(it.id, it) }
                             definitionResults.forEach { mergedById.putIfAbsent(it.id, it) }
                             mergedById.values.toList()
                         }
@@ -459,6 +490,13 @@ class SearchViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "SearchViewModel"
+
+        /**
+         * How many lemmas one result list is followed back to. A word is the
+         * form of one or two things ("casas" is casa and casar); past that the
+         * query is answering a question nobody asked.
+         */
+        private const val MAX_LEMMA_LOOKUPS = 3
 
         /**
          * The search mode after a query edit. When the user has pinned a mode

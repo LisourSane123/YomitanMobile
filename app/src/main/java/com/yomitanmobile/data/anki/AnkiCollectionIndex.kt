@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.ichi2.anki.FlashCardsContract
+import com.yomitanmobile.util.EnglishLemmatizer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -79,7 +80,7 @@ class AnkiCollectionIndex @Inject constructor(
             // place it is indexed (see AnkiNoteFieldIndexer), under its
             // lowercased spelling. No reading rule applies to it.
             val latin = expressions.filter { AnkiNoteFieldIndexer.isLatinWord(it) }
-            if (latin.isNotEmpty() && latin.any { AnkiNoteFieldIndexer.latinKey(it) in keys }) return true
+            if (latin.isNotEmpty() && latin.any { latinMatch(it) }) return true
             val read = AnkiNoteFieldIndexer.normalizeKey(reading)
             val spellings = expressions
                 .map { AnkiNoteFieldIndexer.normalizeKey(it) }
@@ -107,6 +108,26 @@ class AnkiCollectionIndex @Inject constructor(
                 !AnkiNoteFieldIndexer.isKanaOnly(primary) &&
                 !readingCountsAlone
             return !kanjiFormIsDecisive
+        }
+
+        /**
+         * The word itself, or the base form it is an inflection of.
+         *
+         * A collection holds "make", and the user mines "made" off the page
+         * they read it on: without this the card is created, and the pair sits
+         * in the deck for good. English is where the app can answer this
+         * itself ([EnglishLemmatizer]); a Spanish form is resolved to its
+         * lemma earlier, by the dictionary, because kty-es-en files every
+         * conjugation as an entry pointing at the base (see `FormOf`).
+         *
+         * Only the direction that can be trusted: "made" asks about "make",
+         * never the other way round. Generating every form of a word would
+         * mean a collection holding "saw" answers for "see".
+         */
+        private fun latinMatch(word: String): Boolean {
+            if (AnkiNoteFieldIndexer.latinKey(word) in keys) return true
+            return EnglishLemmatizer.inflectionBases(word)
+                .any { AnkiNoteFieldIndexer.latinKey(it) in keys }
         }
 
         companion object {
@@ -388,6 +409,13 @@ class AnkiCollectionIndex @Inject constructor(
         private const val LIVE_MAX_NOTES = 5_000
 
         /**
+         * How many base forms of one word the live search asks Anki about.
+         * Each is an OR clause; the lemmatiser's first few are the plausible
+         * ones and the rest only widen the sweep.
+         */
+        private const val LIVE_MAX_BASES = 3
+
+        /**
          * The Anki search [liveContainsAny] runs, or null when there is
          * nothing to search for.
          *
@@ -401,7 +429,13 @@ class AnkiCollectionIndex @Inject constructor(
          */
         internal fun liveSearch(expressions: List<String>, reading: String): String? {
             val clauses = LinkedHashSet<String>()
-            for (raw in expressions + reading) {
+            // The base forms too, or the note holding "make" is never even
+            // fetched when the question is about "made" — the live path has to
+            // read the notes that `Index.containsAny` will then judge.
+            val bases = expressions
+                .filter { AnkiNoteFieldIndexer.isLatinWord(it) }
+                .flatMap { EnglishLemmatizer.inflectionBases(it, limit = LIVE_MAX_BASES) }
+            for (raw in expressions + reading + bases) {
                 val word = AnkiNoteFieldIndexer.normalizeKey(raw)
                 if (word.isEmpty()) continue
                 val kanji = word.filter { AnkiNoteFieldIndexer.isKanji(it) }.toSet()

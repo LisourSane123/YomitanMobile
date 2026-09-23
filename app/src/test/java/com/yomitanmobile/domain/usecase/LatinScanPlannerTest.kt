@@ -196,6 +196,26 @@ class LatinScanPlannerTest {
     }
 
     @Test
+    fun `spanish conjugations become one card for the verb`() {
+        // What the scan sees after ScanEntryResolver has followed each form to
+        // its lemma: three tokens, one entry.
+        val hablar = entry("hablar", frequency = 400)
+        val result = TextScanPlanner.plan(
+            sources = listOf(source),
+            words = listOf(
+                ScanToken("hablando", 12), ScanToken("hablé", 5), ScanToken("hablar", 3)
+            ),
+            entries = mapOf("hablando" to hablar, "hablé" to hablar, "hablar" to hablar),
+            filters = TextScanFilters(),
+            totalTokenCount = 20,
+            rules = LatinScanRules(AppLanguage.SPANISH)
+        )
+        assertEquals(1, result.selected.size)
+        assertEquals("hablar", result.selected.single().entry.primaryExpression)
+        assertEquals(20, result.selected.single().occurrences)
+    }
+
+    @Test
     fun `spanish uses its own closed classes`() {
         val result = TextScanPlanner.plan(
             sources = listOf(source),
