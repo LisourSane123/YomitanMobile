@@ -124,7 +124,43 @@ class SearchViewModel @Inject constructor(
     private val _deconjugationCandidates = MutableStateFlow<List<DeconjugationCandidate>>(emptyList())
     val deconjugationCandidates: StateFlow<List<DeconjugationCandidate>> = _deconjugationCandidates.asStateFlow()
 
-    private var lastInjectedExternalQuery: String? = null
+    /**
+     * The share/PROCESS_TEXT event this screen has already acted on.
+     *
+     * A shared query is an EVENT and has to be consumed once. The screen
+     * applies it from a `LaunchedEffect`, and that effect runs again every
+     * time the Search destination is entered — leaving for Settings disposes
+     * the composable, coming back creates it anew — while the Activity keeps
+     * offering the same query for as long as it lives. So a word shared into
+     * the app once came back and overwrote whatever the user had typed on
+     * every single return to the tab, which is what "it keeps jumping back to
+     * an old search" was. The nonce already distinguished one share from the
+     * next; nothing recorded which of them had been acted on.
+     *
+     * Lives in the ViewModel, not in the composable: the composable is exactly
+     * the thing that gets thrown away and rebuilt here.
+     */
+    private var lastExternalNonce: Int? = null
+
+    /**
+     * Whether the "open with the keyboard up" request that came with the
+     * launch has been acted on.
+     *
+     * The same shape of bug as [lastExternalNonce], in the same screen: the
+     * quick-search widget and a share both ask for the search box to be
+     * focused, the Activity holds that request for as long as it lives, and
+     * the effect that reads it runs on every entry into the Search tab. So
+     * the keyboard came up over the results every time the user came back
+     * from Settings. It is a request made once, at launch.
+     */
+    private var focusRequestConsumed = false
+
+    /** True the first time it is asked, false afterwards; see [focusRequestConsumed]. */
+    fun consumeFocusRequest(): Boolean {
+        if (focusRequestConsumed) return false
+        focusRequestConsumed = true
+        return true
+    }
 
     // True once the user has explicitly picked a mode via [toggleSearchMode].
     // While set, [onQueryChange] stops auto-detecting the mode on every
@@ -413,16 +449,23 @@ class SearchViewModel @Inject constructor(
         _query.value = newQuery
     }
 
-    fun applyExternalQuery(sharedQuery: String) {
+    /**
+     * Puts a word shared into the app in the search box — once per share.
+     *
+     * [nonce] identifies the share (see [lastExternalNonce]); the same one
+     * arriving a second time is the screen being re-entered, not the user
+     * sharing again, and it is ignored.
+     */
+    fun applyExternalQuery(sharedQuery: String, nonce: Int) {
+        if (!isNewExternalQuery(lastExternalNonce, nonce)) return
+        lastExternalNonce = nonce
         val normalized = sharedQuery.trim()
             .lineSequence()
             .firstOrNull()
             ?.trim()
             .orEmpty()
         if (normalized.isBlank()) return
-        if (normalized == lastInjectedExternalQuery && normalized == _query.value) return
 
-        lastInjectedExternalQuery = normalized
         // A shared/injected query is a fresh lookup — let auto-detect run.
         manualModeOverride = false
         applyAutoSearchModeIfNeeded(normalized)
@@ -490,6 +533,9 @@ class SearchViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "SearchViewModel"
+
+        /** Whether a share event has not been acted on yet; see [lastExternalNonce]. */
+        fun isNewExternalQuery(lastNonce: Int?, nonce: Int): Boolean = lastNonce != nonce
 
         /**
          * How many lemmas one result list is followed back to. A word is the

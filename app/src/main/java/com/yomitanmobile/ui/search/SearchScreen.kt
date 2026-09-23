@@ -105,9 +105,13 @@ fun SearchScreen(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // Auto-focus search bar when launched from quick search widget
-    if (focusSearch) {
-        LaunchedEffect(Unit) {
+    // Auto-focus the search bar when the app was launched from the quick
+    // search widget — once, at that launch. The flag lives on the Activity
+    // for its whole life and this effect runs on every entry into the tab,
+    // so without the ViewModel's answer the keyboard came up over the
+    // results every time the user came back from Settings.
+    LaunchedEffect(Unit) {
+        if (focusSearch && viewModel.consumeFocusRequest()) {
             delay(300)
             try {
                 focusRequester.requestFocus()
@@ -122,10 +126,13 @@ fun SearchScreen(
     }
 
     // Nonce in the key set: re-sharing the same text is a new event and must
-    // re-apply even though the query string itself didn't change.
+    // re-apply even though the query string itself didn't change. Whether the
+    // event has already been acted on is the ViewModel's business — this
+    // effect also runs every time the screen is re-entered, and the Activity
+    // goes on offering the same share for as long as it lives.
     LaunchedEffect(initialQuery, initialQueryNonce) {
         if (!initialQuery.isNullOrBlank()) {
-            viewModel.applyExternalQuery(initialQuery)
+            viewModel.applyExternalQuery(initialQuery, initialQueryNonce)
         }
     }
 

@@ -256,15 +256,16 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            // Mark setup as completed when navigating away from setup
+                            // Reaching the search screen means setup is behind
+                            // us — recorded ONCE per launch. This used to
+                            // collect for the whole session and rewrite the
+                            // preferences file on every arrival, so switching
+                            // to the Search tab wrote to DataStore and woke
+                            // every reader of it each time.
                             LaunchedEffect(navController) {
-                                navController.currentBackStackEntryFlow.collect { entry ->
-                                    if (entry.destination.route == Screen.Search.route) {
-                                        dataStore.edit { prefs ->
-                                            prefs[SETUP_COMPLETED] = true
-                                        }
-                                    }
-                                }
+                                navController.currentBackStackEntryFlow
+                                    .first { it.destination.route == Screen.Search.route }
+                                dataStore.edit { prefs -> prefs[SETUP_COMPLETED] = true }
                             }
                         }
                     }
