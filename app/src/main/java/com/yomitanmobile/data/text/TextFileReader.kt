@@ -34,7 +34,10 @@ class TextFileReader @Inject constructor(
         val partCount: Int
     )
 
-    suspend fun read(uri: Uri): Document = withContext(Dispatchers.IO) {
+    suspend fun read(
+        uri: Uri,
+        encoding: TextExtraction.Encoding = TextExtraction.Encoding.JAPANESE
+    ): Document = withContext(Dispatchers.IO) {
         val name = displayName(uri)
         val bytes = context.contentResolver.openInputStream(uri)
             ?.use { stream -> stream.readAtMost(MAX_BYTES) }
@@ -44,13 +47,14 @@ class TextFileReader @Inject constructor(
         // often reports application/octet-stream, and users rename files.
         val declared = TextFileFormat.fromFileName(name)
         val format = when (declared) {
-            null -> TextExtraction.sniff(bytes)
-            TextFileFormat.PLAIN -> TextExtraction.sniff(bytes, fallback = TextFileFormat.PLAIN)
+            null -> TextExtraction.sniff(bytes, encoding = encoding)
+            TextFileFormat.PLAIN ->
+                TextExtraction.sniff(bytes, fallback = TextFileFormat.PLAIN, encoding = encoding)
             else -> declared
         }
         if (format == TextFileFormat.PDF) throw UnsupportedFormatException(format)
 
-        val result = TextExtraction.extract(bytes, format)
+        val result = TextExtraction.extract(bytes, format, encoding)
         Document(
             fileName = name,
             text = result.text,

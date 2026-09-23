@@ -86,6 +86,17 @@ object EnglishLemmatizer {
     private val IRREGULAR: Map<String, List<String>> by lazy { parseIrregular(IRREGULAR_TABLE) }
 
     /**
+     * The base forms the curated table gives [word], empty when it has none.
+     *
+     * Search does not need to tell a table hit from a suffix guess — a wrong
+     * candidate simply matches nothing — but the text scanner does: it MERGES
+     * a form onto its base, and "mother" → "moth" is a suffix guess that
+     * happens to be a real word, while "children" → "child" is a fact. See
+     * `LatinScanRules.mergeParadigms`.
+     */
+    fun irregularBases(word: String): List<String> = IRREGULAR[word.lowercase()].orEmpty()
+
+    /**
      * `form base[,base]` for nouns and comparatives; `base past participle`
      * (commas for alternatives) for verbs, under the `# verbs` header.
      */

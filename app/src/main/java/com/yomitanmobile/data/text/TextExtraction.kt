@@ -28,15 +28,34 @@ object TextExtraction {
         val partCount: Int = 0
     )
 
-    fun extract(bytes: ByteArray, format: TextFileFormat): Result = when (format) {
-        TextFileFormat.EPUB -> extractEpub(bytes)
+    /**
+     * Which single-byte encoding a file that is not valid UTF-8 is guessed to
+     * be. The guess cannot be shared: every one of these decodes any byte
+     * sequence without complaining, so the WRONG fallback never fails — it
+     * silently returns mojibake. Shift_JIS applied to an English EPUB exported
+     * from Word (CP1252 curly quotes) turns the whole book into line noise,
+     * and Windows-1252 applied to Japanese subtitles does the same the other
+     * way; the study language is what says which risk to take.
+     */
+    enum class Encoding(val fallbacks: List<String>) {
+        JAPANESE(listOf("Shift_JIS", "EUC-JP")),
+        LATIN(listOf("windows-1252", "ISO-8859-1"))
+    }
+
+    fun extract(
+        bytes: ByteArray,
+        format: TextFileFormat,
+        encoding: Encoding = Encoding.JAPANESE
+    ): Result = when (format) {
+        TextFileFormat.EPUB -> extractEpub(bytes, encoding)
         TextFileFormat.PDF -> throw UnsupportedOperationException("PDF handled by PdfTextExtractor")
         else -> {
-            val decoded = decode(bytes)
+            val decoded = decode(bytes, encoding)
             val (text, parts) = when (format) {
                 TextFileFormat.SRT -> stripSrt(decoded.first)
                 TextFileFormat.VTT -> stripVtt(decoded.first)
                 TextFileFormat.ASS -> stripAss(decoded.first)
+                TextFileFormat.MARKDOWN -> stripMarkdown(decoded.first) to 0
                 else -> decoded.first to 0
             }
             Result(text, format, decoded.second, parts)
@@ -47,14 +66,18 @@ object TextExtraction {
      * Sniffs the format when the file name gave nothing away (or lied).
      * Cheap prefix checks only — the caller has already read the bytes.
      */
-    fun sniff(bytes: ByteArray, fallback: TextFileFormat = TextFileFormat.PLAIN): TextFileFormat {
+    fun sniff(
+        bytes: ByteArray,
+        fallback: TextFileFormat = TextFileFormat.PLAIN,
+        encoding: Encoding = Encoding.JAPANESE
+    ): TextFileFormat {
         if (bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()) {
             return TextFileFormat.EPUB
         }
         if (bytes.size >= 5 && String(bytes, 0, 5, Charsets.US_ASCII) == "%PDF-") {
             return TextFileFormat.PDF
         }
-        val head = decode(bytes.copyOfRange(0, minOf(bytes.size, 4096))).first
+        val head = decode(bytes.copyOfRange(0, minOf(bytes.size, 4096)), encoding).first
         return when {
             head.startsWith("WEBVTT") -> TextFileFormat.VTT
             head.contains("[Script Info]") || head.contains("Dialogue:") -> TextFileFormat.ASS
@@ -72,7 +95,7 @@ object TextExtraction {
      * decode is proof. Anything that fails falls back to Shift_JIS, which
      * never fails but would turn a UTF-8 file into mojibake — hence the order.
      */
-    fun decode(bytes: ByteArray): Pair<String, String> {
+    fun decode(bytes: ByteArray, encoding: Encoding = Encoding.JAPANESE): Pair<String, String> {
         val stripped = stripBom(bytes)
         strictDecode(stripped.first, Charsets.UTF_8)?.let {
             return it to (stripped.second ?: "UTF-8")
@@ -81,10 +104,11 @@ object TextExtraction {
             // A BOM declared UTF-16; honour it even though the strict pass failed.
             return String(stripped.first, charsetOrUtf8(forced)) to forced
         }
-        for (name in listOf("Shift_JIS", "EUC-JP")) {
+        for (name in encoding.fallbacks) {
             strictDecode(stripped.first, charsetOrUtf8(name))?.let { return it to name }
         }
-        return String(stripped.first, charsetOrUtf8("Shift_JIS")) to "Shift_JIS"
+        val last = encoding.fallbacks.last()
+        return String(stripped.first, charsetOrUtf8(last)) to last
     }
 
     private fun charsetOrUtf8(name: String) =
@@ -201,7 +225,7 @@ object TextExtraction {
      * stripped — keeping it would feed every kanji compound's reading into the
      * tokeniser as if it were a separate word.
      */
-    fun extractEpub(bytes: ByteArray): Result {
+    fun extractEpub(bytes: ByteArray, encoding: Encoding = Encoding.JAPANESE): Result {
         val out = StringBuilder()
         var chapters = 0
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
@@ -212,10 +236,10 @@ object TextExtraction {
                 val isDocument = name.endsWith(".xhtml") || name.endsWith(".html") ||
                     name.endsWith(".htm")
                 if (!isDocument) continue
-                val raw = decode(zip.readBytes()).first
+                val raw = decode(zip.readBytes(), encoding).first
                 if (isNavigationOrColophon(name, raw)) continue
                 val text = htmlToText(raw)
-                if (isPublisherPage(text)) continue
+                if (isPublisherPage(text) || isLicencePage(text)) continue
                 chapters++
                 out.append(text).append('\n')
             }
@@ -274,6 +298,31 @@ object TextExtraction {
         return PUBLISHER_PHRASES.any { it in text }
     }
 
+    /**
+     * The licence and the distributor's notice at the end of an English
+     * ebook — Project Gutenberg's runs to several pages and is longer than
+     * [MAX_PUBLISHER_PAGE_LENGTH], so length cannot be what finds it. Three
+     * of these phrases together is what a licence says and a chapter does
+     * not; Pride and Prejudice ended a deck with "infringement",
+     * "transcription", "deductible" and "punitive", none of which Jane Austen
+     * wrote.
+     */
+    private fun isLicencePage(text: String): Boolean =
+        LICENCE_PHRASES.count { it in text } >= LICENCE_PHRASE_HITS
+
+    private val LICENCE_PHRASES = listOf(
+        "Project Gutenberg", "PROJECT GUTENBERG", "public domain", "copyright",
+        "Copyright", "trademark", "redistribut", "royalt", "License", "licence",
+        "All rights reserved", "no warrant", "Foundation", "donations",
+        "electronic work"
+    )
+
+    /**
+     * Higher than the Japanese colophon's three, because an English novel can
+     * legitimately say "copyright" or "foundation" once in its own text.
+     */
+    private const val LICENCE_PHRASE_HITS = 4
+
     private val COLOPHON_PHRASES = listOf(
         "本電子書籍", "無断", "複製", "転載", "発行者", "発行所", "著作権", "禁じ", "落丁", "乱丁"
     )
@@ -315,6 +364,96 @@ object TextExtraction {
         for ((entity, replacement) in NAMED_ENTITIES) out = out.replace(entity, replacement)
         return out
     }
+
+    // ---------------------------------------------------------------- markdown
+
+    /**
+     * Markdown: prose with syntax in it, and every marker left in becomes a
+     * word of its own.
+     *
+     * Notes and exported articles are where a reader's own material actually
+     * lives, and a `.md` file used to be read as plain text — so a link's URL
+     * was tokenised (`https`, `github`, `com`), a fenced block put its code
+     * identifiers in the deck, and `**słowo**` reached the dictionary with the
+     * asterisks attached. What a person reads on the page is what this keeps:
+     * heading text yes, the `##` no; link text yes, its target no; code no,
+     * because code is not the language being learned.
+     *
+     * Deliberately not a Markdown parser. The syntax is only ever removed,
+     * never interpreted, so a file with half-broken markup still scans — the
+     * worst case is a stray marker in a sentence, not a lost chapter.
+     */
+    fun stripMarkdown(raw: String): String {
+        var text = raw.replace("\r\n", "\n")
+        // Front matter is metadata (title:, tags:, date:) — a page's worth of
+        // key names that are not words of the text.
+        text = FRONT_MATTER.replace(text, "")
+        text = FENCED_CODE.replace(text, "\n")
+        text = INLINE_CODE.replace(text, " ")
+        // An image's alt text is usually a file name; a link's text is prose.
+        text = MD_IMAGE.replace(text, " ")
+        text = MD_INLINE_LINK.replace(text, "$1")
+        text = MD_REFERENCE_LINK.replace(text, "$1")
+        text = MD_FOOTNOTE_REF.replace(text, " ")
+        text = URL.replace(text, " ")
+
+        text = text.lineSequence()
+            .filterNot { line ->
+                MD_LINK_DEFINITION.matches(line) || MD_RULE.matches(line) || MD_TABLE_DIVIDER.matches(line)
+            }
+            .map { line ->
+                var out = MD_BLOCKQUOTE.replace(line, "")
+                out = MD_HEADING.replace(out, "")
+                out = MD_TRAILING_HASHES.replace(out, "")
+                out = MD_LIST_BULLET.replace(out, "")
+                // A table's cells are separate phrases, not one run-on line.
+                out.replace('|', ' ')
+            }
+            .joinToString("\n")
+
+        text = MD_STRONG.replace(text, "$2")
+        text = MD_EMPHASIS.replace(text, "$2")
+        text = MD_STRIKE.replace(text, "$1")
+        // Markdown allows raw HTML, and a `.md` exported from a web page is
+        // half of it.
+        text = HTML_TAG.replace(text, " ")
+        text = MD_ESCAPED.replace(text, "$1")
+        return decodeEntities(text)
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
+    }
+
+    private val MULTILINE_DOTALL = setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL)
+
+    private val FRONT_MATTER = Regex("""\A---[ \t]*\n.*?\n---[ \t]*(\n|$)""", RegexOption.DOT_MATCHES_ALL)
+
+    /** An unterminated block runs to the end of the file, which is what an editor shows too. */
+    private val FENCED_CODE =
+        Regex("""^[ \t]{0,3}(`{3,}|~{3,})[^\n]*\n.*?(^[ \t]{0,3}\1[^\n]*$|\z)""", MULTILINE_DOTALL)
+    private val INLINE_CODE = Regex("""`+[^`\n]*`+""")
+    private val MD_IMAGE = Regex("""!\[[^\]]*\]\([^)\n]*\)""")
+    private val MD_INLINE_LINK = Regex("""\[([^\]\n]*)\]\([^)\n]*\)""")
+    private val MD_REFERENCE_LINK = Regex("""\[([^\]\n]*)\]\[[^\]\n]*\]""")
+    private val MD_FOOTNOTE_REF = Regex("""\[\^[^\]\n]*\]""")
+    private val MD_LINK_DEFINITION = Regex("""^[ \t]*\[[^\]\n]+\]:[ \t]*\S+.*$""")
+    private val URL = Regex("""<?\b(https?|ftp|mailto):\S+""")
+
+    /** `---`, `***`, `___`, `===` — a rule, or the underline of a setext heading. */
+    private val MD_RULE = Regex("""^[ \t]*([-=*_])[ \t]*(\1[ \t]*){1,}$""")
+    private val MD_TABLE_DIVIDER = Regex("""^[ \t]*\|?[ \t:|-]*-[ \t:|-]*\|?[ \t]*$""")
+    private val MD_BLOCKQUOTE = Regex("""^[ \t]*>+[ \t]?""")
+    private val MD_HEADING = Regex("""^[ \t]{0,3}#{1,6}[ \t]*""")
+    private val MD_TRAILING_HASHES = Regex("""[ \t]+#+[ \t]*$""")
+    private val MD_LIST_BULLET = Regex("""^[ \t]*([-*+]|\d+[.)])[ \t]+""")
+
+    // The markers only come off in pairs, so `snake_case` and a lone asterisk
+    // in dialogue survive as themselves.
+    private val MD_STRONG = Regex("""(\*\*|__)(?=\S)(.+?)(?<=\S)\1""", RegexOption.DOT_MATCHES_ALL)
+    private val MD_EMPHASIS = Regex("""(?<![\w*_])([*_])(?=\S)([^*_\n]+?)(?<=\S)\1(?![\w*_])""")
+    private val MD_STRIKE = Regex("""~~(?=\S)(.+?)(?<=\S)~~""")
+    private val MD_ESCAPED = Regex("""\\([\\`*_{}\[\]()#+\-.!>~|])""")
 
     private val NAMED_ENTITIES = listOf(
         "&nbsp;" to " ", "&lt;" to "<", "&gt;" to ">", "&quot;" to "\"",

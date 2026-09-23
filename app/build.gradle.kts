@@ -105,7 +105,7 @@ android {
                 // Forward the handful the harnesses read, so they can be
                 // pointed at files without editing code.
                 for (key in listOf(
-                    "book.paths", "dict.zip", "freq.zip", "out.dir",
+                    "book.paths", "dict.zip", "freq.zip", "freq.format", "scan.language", "out.dir",
                     "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields",
                     "skipPlainKana", "skipKatakana",
                     "kindle.lookups", "kindle.deck", "kindle.dryRun", "anki.connect",

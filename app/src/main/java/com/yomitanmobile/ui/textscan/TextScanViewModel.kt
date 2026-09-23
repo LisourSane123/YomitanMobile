@@ -26,7 +26,12 @@ import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
 import com.yomitanmobile.domain.usecase.ScanEntryResolver
 import com.yomitanmobile.domain.usecase.TextScanPlanner
+import com.yomitanmobile.domain.model.AppLanguage
+import com.yomitanmobile.data.settings.LanguageSettings
+import com.yomitanmobile.data.text.TextExtraction
+import com.yomitanmobile.domain.usecase.ScanRules
 import com.yomitanmobile.util.JapaneseTokenizer
+import com.yomitanmobile.util.LatinTokenizer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -85,16 +90,33 @@ class TextScanViewModel @Inject constructor(
     private val audioPlayer: AudioPlayer,
     private val voicevox: com.yomitanmobile.data.audio.voicevox.VoicevoxVoice,
     private val apkgWriter: com.yomitanmobile.data.anki.ApkgWriter,
+    languageSettings: LanguageSettings,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val logTag = "TextScanViewModel"
 
+    /**
+     * The language being studied decides three things here: which tokeniser
+     * reads the file, which rules the planner runs, and which single-byte
+     * encoding a file that is not UTF-8 is guessed to be. It cannot change
+     * while the app runs (see LanguageSettings), so it is read once.
+     */
+    private val language = languageSettings.current
+    private val scanRules = ScanRules.forLanguage(language)
+    val isJapanese: Boolean = language.hasJapaneseFeatures
+
     // On when the screen opens: what is left of the segmentation noise is
     // almost all plain hiragana. It costs the kana adverbs, which is why it
     // is a switch and says so.
-    private val _filters =
-        MutableStateFlow(TextScanFilters(skipPlainKana = true, skipKatakana = true))
+    private val _filters = MutableStateFlow(
+        TextScanFilters(
+            // Both are about kana, so they start off for a language that has
+            // none — a switch that cannot do anything must not read as on.
+            skipPlainKana = languageSettings.current.hasJapaneseFeatures,
+            skipKatakana = languageSettings.current.hasJapaneseFeatures
+        )
+    )
     val filters: StateFlow<TextScanFilters> = _filters.asStateFlow()
 
     private val _deckName = MutableStateFlow(DEFAULT_DECK)
@@ -172,7 +194,7 @@ class TextScanViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _analysisStage.value = STAGE_READING
-                val documents = uris.map { textFileReader.read(it) }
+                val documents = uris.map { textFileReader.read(it, encoding) }
                     .sortedBy { it.fileName.lowercase() }
 
                 _analysisStage.value = STAGE_LEXICON
@@ -185,39 +207,20 @@ class TextScanViewModel @Inject constructor(
                 // Ranks decide between two readings of the same characters
                 // (今日は the greeting vs 今日 + は). Empty when no frequency
                 // dictionary is installed, which turns the preference off.
-                val common = repository.getCommonSurfaces(JapaneseTokenizer.COMMON_RANK)
+                // Nothing in the Latin tokeniser reads them — spaces already
+                // say where the words are — so the query is skipped there.
+                val common = if (isJapanese) {
+                    repository.getCommonSurfaces(JapaneseTokenizer.COMMON_RANK)
+                } else {
+                    emptyMap()
+                }
 
                 _analysisStage.value = STAGE_TOKENIZING
                 val tokens = withContext(Dispatchers.Default) {
-                    val words = object : JapaneseTokenizer.Lexicon {
-                        override fun contains(surface: String) = surface in lexicon
-                        // The rank itself, not only the yes/no: several rules
-                        // compare two numbers (a noun against the verb it is
-                        // the stem of, a katakana piece against the run it sits
-                        // in). Leaving rank() at its default made the app read
-                        // every word as unranked while the offline harness read
-                        // the real numbers — the two disagreed on every one of
-                        // those rules.
-                        override fun rank(surface: String) = common[surface] ?: 0
-                        override fun isCommon(surface: String) =
-                            common.isEmpty() || surface in common
-                        override val ranksAvailable: Boolean get() = common.isNotEmpty()
-                    }
-                    val accumulator = JapaneseTokenizer.Accumulator()
-                    for (document in documents) {
-                        accumulator.add(document.text, words)
-                    }
-                    val totalLength = accumulator.totalLength.coerceAtLeast(1)
-                    accumulator.tokens().map { token ->
-                        ScanToken(
-                            baseForm = token.baseForm,
-                            occurrences = token.count,
-                            sentence = token.sentence,
-                            // 1.0 at the start of the first file, 0.0 at the
-                            // end of the last one.
-                            earliness = 1f - token.firstOffset.toFloat() / totalLength,
-                            honorificHits = token.honorificHits
-                        )
+                    if (isJapanese) {
+                        tokenizeJapanese(documents, lexicon, common)
+                    } else {
+                        tokenizeLatin(documents, lexicon)
                     }
                 }
 
@@ -233,7 +236,9 @@ class TextScanViewModel @Inject constructor(
                         fileName = document.fileName,
                         formatLabel = document.format.label,
                         charsetName = document.charsetName,
-                        characterCount = document.text.count { JapaneseTokenizer.isJapanese(it) },
+                        characterCount = document.text.count {
+                            if (isJapanese) JapaneseTokenizer.isJapanese(it) else it.isLetter()
+                        },
                         partCount = document.partCount
                     )
                 }
@@ -272,6 +277,80 @@ class TextScanViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Longest-match segmentation against the installed dictionaries — see
+     * [JapaneseTokenizer]. Unchanged; it moved out of [analyze] only so the
+     * two languages' paths read as two paths.
+     */
+    private fun tokenizeJapanese(
+        documents: List<TextFileReader.Document>,
+        lexicon: Set<String>,
+        common: Map<String, Int>
+    ): List<ScanToken> {
+        val words = object : JapaneseTokenizer.Lexicon {
+            override fun contains(surface: String) = surface in lexicon
+            // The rank itself, not only the yes/no: several rules compare two
+            // numbers (a noun against the verb it is the stem of, a katakana
+            // piece against the run it sits in). Leaving rank() at its default
+            // made the app read every word as unranked while the offline
+            // harness read the real numbers — the two disagreed on every one
+            // of those rules.
+            override fun rank(surface: String) = common[surface] ?: 0
+            override fun isCommon(surface: String) = common.isEmpty() || surface in common
+            override val ranksAvailable: Boolean get() = common.isNotEmpty()
+        }
+        val accumulator = JapaneseTokenizer.Accumulator()
+        for (document in documents) {
+            accumulator.add(document.text, words)
+        }
+        val totalLength = accumulator.totalLength.coerceAtLeast(1)
+        return accumulator.tokens().map { token ->
+            ScanToken(
+                baseForm = token.baseForm,
+                occurrences = token.count,
+                sentence = token.sentence,
+                // 1.0 at the start of the first file, 0.0 at the end of the last one.
+                earliness = 1f - token.firstOffset.toFloat() / totalLength,
+                nameHits = token.honorificHits
+            )
+        }
+    }
+
+    /**
+     * English and Spanish: the words are already separated, so the whole job
+     * is reducing each surface to a headword the dictionary lists (see
+     * [LatinTokenizer]). Only English has a lemmatiser.
+     */
+    private fun tokenizeLatin(
+        documents: List<TextFileReader.Document>,
+        lexicon: Set<String>
+    ): List<ScanToken> {
+        val words = LatinTokenizer.Lexicon { it in lexicon }
+        val lemmatizer = if (language == AppLanguage.ENGLISH) {
+            LatinTokenizer.ENGLISH
+        } else {
+            LatinTokenizer.NONE
+        }
+        val accumulator = LatinTokenizer.Accumulator(lemmatizer)
+        for (document in documents) {
+            accumulator.add(document.text, words)
+        }
+        val totalLength = accumulator.totalLength.coerceAtLeast(1)
+        return accumulator.tokens().map { token ->
+            ScanToken(
+                baseForm = token.baseForm,
+                occurrences = token.count,
+                sentence = token.sentence,
+                earliness = 1f - token.firstOffset.toFloat() / totalLength,
+                nameHits = token.nameHits
+            )
+        }
+    }
+
+    /** See [TextExtraction.Encoding]: the wrong guess is silent mojibake. */
+    private val encoding: TextExtraction.Encoding
+        get() = if (isJapanese) TextExtraction.Encoding.JAPANESE else TextExtraction.Encoding.LATIN
+
     private fun recomputePlan() {
         if (sources.isEmpty()) return
         val filters = _filters.value
@@ -304,7 +383,8 @@ class TextScanViewModel @Inject constructor(
                 )
             },
             isMined = { matchKey(it.primaryExpression, it.reading) in minedKeys },
-            ankiScanUnavailable = filters.skipAlreadyInAnki && ankiScanUnavailable
+            ankiScanUnavailable = filters.skipAlreadyInAnki && ankiScanUnavailable,
+            rules = scanRules
         )
     }
 

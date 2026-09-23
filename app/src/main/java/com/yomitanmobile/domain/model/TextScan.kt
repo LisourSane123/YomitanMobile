@@ -129,10 +129,12 @@ data class ScanToken(
     val sentence: String = "",
     val earliness: Float = 1f,
     /**
-     * How often the text put an honorific suffix after this word (池くん,
-     * 平田さん) — see [com.yomitanmobile.util.JapaneseTokenizer.Token].
+     * How often the text marked this word as somebody's name: an honorific
+     * suffix after it in Japanese (池くん, 平田さん), a capital letter in the
+     * middle of a sentence in English and Spanish. Two different signals for
+     * the same question, which is why the field is not named after either.
      */
-    val honorificHits: Int = 0
+    val nameHits: Int = 0
 )
 
 /**

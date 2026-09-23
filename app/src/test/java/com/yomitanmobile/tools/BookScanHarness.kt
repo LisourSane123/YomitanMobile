@@ -4,6 +4,7 @@ import com.yomitanmobile.data.local.dao.FrequencyUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.mapper.toDomain
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
+import com.yomitanmobile.data.download.FrequencyListConverter
 import com.yomitanmobile.data.text.TextExtraction
 import com.yomitanmobile.data.text.TextFileFormat
 import com.yomitanmobile.domain.model.FrequencyTier
@@ -13,7 +14,10 @@ import com.yomitanmobile.domain.model.TextScanFilters
 import com.yomitanmobile.domain.model.TextScanSource
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.usecase.TextScanPlanner
+import com.yomitanmobile.domain.model.AppLanguage
+import com.yomitanmobile.domain.usecase.ScanRules
 import com.yomitanmobile.util.JapaneseTokenizer
+import com.yomitanmobile.util.LatinTokenizer
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume
 import org.junit.Test
@@ -49,6 +53,11 @@ import java.text.Normalizer
  *   [-Danki.fields=/path/fields.txt]
  * ```
  *
+ * `-Dscan.language=en` (or `es`) runs the same pipeline through
+ * [LatinTokenizer] and the English rules instead, against an English
+ * dictionary zip and a converted frequency list — which is the only way to
+ * read the first hundred cards of an English book before shipping the deck.
+ *
  * `anki.fields` turns on the "already in Anki" filter. Dump it from a COPY of
  * the desktop collection (never the live file):
  * `sqlite3 collection.anki2 "select replace(replace(replace(flds, char(10), '<br>'), char(13), ''), char(31), '␟') from notes" > fields.txt`
@@ -64,6 +73,13 @@ class BookScanHarness {
         val dictZip = System.getProperty("dict.zip").orEmpty()
         Assume.assumeTrue("harness: pass -Dbook.paths and -Ddict.zip", bookPaths.isNotEmpty() && dictZip.isNotEmpty())
 
+        val language = AppLanguage.fromStorage(System.getProperty("scan.language"))
+        val isJapanese = language.hasJapaneseFeatures
+        val encoding = if (isJapanese) {
+            TextExtraction.Encoding.JAPANESE
+        } else {
+            TextExtraction.Encoding.LATIN
+        }
         val freqZip = System.getProperty("freq.zip").orEmpty()
         val outDir = File(System.getProperty("out.dir") ?: "build/book-scan").apply { mkdirs() }
         val parser = YomitanDictionaryParser()
@@ -73,8 +89,8 @@ class BookScanHarness {
         // which is what makes the "earliness" term mean anything.
         val documents = bookPaths.map { resolveBook(it) }.sortedBy { it.name.lowercase() }.map { file ->
             val bytes = file.readBytes()
-            val format = TextFileFormat.fromFileName(file.name) ?: TextExtraction.sniff(bytes)
-            val extracted = TextExtraction.extract(bytes, format)
+            val format = TextFileFormat.fromFileName(file.name) ?: TextExtraction.sniff(bytes, encoding = encoding)
+            val extracted = TextExtraction.extract(bytes, format, encoding)
             log("read ${file.name}: ${extracted.text.length} chars, ${extracted.partCount} parts")
             file.name to extracted
         }
@@ -89,6 +105,7 @@ class BookScanHarness {
             onBatch = { entries, _ ->
                 for (entry in entries) {
                     lexicon.add(entry.expression)
+                    if (!isJapanese) continue
                     val kanaWritten = entry.reading == entry.expression ||
                         entry.partsOfSpeech.split(',', ';', ' ')
                             .any { it.trim() == "uk" } ||
@@ -104,9 +121,30 @@ class BookScanHarness {
         // Mirrors applyFrequenciesFromTable(): best (lowest) rank wins, and a
         // rank stored without a reading matches the expression alone.
         val ranks = HashMap<String, MutableList<Pair<String, Int>>>(1 shl 18)
+        // English and Spanish lists are not published in Yomitan's format —
+        // the app converts them at install time, so the harness converts them
+        // here, through the same code (`-Dfreq.format=WORDFREQ_MSGPACK`).
+        val freqFile = System.getProperty("freq.format")?.takeIf { freqZip.isNotEmpty() }?.let { format ->
+            val words = File(freqZip).inputStream().buffered().use {
+                FrequencyListConverter.rankedWords(FrequencyListConverter.Format.valueOf(format), it)
+            }
+            log("frequency list: ${words.size} words converted from $format")
+            File.createTempFile("converted-frequency", ".zip").apply {
+                deleteOnExit()
+                writeBytes(
+                    FrequencyListConverter.toYomitanZip(
+                        title = File(freqZip).name,
+                        revision = "harness",
+                        sourceLanguage = language.entryTag,
+                        attribution = "",
+                        words = words
+                    )
+                )
+            }
+        } ?: File(freqZip)
         if (freqZip.isNotEmpty()) {
             parser.parseFromZipStreaming(
-                inputStream = File(freqZip).inputStream().buffered(),
+                inputStream = freqFile.inputStream().buffered(),
                 onBatch = { _, _ -> },
                 onMetaBatch = { updates: List<FrequencyUpdate>, _ ->
                     for (u in updates) {
@@ -119,7 +157,7 @@ class BookScanHarness {
         }
         log("frequency: ${ranks.size} expressions ranked")
         // Same as getSurfaceLexicon: kana spellings a list ranks as written.
-        for ((surface, entries) in ranks) {
+        if (isJapanese) for ((surface, entries) in ranks) {
             if (!surface.all { JapaneseTokenizer.isKana(it) || it == 'ー' }) continue
             if (entries.any { it.first.isEmpty() && it.second in 1..JapaneseTokenizer.KANA_WRITTEN_RANK }) {
                 lexicon.add(surface)
@@ -150,22 +188,40 @@ class BookScanHarness {
                 offer(reading, rank)
             }
         }
-        val words = object : JapaneseTokenizer.Lexicon {
-            override fun contains(surface: String) = surface in lexicon
-            override fun rank(surface: String) = common[surface] ?: 0
-            override val ranksAvailable: Boolean get() = common.isNotEmpty()
-        }
-        val accumulator = JapaneseTokenizer.Accumulator()
-        for ((_, document) in documents) accumulator.add(document.text, words)
-        val totalLength = accumulator.totalLength.coerceAtLeast(1)
-        val tokens = accumulator.tokens().map { token ->
-            ScanToken(
-                baseForm = token.baseForm,
-                occurrences = token.count,
-                sentence = token.sentence,
-                earliness = 1f - token.firstOffset.toFloat() / totalLength,
-                honorificHits = token.honorificHits
-            )
+        val tokens = if (isJapanese) {
+            val words = object : JapaneseTokenizer.Lexicon {
+                override fun contains(surface: String) = surface in lexicon
+                override fun rank(surface: String) = common[surface] ?: 0
+                override val ranksAvailable: Boolean get() = common.isNotEmpty()
+            }
+            val accumulator = JapaneseTokenizer.Accumulator()
+            for ((_, document) in documents) accumulator.add(document.text, words)
+            val totalLength = accumulator.totalLength.coerceAtLeast(1)
+            accumulator.tokens().map { token ->
+                ScanToken(
+                    baseForm = token.baseForm,
+                    occurrences = token.count,
+                    sentence = token.sentence,
+                    earliness = 1f - token.firstOffset.toFloat() / totalLength,
+                    nameHits = token.honorificHits
+                )
+            }
+        } else {
+            val words = LatinTokenizer.Lexicon { it in lexicon }
+            val lemmatizer =
+                if (language == AppLanguage.ENGLISH) LatinTokenizer.ENGLISH else LatinTokenizer.NONE
+            val accumulator = LatinTokenizer.Accumulator(lemmatizer)
+            for ((_, document) in documents) accumulator.add(document.text, words)
+            val totalLength = accumulator.totalLength.coerceAtLeast(1)
+            accumulator.tokens().map { token ->
+                ScanToken(
+                    baseForm = token.baseForm,
+                    occurrences = token.count,
+                    sentence = token.sentence,
+                    earliness = 1f - token.firstOffset.toFloat() / totalLength,
+                    nameHits = token.nameHits
+                )
+            }
         }
         val totalTokenCount = tokens.sumOf { it.occurrences }
         log("tokens: ${tokens.size} distinct, $totalTokenCount running")
@@ -215,7 +271,9 @@ class BookScanHarness {
                 fileName = name,
                 formatLabel = document.format.label,
                 charsetName = document.charsetName,
-                characterCount = document.text.count { JapaneseTokenizer.isJapanese(it) },
+                characterCount = document.text.count {
+                    if (isJapanese) JapaneseTokenizer.isJapanese(it) else it.isLetter()
+                },
                 partCount = document.partCount
             )
         }
@@ -242,8 +300,8 @@ class BookScanHarness {
         val filters = TextScanFilters(
             tier = FrequencyTier.entries.first { it.name == (System.getProperty("tier") ?: "TOP_20K") },
             minOccurrences = System.getProperty("minOccurrences")?.toIntOrNull() ?: 1,
-            skipPlainKana = System.getProperty("skipPlainKana")?.toBooleanStrictOrNull() ?: true,
-            skipKatakana = System.getProperty("skipKatakana")?.toBooleanStrictOrNull() ?: true,
+            skipPlainKana = System.getProperty("skipPlainKana")?.toBooleanStrictOrNull() ?: isJapanese,
+            skipKatakana = System.getProperty("skipKatakana")?.toBooleanStrictOrNull() ?: isJapanese,
             assumeKnownTopRank = System.getProperty("assumeKnownTopRank")?.toIntOrNull() ?: 0,
             maxWords = System.getProperty("maxWords")?.toIntOrNull() ?: 0,
             // exported_words lives on the phone; the collection only when dumped.
@@ -263,7 +321,8 @@ class BookScanHarness {
                     readingCountsAlone = WordFilterRules.isUsuallyKana(entry)
                 ) ?: false
             },
-            ankiScanUnavailable = ankiIndex == null
+            ankiScanUnavailable = ankiIndex == null,
+            rules = ScanRules.forLanguage(language)
         )
 
         // ---- 7. report ------------------------------------------------------
@@ -272,7 +331,8 @@ class BookScanHarness {
             for (source in sources) {
                 appendLine(
                     "- ${source.fileName}: ${source.formatLabel}, ${source.charsetName}, " +
-                        "${source.characterCount} Japanese chars, ${source.partCount} parts"
+                        "${source.characterCount} ${if (isJapanese) "Japanese chars" else "letters"}, " +
+                            "${source.partCount} parts"
                 )
             }
             appendLine()
@@ -310,6 +370,7 @@ class BookScanHarness {
             // Problem 4 lives here: what the grammar filter did NOT catch.
             // Nothing is dropped on this evidence — it is a list to read before
             // deciding what to add to the stoplist or the tag rules.
+            if (isJapanese) {
             appendLine("## grammar suspects still in the deck")
             appendLine("(kana-only, or carrying a grammatical tag, sorted by occurrences)")
             appendLine("word\treading\tocc\trank\ttags\tmeaning")
@@ -331,6 +392,27 @@ class BookScanHarness {
                             entry.definitions.firstOrNull().orEmpty().replace('\t', ' ').take(70)
                     )
                 }
+            } else {
+                // The English judgement call: a novel's cast are dictionary
+                // words, and only the capital letter tells them apart from
+                // vocabulary. This is the list to read before moving
+                // LatinScanRules.NAME_CAPITALISED_RANK.
+                appendLine("## capitalised words still on cards")
+                appendLine("(mid-sentence capitals against total uses — a name is nearly all capitals)")
+                appendLine("word\tcapitals\tocc\trank\tmeaning")
+                val capitals = tokens.associate { it.baseForm to it.nameHits }
+                plan.selected
+                    .filter { (capitals[it.entry.primaryExpression] ?: 0) > 0 }
+                    .sortedByDescending { capitals[it.entry.primaryExpression] ?: 0 }
+                    .take(80)
+                    .forEach { word ->
+                        appendLine(
+                            "${word.entry.primaryExpression}\t${capitals[word.entry.primaryExpression]}\t" +
+                                "${word.occurrences}\t${word.entry.frequency}\t" +
+                                word.entry.definitions.firstOrNull().orEmpty().replace('\t', ' ').take(60)
+                        )
+                    }
+            }
             appendLine()
             // Does "one word, one card" hold? Every card whose surface is an
             // inflection of something the dictionary lists is a leak: the
@@ -342,8 +424,16 @@ class BookScanHarness {
             var leaks = 0
             for (word in plan.selected) {
                 val surface = word.entry.primaryExpression
-                val base = ParadigmMerge.possibleBases(surface)
-                    .firstOrNull { it != surface && it in lexicon } ?: continue
+                val bases = if (isJapanese) {
+                    ParadigmMerge.possibleBases(surface)
+                } else {
+                    com.yomitanmobile.util.EnglishLemmatizer.analyze(surface.lowercase())
+                }
+                val base = bases.firstOrNull { it != surface && it in lexicon } ?: continue
+                // English: the lemmatiser's suffix rules answer "moth" for
+                // "mother", so only a base that is ITSELF a card here is
+                // evidence of a leak; the rest is the probe guessing.
+                if (!isJapanese && base !in selectedWords) continue
                 leaks++
                 appendLine(
                     "$surface\t$base\t${if (base in selectedWords) "yes" else "no"}\t" +

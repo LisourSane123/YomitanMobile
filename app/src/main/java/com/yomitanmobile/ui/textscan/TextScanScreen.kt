@@ -102,6 +102,9 @@ fun TextScanScreen(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris -> if (uris.isNotEmpty()) viewModel.analyze(uris) }
 
+    // The kana switches, and the wording of the grammar one, only mean
+    // something for Japanese; see TextScanViewModel.isJapanese.
+    val isJapanese = viewModel.isJapanese
     val filters by viewModel.filters.collectAsState()
     val deckName by viewModel.deckName.collectAsState()
     val isAnalyzing by viewModel.isAnalyzing.collectAsState()
@@ -131,8 +134,8 @@ fun TextScanScreen(
                     "File is too large (${event.megabytes} MB)."
                 )
                 TextScanEvent.UnsupportedFormat -> tr(
-                    "Nieobsługiwany format pliku. Obsługiwane: .srt, .ass, .ssa, .vtt, .txt, .epub.",
-                    "Unsupported file format. Supported: .srt, .ass, .ssa, .vtt, .txt, .epub."
+                    "Nieobsługiwany format pliku. Obsługiwane: .srt, .ass, .ssa, .vtt, .txt, .md, .epub.",
+                    "Unsupported file format. Supported: .srt, .ass, .ssa, .vtt, .txt, .md, .epub."
                 )
                 TextScanEvent.NoDictionary -> tr(
                     "Brak zainstalowanego słownika — bez niego nie da się podzielić tekstu na słowa.",
@@ -189,11 +192,13 @@ fun TextScanScreen(
         ) {
             Text(
                 tr(
-                    "Wczytaj napisy (.srt, .ass, .ssa, .vtt), książkę (.epub) lub zwykły tekst (.txt) — " +
+                    "Wczytaj napisy (.srt, .ass, .ssa, .vtt), książkę (.epub), notatki (.md) " +
+                        "lub zwykły tekst (.txt) — " +
                         "możesz zaznaczyć wiele plików naraz, np. cały sezon albo całą serię. " +
                         "Aplikacja podzieli tekst na słowa, odrzuci te, które już znasz (kolekcja Anki " +
                         "i wcześniejsze eksporty) i zrobi fiszki z reszty.",
-                    "Load subtitles (.srt, .ass, .ssa, .vtt), a book (.epub) or plain text (.txt) — " +
+                    "Load subtitles (.srt, .ass, .ssa, .vtt), a book (.epub), notes (.md) " +
+                        "or plain text (.txt) — " +
                         "you can pick several files at once, e.g. a whole season or a whole series. " +
                         "The app splits the text into words, drops the ones you already know (Anki " +
                         "collection and earlier exports) and makes cards from the rest."
@@ -254,9 +259,12 @@ fun TextScanScreen(
                         val charsets = currentPlan.sources.map { it.charsetName }.distinct()
                             .joinToString(", ")
                         Text(
-                            tr(
+                            if (isJapanese) tr(
                                 "$formats · $charsets · $characters znaków japońskich",
                                 "$formats · $charsets · $characters Japanese characters"
+                            ) else tr(
+                                "$formats · $charsets · $characters liter",
+                                "$formats · $charsets · $characters letters"
                             ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -397,7 +405,7 @@ fun TextScanScreen(
                         }
                     )
 
-                    ToggleRow(
+                    if (isJapanese) ToggleRow(
                         title = tr("Pomiń słowa pisane samą hiraganą", "Skip plain hiragana words"),
                         subtitle = tr(
                             "Zostają słowa z kanji, katakaną (クラス, コンビニ) oraz powtórzenia " +
@@ -414,7 +422,7 @@ fun TextScanScreen(
                         }
                     )
 
-                    ToggleRow(
+                    if (isJapanese) ToggleRow(
                         title = tr("Pomiń słowa w katakanie", "Skip katakana words"),
                         subtitle = tr(
                             "Zapożyczenia (クラス, コンビニ, イヤホン) i imiona pisane katakaną. " +
@@ -430,11 +438,17 @@ fun TextScanScreen(
 
                     ToggleRow(
                         title = tr("Pomiń słowa gramatyczne", "Skip function words"),
-                        subtitle = tr(
+                        subtitle = if (isJapanese) tr(
                             "Partykuły, です/ます, する/いる oraz wszystko, co słownik oznacza jako " +
                                 "spójnik, partykułę, kopulę czy końcówkę posiłkową (それでも, ということ).",
                             "Particles, です/ます, する/いる, plus anything the dictionary tags as a " +
                                 "conjunction, particle, copula or auxiliary (それでも, ということ)."
+                        ) else tr(
+                            "Rodzajniki, zaimki, przyimki i czasowniki posiłkowe (the, of, would, " +
+                                "el, por, estar) — klasy zamknięte, które stoją na szczycie każdej " +
+                                "listy częstości.",
+                            "Articles, pronouns, prepositions and auxiliaries (the, of, would, " +
+                                "el, por, estar) — the closed classes that top every frequency list."
                         ),
                         checked = filters.skipFunctionWords,
                         onCheckedChange = { value ->

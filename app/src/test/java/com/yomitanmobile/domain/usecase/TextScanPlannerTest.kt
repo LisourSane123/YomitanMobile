@@ -473,9 +473,9 @@ class TextScanPlannerTest {
         val result = TextScanPlanner.plan(
             sources = listOf(source),
             words = listOf(
-                ScanToken("池", 156, honorificHits = 8),
-                ScanToken("平田", 126, honorificHits = 11),
-                ScanToken("猫", 40, honorificHits = 9)
+                ScanToken("池", 156, nameHits = 8),
+                ScanToken("平田", 126, nameHits = 11),
+                ScanToken("猫", 40, nameHits = 9)
             ),
             entries = mapOf("池" to classmate, "平田" to nameOnly, "猫" to everydayWord),
             filters = TextScanFilters(),
@@ -533,7 +533,7 @@ class TextScanPlannerTest {
         val word = entry("先生", frequency = 2000)
         val result = TextScanPlanner.plan(
             sources = listOf(source),
-            words = listOf(ScanToken("先生", 30, honorificHits = 2)),
+            words = listOf(ScanToken("先生", 30, nameHits = 2)),
             entries = mapOf("先生" to word),
             filters = TextScanFilters(),
             totalTokenCount = 100

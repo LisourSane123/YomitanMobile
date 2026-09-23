@@ -12,7 +12,8 @@ enum class TextFileFormat(val extensions: List<String>, val label: String) {
     VTT(listOf("vtt"), "WebVTT (.vtt)"),
     EPUB(listOf("epub"), "EPUB"),
     PDF(listOf("pdf"), "PDF"),
-    PLAIN(listOf("txt", "text", "md", "csv", "lrc"), "Tekst (.txt)");
+    MARKDOWN(listOf("md", "markdown", "mkd", "mdown"), "Markdown (.md)"),
+    PLAIN(listOf("txt", "text", "csv", "lrc"), "Tekst (.txt)");
 
     companion object {
         fun fromFileName(name: String): TextFileFormat? {

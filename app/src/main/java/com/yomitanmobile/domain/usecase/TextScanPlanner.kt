@@ -163,7 +163,7 @@ object TextScanPlanner {
      * the collection — cards whose whole content is the particle. Treated as
      * already known when the word before the particle is.
      */
-    private fun isKnownBlend(entry: MergedWordEntry, isInAnki: (MergedWordEntry) -> Boolean): Boolean {
+    internal fun isKnownBlend(entry: MergedWordEntry, isInAnki: (MergedWordEntry) -> Boolean): Boolean {
         val expression = entry.primaryExpression
         val suffix = BLEND_PARTICLES.firstOrNull { expression.length > it.length && expression.endsWith(it) }
             ?: return false
@@ -193,7 +193,7 @@ object TextScanPlanner {
      * いい, やる) is ranked in the top few thousand, so "kana, tiny, and
      * unranked" is noise with no counterexamples.
      */
-    private fun isSegmentationNoise(word: String, entry: MergedWordEntry): Boolean =
+    internal fun isSegmentationNoise(word: String, entry: MergedWordEntry): Boolean =
         word.length <= 2 &&
             word.none { JapaneseTokenizer.isKanji(it) } &&
             entry.frequency <= 0
@@ -203,7 +203,7 @@ object TextScanPlanner {
      * word AND ranked inside [GRAMMAR_KNOWN_RANK]. Unranked or rarer grammar
      * becomes a card.
      */
-    private fun isEverydayGrammar(entry: MergedWordEntry, occurrences: Int): Boolean {
+    internal fun isEverydayGrammar(entry: MergedWordEntry, occurrences: Int): Boolean {
         if (!WordFilterRules.isFunctionWord(entry)) return false
         if (entry.frequency in 1..GRAMMAR_KNOWN_RANK) return true
         // An unranked grammar word is NOT a rare one. The lists rank とはいえ at
@@ -237,13 +237,13 @@ object TextScanPlanner {
      * compounds used ten times each in the same book and are perfectly good
      * cards.
      */
-    private fun isNameOnly(token: ScanToken, entry: MergedWordEntry): Boolean = when {
-        token.honorificHits >= NAME_HONORIFIC_HITS &&
+    internal fun isNameOnly(token: ScanToken, entry: MergedWordEntry): Boolean = when {
+        token.nameHits >= NAME_HONORIFIC_HITS &&
             (entry.frequency <= 0 || entry.frequency > NAME_RARE_RANK) -> true
         // A classmate the text keeps calling 池くん: eight くん out of 156
         // occurrences, and the word is common enough (3 770) to pass the rule
         // above. Anything the corpus calls everyday — 猫ちゃん, お母さん — stays.
-        else -> token.honorificHits >= NAME_HONORIFIC_CERTAIN &&
+        else -> token.nameHits >= NAME_HONORIFIC_CERTAIN &&
             (entry.frequency <= 0 || entry.frequency > NAME_EVERYDAY_RANK)
     }
 
@@ -256,7 +256,7 @@ object TextScanPlanner {
      * to hiragana and the entry's other written forms are checked too, which
      * also covers ワタシ, ボク and キミ.
      */
-    private fun isStoplisted(word: String, entry: MergedWordEntry?): Boolean {
+    internal fun isStoplisted(word: String, entry: MergedWordEntry?): Boolean {
         if (word in FUNCTION_WORDS || word.katakanaToHiragana() in FUNCTION_WORDS) return true
         if (entry == null) return false
         if (entry.primaryExpression in FUNCTION_WORDS) return true
@@ -308,15 +308,16 @@ object TextScanPlanner {
         out: MutableList<GrammarUse>,
         word: String,
         occurrences: Int,
-        entry: MergedWordEntry?
+        entry: MergedWordEntry?,
+        rules: ScanRules
     ) {
         @Suppress("NAME_SHADOWING")
         val rank = entry?.frequency ?: 0
         val source = when {
-            isStoplisted(word, entry) -> GrammarSource.STOPLIST
+            rules.isStoplisted(word, entry) -> GrammarSource.STOPLIST
             entry == null -> return
             !WordFilterRules.isFunctionWord(entry) -> return
-            isEverydayGrammar(entry, occurrences) -> GrammarSource.TAG_RULE
+            rules.isEverydayGrammar(entry, occurrences) -> GrammarSource.TAG_RULE
             else -> GrammarSource.KEPT
         }
         out += GrammarUse(word, occurrences, rank, source)
@@ -345,7 +346,7 @@ object TextScanPlanner {
      * and the earliest occurrence wins, exactly like [mergeByEntry] — this
      * runs first, so the entry merge then sees one token per word.
      */
-    private fun mergeByParadigm(
+    internal fun mergeByParadigm(
         words: List<ScanToken>,
         entries: Map<String, MergedWordEntry>
     ): Pair<List<ScanToken>, Map<String, MergedWordEntry>> {
@@ -353,7 +354,22 @@ object TextScanPlanner {
             entries[word]?.let { isInflectable(it) } == true
         }
         if (bases.isEmpty()) return words to entries
-        val index = ParadigmMerge.index(bases)
+        return mergeOnto(words, entries, ParadigmMerge.index(bases))
+    }
+
+    /**
+     * Collapses every token onto the target [index] names for it, adding the
+     * counts up and keeping the earliest occurrence's sentence.
+     *
+     * The index is the language's business — Japanese generates a verb's
+     * paradigm, English asks its lemmatiser — and this is what both do with
+     * it afterwards.
+     */
+    internal fun mergeOnto(
+        words: List<ScanToken>,
+        entries: Map<String, MergedWordEntry>,
+        index: Map<String, String>
+    ): Pair<List<ScanToken>, Map<String, MergedWordEntry>> {
         if (index.isEmpty()) return words to entries
 
         val grouped = LinkedHashMap<String, MutableList<ScanToken>>()
@@ -370,7 +386,7 @@ object TextScanPlanner {
                 occurrences = tokens.sumOf { it.occurrences },
                 sentence = base.sentence.ifBlank { earliest.sentence },
                 earliness = earliest.earliness,
-                honorificHits = tokens.sumOf { it.honorificHits }
+                nameHits = tokens.sumOf { it.nameHits }
             )
         }
         val outEntries = HashMap<String, MergedWordEntry>(grouped.size)
@@ -392,7 +408,7 @@ object TextScanPlanner {
      * inflection of. 近い is in Anki, 近く (a JMdict noun of its own, ranked
      * 348) was not compared against it and became a card.
      */
-    private fun isInflectionInAnki(
+    internal fun isInflectionInAnki(
         word: String,
         entry: MergedWordEntry,
         isInAnki: (MergedWordEntry) -> Boolean
@@ -411,7 +427,8 @@ object TextScanPlanner {
 
     private fun mergeByEntry(
         words: List<ScanToken>,
-        entries: Map<String, MergedWordEntry>
+        entries: Map<String, MergedWordEntry>,
+        rules: ScanRules
     ): Pair<List<ScanToken>, Map<String, MergedWordEntry>> {
         val groups = LinkedHashMap<String, MutableList<ScanToken>>()
         val entryOf = HashMap<String, MergedWordEntry>()
@@ -443,7 +460,7 @@ object TextScanPlanner {
             // form carrying kanji, so 去る beats さる at 3 occurrences each.
             val winner = tokens.maxWith(
                 compareBy<ScanToken> { it.occurrences }
-                    .thenBy { token -> token.baseForm.count { JapaneseTokenizer.isKanji(it) } }
+                    .thenBy { token -> rules.spellingPreference(token.baseForm) }
             )
             val earliest = tokens.maxByOrNull { it.earliness } ?: winner
             outWords += ScanToken(
@@ -451,7 +468,7 @@ object TextScanPlanner {
                 occurrences = tokens.sumOf { it.occurrences },
                 sentence = earliest.sentence.ifBlank { winner.sentence },
                 earliness = earliest.earliness,
-                honorificHits = tokens.sumOf { it.honorificHits }
+                nameHits = tokens.sumOf { it.nameHits }
             )
             // Several tokens reached this entry, so every one of them is a
             // spelling of it; the text's favourite goes on the card.
@@ -475,7 +492,8 @@ object TextScanPlanner {
         totalTokenCount: Int,
         isInAnki: (MergedWordEntry) -> Boolean = { false },
         isMined: (MergedWordEntry) -> Boolean = { false },
-        ankiScanUnavailable: Boolean = false
+        ankiScanUnavailable: Boolean = false,
+        rules: ScanRules = JapaneseScanRules
     ): TextScanPlan {
         val skipped = linkedMapOf<TextScanSkipReason, Int>()
         var knownTokens = 0
@@ -490,8 +508,8 @@ object TextScanPlanner {
             }
         }
 
-        val byParadigm = mergeByParadigm(words, entries)
-        val merged = mergeByEntry(byParadigm.first, byParadigm.second)
+        val byParadigm = rules.mergeParadigms(words, entries)
+        val merged = mergeByEntry(byParadigm.first, byParadigm.second, rules)
         val maxOccurrences = merged.first.maxOfOrNull { it.occurrences } ?: 1
         val mergedWords = merged.first
         val mergedEntries = merged.second
@@ -504,40 +522,37 @@ object TextScanPlanner {
             val entry = mergedEntries[word]
             // Counted before the filters run, so the tally is the same whether
             // or not the user has the grammar filter switched on.
-            recordGrammar(grammar, word, occurrences, entry)
+            recordGrammar(grammar, word, occurrences, entry, rules)
+            // Judged on the spelling the card will carry, which is the one the
+            // text used; null for a language whose script filters do not apply.
+            val scriptReason = entry?.let { rules.scriptSkipReason(word, filters) }
             when {
-                filters.skipFunctionWords && isStoplisted(word, entry) ->
+                filters.skipFunctionWords && rules.isStoplisted(word, entry) ->
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
                 // Noise is not a filter the user can switch off: nobody wants
                 // a card for ああああ. See NoiseRules.
-                NoiseRules.isBlacklisted(word, entry) ||
-                    NoiseRules.isBareNumber(word) ||
-                    NoiseRules.isEmphaticNoise(word) { it in FUNCTION_WORDS } ->
+                rules.isNoise(word, entry) ->
                     reject(TextScanSkipReason.NOISE, occurrences)
                 entry == null ->
                     reject(TextScanSkipReason.NOT_IN_DICTIONARY, occurrences)
-                NoiseRules.isKanaFragment(word, entry) ->
+                rules.isFragment(word, entry) ->
                     reject(TextScanSkipReason.NOISE, occurrences)
-                // Judged on the spelling the card will carry, which is the
-                // one the text used.
-                filters.skipPlainKana && NoiseRules.isPlainKana(word) ->
-                    reject(TextScanSkipReason.KANA_ONLY, occurrences)
-                filters.skipKatakana && NoiseRules.isKatakanaWord(word) ->
-                    reject(TextScanSkipReason.KATAKANA_ONLY, occurrences)
-                isSegmentationNoise(word, entry) ->
+                scriptReason != null ->
+                    reject(scriptReason, occurrences)
+                rules.isSegmentationNoise(word, entry) ->
                     reject(TextScanSkipReason.UNRANKED, occurrences)
                 // Same reason, second source of truth: the dictionary's own
                 // part-of-speech tags. Runs right after the lookup so a word
                 // rejected as grammar is counted as grammar and not as, say,
                 // "too few occurrences".
-                filters.skipFunctionWords && isEverydayGrammar(entry, occurrences) ->
+                filters.skipFunctionWords && rules.isEverydayGrammar(entry, occurrences) ->
                     reject(TextScanSkipReason.FUNCTION_WORD, occurrences)
                 occurrences < filters.minOccurrences ->
                     reject(TextScanSkipReason.TOO_FEW_OCCURRENCES, occurrences)
                 entry.definitions.none { it.isNotBlank() } ->
                     reject(TextScanSkipReason.NO_DEFINITION, occurrences)
                 filters.skipProperNames &&
-                    (WordFilterRules.isProperName(entry) || isNameOnly(token, entry)) ->
+                    (WordFilterRules.isProperName(entry) || rules.isNameOnly(token, entry)) ->
                     reject(TextScanSkipReason.PROPER_NAME, occurrences)
                 entry.frequency <= 0 && !filters.includeUnranked ->
                     reject(TextScanSkipReason.UNRANKED, occurrences)
@@ -549,8 +564,8 @@ object TextScanPlanner {
                     reject(TextScanSkipReason.ARCHAIC, occurrences)
                 filters.skipAlreadyInAnki && (
                     isInAnki(entry) ||
-                        isKnownBlend(entry, isInAnki) ||
-                        isInflectionInAnki(word, entry, isInAnki)
+                        rules.isKnownBlend(entry, isInAnki) ||
+                        rules.isInflectionInAnki(word, entry, isInAnki)
                     ) ->
                     reject(TextScanSkipReason.ALREADY_IN_ANKI, occurrences)
                 filters.skipAlreadyMined && isMined(entry) ->

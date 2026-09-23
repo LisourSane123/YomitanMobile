@@ -64,9 +64,8 @@ fun ToolsScreen(
                 .padding(16.dp)
         ) {
             // What exists for the language being studied: the level decks are
-            // JLPT or CEFR, and the text scanner and the kanji browser are
-            // Japanese machinery — shown for English they led to screens
-            // that could only fail.
+            // JLPT or CEFR, and the kanji browser is Japanese machinery —
+            // shown for English it led to a screen that could only fail.
             val studyLanguage = com.yomitanmobile.ui.common.LocalStudyLanguage.current
             val scale = com.yomitanmobile.domain.model.LevelScale.forLanguage(studyLanguage)
             SectionLabel(tr("Tworzenie fiszek", "Building cards"))
@@ -79,7 +78,9 @@ fun ToolsScreen(
                 ),
                 onClick = onNavigateToJlptDeck
             )
-            if (studyLanguage.hasJapaneseFeatures) ToolCard(
+            // The scanner is no longer Japanese-only: English and Spanish
+            // read the same files through LatinTokenizer.
+            ToolCard(
                 icon = Icons.Default.MenuBook,
                 title = tr("Fiszki z napisów lub książki", "Cards from subtitles or a book"),
                 subtitle = tr(
