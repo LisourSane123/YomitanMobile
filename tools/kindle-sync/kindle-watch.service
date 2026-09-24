@@ -10,7 +10,12 @@ PartOf=graphical-session.target
 
 [Service]
 ExecStart=@SCRIPT@
-Restart=on-failure
+# always, not on-failure: a watcher that has stopped watching is broken
+# whatever it exited with. udevadm's event stream can end by itself (udev
+# restarting closes the netlink socket) and that looked like a clean exit, so
+# the service would sit there "dead" and every later plug-in went unnoticed —
+# the same symptom as the lock it used to leak.
+Restart=always
 RestartSec=10
 
 [Install]
