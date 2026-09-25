@@ -64,5 +64,16 @@ class KanjiTallyRealCollectionTest {
         }
         val once = tally.counts.count { it.words == 1 }
         println("--- $once characters sit in exactly one word")
+
+        // What the Kanji Study export would hand over. No media ranks here —
+        // those live in the phone's kanji table, not in a field dump — so this
+        // shows the count order and the set split, which is what the file is.
+        val plan = KanjiStudyExport.plan(tally.counts)
+        println(
+            "--- export: ${plan.kanji.size} characters, ${plan.sets.size} sets of " +
+                "${plan.setSize}, ${plan.dropped} dropped for sitting in one word"
+        )
+        plan.sets.take(3).forEachIndexed { i, set -> println("set ${i + 1}: $set") }
+        println("last set: ${plan.sets.last()}")
     }
 }

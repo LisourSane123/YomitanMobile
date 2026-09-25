@@ -48,6 +48,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import com.yomitanmobile.data.anki.KanjiStudyExport
 import com.yomitanmobile.data.anki.KanjiTally
 import com.yomitanmobile.ui.common.rememberTr
 import com.yomitanmobile.ui.common.tr
@@ -82,7 +90,28 @@ fun KanjiBrowseScreen(
     // dictionary: "how much of jōyō grade 3 do I have" is a join with KANJIDIC,
     // while "which characters are my own cards made of" is the scan alone.
     var showMine by remember { mutableStateOf(false) }
-    var matureOnly by remember { mutableStateOf(false) }
+    val matureOnly by viewModel.matureOnly.collectAsState()
+    val exportPlan by viewModel.exportPlan.collectAsState()
+    val shareFile by viewModel.shareFile.collectAsState()
+    val context = LocalContext.current
+
+    // Kanji Study reads a plain list from a file it is given; both ways of
+    // handing it over are offered, because only the file one is documented.
+    val saveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(KanjiStudyExport.MIME_TYPE)
+    ) { uri -> uri?.let(viewModel::exportToFile) }
+
+    LaunchedEffect(shareFile) {
+        val uri = shareFile ?: return@LaunchedEffect
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = KanjiStudyExport.MIME_TYPE
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, KanjiStudyExport.FILE_NAME)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { context.startActivity(Intent.createChooser(send, null)) }
+        viewModel.shareHandled()
+    }
 
     Scaffold(
         topBar = {
@@ -126,8 +155,11 @@ fun KanjiBrowseScreen(
                 showMine -> MyKanjiSection(
                     tally = if (matureOnly) matureTally else tally,
                     matureOnly = matureOnly,
-                    onMatureOnlyChange = { matureOnly = it },
+                    onMatureOnlyChange = viewModel::setMatureOnly,
                     hasMature = matureTally.counts.isNotEmpty(),
+                    exportPlan = exportPlan,
+                    onSave = { saveLauncher.launch(KanjiStudyExport.FILE_NAME) },
+                    onShare = viewModel::prepareShare,
                     onKanjiClick = onKanjiClick
                 )
 
@@ -259,6 +291,9 @@ private fun MyKanjiSection(
     matureOnly: Boolean,
     onMatureOnlyChange: (Boolean) -> Unit,
     hasMature: Boolean,
+    exportPlan: KanjiStudyExport.Plan,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
     onKanjiClick: (String) -> Unit
 ) {
     val tr = rememberTr()
@@ -317,6 +352,50 @@ private fun MyKanjiSection(
                 modifier = Modifier.weight(1f)
             )
             Switch(checked = matureOnly, onCheckedChange = onMatureOnlyChange)
+        }
+    }
+
+    if (!exportPlan.isEmpty) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            tr(
+                "Do Kanji Study: ${exportPlan.kanji.size} znaków w ${exportPlan.sets.size} " +
+                    "zestawach po ${exportPlan.setSize}. Bez ${exportPlan.dropped} znaków " +
+                    "z jednego słowa — te nie mają się gdzie utrwalić.",
+                "For Kanji Study: ${exportPlan.kanji.size} characters in ${exportPlan.sets.size} " +
+                    "sets of ${exportPlan.setSize}. Without the ${exportPlan.dropped} characters " +
+                    "that sit in a single word — those have nowhere to stick."
+            ),
+            fontSize = 12.sp
+        )
+        Text(
+            if (exportPlan.unranked == exportPlan.kanji.size) {
+                tr(
+                    "Kolejność: najwięcej moich słów najpierw. Twój słownik kanji nie podaje " +
+                        "częstości w mediach, więc remisy rozstrzyga sam znak — zaimportuj " +
+                        "KANJIDIC ponownie, żeby je ułożyć sensownie.",
+                    "Order: most of my words first. Your kanji dictionary gives no media " +
+                        "frequency, so ties fall back to the character itself — re-import " +
+                        "KANJIDIC to order them properly."
+                )
+            } else {
+                tr(
+                    "Kolejność: najwięcej moich słów najpierw, remisy po częstości w mediach " +
+                        "(KANJIDIC). Każda linia pliku to jeden zestaw w aplikacji.",
+                    "Order: most of my words first, ties by media frequency (KANJIDIC). Each " +
+                        "line of the file is one set in the app."
+                )
+            },
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onSave) {
+                Text(tr("Zapisz plik", "Save file"))
+            }
+            TextButton(onClick = onShare) {
+                Text(tr("Udostępnij", "Share"))
+            }
         }
     }
 
