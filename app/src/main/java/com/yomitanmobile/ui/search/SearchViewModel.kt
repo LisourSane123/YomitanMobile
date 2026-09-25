@@ -424,22 +424,32 @@ class SearchViewModel @Inject constructor(
      * is imported. Room's own Flow re-emits exactly then, which is what makes
      * a cached copy correct rather than stale.
      */
-    private data class LeadingList(val name: String, val higherIsBetter: Boolean)
+    /**
+     * The user's list order for this language, and which way each list's
+     * numbers run. The first entry leads; the rest are what a word the leader
+     * does not know falls back to, in the order the user put them in.
+     */
+    private data class ListOrder(
+        val names: List<String>,
+        val higherIsBetter: Map<String, Boolean>
+    ) {
+        val leading: String get() = names.firstOrNull().orEmpty()
+        fun direction(name: String): Boolean = higherIsBetter[name] ?: false
+    }
 
-    private val leadingList: StateFlow<LeadingList?> =
+    private val listOrder: StateFlow<ListOrder?> =
         frequencyDao.observeDictionariesFor(appLanguage.entryTag)
             .map { installed ->
-                val name = frequencySettings.leadingDictionary(appLanguage, installed)
-                LeadingList(
-                    name = name,
-                    higherIsBetter = if (name.isBlank()) {
-                        false
-                    } else {
-                        frequencyDao.getListSetting(name)?.higherIsBetter ?: false
-                    }
+                ListOrder(
+                    names = frequencySettings.resolveOrder(
+                        frequencySettings.order(appLanguage),
+                        installed
+                    ),
+                    higherIsBetter = frequencyDao.getListSettings()
+                        .associate { it.dictionary to it.higherIsBetter }
                 )
             }
-            .catch { emit(LeadingList("", false)) }
+            .catch { emit(ListOrder(emptyList(), emptyMap())) }
             // Eagerly, and null until the first answer arrives. WhileSubscribed
             // was wrong in a way that showed: nothing COLLECTS this flow, it is
             // only read through `.value`, so the upstream never started and the
@@ -450,10 +460,10 @@ class SearchViewModel @Inject constructor(
     /**
      * The cached answer, waiting for it only the first time. Null means "not
      * answered yet", never "no list" — a collection with no frequency list
-     * installed still emits, with a blank name.
+     * installed still emits, with an empty order.
      */
-    private suspend fun leading(): LeadingList =
-        leadingList.value ?: leadingList.filterNotNull().first()
+    private suspend fun listOrder(): ListOrder =
+        listOrder.value ?: listOrder.filterNotNull().first()
 
     private suspend fun withLeadingFrequencyTimed(results: List<MergedWordEntry>): List<MergedWordEntry> {
         val startedAt = System.currentTimeMillis()
@@ -462,9 +472,10 @@ class SearchViewModel @Inject constructor(
                 TAG,
                 "leading frequency ${System.currentTimeMillis() - startedAt} ms " +
                     "(${stamped.count { it.leadingFrequency != null }}/${results.size} stamped, " +
-                    "list='${leadingList.value?.name.orEmpty()}', " +
+                    "list='${listOrder.value?.leading.orEmpty()}', " +
                     "first=${stamped.firstOrNull()?.leadingFrequency?.let {
-                        "value=${it.value()} position=${it.position} " +
+                        "dict='${it.dictionary}' leading=${it.fromLeadingList} " +
+                            "value=${it.value()} position=${it.position} " +
                             "tier='${com.yomitanmobile.domain.model.FrequencyTier.label(it.position, it.value())}'"
                     } ?: "none"})"
             )
@@ -476,33 +487,70 @@ class SearchViewModel @Inject constructor(
     ): List<MergedWordEntry> {
         if (entries.isEmpty()) return entries
         return runCatching {
-            val (leading, higherIsBetter) = leading()
+            val order = listOrder()
+            val leading = order.leading
             if (leading.isBlank()) return entries
             val expressions = entries.map { it.primaryExpression }.filter { it.isNotBlank() }.distinct()
-            val rows = expressions.chunked(900)
+            val rows = expressions.chunked(IN_CLAUSE_CHUNK)
                 .flatMap { frequencyDao.getForDictionary(leading, it) }
                 .groupBy { it.expression }
-            entries.map { entry ->
-                // A list that shipped no readings matches on the spelling
-                // alone — the same fallback the per-word lookup uses.
-                val row = rows[entry.primaryExpression]?.let { candidates ->
-                    candidates.firstOrNull { it.reading == entry.reading }
-                        ?: candidates.firstOrNull { it.reading.isBlank() }
-                } ?: return@map entry
+            val stamped = entries.map { entry ->
+                entry.copy(leadingFrequency = pick(rows[entry.primaryExpression], entry, order, leading))
+            }
+
+            // The words the leading list does not know get a number from the
+            // next list that does, in the user's own priority order — marked as
+            // that list's claim, not the leader's. One more query, and only for
+            // those words: a word the leader ranks costs nothing extra, which
+            // is most of them.
+            val others = order.names.drop(1)
+            val missing = stamped.filter { it.leadingFrequency == null }
+                .map { it.primaryExpression }
+                .filter { it.isNotBlank() }
+                .distinct()
+            if (others.isEmpty() || missing.isEmpty()) return@runCatching stamped
+            val fallback = missing.chunked(IN_CLAUSE_CHUNK)
+                .flatMap { frequencyDao.getForDictionaries(others, it) }
+                .groupBy { it.expression }
+            stamped.map { entry ->
+                if (entry.leadingFrequency != null) return@map entry
+                val byList = (fallback[entry.primaryExpression] ?: return@map entry)
+                    .groupBy { it.dictionary }
+                val name = others.firstOrNull { it in byList } ?: return@map entry
                 entry.copy(
-                    leadingFrequency = WordFrequencyInfo(
-                        dictionary = row.dictionary,
-                        rank = row.rank,
-                        displayValue = row.displayValue,
-                        position = row.position,
-                        higherIsBetter = higherIsBetter
-                    )
+                    leadingFrequency = pick(byList[name], entry, order, name, fromLeadingList = false)
                 )
             }
         }.getOrElse { e ->
             Log.w(TAG, "leading frequency lookup failed", e)
             entries
         }
+    }
+
+    /**
+     * One list's row for this word, as the UI wants it. A list that shipped no
+     * readings matches on the spelling alone — the same fallback the per-word
+     * lookup uses.
+     */
+    private fun pick(
+        candidates: List<com.yomitanmobile.data.local.entity.WordFrequency>?,
+        entry: MergedWordEntry,
+        order: ListOrder,
+        dictionary: String,
+        fromLeadingList: Boolean = true
+    ): WordFrequencyInfo? {
+        val row = candidates?.let { rows ->
+            rows.firstOrNull { it.reading == entry.reading }
+                ?: rows.firstOrNull { it.reading.isBlank() }
+        } ?: return null
+        return WordFrequencyInfo(
+            dictionary = row.dictionary,
+            rank = row.rank,
+            displayValue = row.displayValue,
+            position = row.position,
+            higherIsBetter = order.direction(dictionary),
+            fromLeadingList = fromLeadingList
+        )
     }
 
     private fun enrichWithJlptFallback(entry: MergedWordEntry): MergedWordEntry {
@@ -616,6 +664,9 @@ class SearchViewModel @Inject constructor(
          * query is answering a question nobody asked.
          */
         private const val MAX_LEMMA_LOOKUPS = 3
+
+        /** SQLite binds at most 999 variables per statement. */
+        private const val IN_CLAUSE_CHUNK = 900
 
         /**
          * The search mode after a query edit. When the user has pinned a mode

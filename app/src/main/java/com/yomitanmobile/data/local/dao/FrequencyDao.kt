@@ -100,6 +100,24 @@ interface FrequencyDao {
     ): List<WordFrequency>
 
     /**
+     * The same for SEVERAL lists at once — the leading one and, for the words
+     * it does not know, whichever other list does.
+     *
+     * One statement for the fallback rather than one per list: the caller knows
+     * its priority order and picks from what comes back.
+     */
+    @Query(
+        """
+        SELECT * FROM word_frequencies
+        WHERE dictionary IN (:dictionaries) AND expression IN (:expressions)
+        """
+    )
+    suspend fun getForDictionaries(
+        dictionaries: List<String>,
+        expressions: List<String>
+    ): List<WordFrequency>
+
+    /**
      * How one list's numbers are distributed, for [FrequencyListStats].
      * `rank` holds the numbers as shipped, so this is the list's real shape.
      */

@@ -10,6 +10,7 @@ import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.data.repository.DictionaryRepositoryImpl
 import com.yomitanmobile.data.settings.FrequencySettings
 import com.yomitanmobile.data.settings.LanguageSettings
+import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.domain.model.FrequencyTier
 import com.yomitanmobile.domain.usecase.SearchDictionaryUseCase
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -112,6 +114,50 @@ class LeadingFrequencyTest {
         db.close()
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun `a word the leading list does not know borrows the next list's number, marked`() =
+        runTest(dispatcher) {
+            // The user's own order decides who leads — not the alphabet, which
+            // is how the lists come back from the database.
+            FrequencySettings(ApplicationProvider.getApplicationContext())
+                .setOrder(AppLanguage.JAPANESE, listOf("JPDB", "BCCWJ"))
+            // BCCWJ knows 洗濯, JPDB (the leader) does not.
+            db.dictionaryInfoDao().insert(DictionaryInfo(name = "BCCWJ", language = "ja"))
+            db.dictionaryDao().insertAll(
+                listOf(
+                    DictionaryEntry(
+                        expression = "洗濯",
+                        reading = "せんたく",
+                        definition = "[\"laundry\"]",
+                        dictionaryName = "Jitendex",
+                        language = "ja",
+                        frequency = 0
+                    )
+                )
+            )
+            db.frequencyDao().insertAll(
+                listOf(
+                    WordFrequency(
+                        expression = "洗濯",
+                        reading = "せんたく",
+                        dictionary = "BCCWJ",
+                        rank = 4200,
+                        displayValue = "4200",
+                        position = 4200
+                    )
+                )
+            )
+
+            viewModel.onQueryChange("洗濯")
+            val results = viewModel.searchResults.first { it.isNotEmpty() }
+            val leading = results.first().leadingFrequency
+            assertNotNull("a word outside the leading list showed no number at all", leading)
+            assertEquals("BCCWJ", leading!!.dictionary)
+            // …and the row is told it is not the leading list's claim.
+            assertFalse(leading.fromLeadingList)
+            assertEquals("★★ Top 5K", FrequencyTier.label(leading.position, leading.value()))
+        }
 
     @Test
     fun `a result carries the leading list's number and its tier`() = runTest(dispatcher) {
