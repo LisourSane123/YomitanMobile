@@ -3,6 +3,7 @@ package com.yomitanmobile.ui.kanji
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yomitanmobile.data.anki.AnkiCollectionStore
+import com.yomitanmobile.data.anki.KanjiTally
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.domain.repository.DictionaryRepository
@@ -66,6 +67,21 @@ class KanjiViewModel @Inject constructor(
     private val _matureKanji = MutableStateFlow<Set<String>>(emptySet())
     val matureKanji: StateFlow<Set<String>> = _matureKanji.asStateFlow()
 
+    /**
+     * Every kanji in the collection with how many of the user's words carry it,
+     * commonest first — the same list twice, once for all cards and once for
+     * mature ones only, because both are a pass over words already in memory
+     * and the screen switches between them with a toggle.
+     *
+     * This half of the screen needs no kanji dictionary at all: it is the scan
+     * cut into characters, nothing else.
+     */
+    private val _tally = MutableStateFlow(KanjiTally.KanjiTallyResult.EMPTY)
+    val tally: StateFlow<KanjiTally.KanjiTallyResult> = _tally.asStateFlow()
+
+    private val _matureTally = MutableStateFlow(KanjiTally.KanjiTallyResult.EMPTY)
+    val matureTally: StateFlow<KanjiTally.KanjiTallyResult> = _matureTally.asStateFlow()
+
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -90,10 +106,17 @@ class KanjiViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _loading.value = true
-            val known = runCatching { ankiCollectionStore.knownKanji() }.getOrDefault(emptySet())
+            // One pass each, and the sets fall out of the counts — the tally
+            // IS "which kanji do I have", with the numbers left in.
+            val counted = runCatching { ankiCollectionStore.kanjiTally() }
+                .getOrDefault(KanjiTally.KanjiTallyResult.EMPTY)
+            val countedMature = runCatching { ankiCollectionStore.kanjiTally(matureOnly = true) }
+                .getOrDefault(KanjiTally.KanjiTallyResult.EMPTY)
+            _tally.value = counted
+            _matureTally.value = countedMature
+            val known = counted.counts.mapTo(HashSet()) { it.kanji }
+            val mature = countedMature.counts.mapTo(HashSet()) { it.kanji }
             _knownKanji.value = known
-            val mature = runCatching { ankiCollectionStore.knownKanji(matureOnly = true) }
-                .getOrDefault(emptySet())
             _matureKanji.value = mature
 
             val grades = repository.kanjiCountsByGrade()

@@ -288,16 +288,21 @@ class AnkiCollectionStore @Inject constructor(
      * the note on the scan itself — but it is the only honest answer the app
      * can give without reading review history.
      */
-    suspend fun knownKanji(matureOnly: Boolean = false): Set<String> {
+    suspend fun knownKanji(matureOnly: Boolean = false): Set<String> =
+        kanjiTally(matureOnly).counts.mapTo(HashSet()) { it.kanji }
+
+    /**
+     * Every kanji in the stored scan with how many of the user's words carry
+     * it — see [KanjiTally]. One definition of "the kanji in my collection",
+     * shared with [knownKanji], which is this list without the numbers.
+     *
+     * Reads the same cached word set, so asking for the counts costs a pass
+     * over words already in memory.
+     */
+    suspend fun kanjiTally(matureOnly: Boolean = false): KanjiTally.KanjiTallyResult {
         val all = if (matureOnly) matureWords() else words()
-        if (all.isEmpty()) return emptySet()
-        val out = HashSet<String>(2048)
-        for (word in all) {
-            for (ch in word) {
-                if (ch in '\u4e00'..'\u9fff') out += ch.toString()
-            }
-        }
-        return out
+        if (all.isEmpty()) return KanjiTally.KanjiTallyResult.EMPTY
+        return KanjiTally.of(all)
     }
 
     private suspend fun words(): Set<String> {
