@@ -105,4 +105,19 @@ class SearchAlternativesDbTest {
         val results = useCase.invoke("走る").first()
         assertEquals(listOf("走る"), results.map { it.expression })
     }
+
+    @Test
+    fun `the one-case prefix search finds what the six-branch one finds`() = runBlocking {
+        // A Japanese query is the same string lowercased and titlecased, so it
+        // takes the two-branch statement. Prefix, exact and reading all still
+        // have to match.
+        // Ranked one: the only entry with a frequency, then the unranked ones
+        // shortest first — the order the DAO documents.
+        assertEquals(
+            listOf("食べる", "食ぶ", "食べた"),
+            useCase.invoke("食").first().map { it.expression }
+        )
+        assertEquals("食べる", useCase.invoke("たべる").first().first().expression)
+        assertEquals("食べる", useCase.invoke("食べる").first().first().expression)
+    }
 }

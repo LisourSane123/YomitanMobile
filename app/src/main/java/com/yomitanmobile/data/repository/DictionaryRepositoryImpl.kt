@@ -310,6 +310,22 @@ class DictionaryRepositoryImpl @Inject constructor(
         // its own). All three collapse to one range for a Japanese query.
         val lowered = trimmed.lowercase()
         val titled = lowered.replaceFirstChar { it.uppercaseChar() }
+        // A Japanese query is the same string in all three forms, and running
+        // the six-branch statement for it scanned the same two index ranges
+        // three times over on every keystroke.
+        if (lowered == trimmed && titled == trimmed) {
+            return dictionaryDao.searchCombinedOneCase(
+                exactQuery = trimmed,
+                prefixStart = trimmed,
+                prefixEnd = prefixUpperBound(trimmed),
+                language = language
+            )
+                .map { entries -> entries.map { it.toDomain() } }
+                .catch { e ->
+                    Log.w(TAG, "searchCombined failed (${trimmed.length} chars)", e)
+                    emit(emptyList())
+                }
+        }
         return dictionaryDao.searchCombined(
             exactQuery = trimmed,
             prefixStart = trimmed,

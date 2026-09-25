@@ -169,6 +169,46 @@ interface DictionaryDao {
     ): Flow<List<DictionaryEntry>>
 
     /**
+     * [searchCombined] for a query whose three case forms are the same string
+     * — which is every Japanese query, and any Latin one already typed the way
+     * the dictionary spells it.
+     *
+     * The six-branch version exists for the case where they differ (`dog`,
+     * `Dog`, `DOG`). Running it anyway meant six index range scans over the
+     * same two ranges on every keystroke of a Japanese search, with the UNION
+     * throwing five sixths of the result away.
+     */
+    @Query("""
+        SELECT * FROM dictionary_entries
+        WHERE id IN (
+                SELECT id FROM dictionary_entries
+                WHERE expression >= :prefixStart AND expression < :prefixEnd
+            UNION
+                SELECT id FROM dictionary_entries
+                WHERE reading >= :prefixStart AND reading < :prefixEnd
+          )
+          AND language = :language
+        ORDER BY
+            CASE
+                WHEN expression = :exactQuery THEN 0
+                WHEN reading = :exactQuery THEN 1
+                ELSE 2
+            END,
+            CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
+            frequency ASC,
+            LENGTH(expression) ASC
+        LIMIT :limit
+    """)
+    fun searchCombinedOneCase(
+        exactQuery: String,
+        prefixStart: String,
+        prefixEnd: String,
+        language: String,
+        limit: Int = 50
+    ): Flow<List<DictionaryEntry>>
+
+
+    /**
      * Substring match: every entry that CONTAINS the query somewhere other
      * than at the start (食欲 for 欲), which the prefix-only [searchCombined]
      * can never reach. Kanji carry meaning inside compounds, so looking up a
