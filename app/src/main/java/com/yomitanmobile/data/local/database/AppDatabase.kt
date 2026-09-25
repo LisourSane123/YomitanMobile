@@ -50,7 +50,7 @@ import com.yomitanmobile.data.local.entity.WordFrequency
         AnkiCollectionWord::class,
         AudioFile::class
     ],
-    version = 25,
+    version = 26,
     // Schema history is written to app/schemas/ (room.schemaLocation in
     // build.gradle.kts) and committed, so future migrations can be written
     // against — and tested against — the exact shipped schema.
@@ -97,6 +97,21 @@ abstract class AppDatabase : RoomDatabase() {
          * are safe: the column only ever adds a stricter number beside the
          * existing one, it never hides a word from the duplicate check.
          */
+        /**
+         * "Has this word's card been started?" — not new, not suspended.
+         *
+         * Defaults to 0, which reads the same way [MIGRATION_24_25]'s column
+         * does: a scan taken before this existed claims nothing, and the next
+         * scan fills it.
+         */
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `anki_collection_words` ADD COLUMN `studied` INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         val MIGRATION_24_25 = object : Migration(24, 25) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(

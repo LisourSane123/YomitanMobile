@@ -54,6 +54,16 @@ class KanjiStudyExportTest {
     }
 
     @Test
+    fun `the searches that define a card's state say it once`() {
+        // "not new" already means "not suspended" — that is the whole reason
+        // the screen needs no separate switch for suspended cards.
+        assertTrue("-is:new" in AnkiCollectionIndex.STUDIED_SEARCH)
+        assertTrue("-is:suspended" in AnkiCollectionIndex.STUDIED_SEARCH)
+        assertTrue("-is:suspended" in AnkiCollectionIndex.MATURE_SEARCH)
+        assertTrue("prop:ivl>=21" in AnkiCollectionIndex.MATURE_SEARCH)
+    }
+
+    @Test
     fun `the defaults are the ones that were reasoned about`() {
         assertEquals(2, KanjiStudyExport.DEFAULT_MIN_WORDS)
         assertEquals(20, KanjiStudyExport.DEFAULT_SET_SIZE)

@@ -54,6 +54,13 @@ interface AnkiCollectionWordDao {
     @Query("SELECT word FROM anki_collection_words WHERE mature = 1")
     suspend fun getMatureWords(): List<String>
 
+    /** Words on a card that is neither new nor suspended; see the entity. */
+    @Query("SELECT word FROM anki_collection_words WHERE studied = 1")
+    suspend fun getStudiedWords(): List<String>
+
+    @Query("SELECT COUNT(*) FROM anki_collection_words WHERE studied = 1")
+    suspend fun studiedCount(): Int
+
     @Query("SELECT COUNT(*) FROM anki_collection_words WHERE mature = 1")
     suspend fun matureCount(): Int
 

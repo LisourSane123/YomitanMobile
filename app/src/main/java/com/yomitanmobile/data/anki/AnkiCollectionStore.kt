@@ -32,6 +32,20 @@ class AnkiCollectionStore @Inject constructor(
     private val dao: AnkiCollectionWordDao
 ) {
 
+    /**
+     * How much of the collection a question is about.
+     *
+     * [ANY] is the stored scan as it is — every word a card exists for, which
+     * is what the duplicate check must use: a suspended or never-seen card is
+     * still a card, and re-mining its word would make a pair.
+     *
+     * [STUDIED] and [MATURE] are for the opposite kind of question, the one a
+     * study list asks. Both exclude suspended cards by construction (see
+     * [AnkiCollectionIndex.STUDIED_SEARCH] / MATURE_SEARCH), so "leave the
+     * suspended ones out" needs no separate switch.
+     */
+    enum class Scope { ANY, STUDIED, MATURE }
+
     data class ScanSummary(
         val noteCount: Int,
         val wordCount: Int,
@@ -67,6 +81,7 @@ class AnkiCollectionStore @Inject constructor(
     private var cachedWords: Set<String>? = null
     @Volatile
     private var cachedMature: Set<String>? = null
+    private var cachedStudied: Set<String>? = null
 
     /** Word count of the stored scan, for badges and settings rows. */
     fun observeWordCount(): Flow<Int> = dao.observeCount()
@@ -85,15 +100,18 @@ class AnkiCollectionStore @Inject constructor(
                 Log.w(TAG, "Collection scan unavailable; keeping the previous result")
                 return@withContext ScanSummary.UNAVAILABLE
             }
-            // A second, cheap sweep: which of those words the user actually
-            // knows. Empty on an older provider, and that is fine — nothing is
-            // hidden on the strength of maturity, it only adds a stricter
-            // number beside the first.
-            val mature = runCatching { index.scanMature(deckNames) }
-                .getOrElse {
-                    Log.w(TAG, "Maturity sweep failed; treating nothing as mature", it)
-                    emptySet()
-                }
+            // Two more sweeps, and both are cheap because the scan above
+            // already knows which words each NOTE holds: they ask the provider
+            // for ids alone instead of reading and re-indexing every note's
+            // fields a second and third time.
+            suspend fun sweep(name: String, search: String): Set<String> =
+                runCatching { index.scanState(search, scan.wordsByNote, deckNames) }
+                    .getOrElse {
+                        Log.w(TAG, "$name sweep failed; claiming nothing", it)
+                        emptySet()
+                    }
+            val mature = sweep("Maturity", AnkiCollectionIndex.MATURE_SEARCH)
+            val studied = sweep("Started-cards", AnkiCollectionIndex.STUDIED_SEARCH)
 
             val now = System.currentTimeMillis()
             val rows = scan.wordSources.map { (word, source) ->
@@ -101,13 +119,15 @@ class AnkiCollectionStore @Inject constructor(
                     word = word,
                     source = source,
                     scannedAt = now,
-                    mature = word in mature
+                    mature = word in mature,
+                    studied = word in studied || word in mature
                 )
             }
             dao.replaceAll(rows)
             cacheLock.withLock {
                 cachedWords = rows.mapTo(HashSet(rows.size)) { it.word }
                 cachedMature = null
+                cachedStudied = null
             }
             ScanSummary(
                 noteCount = scan.noteCount,
@@ -257,6 +277,7 @@ class AnkiCollectionStore @Inject constructor(
         cacheLock.withLock {
             cachedWords = emptySet()
             cachedMature = emptySet()
+            cachedStudied = emptySet()
         }
     }
 
@@ -281,6 +302,30 @@ class AnkiCollectionStore @Inject constructor(
     }
 
     /**
+     * Words on a card that has been started — neither new nor suspended. Empty
+     * when the provider would not answer that search, exactly like
+     * [matureWords]; a caller states a figure with it, never withholds one.
+     */
+    suspend fun studiedWords(): Set<String> {
+        cachedStudied?.let { return it }
+        return cacheLock.withLock {
+            cachedStudied ?: withContext(Dispatchers.IO) {
+                runCatching { dao.getStudiedWords().toHashSet() }
+                    .getOrElse {
+                        Log.w(TAG, "Reading started-card words failed", it)
+                        emptySet()
+                    }
+            }.also { cachedStudied = it }
+        }
+    }
+
+    private suspend fun words(scope: Scope): Set<String> = when (scope) {
+        Scope.ANY -> words()
+        Scope.STUDIED -> studiedWords()
+        Scope.MATURE -> matureWords()
+    }
+
+    /**
      * Every kanji that appears in a word the collection holds.
      *
      * "Known" here means exactly what the stored scan means elsewhere: there
@@ -289,7 +334,10 @@ class AnkiCollectionStore @Inject constructor(
      * can give without reading review history.
      */
     suspend fun knownKanji(matureOnly: Boolean = false): Set<String> =
-        kanjiTally(matureOnly).counts.mapTo(HashSet()) { it.kanji }
+        knownKanji(if (matureOnly) Scope.MATURE else Scope.ANY)
+
+    suspend fun knownKanji(scope: Scope): Set<String> =
+        kanjiTally(scope).counts.mapTo(HashSet()) { it.kanji }
 
     /**
      * Every kanji in the stored scan with how many of the user's words carry
@@ -299,8 +347,11 @@ class AnkiCollectionStore @Inject constructor(
      * Reads the same cached word set, so asking for the counts costs a pass
      * over words already in memory.
      */
-    suspend fun kanjiTally(matureOnly: Boolean = false): KanjiTally.KanjiTallyResult {
-        val all = if (matureOnly) matureWords() else words()
+    suspend fun kanjiTally(matureOnly: Boolean = false): KanjiTally.KanjiTallyResult =
+        kanjiTally(if (matureOnly) Scope.MATURE else Scope.ANY)
+
+    suspend fun kanjiTally(scope: Scope): KanjiTally.KanjiTallyResult {
+        val all = words(scope)
         if (all.isEmpty()) return KanjiTally.KanjiTallyResult.EMPTY
         return KanjiTally.of(all)
     }

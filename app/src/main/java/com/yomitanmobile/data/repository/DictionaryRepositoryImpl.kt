@@ -285,6 +285,21 @@ class DictionaryRepositoryImpl @Inject constructor(
             }
     }
 
+    override suspend fun searchExactAll(queries: List<String>): List<WordEntry> {
+        val forms = queries.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (forms.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            try {
+                // Well under SQLite's variable ceiling: the deconjugator caps
+                // its candidates at 24 and they are bound twice.
+                dictionaryDao.searchExactAny(forms, language).map { it.toDomain() }
+            } catch (e: Exception) {
+                Log.w(TAG, "searchExactAll failed (${forms.size} forms)", e)
+                emptyList()
+            }
+        }
+    }
+
     override fun searchCombined(query: String): Flow<List<WordEntry>> {
         if (query.isBlank()) return flowOf(emptyList())
         val trimmed = query.trim()

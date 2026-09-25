@@ -12,6 +12,12 @@ import java.io.InputStream
 
 interface DictionaryRepository {
     fun searchExact(query: String): Flow<List<WordEntry>>
+
+    /**
+     * Exact matches for several base forms in ONE query; see
+     * [com.yomitanmobile.data.local.dao.DictionaryDao.searchExactAny].
+     */
+    suspend fun searchExactAll(queries: List<String>): List<WordEntry>
     fun searchCombined(query: String): Flow<List<WordEntry>>
 
     /**

@@ -49,6 +49,34 @@ interface DictionaryDao {
     """)
     fun searchExact(exactQuery: String, language: String, limit: Int = 50): Flow<List<DictionaryEntry>>
 
+    /**
+     * The same exact-match lookup for MANY forms at once.
+     *
+     * One statement instead of one per candidate. The deconjugator offers up to
+     * 24 base forms for a single word, and each of them used to be its own
+     * query, its own cursor and — because the repository returns a Flow — its
+     * own Room invalidation observer registered and torn down, all of that per
+     * keystroke. The caller merges and re-ranks the results by frequency
+     * anyway (`SearchDictionaryUseCase`), so nothing needs them kept apart.
+     *
+     * A suspend function rather than a Flow: nobody observes a search, they
+     * take its first value.
+     */
+    @Query("""
+        SELECT * FROM dictionary_entries
+        WHERE language = :language
+          AND (expression IN (:forms) OR reading IN (:forms))
+        ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END,
+                 frequency ASC,
+                 LENGTH(expression) ASC
+        LIMIT :limit
+    """)
+    suspend fun searchExactAny(
+        forms: List<String>,
+        language: String,
+        limit: Int = 300
+    ): List<DictionaryEntry>
+
     @Query(
         "SELECT * FROM dictionary_entries WHERE reading = :reading AND language = :language " +
             "ORDER BY CASE WHEN frequency > 0 THEN 0 ELSE 1 END, frequency ASC"

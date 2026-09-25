@@ -91,16 +91,38 @@ class KanjiViewModel @Inject constructor(
     private val _matureTally = MutableStateFlow(KanjiTally.KanjiTallyResult.EMPTY)
     val matureTally: StateFlow<KanjiTally.KanjiTallyResult> = _matureTally.asStateFlow()
 
+    private val _studiedTally = MutableStateFlow(KanjiTally.KanjiTallyResult.EMPTY)
+    val studiedTally: StateFlow<KanjiTally.KanjiTallyResult> = _studiedTally.asStateFlow()
+
+    /** The tally the screen is showing, for the chosen [scope]. */
+    fun tallyFor(scope: AnkiCollectionStore.Scope): KanjiTally.KanjiTallyResult = when (scope) {
+        AnkiCollectionStore.Scope.ANY -> _tally.value
+        AnkiCollectionStore.Scope.STUDIED -> _studiedTally.value
+        AnkiCollectionStore.Scope.MATURE -> _matureTally.value
+    }
+
     /**
-     * Whether the counts, and the export made from them, are restricted to
-     * words on mature cards. Lives here rather than in the composable because
-     * the export reads it too, and the two must not be able to disagree.
+     * Which cards the counts — and the export made from them — are about.
+     *
+     * Starts at [AnkiCollectionStore.Scope.STUDIED], the one that answers the
+     * question this screen exists for: characters out of words the user has
+     * actually started, so a card added and never seen does not put a kanji on
+     * the study list, and a suspended one does not either. Lives here rather
+     * than in the composable because the export reads it too, and the two must
+     * not be able to disagree.
      */
-    private val _matureOnly = MutableStateFlow(false)
-    val matureOnly: StateFlow<Boolean> = _matureOnly.asStateFlow()
+    private val _scope = MutableStateFlow(AnkiCollectionStore.Scope.STUDIED)
+    val scope: StateFlow<AnkiCollectionStore.Scope> = _scope.asStateFlow()
 
     /** KANJIDIC's newspaper rank per character; empty until a kanji bank is installed. */
     private var mediaRank: Map<String, Int> = emptyMap()
+
+    /**
+     * Every kanji row, loaded once per refresh. Picking a bucket used to run
+     * another query for rows that were already in memory — a round trip to
+     * SQLite per chip tap, for a filter on two integers.
+     */
+    private var allKanji: List<KanjiEntry> = emptyList()
 
     /** What an export would contain right now — see [KanjiStudyExport]. */
     private val _exportPlan = MutableStateFlow(EMPTY_PLAN)
@@ -136,12 +158,18 @@ class KanjiViewModel @Inject constructor(
             _loading.value = true
             // One pass each, and the sets fall out of the counts — the tally
             // IS "which kanji do I have", with the numbers left in.
-            val counted = runCatching { ankiCollectionStore.kanjiTally() }
-                .getOrDefault(KanjiTally.KanjiTallyResult.EMPTY)
-            val countedMature = runCatching { ankiCollectionStore.kanjiTally(matureOnly = true) }
-                .getOrDefault(KanjiTally.KanjiTallyResult.EMPTY)
+            suspend fun tally(scope: AnkiCollectionStore.Scope) =
+                runCatching { ankiCollectionStore.kanjiTally(scope) }
+                    .getOrDefault(KanjiTally.KanjiTallyResult.EMPTY)
+            val counted = tally(AnkiCollectionStore.Scope.ANY)
+            val countedStudied = tally(AnkiCollectionStore.Scope.STUDIED)
+            val countedMature = tally(AnkiCollectionStore.Scope.MATURE)
             _tally.value = counted
             _matureTally.value = countedMature
+            // A mature card is a started one, so a scan taken before the
+            // started-card column existed must not read as "nothing started".
+            _studiedTally.value =
+                if (countedStudied.counts.isEmpty()) countedMature else countedStudied
             val known = counted.counts.mapTo(HashSet()) { it.kanji }
             val mature = countedMature.counts.mapTo(HashSet()) { it.kanji }
             _knownKanji.value = known
@@ -150,6 +178,7 @@ class KanjiViewModel @Inject constructor(
             val grades = repository.kanjiCountsByGrade()
             val jlpt = repository.kanjiCountsByJlpt()
             val all = repository.listKanji()
+            allKanji = all
             mediaRank = all.filter { it.frequency > 0 }.associate { it.kanji to it.frequency }
             recomputeExport()
             _empty.value = all.isEmpty()
@@ -183,14 +212,16 @@ class KanjiViewModel @Inject constructor(
         }
     }
 
-    fun setMatureOnly(value: Boolean) {
-        _matureOnly.value = value
+    fun setScope(value: AnkiCollectionStore.Scope) {
+        _scope.value = value
         recomputeExport()
     }
 
     private fun recomputeExport() {
-        val counts = (if (_matureOnly.value) _matureTally.value else _tally.value).counts
-        _exportPlan.value = KanjiStudyExport.plan(counts, mediaRank = { mediaRank[it] ?: 0 })
+        _exportPlan.value = KanjiStudyExport.plan(
+            tallyFor(_scope.value).counts,
+            mediaRank = { mediaRank[it] ?: 0 }
+        )
     }
 
     /**
@@ -242,10 +273,13 @@ class KanjiViewModel @Inject constructor(
 
     fun select(bucket: KanjiBucketState?) {
         _selected.value = bucket
-        viewModelScope.launch {
-            _kanji.value = when {
-                bucket == null -> emptyList()
-                else -> repository.listKanji(grade = bucket.grade, jlpt = bucket.jlpt)
+        _kanji.value = when {
+            bucket == null -> emptyList()
+            // In memory: the rows are the ones refresh() already read, and the
+            // buckets were counted over the same list.
+            else -> allKanji.filter { row ->
+                (bucket.grade == 0 || row.grade == bucket.grade) &&
+                    (bucket.jlpt == 0 || row.jlpt == bucket.jlpt)
             }
         }
     }

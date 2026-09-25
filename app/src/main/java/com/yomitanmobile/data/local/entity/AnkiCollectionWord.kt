@@ -54,5 +54,20 @@ data class AnkiCollectionWord(
      * first.
      */
     @ColumnInfo(name = "mature")
-    val mature: Boolean = false
+    val mature: Boolean = false,
+
+    /**
+     * Whether a card carrying this word has actually been started: not new,
+     * not suspended ([AnkiCollectionIndex.STUDIED_SEARCH]).
+     *
+     * The middle claim between [mature] and "a card exists". A new card has
+     * never been shown, so its word is in the collection and means nothing
+     * yet; a suspended one was taken out of rotation on purpose. Neither
+     * belongs in a list of characters to study, which is what this column is
+     * for — and, like [mature], nothing is ever hidden from the duplicate
+     * check on its strength: false also means "the provider would not answer
+     * that search".
+     */
+    @ColumnInfo(name = "studied")
+    val studied: Boolean = false
 )

@@ -55,6 +55,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
+import com.yomitanmobile.data.anki.AnkiCollectionStore
 import com.yomitanmobile.data.anki.KanjiStudyExport
 import com.yomitanmobile.data.anki.KanjiTally
 import com.yomitanmobile.ui.common.rememberTr
@@ -90,7 +91,8 @@ fun KanjiBrowseScreen(
     // dictionary: "how much of jōyō grade 3 do I have" is a join with KANJIDIC,
     // while "which characters are my own cards made of" is the scan alone.
     var showMine by remember { mutableStateOf(false) }
-    val matureOnly by viewModel.matureOnly.collectAsState()
+    val scope by viewModel.scope.collectAsState()
+    val studiedTally by viewModel.studiedTally.collectAsState()
     val exportPlan by viewModel.exportPlan.collectAsState()
     val shareFile by viewModel.shareFile.collectAsState()
     val context = LocalContext.current
@@ -153,10 +155,13 @@ fun KanjiBrowseScreen(
                 }
 
                 showMine -> MyKanjiSection(
-                    tally = if (matureOnly) matureTally else tally,
-                    matureOnly = matureOnly,
-                    onMatureOnlyChange = viewModel::setMatureOnly,
-                    hasMature = matureTally.counts.isNotEmpty(),
+                    tally = when (scope) {
+                        AnkiCollectionStore.Scope.ANY -> tally
+                        AnkiCollectionStore.Scope.STUDIED -> studiedTally
+                        AnkiCollectionStore.Scope.MATURE -> matureTally
+                    },
+                    scope = scope,
+                    onScopeChange = viewModel::setScope,
                     exportPlan = exportPlan,
                     onSave = { saveLauncher.launch(KanjiStudyExport.FILE_NAME) },
                     onShare = viewModel::prepareShare,
@@ -285,28 +290,69 @@ fun KanjiBrowseScreen(
  * Needs no kanji dictionary — this is the scan and nothing else, which is why
  * it sits before the "install KANJIDIC" notice rather than behind it.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MyKanjiSection(
     tally: KanjiTally.KanjiTallyResult,
-    matureOnly: Boolean,
-    onMatureOnlyChange: (Boolean) -> Unit,
-    hasMature: Boolean,
+    scope: AnkiCollectionStore.Scope,
+    onScopeChange: (AnkiCollectionStore.Scope) -> Unit,
     exportPlan: KanjiStudyExport.Plan,
     onSave: () -> Unit,
     onShare: () -> Unit,
     onKanjiClick: (String) -> Unit
 ) {
     val tr = rememberTr()
+    Spacer(Modifier.height(12.dp))
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Which cards the characters may come from. The two narrower scopes
+        // leave suspended cards out by construction — a card taken out of
+        // rotation is not something to build a study list on — so there is no
+        // separate switch for them.
+        listOf(
+            AnkiCollectionStore.Scope.STUDIED to tr("Zaczęte", "Started"),
+            AnkiCollectionStore.Scope.MATURE to tr("Dojrzałe", "Mature"),
+            AnkiCollectionStore.Scope.ANY to tr("Wszystkie karty", "All cards")
+        ).forEach { (value, label) ->
+            FilterChip(
+                selected = scope == value,
+                onClick = { onScopeChange(value) },
+                label = { Text(label) }
+            )
+        }
+    }
+    Text(
+        when (scope) {
+            AnkiCollectionStore.Scope.STUDIED -> tr(
+                "Słowa z kart, które już się pojawiły — bez nowych i bez zawieszonych.",
+                "Words from cards that have come up at least once — no new ones, none suspended."
+            )
+            AnkiCollectionStore.Scope.MATURE -> tr(
+                "Tylko karty z interwałem 21 dni lub więcej. To ta liczba, która mówi coś o pamięci.",
+                "Only cards with an interval of 21 days or more — the number that says something " +
+                    "about memory."
+            )
+            AnkiCollectionStore.Scope.ANY -> tr(
+                "Każde słowo ze skanu, także z kart nowych i zawieszonych.",
+                "Every word in the scan, including new and suspended cards."
+            )
+        },
+        fontSize = 11.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
     if (tally.counts.isEmpty()) {
         Spacer(Modifier.height(12.dp))
         Notice(
-            if (matureOnly) {
+            if (scope != AnkiCollectionStore.Scope.ANY) {
                 tr(
-                    "Żadna dojrzała fiszka nie zawiera kanji. Dojrzałość zna tylko " +
-                        "skan zrobiony przez nowszą wersję aplikacji — przeskanuj kolekcję " +
-                        "ponownie (Narzędzia → Skan kolekcji Anki).",
-                    "No mature card carries a kanji. Maturity is only known to a scan taken " +
-                        "by a newer version of the app — rescan the collection " +
+                    "Żadna karta w tym zakresie nie zawiera kanji. Stan kart zna tylko skan " +
+                        "zrobiony przez nowszą wersję aplikacji — przeskanuj kolekcję ponownie " +
+                        "(Narzędzia → Skan kolekcji Anki).",
+                    "No card in this scope carries a kanji. Card state is only known to a scan " +
+                        "taken by a newer version of the app — rescan the collection " +
                         "(Tools → Anki collection scan)."
                 )
             } else {
@@ -341,20 +387,6 @@ private fun MyKanjiSection(
         fontSize = 11.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    if (hasMature || matureOnly) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                tr("Tylko fiszki dojrzałe", "Mature cards only"),
-                fontSize = 13.sp,
-                modifier = Modifier.weight(1f)
-            )
-            Switch(checked = matureOnly, onCheckedChange = onMatureOnlyChange)
-        }
-    }
-
     if (!exportPlan.isEmpty) {
         Spacer(Modifier.height(8.dp))
         Text(

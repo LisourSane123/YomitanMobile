@@ -190,6 +190,14 @@ class AnkiCollectionIndex @Inject constructor(
     class Scan(
         val index: Index,
         val wordSources: Map<String, String>,
+        /**
+         * Words per note id, so a later sweep can ask the provider for IDS
+         * ALONE and still know which words it found. Reading `flds` again and
+         * putting every note back through the indexer is the expensive half of
+         * a sweep — the fields are HTML blobs and the indexer is regex work —
+         * and the answer is already here.
+         */
+        val wordsByNote: Map<Long, Set<String>> = emptyMap(),
         val noteCount: Int,
         /**
          * The safety valve cut the sweep short, so the index describes only
@@ -211,7 +219,7 @@ class AnkiCollectionIndex @Inject constructor(
         val wordCount: Int get() = wordSources.size
 
         companion object {
-            val EMPTY = Scan(Index.EMPTY, emptyMap(), 0)
+            val EMPTY = Scan(Index.EMPTY, emptyMap(), emptyMap(), 0)
         }
     }
 
@@ -272,18 +280,79 @@ class AnkiCollectionIndex @Inject constructor(
     suspend fun scanMature(
         deckNames: List<String> = emptyList(),
         maxNotes: Int = MAX_NOTES
+    ): Set<String> = scanState(MATURE_SEARCH, emptyMap(), deckNames, maxNotes)
+
+    /**
+     * The words whose cards are in a given state — matched by Anki's own
+     * search, because the provider has no bulk card query and asking each note
+     * for its cards is one binder round trip per note.
+     *
+     * [wordsByNote] is the map a full scan already built ([Scan.wordsByNote]).
+     * With it the sweep reads note IDS only; without it it falls back to
+     * reading and re-indexing fields, which is what this did for maturity
+     * before and what a caller with no scan in hand still needs.
+     *
+     * Empty when the provider refuses the search (older AnkiDroid), which
+     * degrades to the old behaviour: nothing is claimed, never the other way
+     * round.
+     */
+    suspend fun scanState(
+        stateSearch: String,
+        wordsByNote: Map<Long, Set<String>>,
+        deckNames: List<String> = emptyList(),
+        maxNotes: Int = MAX_NOTES
     ): Set<String> = withContext(Dispatchers.IO) {
         if (!hasPermission()) return@withContext emptySet()
         val decks = buildSearches(deckNames).firstOrNull { !it.isNullOrEmpty() && it != ALL_NOTES_SEARCH }
-        val search = listOfNotNull(decks, MATURE_SEARCH).joinToString(" ")
-        val scan = scanNotes(search, maxNotes) ?: return@withContext emptySet()
-        Log.i(TAG, "Mature sweep: ${scan.noteCount} notes -> ${scan.wordCount} word keys")
-        scan.wordSources.keys
+        val search = listOfNotNull(decks, stateSearch).joinToString(" ")
+        if (wordsByNote.isEmpty()) {
+            val scan = scanNotes(search, maxNotes) ?: return@withContext emptySet()
+            Log.i(TAG, "Sweep '$stateSearch': ${scan.noteCount} notes -> ${scan.wordCount} word keys")
+            return@withContext scan.wordSources.keys
+        }
+        val ids = noteIds(search, maxNotes) ?: return@withContext emptySet()
+        val out = HashSet<String>(ids.size * 2)
+        for (id in ids) out += wordsByNote[id].orEmpty()
+        Log.i(TAG, "Sweep '$stateSearch': ${ids.size} notes -> ${out.size} word keys (ids only)")
+        out
+    }
+
+    /**
+     * Note ids matching one search. The cheap half of a sweep: a one-column
+     * projection instead of every note's fields.
+     */
+    private fun noteIds(search: String?, maxNotes: Int): Set<Long>? = try {
+        val out = HashSet<Long>(4096)
+        val cursor = context.contentResolver.query(
+            FlashCardsContract.Note.CONTENT_URI,
+            arrayOf(FlashCardsContract.Note._ID),
+            search,
+            null,
+            null
+        ) ?: run {
+            Log.w(TAG, "Note provider returned a null cursor for search='$search'")
+            return null
+        }
+        cursor.use {
+            val idIndex = it.getColumnIndex(FlashCardsContract.Note._ID)
+            if (idIndex < 0) return null
+            while (it.moveToNext() && out.size < maxNotes) {
+                val id = runCatching { it.getLong(idIndex) }.getOrNull()
+                    ?: it.getString(idIndex)?.toLongOrNull()
+                    ?: continue
+                out += id
+            }
+        }
+        out
+    } catch (e: Exception) {
+        Log.w(TAG, "Id sweep failed for search='$search'", e)
+        null
     }
 
     /** Runs one search; null means the provider refused it. */
     private fun scanNotes(search: String?, maxNotes: Int): Scan? {
         val sources = LinkedHashMap<String, String>(4096)
+        val byNote = HashMap<Long, Set<String>>(4096)
         val perNote = HashSet<String>(16)
         // Notes per note type. Free here — the sweep already reads every
         // note's model id — and the only way to see a collection's note-type
@@ -308,6 +377,7 @@ class AnkiCollectionIndex @Inject constructor(
                 return null
             }
             cursor.use {
+                val idIndex = it.getColumnIndex(FlashCardsContract.Note._ID)
                 val fldsIndex = it.getColumnIndex(FlashCardsContract.Note.FLDS)
                 if (fldsIndex < 0) {
                     Log.w(TAG, "Note provider returned no ${FlashCardsContract.Note.FLDS} column")
@@ -327,6 +397,10 @@ class AnkiCollectionIndex @Inject constructor(
                     }
                     perNote.clear()
                     AnkiNoteFieldIndexer.collectKeysFromNote(flds, perNote)
+                    if (idIndex >= 0 && perNote.isNotEmpty()) {
+                        val id = runCatching { it.getLong(idIndex) }.getOrNull()
+                        if (id != null) byNote[id] = HashSet(perNote)
+                    }
                     // First note type wins: a word shared by Core and a mining
                     // deck is reported once, under whichever was scanned first.
                     for (key in perNote) sources.putIfAbsent(key, noteType)
@@ -337,11 +411,12 @@ class AnkiCollectionIndex @Inject constructor(
                 Log.w(TAG, "Collection scan stopped at the $maxNotes-note ceiling")
             }
             Scan(
-                Index(sources.keys.toSet(), notes, available = true),
-                sources,
-                notes,
-                truncated,
-                notesPerModel
+                index = Index(sources.keys.toSet(), notes, available = true),
+                wordSources = sources,
+                wordsByNote = byNote,
+                noteCount = notes,
+                truncated = truncated,
+                notesPerModel = notesPerModel
             )
         } catch (e: Exception) {
             // Older AnkiDroid builds, a revoked permission or a locked
@@ -466,7 +541,19 @@ class AnkiCollectionIndex @Inject constructor(
          * more. Suspended cards are excluded — a suspended card is one the
          * user took out of rotation, whatever its interval says.
          */
-        private const val MATURE_SEARCH = "prop:ivl>=21 -is:suspended"
+        const val MATURE_SEARCH = "prop:ivl>=21 -is:suspended"
+
+        /**
+         * A card the user has actually started: not new, and not suspended.
+         *
+         * The middle claim between "I have a card for this" and "I know this".
+         * A new card is a card that has never been shown — its word is in the
+         * collection and means nothing yet — and a suspended one was taken out
+         * of rotation on purpose, so both are out. That is the set a study list
+         * should be built from, and it needs no toggle for the suspended half:
+         * `-is:new -is:suspended` says it once.
+         */
+        const val STUDIED_SEARCH = "-is:new -is:suspended"
         /** Safety valve for very large collections. */
         private const val MAX_NOTES = 200_000
     }

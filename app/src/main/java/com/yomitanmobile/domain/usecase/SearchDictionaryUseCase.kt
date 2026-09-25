@@ -71,22 +71,27 @@ class SearchDictionaryUseCase @Inject constructor(
 
         return flow {
             val results = coroutineScope {
-                val perQuery = orderedQueries.mapIndexed { idx, q ->
-                    async {
-                        if (idx == 0) repository.searchCombined(q).first()
-                        else repository.searchExact(q).first()
-                    }
-                }
+                val literalQuery = async { repository.searchCombined(orderedQueries.first()).first() }
                 val perSpelling = spellings.map { async { repository.searchCombined(it).first() } }
+                // Every deconjugation candidate in ONE query. They used to be
+                // one query each — up to 24 cursors and 24 Room invalidation
+                // observers per keystroke — and the merge below pools and
+                // re-ranks them by frequency anyway, so there was never
+                // anything to gain from keeping them apart.
+                val baseForms = orderedQueries.drop(1)
+                val alternatives = if (baseForms.isEmpty()) {
+                    null
+                } else {
+                    async { repository.searchExactAll(baseForms) }
+                }
                 val substring = if (withSubstring) {
                     async { repository.searchContains(normalized).first() }
                 } else {
                     null
                 }
-                val literalAndSpellings = listOf(perQuery.first().await()) +
-                    perSpelling.map { it.await() }
-                literalAndSpellings +
-                    perQuery.drop(1).map { it.await() } +
+                listOf(literalQuery.await()) +
+                    perSpelling.map { it.await() } +
+                    listOfNotNull(alternatives?.await()) +
                     listOfNotNull(substring?.await())
             }
             val literalCount = 1 + spellings.size
@@ -102,7 +107,9 @@ class SearchDictionaryUseCase @Inject constructor(
             val alternatives = LinkedHashMap<Long, WordEntry>()
             results.forEachIndexed { idx, entries ->
                 val isLiteral = idx < literalCount
-                val bounded = if (isLiteral) entries else entries.take(20)
+                // The alternatives arrive as one pooled list now, so the cap
+                // that used to be per candidate is one cap on the pool.
+                val bounded = if (isLiteral) entries else entries.take(ALTERNATIVE_LIMIT)
                 val target = if (isLiteral) literal else alternatives
                 bounded.forEach { entry ->
                     if (entry.id !in literal) target.putIfAbsent(entry.id, entry)
@@ -120,6 +127,14 @@ class SearchDictionaryUseCase @Inject constructor(
             emit(emptyList())
         }
     }
+
+    /**
+     * How many pooled deconjugation matches survive the merge. Twenty per
+     * candidate was the old rule; the pool is re-ranked by frequency before it
+     * is cut, so a generous single cap keeps the same words and costs one
+     * query instead of twenty-four.
+     */
+    private val ALTERNATIVE_LIMIT = 120
 
     /**
      * Whether a query is worth a substring scan.
