@@ -94,7 +94,7 @@ class InflectedSearchDbTest {
     /** Exactly what SearchViewModel does for a Japanese query. */
     private fun search(query: String): List<String> = runBlocking {
         val candidates = JapaneseDeconjugator.analyze(query).map { it.baseForm }
-        useCase.invokeWithAlternatives(query, candidates).first().map { it.expression }
+        useCase.invokeAll(query, candidates).map { it.expression }
     }
 
     @Test

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import javax.inject.Inject
 
 class SearchDictionaryUseCase @Inject constructor(
@@ -22,6 +23,19 @@ class SearchDictionaryUseCase @Inject constructor(
         if (query.isBlank()) return flowOf(emptyList())
         return invokeWithAlternatives(query, emptyList())
     }
+
+    /**
+     * Every result, once all of them are in.
+     *
+     * [invokeWithAlternatives] emits TWICE for a Japanese query — the indexed
+     * matches first, the substring compounds when the scan that cannot use an
+     * index finishes (see its doc). A collector that wants to show results as
+     * they come takes both; a caller that wants "the results" and then moves on
+     * has to wait for the last one, and `first()` would quietly drop the
+     * compounds.
+     */
+    suspend fun invokeAll(query: String, alternatives: List<String> = emptyList()): List<WordEntry> =
+        invokeWithAlternatives(query, alternatives).toList().lastOrNull().orEmpty()
 
     /**
      * Search the user's literal query plus a list of deconjugation
@@ -70,8 +84,24 @@ class SearchDictionaryUseCase @Inject constructor(
         val spellings = KanaScript.spellingVariants(normalized)
 
         return flow {
-            val results = coroutineScope {
-                val literalQuery = async { repository.searchCombined(orderedQueries.first()).first() }
+            // Two emissions, because one of these queries is a different order
+            // of magnitude from the others. The substring pass cannot use an
+            // index — `LIKE '%x%'` walks the expression index end to end — and
+            // it measured 866 ms of a 1 769 ms search on a real phone against a
+            // real 519 MB database. Everything else took 95 ms of that.
+            //
+            // So the fast half is emitted first and the compounds are appended
+            // when they arrive. Nothing is lost: they were always appended LAST
+            // anyway (see the class doc), so no row the user is already looking
+            // at moves.
+            val fast = coroutineScope {
+                val t0 = System.currentTimeMillis()
+                var literalMs = 0L
+                var alternativesMs = 0L
+                val literalQuery = async {
+                    repository.searchCombined(orderedQueries.first()).first()
+                        .also { literalMs = System.currentTimeMillis() - t0 }
+                }
                 val perSpelling = spellings.map { async { repository.searchCombined(it).first() } }
                 // Every deconjugation candidate in ONE query. They used to be
                 // one query each — up to 24 cursors and 24 Room invalidation
@@ -82,50 +112,67 @@ class SearchDictionaryUseCase @Inject constructor(
                 val alternatives = if (baseForms.isEmpty()) {
                     null
                 } else {
-                    async { repository.searchExactAll(baseForms) }
+                    async {
+                        repository.searchExactAll(baseForms)
+                            .also { alternativesMs = System.currentTimeMillis() - t0 }
+                    }
                 }
-                val substring = if (withSubstring) {
-                    async { repository.searchContains(normalized).first() }
-                } else {
-                    null
-                }
-                listOf(literalQuery.await()) +
+                val lists = listOf(literalQuery.await()) +
                     perSpelling.map { it.await() } +
-                    listOfNotNull(alternatives?.await()) +
-                    listOfNotNull(substring?.await())
+                    listOfNotNull(alternatives?.await())
+                android.util.Log.i(
+                    "SearchTiming",
+                    "fast ${System.currentTimeMillis() - t0} ms: literal $literalMs, " +
+                        "${baseForms.size} alternatives $alternativesMs, ${spellings.size} spellings"
+                )
+                lists
             }
             val literalCount = 1 + spellings.size
+            emit(merge(fast, literalCount))
 
-            // What the user literally typed comes first, in the order the DAO
-            // ranked it. Everything the deconjugator suggested comes next —
-            // ordered by how common the word is, NOT by the order the rules
-            // happened to produce. The candidate list is sorted by length, so
-            // without this a two-character archaism (食ぶ, offered because
-            // 食べる also looks like the potential form of a godan verb)
-            // outranked the word the user was actually inflecting.
-            val literal = LinkedHashMap<Long, WordEntry>()
-            val alternatives = LinkedHashMap<Long, WordEntry>()
-            results.forEachIndexed { idx, entries ->
-                val isLiteral = idx < literalCount
-                // The alternatives arrive as one pooled list now, so the cap
-                // that used to be per candidate is one cap on the pool.
-                val bounded = if (isLiteral) entries else entries.take(ALTERNATIVE_LIMIT)
-                val target = if (isLiteral) literal else alternatives
-                bounded.forEach { entry ->
-                    if (entry.id !in literal) target.putIfAbsent(entry.id, entry)
-                }
-            }
-            val rankedAlternatives = alternatives.values.sortedWith(
-                compareBy(
-                    { if (it.frequency > 0) 0 else 1 },
-                    { if (it.frequency > 0) it.frequency else Int.MAX_VALUE },
-                    { it.expression.length }
+            if (withSubstring) {
+                val t1 = System.currentTimeMillis()
+                val compounds = repository.searchContains(normalized).first()
+                android.util.Log.i(
+                    "SearchTiming",
+                    "substring ${System.currentTimeMillis() - t1} ms (${compounds.size} results)"
                 )
-            )
-            emit(literal.values.toList() + rankedAlternatives)
+                if (compounds.isNotEmpty()) emit(merge(fast + listOf(compounds), literalCount))
+            }
         }.catch {
             emit(emptyList())
         }
+    }
+
+    /**
+     * What the user literally typed comes first, in the order the DAO ranked
+     * it. Everything the deconjugator suggested comes next — ordered by how
+     * common the word is, NOT by the order the rules happened to produce. The
+     * candidate list is sorted by length, so without this a two-character
+     * archaism (食ぶ, offered because 食べる also looks like the potential form
+     * of a godan verb) outranked the word the user was actually inflecting.
+     */
+    private fun merge(lists: List<List<WordEntry>>, literalCount: Int): List<WordEntry> {
+        val literal = LinkedHashMap<Long, WordEntry>()
+        val alternatives = LinkedHashMap<Long, WordEntry>()
+        lists.forEachIndexed { idx, entries ->
+            val isLiteral = idx < literalCount
+            // The alternatives arrive as one pooled list now, so the cap that
+            // used to be per candidate is one cap on the pool.
+            val bounded = if (isLiteral) entries else entries.take(ALTERNATIVE_LIMIT)
+            val target = if (isLiteral) literal else alternatives
+            bounded.forEach { entry ->
+                if (entry.id !in literal) target.putIfAbsent(entry.id, entry)
+            }
+        }
+        val rankedAlternatives = alternatives.values.sortedWith(
+            compareBy(
+                { if (it.frequency > 0) 0 else 1 },
+                { if (it.frequency > 0) it.frequency else Int.MAX_VALUE },
+                { it.expression.length }
+            )
+        )
+        return literal.values.toList() + rankedAlternatives
     }
 
     /**

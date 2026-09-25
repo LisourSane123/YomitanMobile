@@ -95,7 +95,12 @@ class AnkiCollectionStore @Inject constructor(
      */
     suspend fun refresh(deckNames: List<String> = emptyList()): ScanSummary =
         withContext(Dispatchers.IO) {
+            // Timed per phase, because "the scan takes ages" has three possible
+            // culprits — reading every note's fields, the state sweeps, and the
+            // database write — and only the log says which.
+            val startedAt = System.currentTimeMillis()
             val scan = index.scan(deckNames)
+            val scanned = System.currentTimeMillis()
             if (!scan.index.available) {
                 Log.w(TAG, "Collection scan unavailable; keeping the previous result")
                 return@withContext ScanSummary.UNAVAILABLE
@@ -112,6 +117,7 @@ class AnkiCollectionStore @Inject constructor(
                     }
             val mature = sweep("Maturity", AnkiCollectionIndex.MATURE_SEARCH)
             val studied = sweep("Started-cards", AnkiCollectionIndex.STUDIED_SEARCH)
+            val swept = System.currentTimeMillis()
 
             val now = System.currentTimeMillis()
             val rows = scan.wordSources.map { (word, source) ->
@@ -124,6 +130,12 @@ class AnkiCollectionStore @Inject constructor(
                 )
             }
             dao.replaceAll(rows)
+            Log.i(
+                TAG,
+                "scan ${scanned - startedAt} ms (${scan.noteCount} notes), " +
+                    "sweeps ${swept - scanned} ms, " +
+                    "store ${System.currentTimeMillis() - swept} ms (${rows.size} words)"
+            )
             cacheLock.withLock {
                 cachedWords = rows.mapTo(HashSet(rows.size)) { it.word }
                 cachedMature = null

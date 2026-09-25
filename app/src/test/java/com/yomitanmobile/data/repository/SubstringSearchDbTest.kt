@@ -81,7 +81,7 @@ class SubstringSearchDbTest {
     }
 
     private fun search(query: String): List<String> = runBlocking {
-        useCase.invoke(query).first().map { it.expression }
+        useCase.invokeAll(query).map { it.expression }
     }
 
     @Test

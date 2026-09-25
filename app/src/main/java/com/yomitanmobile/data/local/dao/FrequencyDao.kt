@@ -151,10 +151,18 @@ interface FrequencyDao {
      *
      * The language is the one recorded for the list at import; a list with
      * no `dictionaries` row predates languages and is Japanese.
+     *
+     * The distinct names come out of a subquery on purpose. Written as
+     * `SELECT DISTINCT f.dictionary FROM word_frequencies f WHERE <subquery>`,
+     * SQLite evaluated that correlated lookup once per ROW of a table holding
+     * millions of them — and the search screen asks this question on every
+     * keystroke, to find out which list leads. It measured 898 ms per search on
+     * a real phone. Distinct-first turns it into one index pass plus a lookup
+     * per LIST, of which there are three. Same shape as [installedLanguages].
      */
     @Query(
         """
-        SELECT DISTINCT f.dictionary FROM word_frequencies f
+        SELECT f.dictionary FROM (SELECT DISTINCT dictionary FROM word_frequencies) f
         WHERE COALESCE(
             (SELECT d.language FROM dictionaries d WHERE d.name = f.dictionary LIMIT 1),
             'ja'

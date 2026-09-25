@@ -237,6 +237,7 @@ class SearchViewModel @Inject constructor(
                 flowOf(emptyList())
             } else {
                 _isSearching.value = true
+                val startedAt = System.currentTimeMillis()
                 val searchFlow = if (!appLanguage.hasJapaneseFeatures) {
                     // English never uses the JP/EN/ROMAJI split. There is one
                     // lookup: the headword the user typed (plus its base
@@ -287,7 +288,10 @@ class SearchViewModel @Inject constructor(
                             .map { englishResults ->
                                 if (romajiCandidate != null) {
                                     val romajiResults = if (shouldUseRomajiFallback(q, romajiCandidate)) {
-                                        searchDictionaryUseCase.invoke(romajiCandidate).first()
+                                        // invokeAll, not first(): a kana query
+                                        // emits twice and the compounds come
+                                        // with the second one.
+                                        searchDictionaryUseCase.invokeAll(romajiCandidate)
                                     } else {
                                         emptyList()
                                     }
@@ -305,7 +309,7 @@ class SearchViewModel @Inject constructor(
                                 } else {
                                     val romajiConverted = RomajiConverter.toHiragana(q)
                                     if (shouldUseRomajiFallback(q, romajiConverted)) {
-                                        searchDictionaryUseCase.invoke(romajiConverted).first()
+                                        searchDictionaryUseCase.invokeAll(romajiConverted)
                                     } else {
                                         emptyList()
                                     }
@@ -367,7 +371,21 @@ class SearchViewModel @Inject constructor(
                         }
                     }
                     .map { results -> results.map(::enrichWithJlptFallback) }
-                    .map { results -> withLeadingFrequency(results) }
+                    .map { results -> withLeadingFrequencyTimed(results) }
+                    // How long one keystroke's worth of searching took, on the
+                    // real database. Debug-only (R8 strips Log.d), and the
+                    // query text never goes in — its length does, which is
+                    // what makes a slow search reproducible.
+                    .map { results ->
+                        // Log.i, not d: Samsung firmware drops an app's debug
+                        // lines, and R8 strips v/d/i alike for release.
+                        Log.i(
+                            TAG,
+                            "search ${System.currentTimeMillis() - startedAt} ms " +
+                                "(mode=$mode, ${q.length} chars, ${results.size} results)"
+                        )
+                        results
+                    }
             }
         }
         .catch { e ->
@@ -394,17 +412,49 @@ class SearchViewModel @Inject constructor(
      * One extra query per search over an indexed table, chunked below SQLite's
      * 999-variable limit; failures leave the results untouched.
      */
+    /**
+     * Which list leads and which way its numbers run, kept for the screen's
+     * lifetime instead of asked per keystroke.
+     *
+     * Both halves used to be read inside every search: the DataStore order,
+     * and `observeDictionariesFor`, which walks `word_frequencies` — millions
+     * of rows — to find three distinct names. On a real phone that made every
+     * search wait 898 ms for a question whose answer changes when a dictionary
+     * is imported. Room's own Flow re-emits exactly then, which is what makes
+     * a cached copy correct rather than stale.
+     */
+    private data class LeadingList(val name: String, val higherIsBetter: Boolean)
+
+    private val leadingList: StateFlow<LeadingList> =
+        frequencyDao.observeDictionariesFor(appLanguage.entryTag)
+            .map { installed ->
+                val name = frequencySettings.leadingDictionary(appLanguage, installed)
+                LeadingList(
+                    name = name,
+                    higherIsBetter = if (name.isBlank()) {
+                        false
+                    } else {
+                        frequencyDao.getListSetting(name)?.higherIsBetter ?: false
+                    }
+                )
+            }
+            .catch { emit(LeadingList("", false)) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), LeadingList("", false))
+
+    private suspend fun withLeadingFrequencyTimed(results: List<MergedWordEntry>): List<MergedWordEntry> {
+        val startedAt = System.currentTimeMillis()
+        return withLeadingFrequency(results).also {
+            Log.i(TAG, "leading frequency ${System.currentTimeMillis() - startedAt} ms (${results.size} entries)")
+        }
+    }
+
     private suspend fun withLeadingFrequency(
         entries: List<MergedWordEntry>
     ): List<MergedWordEntry> {
         if (entries.isEmpty()) return entries
         return runCatching {
-            val leading = frequencySettings.leadingDictionary(
-                appLanguage,
-                frequencyDao.observeDictionariesFor(appLanguage.entryTag).first()
-            )
+            val (leading, higherIsBetter) = leadingList.value
             if (leading.isBlank()) return entries
-            val higherIsBetter = frequencyDao.getListSetting(leading)?.higherIsBetter ?: false
             val expressions = entries.map { it.primaryExpression }.filter { it.isNotBlank() }.distinct()
             val rows = expressions.chunked(900)
                 .flatMap { frequencyDao.getForDictionary(leading, it) }
