@@ -75,3 +75,4 @@ Thumbs.db
 
 # VOICEVOX bindings and ONNX Runtime, fetched by settings.gradle.kts
 .voicevox/
+__pycache__/
