@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -425,7 +426,7 @@ class SearchViewModel @Inject constructor(
      */
     private data class LeadingList(val name: String, val higherIsBetter: Boolean)
 
-    private val leadingList: StateFlow<LeadingList> =
+    private val leadingList: StateFlow<LeadingList?> =
         frequencyDao.observeDictionariesFor(appLanguage.entryTag)
             .map { installed ->
                 val name = frequencySettings.leadingDictionary(appLanguage, installed)
@@ -439,12 +440,34 @@ class SearchViewModel @Inject constructor(
                 )
             }
             .catch { emit(LeadingList("", false)) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(30_000), LeadingList("", false))
+            // Eagerly, and null until the first answer arrives. WhileSubscribed
+            // was wrong in a way that showed: nothing COLLECTS this flow, it is
+            // only read through `.value`, so the upstream never started and the
+            // value stayed at its initial one — which said "no leading list" and
+            // took the frequency off every search result.
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * The cached answer, waiting for it only the first time. Null means "not
+     * answered yet", never "no list" — a collection with no frequency list
+     * installed still emits, with a blank name.
+     */
+    private suspend fun leading(): LeadingList =
+        leadingList.value ?: leadingList.filterNotNull().first()
 
     private suspend fun withLeadingFrequencyTimed(results: List<MergedWordEntry>): List<MergedWordEntry> {
         val startedAt = System.currentTimeMillis()
-        return withLeadingFrequency(results).also {
-            Log.i(TAG, "leading frequency ${System.currentTimeMillis() - startedAt} ms (${results.size} entries)")
+        return withLeadingFrequency(results).also { stamped ->
+            Log.i(
+                TAG,
+                "leading frequency ${System.currentTimeMillis() - startedAt} ms " +
+                    "(${stamped.count { it.leadingFrequency != null }}/${results.size} stamped, " +
+                    "list='${leadingList.value?.name.orEmpty()}', " +
+                    "first=${stamped.firstOrNull()?.leadingFrequency?.let {
+                        "value=${it.value()} position=${it.position} " +
+                            "tier='${com.yomitanmobile.domain.model.FrequencyTier.label(it.position, it.value())}'"
+                    } ?: "none"})"
+            )
         }
     }
 
@@ -453,7 +476,7 @@ class SearchViewModel @Inject constructor(
     ): List<MergedWordEntry> {
         if (entries.isEmpty()) return entries
         return runCatching {
-            val (leading, higherIsBetter) = leadingList.value
+            val (leading, higherIsBetter) = leading()
             if (leading.isBlank()) return entries
             val expressions = entries.map { it.primaryExpression }.filter { it.isNotBlank() }.distinct()
             val rows = expressions.chunked(900)
