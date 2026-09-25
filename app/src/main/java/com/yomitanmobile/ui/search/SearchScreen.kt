@@ -565,13 +565,10 @@ private fun MergedWordEntryCard(
                     )
                 }
             }
-            // The number and the tier of the list it came from, with the list
-            // named. A word the LEADING list does not know is shown from the
-            // next list the user put in their order — a number is better than
-            // nothing, and two lists disagree by design (a word common in
-            // conversation is rare in print), so the row says whose claim it
-            // is instead of letting it pass for the leader's: the tier is
-            // written "≈" and drawn in the muted colour.
+            // The leading list's own number, named, with its tier. Both come
+            // from that list alone: a word it does not rank shows nothing here
+            // rather than a badge borrowed from another list's scale. Tapping
+            // the word is where the other lists' numbers are.
             val leading = entry.leadingFrequency
             if (leading != null) {
                 Spacer(modifier = Modifier.width(8.dp))
@@ -579,25 +576,16 @@ private fun MergedWordEntryCard(
                     val tier = com.yomitanmobile.domain.model.FrequencyTier.label(leading.position, leading.value())
                     if (tier.isNotBlank()) {
                         Text(
-                            text = if (leading.fromLeadingList) tier else "≈ $tier",
+                            text = tier,
                             fontSize = 12.sp,
-                            color = if (leading.fromLeadingList) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            fontWeight = if (leading.fromLeadingList) FontWeight.Medium else FontWeight.Normal
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                     Text(
                         text = "${leading.value()} ${leading.shortDictionary()}",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontStyle = if (leading.fromLeadingList) {
-                            androidx.compose.ui.text.font.FontStyle.Normal
-                        } else {
-                            androidx.compose.ui.text.font.FontStyle.Italic
-                        }
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

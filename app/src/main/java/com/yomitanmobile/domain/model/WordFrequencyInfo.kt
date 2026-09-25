@@ -18,18 +18,7 @@ data class WordFrequencyInfo(
      * number runs the other way (see [FrequencyDirection]): "12345×", where a
      * rank list says "#12345".
      */
-    val higherIsBetter: Boolean = false,
-    /**
-     * False when this number comes from a list OTHER than the leading one,
-     * because the leading list does not know the word.
-     *
-     * A tier is a claim about how common a word is, and the claims of two
-     * lists are not interchangeable — a word common in conversation is rare in
-     * print. So the number is still shown (it is the only one there is) but
-     * the row says whose it is, instead of letting it pass for the leading
-     * list's own verdict. Nothing is borrowed silently.
-     */
-    val fromLeadingList: Boolean = true
+    val higherIsBetter: Boolean = false
 ) {
     /** e.g. "BCCWJ #980", or "Innocent 12345×" for a counted list. */
     fun label(): String = "$dictionary ${value()}"

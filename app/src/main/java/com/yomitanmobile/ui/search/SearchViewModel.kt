@@ -474,8 +474,7 @@ class SearchViewModel @Inject constructor(
                     "(${stamped.count { it.leadingFrequency != null }}/${results.size} stamped, " +
                     "list='${listOrder.value?.leading.orEmpty()}', " +
                     "first=${stamped.firstOrNull()?.leadingFrequency?.let {
-                        "dict='${it.dictionary}' leading=${it.fromLeadingList} " +
-                            "value=${it.value()} position=${it.position} " +
+                        "dict='${it.dictionary}' value=${it.value()} position=${it.position} " +
                             "tier='${com.yomitanmobile.domain.model.FrequencyTier.label(it.position, it.value())}'"
                     } ?: "none"})"
             )
@@ -494,32 +493,15 @@ class SearchViewModel @Inject constructor(
             val rows = expressions.chunked(IN_CLAUSE_CHUNK)
                 .flatMap { frequencyDao.getForDictionary(leading, it) }
                 .groupBy { it.expression }
-            val stamped = entries.map { entry ->
+            // ONLY the leading list. A word it does not rank shows nothing in
+            // the result row — no number and no tier — because "Top 3K" is a
+            // claim about how common a word is and the lists disagree by
+            // design: a word common in conversation is rare in print. Borrowing
+            // another list's number here was tried and taken out again; the
+            // detail screen is where every installed list's number belongs,
+            // each named, with the leading one starred.
+            entries.map { entry ->
                 entry.copy(leadingFrequency = pick(rows[entry.primaryExpression], entry, order, leading))
-            }
-
-            // The words the leading list does not know get a number from the
-            // next list that does, in the user's own priority order — marked as
-            // that list's claim, not the leader's. One more query, and only for
-            // those words: a word the leader ranks costs nothing extra, which
-            // is most of them.
-            val others = order.names.drop(1)
-            val missing = stamped.filter { it.leadingFrequency == null }
-                .map { it.primaryExpression }
-                .filter { it.isNotBlank() }
-                .distinct()
-            if (others.isEmpty() || missing.isEmpty()) return@runCatching stamped
-            val fallback = missing.chunked(IN_CLAUSE_CHUNK)
-                .flatMap { frequencyDao.getForDictionaries(others, it) }
-                .groupBy { it.expression }
-            stamped.map { entry ->
-                if (entry.leadingFrequency != null) return@map entry
-                val byList = (fallback[entry.primaryExpression] ?: return@map entry)
-                    .groupBy { it.dictionary }
-                val name = others.firstOrNull { it in byList } ?: return@map entry
-                entry.copy(
-                    leadingFrequency = pick(byList[name], entry, order, name, fromLeadingList = false)
-                )
             }
         }.getOrElse { e ->
             Log.w(TAG, "leading frequency lookup failed", e)
@@ -536,8 +518,7 @@ class SearchViewModel @Inject constructor(
         candidates: List<com.yomitanmobile.data.local.entity.WordFrequency>?,
         entry: MergedWordEntry,
         order: ListOrder,
-        dictionary: String,
-        fromLeadingList: Boolean = true
+        dictionary: String
     ): WordFrequencyInfo? {
         val row = candidates?.let { rows ->
             rows.firstOrNull { it.reading == entry.reading }
@@ -548,8 +529,7 @@ class SearchViewModel @Inject constructor(
             rank = row.rank,
             displayValue = row.displayValue,
             position = row.position,
-            higherIsBetter = order.direction(dictionary),
-            fromLeadingList = fromLeadingList
+            higherIsBetter = order.direction(dictionary)
         )
     }
 
