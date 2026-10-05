@@ -1085,19 +1085,21 @@ class KindleSync {
     /**
      * A step of the run, in the log and in the desktop notification
      * kindle-sync.sh opened for it (`-Dkindle.notifyFile` holds its id), so
-     * the one bubble on screen keeps saying what is happening.
+     * the one bubble on screen keeps saying what is happening. It goes through
+     * the script's own notify.sh (`-Dkindle.notifyScript`): this used to run
+     * notify-send itself, and two copies of "how to show a bubble" are how one
+     * of them ends up writing into a bubble the desktop already closed.
      */
     private fun progress(message: String) {
         log(message)
-        val file = System.getProperty("kindle.notifyFile").orEmpty().takeIf { it.isNotEmpty() }?.let(::File) ?: return
+        val script = System.getProperty("kindle.notifyScript").orEmpty().takeIf { it.isNotEmpty() } ?: return
+        val idFile = System.getProperty("kindle.notifyFile").orEmpty()
         runCatching {
-            val id = file.takeIf { it.isFile }?.readText()?.trim().orEmpty()
-            val command = mutableListOf("notify-send", "-a", "Kindle → Anki", "-p")
-            if (id.isNotEmpty()) command += listOf("-r", id)
-            command += listOf("Kindle → Anki", message)
-            val process = ProcessBuilder(command).redirectErrorStream(true).start()
-            val printed = process.inputStream.bufferedReader().readText().trim()
-            if (process.waitFor() == 0 && printed.all { it.isDigit() } && printed.isNotEmpty()) file.writeText(printed)
+            val process = ProcessBuilder(script, "progress", message).redirectErrorStream(true)
+                .apply { environment()["KINDLE_NOTIFY_ID_FILE"] = idFile }
+                .start()
+            process.inputStream.readAllBytes()
+            process.waitFor()
         }
     }
 

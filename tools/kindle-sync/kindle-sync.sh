@@ -97,25 +97,36 @@ STATE="${XDG_STATE_HOME:-$HOME/.local/state}/kindle-sync"
 ANKI_CONNECT="${KINDLE_SYNC_ANKI:-http://127.0.0.1:8765}"
 mkdir -p "$STATE" "$DATA"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# A run that ends without a result — killed by kindle-watch's timeout, or a
+# command failing under `set -e` — would leave the progress bubble standing on
+# its last step forever, which reads as "still working". Say it ended.
+on_exit() {
+    local status=$?
+    if [[ "${RESULT_SENT:-true}" == false ]]; then
+        "$NOTIFY" done "Nie wykonano: przebieg przerwany (kod $status), szczegóły: journalctl --user -u kindle-watch"
+    fi
+    rm -rf "$WORK"
+}
+trap on_exit EXIT
+# bash runs the EXIT trap on a signal only when the signal itself is trapped.
+trap 'exit 143' TERM
+trap 'exit 130' INT
 
 log() { echo "[kindle-sync] $*" >&2; }
-# One desktop notification per run, rewritten in place at every step — the
-# Kindle is plugged in and nothing on it says what the laptop is doing, so the
-# bubble does: Kindle found, words read, cards made, synced. Its id lives in
-# the run's work dir, where the Kotlin half (-Dkindle.notifyFile) finds it and
-# keeps writing into the same bubble.
-NOTIFY_ID_FILE="$WORK/notify.id"
-notify() {
-    command -v notify-send >/dev/null || return 0
-    local id
-    id="$(cat "$NOTIFY_ID_FILE" 2>/dev/null || true)"
-    id="$(notify-send -a "Kindle → Anki" -p ${id:+-r "$id"} "Kindle → Anki" "$1" 2>/dev/null)" &&
-        echo "$id" > "$NOTIFY_ID_FILE"
-    return 0
-}
+# The desktop side of a run goes through notify.sh: one bubble that says what
+# the laptop is doing while the Kindle sits there saying nothing, rewritten at
+# every step, and the result as a bubble of its own that stays until dismissed
+# (notify.sh says why it has to be that way). The progress bubble's id lives in
+# the work dir, where the Kotlin half (-Dkindle.notifyFile) keeps writing into
+# the same bubble.
+NOTIFY="$(dirname "$(readlink -f "$0")")/notify.sh"
+export KINDLE_NOTIFY_ID_FILE="$WORK/notify.id"
+NOTIFY_ID_FILE="$KINDLE_NOTIFY_ID_FILE"
+RESULT_SENT=false
 # A step along the way: in the log and in the bubble.
-progress() { log "$1"; notify "$1"; }
+progress() { log "$1"; "$NOTIFY" progress "$1"; }
+# How the run ended. Every exit path says one.
+notify() { RESULT_SENT=true; "$NOTIFY" done "$1"; }
 # The message a run ends with when it fails.
 fail() { log "$1"; notify "Nie wykonano: $1"; exit 1; }
 
@@ -252,6 +263,7 @@ if [[ "$INSTALL_NATIVE" == true ]]; then
         -Dkindle.installNativeAudio=true \
         -Dnative.audio="$NATIVE_AUDIO" \
         -Dkindle.notifyFile="$NOTIFY_ID_FILE" \
+        -Dkindle.notifyScript="$NOTIFY" \
         -Dout.dir="$STATE/last-run") >&2 || true
     if grep -q "installed=true" "$STATE/last-run/summary.txt" 2>/dev/null; then
         notify "Wykonano: nagrania native speakerów zainstalowane. Nowe fiszki z Kindle dostaną je przed VOICEVOX."
@@ -420,6 +432,7 @@ fi
 (cd "$REPO" && ./gradlew -q :app:testDebugUnitTest --tests "*KindleSync" --rerun \
     -Dkindle.lookups="$WORK/lookups.tsv" \
     -Dkindle.notifyFile="$NOTIFY_ID_FILE" \
+    -Dkindle.notifyScript="$NOTIFY" \
     -Ddict.zip="$DICT" \
     -Dfreq.zip="$FREQ" \
     -Dpitch.zip="$PITCH" \
