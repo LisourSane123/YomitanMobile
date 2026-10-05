@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Locks down the contract that [AnkiCardCreator.buildBackTemplate]
+ * Locks down the contract that [CardTemplates.buildBackTemplate]
  * emits the back-side sections in the order given by `sectionOrder`.
  * If this passes, any "reorder doesn't work" report is a platform-side
  * issue (AnkiDroid template cache), not a data-path issue.
@@ -24,7 +24,7 @@ class AnkiBackTemplateOrderingTest {
             CardSection.SUMMARY
         )
 
-        val html = AnkiCardCreator.buildBackTemplate(customOrder)
+        val html = CardTemplates.buildBackTemplate(customOrder)
 
         // Each section type leaves a unique CSS-class fingerprint on the
         // emitted block, which lets us read order back out of the raw
@@ -53,7 +53,7 @@ class AnkiBackTemplateOrderingTest {
 
     @Test
     fun buildBackTemplate_headerStaysPinned_evenWhenSectionsReordered() {
-        val html = AnkiCardCreator.buildBackTemplate(
+        val html = CardTemplates.buildBackTemplate(
             listOf(
                 CardSection.SUMMARY,
                 CardSection.PITCH,
@@ -80,7 +80,7 @@ class AnkiBackTemplateOrderingTest {
         // the "show frequency" preference reveals through CSS. Before this it
         // was emitted nowhere at all, which made that preference a switch
         // wired to nothing.
-        val html = AnkiCardCreator.buildBackTemplate(CardSection.defaultOrder())
+        val html = CardTemplates.buildBackTemplate(CardSection.defaultOrder())
         assertTrue(
             "Frequency block should be emitted",
             html.contains("{{#Frequency}}") && html.contains("{{/Frequency}}")
@@ -93,10 +93,10 @@ class AnkiBackTemplateOrderingTest {
 
     @Test
     fun css_hidesFrequencyUnlessTheUserAsksForIt() {
-        val hidden = AnkiCardCreator.buildCssFromPreferences(
+        val hidden = CardTemplates.buildCssFromPreferences(
             CardStylePreferences(showFrequency = false)
         )
-        val shown = AnkiCardCreator.buildCssFromPreferences(
+        val shown = CardTemplates.buildCssFromPreferences(
             CardStylePreferences(showFrequency = true)
         )
         val hiddenRule = hidden.substringAfter(".freq {").substringBefore("}")

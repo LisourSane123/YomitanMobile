@@ -33,7 +33,7 @@ class LatinDuplicateTest {
 
     @Test
     fun `the lookup finds an English word in any casing, and not another word`() {
-        val index = AnkiCollectionIndex.Index(setOf("dog", "icecream", "犬"), 3, available = true)
+        val index = AnkiCollectionMatch.Index(setOf("dog", "icecream", "犬"), 3, available = true)
         assertTrue(index.containsAny(listOf("Dog"), "Dog"))
         assertTrue(index.containsAny(listOf("ice cream"), "ice cream"))
         assertFalse(index.containsAny(listOf("cat"), "cat"))
@@ -48,7 +48,7 @@ class LatinDuplicateTest {
 
     @Test
     fun `an inflected form is found through the word the collection holds`() {
-        val index = AnkiCollectionIndex.Index(setOf("make", "child", "study", "moth"), 4, available = true)
+        val index = AnkiCollectionMatch.Index(setOf("make", "child", "study", "moth"), 4, available = true)
         assertTrue(index.containsAny(listOf("made"), "made"))
         assertTrue(index.containsAny(listOf("makes"), "makes"))
         assertTrue(index.containsAny(listOf("making"), "making"))
@@ -62,7 +62,7 @@ class LatinDuplicateTest {
 
     @Test
     fun `the live search asks Anki about the base form too`() {
-        val search = AnkiCollectionIndex.liveSearch(listOf("made"), "made").orEmpty()
+        val search = AnkiCollectionMatch.liveSearch(listOf("made"), "made").orEmpty()
         assertTrue(search, "\"make\"" in search)
         assertTrue(search, "\"made\"" in search)
     }

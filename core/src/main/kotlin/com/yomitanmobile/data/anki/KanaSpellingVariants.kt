@@ -20,7 +20,7 @@ package com.yomitanmobile.data.anki
  * missing reading) yields no variants at all, so the caller falls back to the
  * plain string comparison it did before.
  */
-internal object KanaSpellingVariants {
+object KanaSpellingVariants {
 
     /** 2^4 spellings covers every compound; beyond that it is not a headword. */
     private const val MAX_GROUPS = 4

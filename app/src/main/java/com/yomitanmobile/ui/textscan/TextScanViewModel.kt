@@ -1,5 +1,6 @@
 package com.yomitanmobile.ui.textscan
 
+import com.yomitanmobile.data.anki.AnkiCollectionMatch
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -154,7 +155,7 @@ class TextScanViewModel @Inject constructor(
     private var sources: List<TextScanSource> = emptyList()
     private var ankiScanUnavailable: Boolean = false
     private var minedKeys: Set<String> = emptySet()
-    private var ankiIndex: AnkiCollectionIndex.Index = AnkiCollectionIndex.Index.EMPTY
+    private var ankiIndex: AnkiCollectionMatch.Index = AnkiCollectionMatch.Index.EMPTY
 
     /**
      * Every written form of each resolved word, by JMdict sequence.

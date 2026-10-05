@@ -1,7 +1,6 @@
 package com.yomitanmobile.data.settings
 
 import androidx.datastore.preferences.core.Preferences
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT
 import com.yomitanmobile.data.ai.AiProvider
 import com.yomitanmobile.domain.model.CardSection
@@ -19,47 +18,47 @@ import com.yomitanmobile.domain.model.PitchAccentStyle
 fun readCardStylePreferences(prefs: Preferences): CardStylePreferences {
     val d = CardStylePreferences()
     return CardStylePreferences(
-        expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: d.expressionBold,
-        expressionFontSize = prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: d.expressionFontSize,
-        readingFontSize = prefs[MainActivity.CARD_READING_FONT_SIZE] ?: d.readingFontSize,
-        meaningFontSize = prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: d.meaningFontSize,
-        frontContextSentenceFontSize = prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE]
+        expressionBold = prefs[PreferenceKeys.CARD_EXPRESSION_BOLD] ?: d.expressionBold,
+        expressionFontSize = prefs[PreferenceKeys.CARD_EXPRESSION_FONT_SIZE] ?: d.expressionFontSize,
+        readingFontSize = prefs[PreferenceKeys.CARD_READING_FONT_SIZE] ?: d.readingFontSize,
+        meaningFontSize = prefs[PreferenceKeys.CARD_MEANING_FONT_SIZE] ?: d.meaningFontSize,
+        frontContextSentenceFontSize = prefs[PreferenceKeys.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE]
             ?: d.frontContextSentenceFontSize,
-        backSentenceFontSize = prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: d.backSentenceFontSize,
-        fontFamily = safeFontName(prefs[MainActivity.CARD_FONT_FAMILY], d.fontFamily),
-        cardBackgroundColor = safeColor(prefs[MainActivity.CARD_BACKGROUND_COLOR], d.cardBackgroundColor),
-        expressionColor = safeColor(prefs[MainActivity.CARD_EXPRESSION_COLOR], d.expressionColor),
-        readingColor = safeColor(prefs[MainActivity.CARD_READING_COLOR], d.readingColor),
-        meaningColor = safeColor(prefs[MainActivity.CARD_MEANING_COLOR], d.meaningColor),
-        accentColor = safeColor(prefs[MainActivity.CARD_ACCENT_COLOR], d.accentColor),
+        backSentenceFontSize = prefs[PreferenceKeys.CARD_BACK_SENTENCE_FONT_SIZE] ?: d.backSentenceFontSize,
+        fontFamily = safeFontName(prefs[PreferenceKeys.CARD_FONT_FAMILY], d.fontFamily),
+        cardBackgroundColor = safeColor(prefs[PreferenceKeys.CARD_BACKGROUND_COLOR], d.cardBackgroundColor),
+        expressionColor = safeColor(prefs[PreferenceKeys.CARD_EXPRESSION_COLOR], d.expressionColor),
+        readingColor = safeColor(prefs[PreferenceKeys.CARD_READING_COLOR], d.readingColor),
+        meaningColor = safeColor(prefs[PreferenceKeys.CARD_MEANING_COLOR], d.meaningColor),
+        accentColor = safeColor(prefs[PreferenceKeys.CARD_ACCENT_COLOR], d.accentColor),
         // Empty means "inherit the sentence colour" and is a valid value here.
-        furiganaColor = (prefs[MainActivity.CARD_FURIGANA_COLOR] ?: d.furiganaColor)
+        furiganaColor = (prefs[PreferenceKeys.CARD_FURIGANA_COLOR] ?: d.furiganaColor)
             .let { if (it.isBlank()) "" else safeColor(it, d.furiganaColor) },
-        showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: d.showPitchAccent,
+        showPitchAccent = prefs[PreferenceKeys.CARD_SHOW_PITCH] ?: d.showPitchAccent,
         pitchAccentStyle = PitchAccentStyle.fromStorage(
-            prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] ?: d.pitchAccentStyle.storageValue
+            prefs[PreferenceKeys.CARD_PITCH_ACCENT_STYLE] ?: d.pitchAccentStyle.storageValue
         ),
-        showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: d.showFrequency,
-        showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: d.showSentence,
-        showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE]
+        showFrequency = prefs[PreferenceKeys.CARD_SHOW_FREQUENCY] ?: d.showFrequency,
+        showSentence = prefs[PreferenceKeys.CARD_SHOW_SENTENCE] ?: d.showSentence,
+        showFrontContextSentence = prefs[PreferenceKeys.CARD_SHOW_FRONT_CONTEXT_SENTENCE]
             ?: d.showFrontContextSentence,
-        randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: d.randomFontsEnabled,
-        randomFonts = (prefs[MainActivity.CARD_RANDOM_FONTS] ?: d.randomFonts)
+        randomFontsEnabled = prefs[PreferenceKeys.CARD_RANDOM_FONTS_ENABLED] ?: d.randomFontsEnabled,
+        randomFonts = (prefs[PreferenceKeys.CARD_RANDOM_FONTS] ?: d.randomFonts)
             .mapNotNull { font -> font.takeIf { isSafeFontName(it) } }
             .toSet(),
-        randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: d.randomVoicesEnabled,
-        randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: d.randomVoices,
-        showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: d.showSectionDividers,
+        randomVoicesEnabled = prefs[PreferenceKeys.TTS_RANDOM_VOICES_ENABLED] ?: d.randomVoicesEnabled,
+        randomVoices = prefs[PreferenceKeys.TTS_RANDOM_VOICES] ?: d.randomVoices,
+        showSectionDividers = prefs[PreferenceKeys.CARD_SHOW_SECTION_DIVIDERS] ?: d.showSectionDividers,
         // Was missing here while the card-style screen wrote it and its own
         // preview honoured it — so turning the word divider off changed the
         // preview and nothing about the exported card.
-        showWordDivider = prefs[MainActivity.CARD_SHOW_WORD_DIVIDER] ?: d.showWordDivider,
-        aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false,
-        aiProvider = AiProvider.fromStorage(prefs[MainActivity.CARD_AI_PROVIDER]),
-        aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: "",
-        aiPrompt = prefs[MainActivity.CARD_AI_PROMPT] ?: AI_DEFAULT_PROMPT,
-        aiModel = prefs[MainActivity.CARD_AI_MODEL] ?: "",
-        sectionOrder = CardSection.decode(prefs[MainActivity.CARD_SECTION_ORDER])
+        showWordDivider = prefs[PreferenceKeys.CARD_SHOW_WORD_DIVIDER] ?: d.showWordDivider,
+        aiSummaryEnabled = prefs[PreferenceKeys.CARD_AI_SUMMARY_ENABLED] ?: false,
+        aiProvider = AiProvider.fromStorage(prefs[PreferenceKeys.CARD_AI_PROVIDER]),
+        aiApiKey = prefs[PreferenceKeys.CARD_AI_API_KEY] ?: "",
+        aiPrompt = prefs[PreferenceKeys.CARD_AI_PROMPT] ?: AI_DEFAULT_PROMPT,
+        aiModel = prefs[PreferenceKeys.CARD_AI_MODEL] ?: "",
+        sectionOrder = CardSection.decode(prefs[PreferenceKeys.CARD_SECTION_ORDER])
     )
 }
 

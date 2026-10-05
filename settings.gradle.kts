@@ -92,3 +92,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "YomitanMobile"
 include(":app")
+include(":core")
+include(":kindle-desktop")

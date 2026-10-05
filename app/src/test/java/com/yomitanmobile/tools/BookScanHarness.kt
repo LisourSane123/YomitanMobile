@@ -1,5 +1,6 @@
 package com.yomitanmobile.tools
 
+import com.yomitanmobile.data.anki.AnkiCollectionMatch
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.mapper.toDomain
@@ -292,7 +293,7 @@ class BookScanHarness {
                 notes++
             }
             log("anki: $notes notes, ${keys.size} keys")
-            AnkiCollectionIndex.Index(keys, notes, available = true)
+            AnkiCollectionMatch.Index(keys, notes, available = true)
         } else {
             null
         }

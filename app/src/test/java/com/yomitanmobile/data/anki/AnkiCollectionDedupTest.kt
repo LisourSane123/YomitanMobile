@@ -26,10 +26,10 @@ class AnkiCollectionDedupTest {
 
     private val sep = ''
 
-    private fun index(vararg notes: String): AnkiCollectionIndex.Index {
+    private fun index(vararg notes: String): AnkiCollectionMatch.Index {
         val keys = HashSet<String>()
         notes.forEach { AnkiNoteFieldIndexer.collectKeysFromNote(it, keys) }
-        return AnkiCollectionIndex.Index(keys, notes.size, available = true)
+        return AnkiCollectionMatch.Index(keys, notes.size, available = true)
     }
 
     private fun word(
@@ -47,7 +47,7 @@ class AnkiCollectionDedupTest {
         partsOfSpeech = partsOfSpeech
     )
 
-    private fun AnkiCollectionIndex.Index.holds(entry: MergedWordEntry) = contains(
+    private fun AnkiCollectionMatch.Index.holds(entry: MergedWordEntry) = contains(
         entry.primaryExpression,
         entry.reading,
         readingCountsAlone = WordFilterRules.isUsuallyKana(entry)
@@ -110,7 +110,7 @@ class AnkiCollectionDedupTest {
      * from the database by sequence and passed in here. See
      * `WrittenFormsBySequenceDbTest` for that half.
      */
-    private fun AnkiCollectionIndex.Index.holdsAnyOf(
+    private fun AnkiCollectionMatch.Index.holdsAnyOf(
         entry: MergedWordEntry,
         writtenForms: List<String>
     ) = containsAny(

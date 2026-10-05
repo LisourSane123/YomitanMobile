@@ -30,7 +30,7 @@ class AnkiFuriganaSentenceTest {
                 FuriganaSegment("べるべきです。", "")
             )
         )
-        val html = AnkiCardCreator.buildFuriganaSentenceHtml(ex)
+        val html = CardTemplates.buildFuriganaSentenceHtml(ex)
 
         // 果 and 物 collapse into ONE <ruby> (one tap target) with both readings;
         // 食 is its own <ruby>. So exactly two <ruby> openings total.
@@ -57,11 +57,11 @@ class AnkiFuriganaSentenceTest {
             segments = listOf(FuriganaSegment("水", "みず"))
         )
         // Blank ⇒ same color as text (inherit).
-        val def = AnkiCardCreator.buildFuriganaSentenceHtml(ex, "")
+        val def = CardTemplates.buildFuriganaSentenceHtml(ex, "")
         assertTrue("default inherits text color", def.contains("color:inherit"))
 
         // Explicit color is applied.
-        val colored = AnkiCardCreator.buildFuriganaSentenceHtml(ex, "#ffb74d")
+        val colored = CardTemplates.buildFuriganaSentenceHtml(ex, "#ffb74d")
         assertTrue("explicit color applied", colored.contains("color:#ffb74d"))
         assertFalse("no inherit when overridden", colored.contains("color:inherit"))
     }
@@ -73,7 +73,7 @@ class AnkiFuriganaSentenceTest {
             en = "",
             segments = listOf(FuriganaSegment("これはテスト。", ""))
         )
-        val html = AnkiCardCreator.buildFuriganaSentenceHtml(ex)
+        val html = CardTemplates.buildFuriganaSentenceHtml(ex)
         assertFalse("no ruby for reading-less sentence", html.contains("<ruby"))
         assertEquals("これはテスト。", html)
     }
@@ -81,7 +81,7 @@ class AnkiFuriganaSentenceTest {
     @Test
     fun noSegmentsFallsBackToEscapedJp() {
         val ex = ExamplePair(jp = "A & B <x>", en = "", segments = emptyList())
-        val html = AnkiCardCreator.buildFuriganaSentenceHtml(ex)
+        val html = CardTemplates.buildFuriganaSentenceHtml(ex)
         assertFalse(html.contains("<ruby"))
         // HTML-escaped so the card can't be broken by punctuation.
         assertTrue("escaped", html.contains("&amp;") && html.contains("&lt;x&gt;"))

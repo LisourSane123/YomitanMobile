@@ -1,5 +1,6 @@
 package com.yomitanmobile.ui.settings
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -153,11 +154,11 @@ fun SettingsScreen(
     // Load current deck name, theme mode and daily goal
     LaunchedEffect(Unit) {
         val prefs = context.dataStore.data.first()
-        currentDeckName = prefs[MainActivity.ANKI_DECK_NAME] ?: ""
-        currentThemeMode = prefs[MainActivity.THEME_MODE] ?: "system"
-        dailyGoalCount = (prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0).toFloat()
-        cardMeaningLanguage = CardMeaningLanguage.fromStorage(prefs[MainActivity.CARD_MEANING_LANGUAGE])
-        monolingualDictionary = prefs[MainActivity.CARD_MONOLINGUAL_DICTIONARY] ?: ""
+        currentDeckName = prefs[PreferenceKeys.ANKI_DECK_NAME] ?: ""
+        currentThemeMode = prefs[PreferenceKeys.THEME_MODE] ?: "system"
+        dailyGoalCount = (prefs[PreferenceKeys.DAILY_GOAL_COUNT] ?: 0).toFloat()
+        cardMeaningLanguage = CardMeaningLanguage.fromStorage(prefs[PreferenceKeys.CARD_MEANING_LANGUAGE])
+        monolingualDictionary = prefs[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY] ?: ""
         // Language is stored in SharedPreferences (needed for synchronous read at startup)
         val langPrefs = context.getSharedPreferences(MainActivity.LANG_PREFS_NAME, android.content.Context.MODE_PRIVATE)
         currentLanguage = langPrefs.getString(MainActivity.LANG_PREFS_KEY, "system") ?: "system"
@@ -191,7 +192,7 @@ fun SettingsScreen(
                                         showMonolingualPicker = false
                                         coroutineScope.launch {
                                             context.dataStore.edit {
-                                                it[MainActivity.CARD_MONOLINGUAL_DICTIONARY] = info.name
+                                                it[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY] = info.name
                                             }
                                         }
                                     }
@@ -373,7 +374,7 @@ fun SettingsScreen(
             currentDeckName = sanitized
             coroutineScope.launch {
                 context.dataStore.edit { prefs ->
-                    prefs[MainActivity.ANKI_DECK_NAME] = sanitized
+                    prefs[PreferenceKeys.ANKI_DECK_NAME] = sanitized
                 }
             }
             showDeckEditDialog = false
@@ -956,7 +957,7 @@ fun SettingsScreen(
                                 onClick = {
                                     currentThemeMode = "system"
                                     coroutineScope.launch {
-                                        context.dataStore.edit { it[MainActivity.THEME_MODE] = "system" }
+                                        context.dataStore.edit { it[PreferenceKeys.THEME_MODE] = "system" }
                                     }
                                 },
                                 label = { Text(tr("Systemowy", "System")) },
@@ -967,7 +968,7 @@ fun SettingsScreen(
                                 onClick = {
                                     currentThemeMode = "light"
                                     coroutineScope.launch {
-                                        context.dataStore.edit { it[MainActivity.THEME_MODE] = "light" }
+                                        context.dataStore.edit { it[PreferenceKeys.THEME_MODE] = "light" }
                                     }
                                 },
                                 label = { Text(tr("Jasny", "Light")) },
@@ -981,7 +982,7 @@ fun SettingsScreen(
                                 onClick = {
                                     currentThemeMode = "dark"
                                     coroutineScope.launch {
-                                        context.dataStore.edit { it[MainActivity.THEME_MODE] = "dark" }
+                                        context.dataStore.edit { it[PreferenceKeys.THEME_MODE] = "dark" }
                                     }
                                 },
                                 label = { Text(tr("Ciemny", "Dark")) },
@@ -1430,7 +1431,7 @@ fun SettingsScreen(
                                     cardMeaningLanguage = CardMeaningLanguage.ENGLISH
                                     coroutineScope.launch {
                                         context.dataStore.edit {
-                                            it[MainActivity.CARD_MEANING_LANGUAGE] =
+                                            it[PreferenceKeys.CARD_MEANING_LANGUAGE] =
                                                 CardMeaningLanguage.ENGLISH.storageValue
                                         }
                                     }
@@ -1443,7 +1444,7 @@ fun SettingsScreen(
                                     cardMeaningLanguage = CardMeaningLanguage.JAPANESE
                                     coroutineScope.launch {
                                         context.dataStore.edit {
-                                            it[MainActivity.CARD_MEANING_LANGUAGE] =
+                                            it[PreferenceKeys.CARD_MEANING_LANGUAGE] =
                                                 CardMeaningLanguage.JAPANESE.storageValue
                                         }
                                     }
@@ -1549,7 +1550,7 @@ fun SettingsScreen(
                             onValueChangeFinished = {
                                 coroutineScope.launch {
                                     context.dataStore.edit { prefs ->
-                                        prefs[MainActivity.DAILY_GOAL_COUNT] = dailyGoalCount.toInt()
+                                        prefs[PreferenceKeys.DAILY_GOAL_COUNT] = dailyGoalCount.toInt()
                                     }
                                 }
                             },

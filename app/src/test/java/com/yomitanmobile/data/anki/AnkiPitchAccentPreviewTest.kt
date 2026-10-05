@@ -9,7 +9,7 @@ class AnkiPitchAccentPreviewTest {
 
     @Test
     fun buildPreviewHtml_usesDotLinePitchPattern_whenSelected() {
-        val html = AnkiCardCreator.buildPreviewHtml(
+        val html = CardTemplates.buildPreviewHtml(
             CardStylePreferences(pitchAccentStyle = PitchAccentStyle.DOT_LINE)
         )
 
@@ -20,7 +20,7 @@ class AnkiPitchAccentPreviewTest {
 
     @Test
     fun buildPreviewHtml_usesLegacyPitchPattern_whenSelected() {
-        val html = AnkiCardCreator.buildPreviewHtml(
+        val html = CardTemplates.buildPreviewHtml(
             CardStylePreferences(pitchAccentStyle = PitchAccentStyle.LEGACY)
         )
 

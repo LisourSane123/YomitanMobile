@@ -20,7 +20,7 @@ class LatinCardLayoutTest {
 
     @Test
     fun `japanese keeps the reading in the header`() {
-        val template = AnkiCardCreator.buildBackTemplate(order, CardProfile.JAPANESE)
+        val template = CardTemplates.buildBackTemplate(order, CardProfile.JAPANESE)
         val headerEnd = template.indexOf("<hr>")
         assertTrue(
             "the reading should be inside the header block",
@@ -31,7 +31,7 @@ class LatinCardLayoutTest {
     @Test
     fun `latin profiles move the pronunciation below the meaning`() {
         for (profile in listOf(CardProfile.ENGLISH, CardProfile.SPANISH)) {
-            val template = AnkiCardCreator.buildBackTemplate(order, profile)
+            val template = CardTemplates.buildBackTemplate(order, profile)
 
             val headerEnd = template.indexOf("<hr>")
             val readingAt = template.indexOf("{{Reading}}")
@@ -55,7 +55,7 @@ class LatinCardLayoutTest {
         // so a template mentioning PitchAccent or KanjiBreakdown would print
         // the placeholder itself.
         for (profile in listOf(CardProfile.ENGLISH, CardProfile.SPANISH)) {
-            val template = AnkiCardCreator.buildBackTemplate(order, profile)
+            val template = CardTemplates.buildBackTemplate(order, profile)
             assertFalse("$profile references PitchAccent", template.contains("PitchAccent"))
             assertFalse("$profile references KanjiBreakdown", template.contains("KanjiBreakdown"))
         }

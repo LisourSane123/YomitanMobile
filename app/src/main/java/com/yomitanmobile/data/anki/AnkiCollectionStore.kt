@@ -220,7 +220,7 @@ class AnkiCollectionStore @Inject constructor(
 
     /**
      * Whether the collection already contains this word. Mirrors
-     * [AnkiCollectionIndex.Index.contains]: the written form matches directly,
+     * [AnkiCollectionMatch.Index.contains]: the written form matches directly,
      * and the reading only counts for kana-only words, where there is no kanji
      * form that could belong to a different word.
      */
@@ -232,7 +232,7 @@ class AnkiCollectionStore @Inject constructor(
 
     /**
      * Same check across every written form of the word — see
-     * [AnkiCollectionIndex.Index.containsAny]. The primary spelling goes
+     * [AnkiCollectionMatch.Index.containsAny]. The primary spelling goes
      * first.
      */
     suspend fun containsAny(
@@ -242,7 +242,7 @@ class AnkiCollectionStore @Inject constructor(
     ): Boolean {
         val words = words()
         if (words.isEmpty()) return false
-        return AnkiCollectionIndex.Index(words, 0, available = true)
+        return AnkiCollectionMatch.Index(words, 0, available = true)
             .containsAny(expressions, reading, readingCountsAlone)
     }
 
@@ -264,9 +264,9 @@ class AnkiCollectionStore @Inject constructor(
         ?: containsAny(expressions, reading, readingCountsAlone)
 
     /** Non-suspending variant for callers that already loaded the set. */
-    suspend fun asIndex(): AnkiCollectionIndex.Index {
+    suspend fun asIndex(): AnkiCollectionMatch.Index {
         val words = words()
-        return AnkiCollectionIndex.Index(
+        return AnkiCollectionMatch.Index(
             keys = words,
             noteCount = 0,
             available = words.isNotEmpty()

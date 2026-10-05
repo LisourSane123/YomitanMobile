@@ -182,6 +182,9 @@ kotlin {
 //   * All versions below are the latest stable points that still run on
 //     Kotlin 1.9.22 + KSP 1.9.22-1.0.17.
 dependencies {
+    // The plain-Kotlin half of the app, shared with the desktop Kindle tool.
+    implementation(project(":core"))
+
     // Core
     // P2-16 dep bumps reverted 2026-05-14 — a downstream regression
     // surfaced on Android 16 during dictionary download. Suspect path is

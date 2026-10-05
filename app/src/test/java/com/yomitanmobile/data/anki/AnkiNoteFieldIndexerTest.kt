@@ -105,7 +105,7 @@ class AnkiNoteFieldIndexerTest {
 
     @Test
     fun kanaWordMatchesOnReadingButKanjiWordDoesNot() {
-        val index = AnkiCollectionIndex.Index(
+        val index = AnkiCollectionMatch.Index(
             keys = setOf("きく", "食べる"),
             noteCount = 2,
             available = true
@@ -158,7 +158,7 @@ class AnkiNoteFieldIndexerTest {
 
     @Test
     fun compoundVerbMatchesTheOtherSpelling() {
-        val index = AnkiCollectionIndex.Index(
+        val index = AnkiCollectionMatch.Index(
             keys = setOf("持ってくる"),
             noteCount = 1,
             available = true
@@ -172,7 +172,7 @@ class AnkiNoteFieldIndexerTest {
 
     @Test
     fun spellingVariantsNeverDegradeIntoAReadingMatch() {
-        val index = AnkiCollectionIndex.Index(setOf("きく"), 1, available = true)
+        val index = AnkiCollectionMatch.Index(setOf("きく"), 1, available = true)
 
         // 聞く's only variant besides itself IS the reading, which stays
         // governed by the homophone rule.
@@ -181,7 +181,7 @@ class AnkiNoteFieldIndexerTest {
 
     @Test
     fun alternativeSpellingsCount() {
-        val index = AnkiCollectionIndex.Index(setOf("弁える"), 1, available = true)
+        val index = AnkiCollectionMatch.Index(setOf("弁える"), 1, available = true)
 
         assertFalse(index.contains("辨える", "わきまえる"))
         assertTrue(index.containsAny(listOf("辨える", "弁える"), "わきまえる"))
@@ -189,6 +189,6 @@ class AnkiNoteFieldIndexerTest {
 
     @Test
     fun unavailableIndexNeverClaimsAMatch() {
-        assertFalse(AnkiCollectionIndex.Index.EMPTY.contains("食べる", "たべる"))
+        assertFalse(AnkiCollectionMatch.Index.EMPTY.contains("食べる", "たべる"))
     }
 }

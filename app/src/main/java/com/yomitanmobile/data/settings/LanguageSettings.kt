@@ -2,7 +2,6 @@ package com.yomitanmobile.data.settings
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.AppLanguage
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,23 +41,23 @@ class LanguageSettings @Inject constructor(
      * for [current].
      */
     suspend fun isConfigured(): Boolean =
-        context.dataStore.data.first()[MainActivity.APP_LANGUAGE] != null
+        context.dataStore.data.first()[PreferenceKeys.APP_LANGUAGE] != null
 
     val languageFlow: Flow<AppLanguage> = context.dataStore.data
-        .map { AppLanguage.fromStorage(it[MainActivity.APP_LANGUAGE]) }
+        .map { AppLanguage.fromStorage(it[PreferenceKeys.APP_LANGUAGE]) }
 
     /** Primes [cached]. Called once from Application.onCreate. */
     fun loadBlocking() {
         cached = runCatching {
             runBlocking {
-                AppLanguage.fromStorage(context.dataStore.data.first()[MainActivity.APP_LANGUAGE])
+                AppLanguage.fromStorage(context.dataStore.data.first()[PreferenceKeys.APP_LANGUAGE])
             }
         }.getOrDefault(AppLanguage.DEFAULT)
     }
 
     suspend fun setLanguage(language: AppLanguage) {
         context.dataStore.edit { prefs ->
-            prefs[MainActivity.APP_LANGUAGE] = language.storageValue
+            prefs[PreferenceKeys.APP_LANGUAGE] = language.storageValue
         }
         cached = language
     }

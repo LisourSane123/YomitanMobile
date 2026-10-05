@@ -163,7 +163,7 @@ object TextScanPlanner {
      * the collection — cards whose whole content is the particle. Treated as
      * already known when the word before the particle is.
      */
-    internal fun isKnownBlend(entry: MergedWordEntry, isInAnki: (MergedWordEntry) -> Boolean): Boolean {
+    fun isKnownBlend(entry: MergedWordEntry, isInAnki: (MergedWordEntry) -> Boolean): Boolean {
         val expression = entry.primaryExpression
         val suffix = BLEND_PARTICLES.firstOrNull { expression.length > it.length && expression.endsWith(it) }
             ?: return false
@@ -193,7 +193,7 @@ object TextScanPlanner {
      * いい, やる) is ranked in the top few thousand, so "kana, tiny, and
      * unranked" is noise with no counterexamples.
      */
-    internal fun isSegmentationNoise(word: String, entry: MergedWordEntry): Boolean =
+    fun isSegmentationNoise(word: String, entry: MergedWordEntry): Boolean =
         word.length <= 2 &&
             word.none { JapaneseTokenizer.isKanji(it) } &&
             entry.frequency <= 0
@@ -203,7 +203,7 @@ object TextScanPlanner {
      * word AND ranked inside [GRAMMAR_KNOWN_RANK]. Unranked or rarer grammar
      * becomes a card.
      */
-    internal fun isEverydayGrammar(entry: MergedWordEntry, occurrences: Int): Boolean {
+    fun isEverydayGrammar(entry: MergedWordEntry, occurrences: Int): Boolean {
         if (!WordFilterRules.isFunctionWord(entry)) return false
         if (entry.frequency in 1..GRAMMAR_KNOWN_RANK) return true
         // An unranked grammar word is NOT a rare one. The lists rank とはいえ at
@@ -237,7 +237,7 @@ object TextScanPlanner {
      * compounds used ten times each in the same book and are perfectly good
      * cards.
      */
-    internal fun isNameOnly(token: ScanToken, entry: MergedWordEntry): Boolean = when {
+    fun isNameOnly(token: ScanToken, entry: MergedWordEntry): Boolean = when {
         token.nameHits >= NAME_HONORIFIC_HITS &&
             (entry.frequency <= 0 || entry.frequency > NAME_RARE_RANK) -> true
         // A classmate the text keeps calling 池くん: eight くん out of 156
@@ -256,7 +256,7 @@ object TextScanPlanner {
      * to hiragana and the entry's other written forms are checked too, which
      * also covers ワタシ, ボク and キミ.
      */
-    internal fun isStoplisted(word: String, entry: MergedWordEntry?): Boolean {
+    fun isStoplisted(word: String, entry: MergedWordEntry?): Boolean {
         if (word in FUNCTION_WORDS || word.katakanaToHiragana() in FUNCTION_WORDS) return true
         if (entry == null) return false
         if (entry.primaryExpression in FUNCTION_WORDS) return true
@@ -346,7 +346,7 @@ object TextScanPlanner {
      * and the earliest occurrence wins, exactly like [mergeByEntry] — this
      * runs first, so the entry merge then sees one token per word.
      */
-    internal fun mergeByParadigm(
+    fun mergeByParadigm(
         words: List<ScanToken>,
         entries: Map<String, MergedWordEntry>
     ): Pair<List<ScanToken>, Map<String, MergedWordEntry>> {
@@ -365,7 +365,7 @@ object TextScanPlanner {
      * paradigm, English asks its lemmatiser — and this is what both do with
      * it afterwards.
      */
-    internal fun mergeOnto(
+    fun mergeOnto(
         words: List<ScanToken>,
         entries: Map<String, MergedWordEntry>,
         index: Map<String, String>
@@ -408,7 +408,7 @@ object TextScanPlanner {
      * inflection of. 近い is in Anki, 近く (a JMdict noun of its own, ranked
      * 348) was not compared against it and became a card.
      */
-    internal fun isInflectionInAnki(
+    fun isInflectionInAnki(
         word: String,
         entry: MergedWordEntry,
         isInAnki: (MergedWordEntry) -> Boolean
@@ -643,7 +643,7 @@ object TextScanPlanner {
     /** Rank beyond which a word counts as "not common in the language". */
     private const val RANK_FLOOR = 100_000f
 
-    internal fun studyScore(
+    fun studyScore(
         frequencyRank: Int,
         occurrences: Int,
         maxOccurrences: Int,

@@ -121,7 +121,7 @@ object EnglishLemmatizer {
      * `form base[,base]` for nouns and comparatives; `base past participle`
      * (commas for alternatives) for verbs, under the `# verbs` header.
      */
-    internal fun parseIrregular(table: String): Map<String, List<String>> {
+    fun parseIrregular(table: String): Map<String, List<String>> {
         val out = HashMap<String, MutableList<String>>()
         fun add(form: String, base: String) {
             if (form == base) return

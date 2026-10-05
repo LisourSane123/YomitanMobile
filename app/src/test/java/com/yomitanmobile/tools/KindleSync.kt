@@ -1,5 +1,6 @@
 package com.yomitanmobile.tools
 
+import com.yomitanmobile.data.anki.AnkiCollectionMatch
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.yomitanmobile.data.anki.AnkiCardCreator
@@ -1131,7 +1132,7 @@ class KindleSync {
          * scan uses. Fields are rejoined with Anki's own separator, which is
          * the string [AnkiNoteFieldIndexer.collectKeysFromNote] expects.
          */
-        fun collectionIndex(): AnkiCollectionIndex.Index {
+        fun collectionIndex(): AnkiCollectionMatch.Index {
             val ids = call("findNotes", JSONObject().put("query", "deck:*")) as JSONArray
             val keys = HashSet<String>(1 shl 14)
             val all = (0 until ids.length()).map { ids.getLong(it) }
@@ -1146,7 +1147,7 @@ class KindleSync {
                     AnkiNoteFieldIndexer.collectKeysFromNote(ordered, keys)
                 }
             }
-            return AnkiCollectionIndex.Index(keys, all.size, available = true)
+            return AnkiCollectionMatch.Index(keys, all.size, available = true)
         }
 
         /**
@@ -1253,7 +1254,7 @@ class KindleSync {
          * live check runs.
          */
         fun duplicatesOf(words: List<Pair<String, String>>): List<String> = words.mapNotNull { (word, reading) ->
-            val search = AnkiCollectionIndex.liveSearch(listOf(word), reading) ?: return@mapNotNull null
+            val search = AnkiCollectionMatch.liveSearch(listOf(word), reading) ?: return@mapNotNull null
             val ids = call("findNotes", JSONObject().put("query", search)) as JSONArray
             val key = AnkiNoteFieldIndexer.normalizeKey(word)
             val holding = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).sumOf { chunk ->

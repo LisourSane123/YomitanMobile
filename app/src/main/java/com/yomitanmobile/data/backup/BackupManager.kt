@@ -1,5 +1,6 @@
 package com.yomitanmobile.data.backup
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.content.Context
 import android.util.Log
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -10,7 +11,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.database.AppDatabase
 import com.yomitanmobile.dataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -51,7 +51,7 @@ class BackupManager @Inject constructor(
         const val DATABASE_BACKUP_NAME = "database.db"
         // Settings are exported to a plain-text JSON file (not the raw
         // DataStore .pb) so we can whitelist what leaves the sandbox. The
-        // AI API key (MainActivity.CARD_AI_API_KEY) is ALWAYS excluded on
+        // AI API key (PreferenceKeys.CARD_AI_API_KEY) is ALWAYS excluded on
         // both export and import — getExternalFilesDir() is reachable via
         // USB MTP / file managers, so the secret must never land in a
         // backup. Everything else (card style, deck name, theme, section
@@ -279,7 +279,7 @@ class BackupManager @Inject constructor(
         val root = buildJsonObject {
             for ((key, value) in prefs.asMap()) {
                 // Never export the AI API key — the backup dir is world-readable.
-                if (key.name == MainActivity.CARD_AI_API_KEY.name) continue
+                if (key.name == PreferenceKeys.CARD_AI_API_KEY.name) continue
                 val entry = preferenceEntry(value) ?: continue
                 put(key.name, entry)
             }
@@ -334,7 +334,7 @@ class BackupManager @Inject constructor(
         var applied = 0
         context.dataStore.edit { prefs ->
             for ((name, element) in root) {
-                if (name == MainActivity.CARD_AI_API_KEY.name) continue
+                if (name == PreferenceKeys.CARD_AI_API_KEY.name) continue
                 val obj = element as? JsonObject ?: continue
                 val type = obj["t"]?.jsonPrimitive?.contentOrNull ?: continue
                 val v = obj["v"] ?: continue

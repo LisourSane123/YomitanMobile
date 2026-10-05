@@ -108,7 +108,7 @@ class OurModelsTest {
         // No Summary, no FrontContext, no KanjiBreakdown, no Frequency —
         // roughly what an early version of the note type looked like.
         val lean = setOf("Front", "Reading", "Meaning", "PitchAccent", "Audio", "Sentence")
-        val back = AnkiCardCreator.buildBackTemplate(
+        val back = CardTemplates.buildBackTemplate(
             CardSection.defaultOrder(),
             CardProfile.JAPANESE,
             lean
@@ -124,7 +124,7 @@ class OurModelsTest {
         assertTrue(back.contains("{{Reading}}"))
         assertTrue(back.contains("{{Meaning}}"))
 
-        val front = AnkiCardCreator.buildFrontTemplate(lean)
+        val front = CardTemplates.buildFrontTemplate(lean)
         assertTrue(front.contains("{{Front}}"))
         assertFalse(front.contains("FrontContext"))
     }
@@ -132,7 +132,7 @@ class OurModelsTest {
     @Test
     fun `a full note type gets the full template`() {
         val full = CardProfile.JAPANESE.fieldNames.toSet()
-        val back = AnkiCardCreator.buildBackTemplate(
+        val back = CardTemplates.buildBackTemplate(
             CardSection.defaultOrder(),
             CardProfile.JAPANESE,
             full
@@ -145,7 +145,7 @@ class OurModelsTest {
     @Test
     fun `a note type that lost its Front field is fronted with its first one`() {
         val odd = setOf("Expression", "Meaning")
-        val front = AnkiCardCreator.buildFrontTemplate(odd)
+        val front = CardTemplates.buildFrontTemplate(odd)
         assertTrue(front.contains("{{Expression}}"))
         assertFalse(front.contains("{{Front}}"))
     }

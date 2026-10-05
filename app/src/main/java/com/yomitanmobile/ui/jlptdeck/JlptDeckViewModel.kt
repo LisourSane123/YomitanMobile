@@ -1,5 +1,6 @@
 package com.yomitanmobile.ui.jlptdeck
 
+import com.yomitanmobile.data.anki.AnkiCollectionMatch
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -282,7 +283,7 @@ class JlptDeckViewModel @Inject constructor(
                     ankiCollectionStore.refresh()
                     ankiCollectionStore.asIndex()
                 } else {
-                    AnkiCollectionIndex.Index.EMPTY
+                    AnkiCollectionMatch.Index.EMPTY
                 }
                 val storedScan = ankiCollectionStore.storedScanInfo()
 

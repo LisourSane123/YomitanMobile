@@ -1,11 +1,11 @@
 package com.yomitanmobile.ui.detail
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.ai.AiSummaryResult
 import com.yomitanmobile.data.ai.AiSummaryService
 import com.yomitanmobile.data.anki.AnkiCardCreator
@@ -412,7 +412,7 @@ class DetailViewModel @Inject constructor(
                 // number on the card all speak for the language being studied.
                 val installed = frequencyDao.observeDictionariesFor(studyLanguage.entryTag).first()
                 val priority = frequencySettings.resolveOrder(frequencySettings.order(studyLanguage), installed)
-                val showAll = prefs[MainActivity.FREQUENCY_SHOW_ALL] ?: true
+                val showAll = prefs[PreferenceKeys.FREQUENCY_SHOW_ALL] ?: true
                 val leading = priority.firstOrNull().orEmpty()
                 _leadingDictionary.value = leading
                 // The card carries the leading list's number: take it from the
@@ -440,7 +440,7 @@ class DetailViewModel @Inject constructor(
      * eye-catching of the two export buttons.
      */
     val aiSummaryConfigured: StateFlow<Boolean> = appContext.dataStore.data
-        .map { prefs -> !prefs[MainActivity.CARD_AI_API_KEY].isNullOrBlank() }
+        .map { prefs -> !prefs[PreferenceKeys.CARD_AI_API_KEY].isNullOrBlank() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     /** True while a frequency rollup runs (after [makeLeading]). */
@@ -624,7 +624,7 @@ class DetailViewModel @Inject constructor(
 
                 // Check if deck is already selected
                 val savedDeck = appContext.dataStore.data
-                    .map { it[MainActivity.ANKI_DECK_NAME] }
+                    .map { it[PreferenceKeys.ANKI_DECK_NAME] }
                     .first()
 
                 if (savedDeck.isNullOrBlank()) {
@@ -678,7 +678,7 @@ class DetailViewModel @Inject constructor(
         exportJob = viewModelScope.launch {
             try {
                 val savedDeckRaw = appContext.dataStore.data
-                    .map { it[MainActivity.ANKI_DECK_NAME] }
+                    .map { it[PreferenceKeys.ANKI_DECK_NAME] }
                     .first() ?: "Mining Deck"
                 val savedDeck = InputSanitizer.sanitizeDeckName(savedDeckRaw)
                 performExport(word, savedDeck, includeAiSummary)
@@ -702,7 +702,7 @@ class DetailViewModel @Inject constructor(
         exportJob = viewModelScope.launch {
             try {
                 appContext.dataStore.edit { prefs ->
-                    prefs[MainActivity.ANKI_DECK_NAME] = sanitizedDeck
+                    prefs[PreferenceKeys.ANKI_DECK_NAME] = sanitizedDeck
                 }
 
                 val safeExpression = normalizeExpression(word.expression, word.reading)

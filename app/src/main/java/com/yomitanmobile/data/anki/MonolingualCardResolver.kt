@@ -1,8 +1,8 @@
 package com.yomitanmobile.data.anki
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.content.Context
 import android.util.Log
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.data.settings.LanguageSettings
 import com.yomitanmobile.domain.model.AppLanguage
@@ -66,8 +66,8 @@ class MonolingualCardResolver @Inject constructor(
     suspend fun readSettings(): Settings {
         val prefs = context.dataStore.data.first()
         return Settings(
-            language = CardMeaningLanguage.fromStorage(prefs[MainActivity.CARD_MEANING_LANGUAGE]),
-            dictionaryName = prefs[MainActivity.CARD_MONOLINGUAL_DICTIONARY].orEmpty()
+            language = CardMeaningLanguage.fromStorage(prefs[PreferenceKeys.CARD_MEANING_LANGUAGE]),
+            dictionaryName = prefs[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY].orEmpty()
         )
     }
 

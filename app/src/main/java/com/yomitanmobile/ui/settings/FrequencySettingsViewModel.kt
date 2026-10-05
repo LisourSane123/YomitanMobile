@@ -1,10 +1,10 @@
 package com.yomitanmobile.ui.settings
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.dao.FrequencyDao
 import com.yomitanmobile.data.repository.FrequencyRecomputer
 import com.yomitanmobile.data.settings.FrequencySettings
@@ -89,7 +89,7 @@ class FrequencySettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val prefs = appContext.dataStore.data.first()
-            _showAll.value = prefs[MainActivity.FREQUENCY_SHOW_ALL] ?: true
+            _showAll.value = prefs[PreferenceKeys.FREQUENCY_SHOW_ALL] ?: true
             val saved = frequencySettings.order(language)
             _order.value = saved
             frequencyDao.observeDictionariesFor(language.entryTag).collect { installed ->
@@ -138,7 +138,7 @@ class FrequencySettingsViewModel @Inject constructor(
     fun setShowAll(value: Boolean) {
         _showAll.value = value
         viewModelScope.launch {
-            appContext.dataStore.edit { it[MainActivity.FREQUENCY_SHOW_ALL] = value }
+            appContext.dataStore.edit { it[PreferenceKeys.FREQUENCY_SHOW_ALL] = value }
         }
     }
 

@@ -1,9 +1,9 @@
 package com.yomitanmobile.data.audio.voicevox
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.content.Context
 import android.util.Log
 import androidx.datastore.preferences.core.edit
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.download.DictionaryDownloadManager
 import com.yomitanmobile.dataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -62,7 +62,7 @@ class VoicevoxVoice @Inject constructor(
     val state: StateFlow<State> = _state.asStateFlow()
 
     /** Switched on by default the moment the voice is installed — installing it is the opt-in. */
-    val enabled: Flow<Boolean> = context.dataStore.data.map { it[MainActivity.TTS_VOICEVOX_ENABLED] ?: true }
+    val enabled: Flow<Boolean> = context.dataStore.data.map { it[PreferenceKeys.TTS_VOICEVOX_ENABLED] ?: true }
 
     private var installJob: Job? = null
 
@@ -85,7 +85,7 @@ class VoicevoxVoice @Inject constructor(
     }
 
     suspend fun setEnabled(value: Boolean) {
-        context.dataStore.edit { it[MainActivity.TTS_VOICEVOX_ENABLED] = value }
+        context.dataStore.edit { it[PreferenceKeys.TTS_VOICEVOX_ENABLED] = value }
     }
 
     suspend fun uninstall() = withContext(Dispatchers.IO) {

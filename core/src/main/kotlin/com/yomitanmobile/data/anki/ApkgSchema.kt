@@ -17,7 +17,7 @@ import java.security.MessageDigest
  * every Anki and AnkiDroid still imports; the newer schema keeps note types in
  * protobuf columns that a third-party writer has no business generating.
  */
-internal object ApkgSchema {
+object ApkgSchema {
 
     const val SCHEMA_VERSION = 11
 
@@ -213,6 +213,6 @@ internal object ApkgSchema {
         .put("newBury", true)
         .put("newSpread", 0)
         .put("dueCounts", true)
-        .put("curModel", null)
+        .put("curModel", null as Any?)
         .put("collapseTime", 1200)
 }

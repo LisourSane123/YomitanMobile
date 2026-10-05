@@ -1,10 +1,10 @@
 package com.yomitanmobile.ui.statistics
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.DictionaryInfoDao
 import com.yomitanmobile.data.local.dao.ExportedCategoryRow
@@ -201,7 +201,7 @@ class StatisticsViewModel @Inject constructor(
 
                 // Load daily goal
                 val prefs = context.dataStore.data.first()
-                val dailyGoal = prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0
+                val dailyGoal = prefs[PreferenceKeys.DAILY_GOAL_COUNT] ?: 0
 
                 // Compute daily counts for chart (last 30 days)
                 val allDates = exportedWordDao.getAllExportDates()

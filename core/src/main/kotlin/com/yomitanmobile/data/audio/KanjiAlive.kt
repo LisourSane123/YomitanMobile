@@ -171,5 +171,5 @@ object KanjiAlive {
     private const val LETTERS = "abcdefghijkl"
     private const val EXTENSION = "aac"
 
-    internal fun parseCsv(text: String): List<List<String>> = com.yomitanmobile.util.Csv.parse(text)
+    fun parseCsv(text: String): List<List<String>> = com.yomitanmobile.util.Csv.parse(text)
 }

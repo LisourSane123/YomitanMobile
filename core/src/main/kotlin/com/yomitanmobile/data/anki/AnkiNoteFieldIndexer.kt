@@ -11,7 +11,7 @@ package com.yomitanmobile.data.anki
  * thrown away. Sentences, English meanings, sound tags and HTML never survive
  * that filter, so what is left is the headword — whatever the deck calls it.
  */
-internal object AnkiNoteFieldIndexer {
+object AnkiNoteFieldIndexer {
 
     /** Anki stores a note's fields joined by the 0x1f unit separator. */
     private const val FIELD_SEPARATOR = '\u001f'

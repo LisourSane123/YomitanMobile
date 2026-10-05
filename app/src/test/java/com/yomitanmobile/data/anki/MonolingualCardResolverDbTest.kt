@@ -1,11 +1,11 @@
 package com.yomitanmobile.data.anki
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import com.yomitanmobile.data.settings.LanguageSettings
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.database.AppDatabase
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
@@ -79,10 +79,10 @@ class MonolingualCardResolverDbTest {
 
     private fun setEngine(language: String?, dictionary: String?) = runBlocking {
         context.dataStore.edit { prefs ->
-            if (language == null) prefs.remove(MainActivity.CARD_MEANING_LANGUAGE)
-            else prefs[MainActivity.CARD_MEANING_LANGUAGE] = language
-            if (dictionary == null) prefs.remove(MainActivity.CARD_MONOLINGUAL_DICTIONARY)
-            else prefs[MainActivity.CARD_MONOLINGUAL_DICTIONARY] = dictionary
+            if (language == null) prefs.remove(PreferenceKeys.CARD_MEANING_LANGUAGE)
+            else prefs[PreferenceKeys.CARD_MEANING_LANGUAGE] = language
+            if (dictionary == null) prefs.remove(PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY)
+            else prefs[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY] = dictionary
         }
     }
 

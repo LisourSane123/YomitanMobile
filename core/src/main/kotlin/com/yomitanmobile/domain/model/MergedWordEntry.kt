@@ -251,7 +251,7 @@ data class MergedWordEntry(
          * to -1 (unattached) so the example still shows rather than latching
          * onto an unrelated meaning.
          */
-        internal fun mergeDefinitionsAndExamples(
+        fun mergeDefinitionsAndExamples(
             group: List<WordEntry>
         ): Pair<List<String>, List<ExamplePair>> {
             // Insertion-ordered so value == position in the final keys list.

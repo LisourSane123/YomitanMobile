@@ -1,10 +1,10 @@
 package com.yomitanmobile.ui.search
 
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.local.dao.DictionaryDao
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.SearchHistoryDao
@@ -215,7 +215,7 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val prefs = appContext.dataStore.data.first()
-                val goalCount = prefs[MainActivity.DAILY_GOAL_COUNT] ?: 0
+                val goalCount = prefs[PreferenceKeys.DAILY_GOAL_COUNT] ?: 0
                 val zoneId = ZoneId.systemDefault()
                 val startOfDay = LocalDate.now(zoneId)
                     .atStartOfDay(zoneId)

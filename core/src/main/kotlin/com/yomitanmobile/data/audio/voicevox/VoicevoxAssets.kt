@@ -117,7 +117,7 @@ object VoicevoxAssets {
      * directories. Names are checked to stay under [into] — a tar entry named
      * `../../x` must not write outside the install folder.
      */
-    internal fun untar(input: InputStream, into: File) {
+    fun untar(input: InputStream, into: File) {
         val header = ByteArray(512)
         val root = into.canonicalFile
         while (true) {

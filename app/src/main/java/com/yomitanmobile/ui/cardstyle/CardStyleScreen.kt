@@ -1,5 +1,7 @@
 package com.yomitanmobile.ui.cardstyle
 
+import com.yomitanmobile.data.anki.CardTemplates
+import com.yomitanmobile.data.settings.PreferenceKeys
 import android.webkit.WebView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -76,7 +78,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.datastore.preferences.core.edit
 import androidx.compose.material3.OutlinedTextField
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.ai.AI_DEFAULT_PROMPT
 import com.yomitanmobile.data.ai.AiProvider
 import com.yomitanmobile.data.anki.AnkiCardCreator
@@ -178,37 +179,37 @@ fun CardStyleScreen(
     LaunchedEffect(Unit) {
         val prefs = context.dataStore.data.first()
         studyLanguage = com.yomitanmobile.domain.model.AppLanguage
-            .fromStorage(prefs[MainActivity.APP_LANGUAGE])
-        expressionBold = prefs[MainActivity.CARD_EXPRESSION_BOLD] ?: defaults.expressionBold
-        expressionFontSize = (prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] ?: defaults.expressionFontSize).toFloat()
-        readingFontSize = (prefs[MainActivity.CARD_READING_FONT_SIZE] ?: defaults.readingFontSize).toFloat()
-        meaningFontSize = (prefs[MainActivity.CARD_MEANING_FONT_SIZE] ?: defaults.meaningFontSize).toFloat()
-        frontContextSentenceFontSize = (prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: defaults.frontContextSentenceFontSize).toFloat()
-        backSentenceFontSize = (prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] ?: defaults.backSentenceFontSize).toFloat()
-        selectedFont = prefs[MainActivity.CARD_FONT_FAMILY] ?: defaults.fontFamily
-        backgroundColor = prefs[MainActivity.CARD_BACKGROUND_COLOR] ?: defaults.cardBackgroundColor
-        expressionColor = prefs[MainActivity.CARD_EXPRESSION_COLOR] ?: defaults.expressionColor
-        readingColor = prefs[MainActivity.CARD_READING_COLOR] ?: defaults.readingColor
-        meaningColor = prefs[MainActivity.CARD_MEANING_COLOR] ?: defaults.meaningColor
-        accentColor = prefs[MainActivity.CARD_ACCENT_COLOR] ?: defaults.accentColor
-        furiganaColor = prefs[MainActivity.CARD_FURIGANA_COLOR] ?: defaults.furiganaColor
-        showPitchAccent = prefs[MainActivity.CARD_SHOW_PITCH] ?: defaults.showPitchAccent
-        pitchAccentStyle = PitchAccentStyle.fromStorage(prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] ?: defaults.pitchAccentStyle.storageValue)
-        showFrequency = prefs[MainActivity.CARD_SHOW_FREQUENCY] ?: defaults.showFrequency
-        showSentence = prefs[MainActivity.CARD_SHOW_SENTENCE] ?: defaults.showSentence
-        showFrontContextSentence = prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: defaults.showFrontContextSentence
-        randomFontsEnabled = prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] ?: defaults.randomFontsEnabled
-        randomFonts = prefs[MainActivity.CARD_RANDOM_FONTS] ?: defaults.randomFonts
-        randomVoicesEnabled = prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] ?: defaults.randomVoicesEnabled
-        randomVoices = prefs[MainActivity.TTS_RANDOM_VOICES] ?: defaults.randomVoices
-        showSectionDividers = prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] ?: defaults.showSectionDividers
-        showWordDivider = prefs[MainActivity.CARD_SHOW_WORD_DIVIDER] ?: defaults.showWordDivider
-        aiSummaryEnabled = prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] ?: false
-        aiProvider = AiProvider.fromStorage(prefs[MainActivity.CARD_AI_PROVIDER])
-        aiApiKey = prefs[MainActivity.CARD_AI_API_KEY] ?: ""
-        aiPrompt = prefs[MainActivity.CARD_AI_PROMPT] ?: AI_DEFAULT_PROMPT
-        aiModel = prefs[MainActivity.CARD_AI_MODEL] ?: ""
-        sectionOrder = CardSection.decode(prefs[MainActivity.CARD_SECTION_ORDER])
+            .fromStorage(prefs[PreferenceKeys.APP_LANGUAGE])
+        expressionBold = prefs[PreferenceKeys.CARD_EXPRESSION_BOLD] ?: defaults.expressionBold
+        expressionFontSize = (prefs[PreferenceKeys.CARD_EXPRESSION_FONT_SIZE] ?: defaults.expressionFontSize).toFloat()
+        readingFontSize = (prefs[PreferenceKeys.CARD_READING_FONT_SIZE] ?: defaults.readingFontSize).toFloat()
+        meaningFontSize = (prefs[PreferenceKeys.CARD_MEANING_FONT_SIZE] ?: defaults.meaningFontSize).toFloat()
+        frontContextSentenceFontSize = (prefs[PreferenceKeys.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] ?: defaults.frontContextSentenceFontSize).toFloat()
+        backSentenceFontSize = (prefs[PreferenceKeys.CARD_BACK_SENTENCE_FONT_SIZE] ?: defaults.backSentenceFontSize).toFloat()
+        selectedFont = prefs[PreferenceKeys.CARD_FONT_FAMILY] ?: defaults.fontFamily
+        backgroundColor = prefs[PreferenceKeys.CARD_BACKGROUND_COLOR] ?: defaults.cardBackgroundColor
+        expressionColor = prefs[PreferenceKeys.CARD_EXPRESSION_COLOR] ?: defaults.expressionColor
+        readingColor = prefs[PreferenceKeys.CARD_READING_COLOR] ?: defaults.readingColor
+        meaningColor = prefs[PreferenceKeys.CARD_MEANING_COLOR] ?: defaults.meaningColor
+        accentColor = prefs[PreferenceKeys.CARD_ACCENT_COLOR] ?: defaults.accentColor
+        furiganaColor = prefs[PreferenceKeys.CARD_FURIGANA_COLOR] ?: defaults.furiganaColor
+        showPitchAccent = prefs[PreferenceKeys.CARD_SHOW_PITCH] ?: defaults.showPitchAccent
+        pitchAccentStyle = PitchAccentStyle.fromStorage(prefs[PreferenceKeys.CARD_PITCH_ACCENT_STYLE] ?: defaults.pitchAccentStyle.storageValue)
+        showFrequency = prefs[PreferenceKeys.CARD_SHOW_FREQUENCY] ?: defaults.showFrequency
+        showSentence = prefs[PreferenceKeys.CARD_SHOW_SENTENCE] ?: defaults.showSentence
+        showFrontContextSentence = prefs[PreferenceKeys.CARD_SHOW_FRONT_CONTEXT_SENTENCE] ?: defaults.showFrontContextSentence
+        randomFontsEnabled = prefs[PreferenceKeys.CARD_RANDOM_FONTS_ENABLED] ?: defaults.randomFontsEnabled
+        randomFonts = prefs[PreferenceKeys.CARD_RANDOM_FONTS] ?: defaults.randomFonts
+        randomVoicesEnabled = prefs[PreferenceKeys.TTS_RANDOM_VOICES_ENABLED] ?: defaults.randomVoicesEnabled
+        randomVoices = prefs[PreferenceKeys.TTS_RANDOM_VOICES] ?: defaults.randomVoices
+        showSectionDividers = prefs[PreferenceKeys.CARD_SHOW_SECTION_DIVIDERS] ?: defaults.showSectionDividers
+        showWordDivider = prefs[PreferenceKeys.CARD_SHOW_WORD_DIVIDER] ?: defaults.showWordDivider
+        aiSummaryEnabled = prefs[PreferenceKeys.CARD_AI_SUMMARY_ENABLED] ?: false
+        aiProvider = AiProvider.fromStorage(prefs[PreferenceKeys.CARD_AI_PROVIDER])
+        aiApiKey = prefs[PreferenceKeys.CARD_AI_API_KEY] ?: ""
+        aiPrompt = prefs[PreferenceKeys.CARD_AI_PROMPT] ?: AI_DEFAULT_PROMPT
+        aiModel = prefs[PreferenceKeys.CARD_AI_MODEL] ?: ""
+        sectionOrder = CardSection.decode(prefs[PreferenceKeys.CARD_SECTION_ORDER])
     }
 
     fun currentPreferences() = CardStylePreferences(
@@ -247,36 +248,36 @@ fun CardStyleScreen(
     fun savePreferences() {
         coroutineScope.launch {
             context.dataStore.edit { prefs ->
-                prefs[MainActivity.CARD_EXPRESSION_BOLD] = expressionBold
-                prefs[MainActivity.CARD_EXPRESSION_FONT_SIZE] = expressionFontSize.roundToInt()
-                prefs[MainActivity.CARD_READING_FONT_SIZE] = readingFontSize.roundToInt()
-                prefs[MainActivity.CARD_MEANING_FONT_SIZE] = meaningFontSize.roundToInt()
-                prefs[MainActivity.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] = frontContextSentenceFontSize.roundToInt()
-                prefs[MainActivity.CARD_BACK_SENTENCE_FONT_SIZE] = backSentenceFontSize.roundToInt()
-                prefs[MainActivity.CARD_FONT_FAMILY] = selectedFont
-                prefs[MainActivity.CARD_BACKGROUND_COLOR] = backgroundColor
-                prefs[MainActivity.CARD_EXPRESSION_COLOR] = expressionColor
-                prefs[MainActivity.CARD_READING_COLOR] = readingColor
-                prefs[MainActivity.CARD_MEANING_COLOR] = meaningColor
-                prefs[MainActivity.CARD_ACCENT_COLOR] = accentColor
-                prefs[MainActivity.CARD_FURIGANA_COLOR] = furiganaColor
-                prefs[MainActivity.CARD_SHOW_PITCH] = showPitchAccent
-                prefs[MainActivity.CARD_PITCH_ACCENT_STYLE] = pitchAccentStyle.storageValue
-                prefs[MainActivity.CARD_SHOW_FREQUENCY] = showFrequency
-                prefs[MainActivity.CARD_SHOW_SENTENCE] = showSentence
-                prefs[MainActivity.CARD_SHOW_FRONT_CONTEXT_SENTENCE] = showFrontContextSentence
-                prefs[MainActivity.CARD_RANDOM_FONTS_ENABLED] = randomFontsEnabled
-                prefs[MainActivity.CARD_RANDOM_FONTS] = randomFonts
-                prefs[MainActivity.TTS_RANDOM_VOICES_ENABLED] = randomVoicesEnabled
-                prefs[MainActivity.TTS_RANDOM_VOICES] = randomVoices
-                prefs[MainActivity.CARD_SHOW_SECTION_DIVIDERS] = showSectionDividers
-                prefs[MainActivity.CARD_SHOW_WORD_DIVIDER] = showWordDivider
-                prefs[MainActivity.CARD_AI_SUMMARY_ENABLED] = aiSummaryEnabled
-                prefs[MainActivity.CARD_AI_PROVIDER] = aiProvider.storageValue
-                prefs[MainActivity.CARD_AI_API_KEY] = aiApiKey
-                prefs[MainActivity.CARD_AI_PROMPT] = aiPrompt
-                prefs[MainActivity.CARD_AI_MODEL] = aiModel
-                prefs[MainActivity.CARD_SECTION_ORDER] = CardSection.encode(sectionOrder)
+                prefs[PreferenceKeys.CARD_EXPRESSION_BOLD] = expressionBold
+                prefs[PreferenceKeys.CARD_EXPRESSION_FONT_SIZE] = expressionFontSize.roundToInt()
+                prefs[PreferenceKeys.CARD_READING_FONT_SIZE] = readingFontSize.roundToInt()
+                prefs[PreferenceKeys.CARD_MEANING_FONT_SIZE] = meaningFontSize.roundToInt()
+                prefs[PreferenceKeys.CARD_FRONT_CONTEXT_SENTENCE_FONT_SIZE] = frontContextSentenceFontSize.roundToInt()
+                prefs[PreferenceKeys.CARD_BACK_SENTENCE_FONT_SIZE] = backSentenceFontSize.roundToInt()
+                prefs[PreferenceKeys.CARD_FONT_FAMILY] = selectedFont
+                prefs[PreferenceKeys.CARD_BACKGROUND_COLOR] = backgroundColor
+                prefs[PreferenceKeys.CARD_EXPRESSION_COLOR] = expressionColor
+                prefs[PreferenceKeys.CARD_READING_COLOR] = readingColor
+                prefs[PreferenceKeys.CARD_MEANING_COLOR] = meaningColor
+                prefs[PreferenceKeys.CARD_ACCENT_COLOR] = accentColor
+                prefs[PreferenceKeys.CARD_FURIGANA_COLOR] = furiganaColor
+                prefs[PreferenceKeys.CARD_SHOW_PITCH] = showPitchAccent
+                prefs[PreferenceKeys.CARD_PITCH_ACCENT_STYLE] = pitchAccentStyle.storageValue
+                prefs[PreferenceKeys.CARD_SHOW_FREQUENCY] = showFrequency
+                prefs[PreferenceKeys.CARD_SHOW_SENTENCE] = showSentence
+                prefs[PreferenceKeys.CARD_SHOW_FRONT_CONTEXT_SENTENCE] = showFrontContextSentence
+                prefs[PreferenceKeys.CARD_RANDOM_FONTS_ENABLED] = randomFontsEnabled
+                prefs[PreferenceKeys.CARD_RANDOM_FONTS] = randomFonts
+                prefs[PreferenceKeys.TTS_RANDOM_VOICES_ENABLED] = randomVoicesEnabled
+                prefs[PreferenceKeys.TTS_RANDOM_VOICES] = randomVoices
+                prefs[PreferenceKeys.CARD_SHOW_SECTION_DIVIDERS] = showSectionDividers
+                prefs[PreferenceKeys.CARD_SHOW_WORD_DIVIDER] = showWordDivider
+                prefs[PreferenceKeys.CARD_AI_SUMMARY_ENABLED] = aiSummaryEnabled
+                prefs[PreferenceKeys.CARD_AI_PROVIDER] = aiProvider.storageValue
+                prefs[PreferenceKeys.CARD_AI_API_KEY] = aiApiKey
+                prefs[PreferenceKeys.CARD_AI_PROMPT] = aiPrompt
+                prefs[PreferenceKeys.CARD_AI_MODEL] = aiModel
+                prefs[PreferenceKeys.CARD_SECTION_ORDER] = CardSection.encode(sectionOrder)
             }
         }
     }
@@ -293,7 +294,7 @@ fun CardStyleScreen(
         showFrontContextSentence, pitchAccentStyle, showSectionDividers,
         showWordDivider, sectionOrder
     ) {
-        AnkiCardCreator.buildPreviewHtml(currentPreferences(), studyLanguage)
+        CardTemplates.buildPreviewHtml(currentPreferences(), studyLanguage)
     }
 
     Scaffold(

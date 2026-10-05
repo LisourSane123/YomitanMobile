@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.yomitanmobile.MainActivity
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.AppLanguage
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -66,13 +65,13 @@ class FrequencySettings @Inject constructor(
      * leading list calls rare ahead of one it calls common.
      */
     suspend fun strictLeading(): Boolean = try {
-        context.dataStore.data.first()[MainActivity.FREQUENCY_STRICT_LEADING] ?: false
+        context.dataStore.data.first()[PreferenceKeys.FREQUENCY_STRICT_LEADING] ?: false
     } catch (_: Exception) {
         false
     }
 
     suspend fun setStrictLeading(value: Boolean) {
-        context.dataStore.edit { it[MainActivity.FREQUENCY_STRICT_LEADING] = value }
+        context.dataStore.edit { it[PreferenceKeys.FREQUENCY_STRICT_LEADING] = value }
     }
 
     suspend fun setOrder(language: AppLanguage, order: List<String>) {
@@ -84,7 +83,7 @@ class FrequencySettings @Inject constructor(
     companion object {
         /** Japanese keeps the pre-language key; the others get their own. */
         fun orderKey(language: AppLanguage): Preferences.Key<String> =
-            if (language == AppLanguage.JAPANESE) MainActivity.FREQUENCY_DISPLAY_ORDER
+            if (language == AppLanguage.JAPANESE) PreferenceKeys.FREQUENCY_DISPLAY_ORDER
             else stringPreferencesKey("frequency_display_order_${language.entryTag}")
     }
 }
