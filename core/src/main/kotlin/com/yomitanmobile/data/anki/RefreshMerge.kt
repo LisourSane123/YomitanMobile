@@ -4,7 +4,7 @@ package com.yomitanmobile.data.anki
  * What a refresh of an EXISTING note writes, field by field: today's rebuild
  * where it may, the note's own value where only the note knows the answer.
  *
- * Shared by the phone ([AnkiNoteRefresher]) and the desktop tool (KindleSync's
+ * Shared by the phone ([AnkiNoteRefresher]) and the desktop tool (kindle-desktop's Maintenance,
  * refresh), because the rule is the whole safety of a refresh and two copies of
  * it drift.
  *

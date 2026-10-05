@@ -98,7 +98,7 @@ android {
             // on the JVM classpath.
             isIncludeAndroidResources = true
             all {
-                // The offline harnesses (BookScanHarness, KindleSync) hold a whole Yomitan
+                // The offline harness (BookScanHarness) holds a whole Yomitan
                 // dictionary in memory; the 512 MB default cannot.
                 it.maxHeapSize = "6g"
                 // Gradle's -D lands on the Gradle JVM, not on the test worker.
@@ -108,8 +108,7 @@ android {
                     "book.paths", "dict.zip", "freq.zip", "freq.format", "scan.language", "out.dir",
                     "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields",
                     "skipPlainKana", "skipKatakana",
-                    "kindle.lookups", "kindle.deck", "kindle.dryRun", "anki.connect",
-                    "pitch.zip", "kanji.zip", "kindle.settings", "kindle.sync", "anki.reorderAddon", "kindle.refreshAudio", "kindle.refreshCards", "kindle.refreshExclude", "kindle.restyle", "kindle.checkDuplicates", "kindle.notifyFile", "kindle.notifyScript", "kindle.installNativeAudio", "native.audio", "cefr.dir", "ll.live", "ll.tsv", "freq.src.dir", "ka.dir", "audio.archive", "voicevox.root", "voicevox.onnxruntime"
+                    "cefr.dir", "ll.live", "ll.tsv", "freq.src.dir", "ka.dir", "voicevox.root", "voicevox.onnxruntime"
                 )) {
                     System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
                 }
@@ -231,8 +230,8 @@ dependencies {
 
     // VOICEVOX: neural Japanese TTS for card audio. The Android AAR carries the
     // JNI bindings; ONNX Runtime comes from .voicevox/jniLibs (see
-    // settings.gradle.kts). The desktop jar is for the JVM tools (KindleSync),
-    // which run the same speaker code on a laptop.
+    // settings.gradle.kts). The desktop jar runs the speaker's own tests on the
+    // JVM; the Kindle desktop program (kindle-desktop/) uses it too.
     implementation("jp.hiroshiba.voicevoxcore:voicevoxcore-android:0.17.0")
     testImplementation("jp.hiroshiba.voicevoxcore:voicevoxcore:0.17.0")
 
