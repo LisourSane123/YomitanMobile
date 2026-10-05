@@ -35,6 +35,28 @@ fun sha256Of(file: File): String = MessageDigest.getInstance("SHA-256").let { di
     digest.digest().joinToString("") { "%02x".format(it) }
 }
 
+/**
+ * A zip, unpacked by the JDK rather than by `unzip`, which a Windows machine
+ * does not have — the desktop Kindle program is built on all three systems.
+ * Entries that would land outside [into] are refused.
+ */
+fun unzip(archive: File, into: File) {
+    into.mkdirs()
+    val root = into.canonicalFile
+    java.util.zip.ZipFile(archive).use { zip ->
+        for (entry in zip.entries()) {
+            val target = File(into, entry.name).canonicalFile
+            if (!target.path.startsWith(root.path + File.separator)) throw GradleException("unsafe entry ${entry.name} in $archive")
+            if (entry.isDirectory) {
+                target.mkdirs()
+            } else {
+                target.parentFile.mkdirs()
+                zip.getInputStream(entry).use { input -> target.outputStream().use { input.copyTo(it) } }
+            }
+        }
+    }
+}
+
 fun unpack(archive: File, into: File, command: List<String>) {
     into.mkdirs()
     val process = ProcessBuilder(command + archive.absolutePath).directory(into).inheritIO().start()
@@ -50,7 +72,7 @@ if (!File(voicevoxMaven, "jp/hiroshiba/voicevoxcore/voicevoxcore-android/0.17.0"
         "e22f120adfb1a680bafd01287bc7aa3f104aa7e437d5d710107a16036c38b017",
         zip
     )
-    unpack(zip, voicevoxMaven, listOf("unzip", "-q", "-o"))
+    unzip(zip, voicevoxMaven)
 }
 // ONNX Runtime for the two ABIs the AAR ships natives for. Loaded by name at
 // run time, so it only has to sit in the APK's lib/ folder.

@@ -73,7 +73,8 @@ val jpackage by tasks.registering(Exec::class) {
         else -> "deb"
     }
     val input = layout.buildDirectory.dir("libs")
-    val dest = layout.buildDirectory.dir("installer")
+    // One folder per type: CI builds two on Linux, and each run clears its own.
+    val dest = layout.buildDirectory.dir("installer/$type")
     doFirst { delete(dest) }
     val args = mutableListOf(
         "jpackage",

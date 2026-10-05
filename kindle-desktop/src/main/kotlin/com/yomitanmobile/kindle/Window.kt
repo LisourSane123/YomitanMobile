@@ -37,7 +37,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
  * says what it is doing and stays open when it is done — which is the point:
  * a run started by hand never leaves anyone guessing whether it finished.
  */
-class Window private constructor(private var config: Config) {
+class Window internal constructor(private var config: Config) {
 
     private val frame = JFrame("Kindle → Anki")
     private val status = JLabel()
@@ -54,7 +54,7 @@ class Window private constructor(private var config: Config) {
     private val reportButton = JButton(tr("Raport", "Report"))
     private val dryRun = JCheckBox(tr("Tylko podgląd (nic nie dodawaj)", "Preview only (add nothing)"))
 
-    private fun build() {
+    internal fun build(visible: Boolean = true) {
         frame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
         val root = JPanel(BorderLayout(0, 12)).apply { border = BorderFactory.createEmptyBorder(16, 16, 16, 16) }
 
@@ -100,12 +100,17 @@ class Window private constructor(private var config: Config) {
         root.add(JScrollPane(logArea).apply { border = BorderFactory.createTitledBorder(tr("Szczegóły", "Details")) }, BorderLayout.CENTER)
 
         frame.contentPane = root
+        // The accent-coloured button, and the one Enter presses.
+        frame.rootPane.defaultButton = syncButton
         frame.minimumSize = Dimension(620, 440)
         frame.pack()
         frame.setLocationRelativeTo(null)
         showIdle()
-        frame.isVisible = true
+        frame.isVisible = visible
     }
+
+    /** The window's content, for the screenshot test. */
+    internal val content get() = frame.contentPane
 
     private fun showIdle() {
         val problems = config.problems()

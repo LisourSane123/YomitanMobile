@@ -1,0 +1,93 @@
+# Builds the Kindle → Anki desktop program for Linux, Windows and macOS.
+#
+# jpackage cannot cross-build — a Windows installer is made on Windows, a Mac
+# one on a Mac — so each system gets its own job. Every package carries its own
+# Java runtime: the user installs one file and never meets Java. The packages
+# are unsigned, so Windows SmartScreen and macOS Gatekeeper ask once ("More
+# info → Run anyway" / right-click → Open).
+#
+# The installers land as the run's artifacts (Actions → this run → Artifacts).
+name: Kindle desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [kindle-desktop, main]
+    paths:
+      - "core/**"
+      - "kindle-desktop/**"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - ".github/workflows/kindle-desktop.yml"
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            type: deb
+          - os: windows-latest
+            type: msi
+          - os: macos-latest
+            type: dmg
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Gradle configures the Android app too (one build, three modules), and
+      # the Android plugin wants to know where the SDK is. Every hosted runner
+      # has one; this only says where.
+      - name: Point Gradle at the Android SDK
+        run: echo "sdk.dir=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" | sed 's/\\/\//g' > local.properties
+
+      # jpackage makes an .msi with the WiX 3 toolset (JDK 17 does not speak
+      # WiX 4+). Installed only when the image does not already carry it.
+      - name: WiX toolset (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue)) {
+            choco install wixtoolset --version 3.14.1 -y --no-progress
+          }
+          $wix = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset v3*" -Directory | Select-Object -First 1
+          if ($wix) { Add-Content $env:GITHUB_PATH (Join-Path $wix.FullName "bin") }
+
+      - name: Test
+        run: ./gradlew --no-daemon :kindle-desktop:test
+
+      - name: Package (${{ matrix.type }})
+        run: ./gradlew --no-daemon :kindle-desktop:jpackage -PinstallerType=${{ matrix.type }}
+
+      # A folder that runs on any Linux distribution, Debian-based or not.
+      - name: Portable Linux build
+        if: runner.os == 'Linux'
+        run: |
+          ./gradlew --no-daemon :kindle-desktop:jpackage -PinstallerType=app-image
+          tar -C kindle-desktop/build/installer/app-image -czf kindle-desktop/build/Kindle-Anki-linux-x64.tar.gz Kindle-Anki
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kindle-Anki-${{ runner.os }}
+          path: |
+            kindle-desktop/build/installer/deb/*.deb
+            kindle-desktop/build/installer/msi/*.msi
+            kindle-desktop/build/installer/dmg/*.dmg
+            kindle-desktop/build/Kindle-Anki-linux-x64.tar.gz
+          if-no-files-found: error
+
+      # The program as a plain jar too, for anyone who already has Java 17+.
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: kindle-sync-jar
+          path: kindle-desktop/build/libs/kindle-sync.jar
