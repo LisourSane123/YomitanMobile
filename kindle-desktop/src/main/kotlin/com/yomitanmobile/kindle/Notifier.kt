@@ -7,9 +7,14 @@ package com.yomitanmobile.kindle
  * it shows its own progress and stays open.
  *
  * One rule matters more than the backends: the progress bubble never expires
- * and the result is a NEW bubble. Plasma expires a bubble after ~5 s and then
- * silently drops every replace aimed at it, so updating one bubble in place
- * gave "two pop-ups, then silence" — the result of every run was lost.
+ * while the run lasts, and the result is a NEW bubble. Plasma expires a bubble
+ * after ~5 s and then silently drops every replace aimed at it, so updating one
+ * bubble in place gave "two pop-ups, then silence" — the result was lost.
+ *
+ * The result itself DOES expire (15 s, 30 s when it failed) and stays in the
+ * notification history. Making it permanent too — critical urgency, timeout 0 —
+ * left a bubble on screen for good after every run, Kindle long unplugged,
+ * which read as the tool nagging rather than reporting.
  */
 class Notifier {
 
@@ -18,7 +23,7 @@ class Notifier {
 
     fun progress(message: String) {
         when (Platform.os) {
-            Platform.Os.LINUX -> progressId = linux(message, replaces = progressId, urgent = false) ?: progressId
+            Platform.Os.LINUX -> progressId = linux(message, replaces = progressId, failed = false, timeoutMs = 0) ?: progressId
             // Notification Center has no replace; a step each is what it does.
             Platform.Os.MAC -> mac(message)
             // A toast per step would be noise on Windows; only the result.
@@ -32,19 +37,23 @@ class Notifier {
             Platform.Os.LINUX -> {
                 progressId?.let(::closeLinux)
                 progressId = null
-                linux(message, replaces = null, urgent = failed)
+                linux(message, replaces = null, failed = failed, timeoutMs = if (failed) 30_000 else 15_000)
             }
             Platform.Os.MAC -> mac(message)
             Platform.Os.WINDOWS -> windows(message, failed)
         }
     }
 
-    /** Returns the bubble's id, when the server said it. */
-    private fun linux(message: String, replaces: String?, urgent: Boolean): String? {
-        val icon = if (urgent) "dialog-error" else "emblem-synchronizing"
+    /**
+     * Returns the bubble's id, when the server said it. [timeoutMs] 0 = until
+     * closed, which only the progress bubble uses — and closes. Urgency stays
+     * normal even for a failure: Plasma ignores the timeout of a critical one.
+     */
+    private fun linux(message: String, replaces: String?, failed: Boolean, timeoutMs: Int): String? {
+        val icon = if (failed) "dialog-error" else "emblem-synchronizing"
         Platform.which("notify-send")?.let { send ->
             val command = mutableListOf(
-                send, "-a", title, "-i", icon, "-u", if (urgent) "critical" else "normal", "-t", "0", "-p"
+                send, "-a", title, "-i", icon, "-u", "normal", "-t", timeoutMs.toString(), "-p"
             )
             if (replaces != null) command += listOf("-r", replaces)
             command += listOf(title, message)
@@ -56,7 +65,7 @@ class Notifier {
                 "--object-path", "/org/freedesktop/Notifications",
                 "--method", "org.freedesktop.Notifications.Notify",
                 title, replaces ?: "0", icon, title, message, "[]",
-                "{'urgency': <byte ${if (urgent) 2 else 1}>}", "0",
+                "{'urgency': <byte 1>}", timeoutMs.toString(),
                 timeoutSeconds = 10
             )
             return out?.let { Regex("uint32 (\\d+)").find(it)?.groupValues?.get(1) }

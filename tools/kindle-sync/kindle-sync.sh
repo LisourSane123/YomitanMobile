@@ -33,7 +33,7 @@ if stale; then
         # A failed build must not end in silence either: the watcher has no
         # terminal, so the desktop is told.
         command -v notify-send >/dev/null &&
-            notify-send -a "Kindle → Anki" -u critical -t 0 "Kindle → Anki" \
+            notify-send -a "Kindle → Anki" -i dialog-error -t 30000 "Kindle → Anki" \
                 "Nie wykonano: nie udało się zbudować programu (journalctl --user -u kindle-watch)." || true
         exit 1
     fi
