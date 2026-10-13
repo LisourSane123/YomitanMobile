@@ -1,6 +1,7 @@
 package com.yomitanmobile.kindle
 
 import com.yomitanmobile.data.anki.CardBuilder
+import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.domain.model.CardProfile
 import com.yomitanmobile.domain.model.MergedWordEntry
@@ -268,6 +269,11 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         }
         val ankiIndex = anki.collectionIndex()
         log("anki: ${ankiIndex.noteCount} notes indexed")
+        // Every row read the way a resolved word is read: the word's other
+        // spellings (身体 → 体) and its homophones, which decide whether a
+        // deck's kana-only note (ひざ) is this word. One more pass of the zip.
+        val entryReadings = resolved.values.mapTo(HashSet()) { it.reading }
+        val forms = WordForms.Lookup(dictionary.collect(emptySet(), entryReadings))
 
         // ---- decide, one word per lookup -----------------------------------
         val report = StringBuilder("#\tstatus\tkindle word\tcard\treading\trank\tsentence\n")
@@ -287,7 +293,8 @@ class SyncJob(private val config: Config, private val out: Reporter) {
                 ankiIndex.containsAny(
                     listOf(entry.primaryExpression) + entry.alternativeExpressions,
                     entry.reading,
-                    readingCountsAlone = WordFilterRules.isUsuallyKana(entry)
+                    readingCountsAlone = WordFilterRules.isUsuallyKana(entry),
+                    forms = forms.of(entry)
                 ) -> "IN_ANKI"
                 "${entry.primaryExpression}|${entry.reading}" in toAdd -> "REPEAT"
                 else -> {

@@ -142,12 +142,17 @@ class AnkiCollectionIndex @Inject constructor(
     suspend fun liveContainsAny(
         expressions: List<String>,
         reading: String,
-        readingCountsAlone: Boolean = false
+        readingCountsAlone: Boolean = false,
+        forms: WordForms = WordForms.NONE
     ): Boolean? = withContext(Dispatchers.IO) {
         if (!hasPermission()) return@withContext null
-        val search = AnkiCollectionMatch.liveSearch(expressions, reading) ?: return@withContext null
+        // The other spellings are searched too, or the note filing 身体 as 体
+        // is never fetched; the reading already is, which covers a deck's
+        // kana-only note.
+        val search = AnkiCollectionMatch.liveSearch(expressions + forms.otherSpellings, reading)
+            ?: return@withContext null
         val scan = scanNotes(search, LIVE_MAX_NOTES) ?: return@withContext null
-        val found = scan.index.containsAny(expressions, reading, readingCountsAlone)
+        val found = scan.index.containsAny(expressions, reading, readingCountsAlone, forms)
         when {
             found -> true
             // A cut-off sweep can prove presence, never absence.
@@ -252,6 +257,7 @@ class AnkiCollectionIndex @Inject constructor(
         val sources = LinkedHashMap<String, String>(4096)
         val byNote = HashMap<Long, Set<String>>(4096)
         val perNote = HashSet<String>(16)
+        val facts = AnkiCollectionMatch.NoteFacts()
         // Notes per note type. Free here — the sweep already reads every
         // note's model id — and the only way to see a collection's note-type
         // hygiene without one provider query per note type.
@@ -295,6 +301,7 @@ class AnkiCollectionIndex @Inject constructor(
                     }
                     perNote.clear()
                     AnkiNoteFieldIndexer.collectKeysFromNote(flds, perNote)
+                    facts.add(perNote)
                     if (idIndex >= 0 && perNote.isNotEmpty()) {
                         val id = runCatching { it.getLong(idIndex) }.getOrNull()
                         if (id != null) byNote[id] = HashSet(perNote)
@@ -309,7 +316,7 @@ class AnkiCollectionIndex @Inject constructor(
                 Log.w(TAG, "Collection scan stopped at the $maxNotes-note ceiling")
             }
             Scan(
-                index = AnkiCollectionMatch.Index(sources.keys.toSet(), notes, available = true),
+                index = facts.build(notes),
                 wordSources = sources,
                 wordsByNote = byNote,
                 noteCount = notes,

@@ -18,7 +18,7 @@ data class MergedWordEntry(
      * apart — which means 傷つく and 傷付く are two MergedWordEntry objects and
      * neither knows about the other. They do share a sequence, and that is the
      * only thing in the data that says they are one word rather than two
-     * words that rhyme. See `DictionaryRepository.writtenFormsBySequence`.
+     * words that rhyme. See `data.anki.WordForms`.
      */
     val sequenceNumber: Int = 0,
     val frequency: Int = 0,

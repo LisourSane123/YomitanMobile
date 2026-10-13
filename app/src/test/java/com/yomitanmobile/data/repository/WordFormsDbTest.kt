@@ -3,15 +3,17 @@ package com.yomitanmobile.data.repository
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.local.database.AppDatabase
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.data.settings.FrequencySettings
 import com.yomitanmobile.data.settings.LanguageSettings
+import com.yomitanmobile.domain.model.MergedWordEntry
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,15 +30,16 @@ import org.robolectric.annotation.Config
  * headword against the collection and reported "you do not have it" for a word
  * the user had been studying for months.
  *
- * The spellings are a fact about the database, so they are read from it. This
- * pins both halves of that lookup: the siblings are found, and homophones —
+ * The spellings are a fact about the database, so they are read from it
+ * (`getEntriesForReadings` → [WordForms.Lookup]). This pins both halves of
+ * that lookup: the siblings are found, and homophones —
  * which share a reading but NOT a sequence — are still kept apart. A false
  * "you already know this" silently drops a word from every future deck, which
  * is the one failure mode the scan is not allowed to have.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
-class WrittenFormsBySequenceDbTest {
+class WordFormsDbTest {
 
     private lateinit var db: AppDatabase
     private lateinit var repo: DictionaryRepositoryImpl
@@ -87,35 +90,33 @@ class WrittenFormsBySequenceDbTest {
         dictionaryName = "JMdict"
     )
 
+    private suspend fun formsOf(expression: String, reading: String): WordForms {
+        val rows = repo.getEntriesForReadings(listOf(reading))
+        val entry = MergedWordEntry.mergeEntries(rows.filter { it.expression == expression }).single()
+        return WordForms.Lookup(rows).of(entry)
+    }
+
     @Test
-    fun `every spelling of one entry comes back together`() = runBlocking {
-        val forms = repo.writtenFormsBySequence(listOf("きずつく"))
-        assertEquals(listOf("傷つく", "傷付く", "疵つく"), forms[1234])
+    fun `every other spelling of one entry comes back`() = runBlocking {
+        assertEquals(listOf("傷付く", "疵つく"), formsOf("傷つく", "きずつく").otherSpellings)
     }
 
     @Test
     fun `the other kanji spelling of 綺麗 is one of its forms`() = runBlocking {
-        val forms = repo.writtenFormsBySequence(listOf("きれい"))
-        assertTrue("奇麗" in forms[5678].orEmpty())
-        assertTrue("綺麗" in forms[5678].orEmpty())
+        assertEquals(listOf("奇麗"), formsOf("綺麗", "きれい").otherSpellings)
     }
 
     @Test
     fun `homophones stay apart because they do not share a sequence`() = runBlocking {
-        val forms = repo.writtenFormsBySequence(listOf("こうえん"))
-        assertEquals(listOf("公園"), forms[1111])
-        assertEquals(listOf("講演"), forms[2222])
+        val forms = formsOf("公園", "こうえん")
+        assertEquals(emptyList<String>(), forms.otherSpellings)
+        // 講演 is another word read こうえん, and no list ranks either, so a
+        // deck's kana-only こうえん cannot be taken for 公園.
+        assertFalse(forms.readingIsUnambiguous)
     }
 
     @Test
     fun `an entry with no sequence contributes nothing rather than a guess`() = runBlocking {
-        val forms = repo.writtenFormsBySequence(listOf("てづくり"))
-        assertEquals(emptyMap<Int, List<String>>(), forms)
-    }
-
-    @Test
-    fun `one call covers a whole candidate set`() = runBlocking {
-        val forms = repo.writtenFormsBySequence(listOf("きずつく", "きれい", "こうえん"))
-        assertEquals(setOf(1234, 5678, 1111, 2222), forms.keys)
+        assertEquals(WordForms.NONE, formsOf("手作り", "てづくり"))
     }
 }

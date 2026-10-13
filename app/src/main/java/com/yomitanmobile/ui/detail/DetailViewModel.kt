@@ -11,6 +11,7 @@ import com.yomitanmobile.data.ai.AiSummaryService
 import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.anki.AnkiCollectionStore
 import com.yomitanmobile.data.anki.MonolingualCardResolver
+import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.FavoriteWordDao
@@ -754,9 +755,7 @@ class DetailViewModel @Inject constructor(
             val usuallyKana = entry?.let {
                 com.yomitanmobile.domain.usecase.WordFilterRules.isUsuallyKana(it)
             } ?: false
-            // All of the entry's written forms: a deck that spells the word
-            // 持ってくる holds the card the user would otherwise mine again as
-            // 持って来る.
+            // The headword and its alternatives here…
             // …plus the lemma, when the word being mined is an inflected form.
             // A Spanish dictionary answers "hablando" with an entry that says
             // "hablar (gerund)", and a collection holding hablar already
@@ -765,7 +764,13 @@ class DetailViewModel @Inject constructor(
             val spellings = listOf(expression) +
                 entry?.alternativeExpressions.orEmpty() +
                 listOfNotNull(entry?.let { com.yomitanmobile.domain.usecase.FormOf.baseOf(it) })
-            ankiCollectionStore.containsAnyNow(spellings, reading, usuallyKana)
+            // …and what the dictionary knows beyond them: the entry's other
+            // spellings (a deck that files 身体 as 体) and whether its reading
+            // is its own (a deck that files 膝 as ひざ). One indexed query.
+            val forms = entry?.let { e ->
+                WordForms.Lookup(repository.getEntriesForReadings(listOf(e.reading))).of(e)
+            } ?: WordForms.NONE
+            ankiCollectionStore.containsAnyNow(spellings, reading, usuallyKana, forms)
         }
             .getOrElse {
                 Log.w(logTag, "Collection duplicate check failed; allowing the export", it)

@@ -9,6 +9,7 @@ import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.anki.AnkiCollectionIndex
 import com.yomitanmobile.data.anki.AnkiCollectionStore
 import com.yomitanmobile.data.anki.MonolingualCardResolver
+import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.dao.JlptTagDao
@@ -289,11 +290,13 @@ class JlptDeckViewModel @Inject constructor(
 
                 // One query for the whole candidate set, on the indexed
                 // reading column — not one per word.
-                val writtenForms = if (filters.skipAlreadyInAnki) {
-                    repository.writtenFormsBySequence(candidates.map { it.reading })
-                } else {
-                    emptyMap()
-                }
+                val wordForms = WordForms.Lookup(
+                    if (filters.skipAlreadyInAnki) {
+                        repository.getEntriesForReadings(candidates.map { it.reading }.distinct())
+                    } else {
+                        emptyList()
+                    }
+                )
 
                 val minedKeys: Set<String> = if (filters.skipAlreadyMined) {
                     runCatching {
@@ -313,24 +316,17 @@ class JlptDeckViewModel @Inject constructor(
                     filters = filters,
                     isInAnki = {
                         index.containsAny(
-                            // Every spelling of the word, not just the
-                            // headword the dictionary happens to file it
-                            // under. The deck holds whichever one its author
-                            // typed — 傷付く where JMdict's primary is 傷つく,
-                            // 奇麗 where it is 綺麗 — and the headword-to-
-                            // headword comparison this replaces reported "not
-                            // in your collection" for words already being
-                            // studied. alternativeExpressions is kept in the
-                            // list because TextScanPlanner's `frontedWith`
-                            // puts the original headword there; it is empty
-                            // otherwise, which is the whole reason the
-                            // spellings are read from the database.
-                            listOf(it.primaryExpression) +
-                                it.alternativeExpressions +
-                                writtenForms[it.sequenceNumber].orEmpty(),
+                            // alternativeExpressions is kept because
+                            // TextScanPlanner's `frontedWith` puts the original
+                            // headword there. The entry's other spellings
+                            // (傷付く for 傷つく, 奇麗 for 綺麗) come from the
+                            // database through `forms`, which only lets one
+                            // count beside its reading — see WordForms.
+                            listOf(it.primaryExpression) + it.alternativeExpressions,
                             it.reading,
                             readingCountsAlone = com.yomitanmobile.domain.usecase.WordFilterRules
-                                .isUsuallyKana(it)
+                                .isUsuallyKana(it),
+                            forms = wordForms.of(it)
                         )
                     },
                     isMined = { matchKey(it.primaryExpression, it.reading) in minedKeys },

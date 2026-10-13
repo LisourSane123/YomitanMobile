@@ -21,7 +21,22 @@ object AnkiCollectionMatch {
     data class Index(
         private val keys: Set<String>,
         val noteCount: Int,
-        val available: Boolean
+        val available: Boolean,
+        /**
+         * "spelling\treading" for every kanji spelling and kana key that ONE
+         * note holds together (see [NoteFacts]). What lets another spelling
+         * of the entry count without letting a different word in: JMdict
+         * files 風 as a spelling of 振り (ふり), and a deck's 風 is かぜ.
+         * Empty for an index built from the stored word list, which then
+         * answers by the older rule alone.
+         */
+        private val spellingReadings: Set<String> = emptySet(),
+        /**
+         * The kana keys of notes that hold no kanji at all — a deck that
+         * files 膝 as ひざ. Only these, not the reading field of a kanji
+         * note, can stand for a word through its reading.
+         */
+        private val kanaHeadwords: Set<String> = emptySet()
     ) {
         /**
          * @param readingCountsAlone the word is normally written in kana (see
@@ -48,11 +63,38 @@ object AnkiCollectionMatch {
          *
          * @param expressions the word's written forms, the primary one FIRST:
          * it is the one that decides whether a bare reading match is allowed.
+         * @param forms what the dictionary says about the entry beyond its
+         * headword ([WordForms]): its other spellings, and whether its
+         * reading belongs to it alone.
          */
         fun containsAny(
             expressions: List<String>,
             reading: String,
-            readingCountsAlone: Boolean = false
+            readingCountsAlone: Boolean = false,
+            forms: WordForms = WordForms.NONE
+        ): Boolean {
+            if (containsByHeadword(expressions, reading, readingCountsAlone)) return true
+            val read = AnkiNoteFieldIndexer.normalizeKey(reading)
+            if (!available || read.isEmpty()) return false
+            // Another spelling of the same entry (身体 → 体, 眼 → 目), but
+            // only from a note that holds this reading beside it: JMdict
+            // lists rare spellings that are common words of their own
+            // (振り・風, 下る・降る, 屋・家), and a spelling alone let 風
+            // "wind" answer for 振り.
+            for (other in forms.otherSpellings) {
+                val key = AnkiNoteFieldIndexer.normalizeKey(other)
+                if ("$key\t$read" in spellingReadings) return true
+            }
+            // A deck that files the word in kana (Core's ひざ, あきれる,
+            // にらむ): the reading stands for the word when no other word
+            // anyone would mean is read that way.
+            return forms.readingIsUnambiguous && read in kanaHeadwords
+        }
+
+        private fun containsByHeadword(
+            expressions: List<String>,
+            reading: String,
+            readingCountsAlone: Boolean
         ): Boolean {
             if (!available) return false
             // An English or Spanish word: its note's first field is the only
@@ -109,9 +151,46 @@ object AnkiCollectionMatch {
                 .any { AnkiNoteFieldIndexer.latinKey(it) in keys }
         }
 
+        /**
+         * This index with [words] added — words written to the collection
+         * since it was built. They carry no per-note facts; their headwords
+         * are enough to block writing them twice.
+         */
+        fun plusWords(words: Set<String>): Index =
+            copy(keys = keys + words, available = available || words.isNotEmpty())
+
         companion object {
             val EMPTY = Index(emptySet(), 0, available = false)
         }
+    }
+
+    /**
+     * Builds an [Index] note by note, keeping the two facts that only make
+     * sense per note — which spelling sits beside which reading, and which
+     * notes are written in kana alone. Fed each note's keys as
+     * [AnkiNoteFieldIndexer] produced them.
+     */
+    class NoteFacts {
+        private val keys = HashSet<String>(1 shl 14)
+        private val spellingReadings = HashSet<String>(1 shl 14)
+        private val kanaHeadwords = HashSet<String>(1 shl 10)
+
+        fun add(noteKeys: Collection<String>) {
+            keys += noteKeys
+            val kana = noteKeys.filter { AnkiNoteFieldIndexer.isKanaOnly(it) }
+            if (kana.isEmpty()) return
+            val kanji = noteKeys.filter { key -> key.any { AnkiNoteFieldIndexer.isKanji(it) } }
+            if (kanji.isEmpty()) {
+                kanaHeadwords += kana
+            } else {
+                for (spelling in kanji) for (r in kana) spellingReadings += "$spelling\t$r"
+            }
+        }
+
+        val keyCount: Int get() = keys.size
+
+        fun build(noteCount: Int): Index =
+            Index(keys, noteCount, available = true, spellingReadings, kanaHeadwords)
     }
 
     /**

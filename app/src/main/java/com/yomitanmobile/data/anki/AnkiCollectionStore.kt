@@ -83,6 +83,16 @@ class AnkiCollectionStore @Inject constructor(
     private var cachedMature: Set<String>? = null
     private var cachedStudied: Set<String>? = null
 
+    /**
+     * The index of the last scan THIS process ran, with what only a fresh
+     * scan knows — which spelling sits beside which reading in one note, and
+     * which notes are written in kana alone (see [AnkiCollectionMatch.NoteFacts]).
+     * The stored table keeps words only; an index rebuilt from it answers by
+     * the headword rule alone, which is why the generators refresh first.
+     */
+    @Volatile
+    private var lastScanIndex: AnkiCollectionMatch.Index? = null
+
     /** Word count of the stored scan, for badges and settings rows. */
     fun observeWordCount(): Flow<Int> = dao.observeCount()
 
@@ -141,6 +151,7 @@ class AnkiCollectionStore @Inject constructor(
                 cachedMature = null
                 cachedStudied = null
             }
+            lastScanIndex = scan.index
             ScanSummary(
                 noteCount = scan.noteCount,
                 wordCount = rows.size,
@@ -238,12 +249,11 @@ class AnkiCollectionStore @Inject constructor(
     suspend fun containsAny(
         expressions: List<String>,
         reading: String,
-        readingCountsAlone: Boolean = false
+        readingCountsAlone: Boolean = false,
+        forms: WordForms = WordForms.NONE
     ): Boolean {
-        val words = words()
-        if (words.isEmpty()) return false
-        return AnkiCollectionMatch.Index(words, 0, available = true)
-            .containsAny(expressions, reading, readingCountsAlone)
+        if (words().isEmpty()) return false
+        return asIndex().containsAny(expressions, reading, readingCountsAlone, forms)
     }
 
     /**
@@ -259,18 +269,20 @@ class AnkiCollectionStore @Inject constructor(
     suspend fun containsAnyNow(
         expressions: List<String>,
         reading: String,
-        readingCountsAlone: Boolean = false
-    ): Boolean = index.liveContainsAny(expressions, reading, readingCountsAlone)
-        ?: containsAny(expressions, reading, readingCountsAlone)
+        readingCountsAlone: Boolean = false,
+        forms: WordForms = WordForms.NONE
+    ): Boolean = index.liveContainsAny(expressions, reading, readingCountsAlone, forms)
+        ?: containsAny(expressions, reading, readingCountsAlone, forms)
 
-    /** Non-suspending variant for callers that already loaded the set. */
+    /**
+     * The stored scan as an index: the last fresh scan's, when this process
+     * ran one, plus every word recorded since ([addWords]).
+     */
     suspend fun asIndex(): AnkiCollectionMatch.Index {
         val words = words()
-        return AnkiCollectionMatch.Index(
-            keys = words,
-            noteCount = 0,
-            available = words.isNotEmpty()
-        )
+        if (words.isEmpty()) return AnkiCollectionMatch.Index.EMPTY
+        return lastScanIndex?.plusWords(words)
+            ?: AnkiCollectionMatch.Index(keys = words, noteCount = 0, available = true)
     }
 
     suspend fun page(limit: Int, offset: Int): List<AnkiCollectionWord> =
@@ -286,6 +298,7 @@ class AnkiCollectionStore @Inject constructor(
 
     suspend fun clear() = withContext(Dispatchers.IO) {
         runCatching { dao.deleteAll() }
+        lastScanIndex = null
         cacheLock.withLock {
             cachedWords = emptySet()
             cachedMature = emptySet()

@@ -44,7 +44,8 @@ class AnkiConnect(private val endpoint: String) {
      */
     fun collectionIndex(): AnkiCollectionMatch.Index {
         val ids = call("findNotes", JSONObject().put("query", "deck:*")) as JSONArray
-        val keys = HashSet<String>(1 shl 14)
+        val facts = AnkiCollectionMatch.NoteFacts()
+        val noteKeys = HashSet<String>(16)
         val all = (0 until ids.length()).map { ids.getLong(it) }
         for (chunk in all.chunked(500)) {
             val infos = call("notesInfo", JSONObject().put("notes", JSONArray(chunk))) as JSONArray
@@ -54,10 +55,12 @@ class AnkiConnect(private val endpoint: String) {
                     .map { fields.getJSONObject(it) }
                     .sortedBy { it.optInt("order") }
                     .joinToString("") { it.optString("value") }
-                AnkiNoteFieldIndexer.collectKeysFromNote(ordered, keys)
+                noteKeys.clear()
+                AnkiNoteFieldIndexer.collectKeysFromNote(ordered, noteKeys)
+                facts.add(noteKeys)
             }
         }
-        return AnkiCollectionMatch.Index(keys, all.size, available = true)
+        return facts.build(all.size)
     }
 
     /**

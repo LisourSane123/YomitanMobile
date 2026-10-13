@@ -10,6 +10,7 @@ import com.yomitanmobile.data.anki.AnkiCardCreator
 import com.yomitanmobile.data.anki.AnkiCollectionIndex
 import com.yomitanmobile.data.anki.AnkiCollectionStore
 import com.yomitanmobile.data.anki.MonolingualCardResolver
+import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.audio.AudioPlayer
 import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.settings.readCardStylePreferences
@@ -158,13 +159,12 @@ class TextScanViewModel @Inject constructor(
     private var ankiIndex: AnkiCollectionMatch.Index = AnkiCollectionMatch.Index.EMPTY
 
     /**
-     * Every written form of each resolved word, by JMdict sequence.
-     *
-     * See `DictionaryRepository.writtenFormsBySequence`. Filled once per
-     * analysis, because `recomputePlan` runs on every filter change and this
-     * does not depend on the filters.
+     * The dictionary rows read like each resolved word — its other spellings
+     * and its homophones (see [WordForms]). Filled once per analysis, because
+     * `recomputePlan` runs on every filter change and this does not depend on
+     * the filters.
      */
-    private var writtenForms: Map<Int, List<String>> = emptyMap()
+    private var wordForms: WordForms.Lookup = WordForms.Lookup(emptyList())
 
     private var generationJob: Job? = null
 
@@ -229,8 +229,8 @@ class TextScanViewModel @Inject constructor(
                 scannedWords = tokens
                 totalTokens = tokens.sumOf { it.occurrences }
                 resolvedEntries = resolveEntries(tokens.mapTo(HashSet()) { it.baseForm })
-                writtenForms = repository.writtenFormsBySequence(
-                    resolvedEntries.values.map { it.reading }
+                wordForms = WordForms.Lookup(
+                    repository.getEntriesForReadings(resolvedEntries.values.map { it.reading }.distinct())
                 )
                 sources = documents.map { document ->
                     TextScanSource(
@@ -363,24 +363,16 @@ class TextScanViewModel @Inject constructor(
             totalTokenCount = totalTokens,
             isInAnki = {
                 ankiIndex.containsAny(
-                    // Every spelling of the word, not just the
-                    // headword the dictionary happens to file it
-                    // under. The deck holds whichever one its author
-                    // typed — 傷付く where JMdict's primary is 傷つく,
-                    // 奇麗 where it is 綺麗 — and the headword-to-
-                    // headword comparison this replaces reported "not
-                    // in your collection" for words already being
-                    // studied. alternativeExpressions is kept in the
-                    // list because TextScanPlanner's `frontedWith`
-                    // puts the original headword there; it is empty
-                    // otherwise, which is the whole reason the
-                    // spellings are read from the database.
-                    listOf(it.primaryExpression) +
-                        it.alternativeExpressions +
-                        writtenForms[it.sequenceNumber].orEmpty(),
+                    // alternativeExpressions is kept because
+                    // `frontedWith` puts the original headword there. The
+                    // entry's other spellings (傷付く for 傷つく, 奇麗 for
+                    // 綺麗) come from the database through `forms`, which
+                    // only lets one count beside its reading — see WordForms.
+                    listOf(it.primaryExpression) + it.alternativeExpressions,
                     it.reading,
                     readingCountsAlone = com.yomitanmobile.domain.usecase.WordFilterRules
-                        .isUsuallyKana(it)
+                        .isUsuallyKana(it),
+                    forms = wordForms.of(it)
                 )
             },
             isMined = { matchKey(it.primaryExpression, it.reading) in minedKeys },
