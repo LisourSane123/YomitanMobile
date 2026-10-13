@@ -13,8 +13,9 @@ data class Spoken(val expression: String, val reading: String, val pitch: String
 
 /**
  * One recording per word, in the phone's order (AudioArchive.find): the user's
- * own folder, then Kanji alive's native speakers, and only then VOICEVOX — a
- * person beats any synthesiser.
+ * own folder, then Kanji alive's native speakers, then VOICEVOX — a person
+ * beats any synthesiser — and last the system's own voice ([SystemVoice]), so
+ * a card is never silent on a machine that has one.
  *
  * ffmpeg is used when it is there, to bring every recording to MP3 at one
  * loudness so the kinds sit side by side. It is not required: Linux has it,
@@ -28,6 +29,7 @@ class AudioMaker(private val config: Config, private val log: (String) -> Unit) 
     private val nativeRoot: File? by lazy { config.nativeAudio.takeIf { KanjiAlive.isInstalled(it) } }
     private val nativeIndex: NativeAudioIndex? by lazy { nativeRoot?.let { KanjiAlive.loadIndex(it) } }
     private val ffmpeg: String? by lazy { Platform.which("ffmpeg") }
+    private val systemVoice: SystemVoice? by lazy { SystemVoice.find() }
     private var voicevox: VoicevoxSpeaker? = null
     private var voicevoxTried = false
 
@@ -72,7 +74,7 @@ class AudioMaker(private val config: Config, private val log: (String) -> Unit) 
         if (missing.isNotEmpty()) {
             val speaker = speaker()
             if (speaker == null) {
-                log("audio: VOICEVOX not installed, ${missing.size} words go without a recording")
+                log("audio: VOICEVOX not installed, ${missing.size} words go to the system voice")
             } else {
                 for ((key, file) in missing) {
                     val spoken = byKey.getValue(key)
@@ -92,6 +94,29 @@ class AudioMaker(private val config: Config, private val log: (String) -> Unit) 
             }
         }
         result += wanted.filterValues { it.isFile }
+
+        // Whatever is still silent — VOICEVOX absent, or failing on a word —
+        // gets the system's voice: a plain recording beats a card without one.
+        val unvoiced = (byKey.keys - result.keys).associateWith { target(it, SYSTEM_SOURCE, ext) }
+        val toSay = unvoiced.filterValues { !it.isFile }
+        if (toSay.isNotEmpty()) {
+            val voice = systemVoice
+            if (voice == null) {
+                log("audio: no Japanese system voice on this machine, ${toSay.size} words go without a recording")
+            } else {
+                var said = 0
+                for ((key, file) in toSay) {
+                    val spoken = byKey.getValue(key)
+                    val tmp = File(dir, file.name + ".tmp.wav")
+                    val ok = voice.wav(spoken.reading.ifBlank { spoken.expression }, tmp) &&
+                        if (ffmpeg == null) tmp.renameTo(file) else normalise(tmp, file)
+                    tmp.delete()
+                    if (ok) said++ else log("system voice failed for ${key.first}")
+                }
+                log("audio: $said of ${toSay.size} words from the system voice (${voice.name})")
+            }
+        }
+        result += unvoiced.filterValues { it.isFile }
         log("audio: ${result.size} of ${byKey.size} words")
         (byKey.keys - result.keys).forEach { log("audio: no recording for ${it.first} (${it.second})") }
         return result
@@ -168,6 +193,7 @@ class AudioMaker(private val config: Config, private val log: (String) -> Unit) 
         const val AUDIO_ENGINE = "vv"
         const val ARCHIVE_SOURCE = "ar"
         const val NATIVE_SOURCE = "na"
+        const val SYSTEM_SOURCE = "sy"
         val AUDIO_EXTENSIONS = listOf(".mp3", ".ogg", ".opus", ".m4a", ".aac", ".wav", ".flac")
     }
 }

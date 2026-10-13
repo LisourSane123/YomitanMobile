@@ -18,7 +18,10 @@ Plug the Kindle in, click **Sync from Kindle**. That's it.
    them once in **Settings**.
 3. *(optional)* **Audio**: Kanji alive's native-speaker recordings
    (`--install-native-audio`, ~74 MB) and/or VOICEVOX installed with its own
-   downloader. Without either, cards are made without audio.
+   downloader. Without either, a word gets the system's own Japanese voice
+   (espeak-ng on Linux, Kyoko on macOS, Haruka on Windows once the Japanese
+   speech pack is installed); only a machine with none of these makes cards
+   without audio.
 
 ## Install
 

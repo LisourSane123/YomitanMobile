@@ -32,6 +32,25 @@ class AudioMakerTest {
         out.deleteRecursively()
     }
 
+    /** No VOICEVOX, no native pack, no archive: the system voice still says every word. */
+    @Test
+    fun withoutVoicevoxTheSystemVoiceSpeaks() {
+        Assume.assumeTrue("no Japanese system voice here", SystemVoice.find() != null)
+        val none = File("/nonexistent-kindle-sync")
+        val config = Config.load().copy(voicevox = none, nativeAudio = none, audioArchive = none)
+        val out = Files.createTempDirectory("audio").toFile()
+        val logs = ArrayList<String>()
+        val words = listOf(Spoken("蹂躙", "じゅうりん", "0"), Spoken("学校", "がっこう", "0"))
+        val made = AudioMaker(config, logs::add).use { it.speak(words, out) }
+        logs.forEach(::println)
+        assertEquals(logs.joinToString("\n"), 2, made.size)
+        made.values.forEach {
+            assertTrue("${it.name} is not a system recording", "_${AudioMaker.SYSTEM_SOURCE}_" in it.name)
+            assertTrue("${it.name} is empty", it.length() > 1_000)
+        }
+        out.deleteRecursively()
+    }
+
     @Test
     fun polishPlural() {
         assertEquals("1 nowa fiszka", SyncJob.fiszki(1))
