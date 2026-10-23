@@ -265,7 +265,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         // the duplicate it would miss. A failure here stops the run.
         if (sync && !dryRun) {
             progress(tr("Synchronizuję z AnkiWeb, żeby sprawdzić, co już masz…", "Syncing with AnkiWeb to see what you already have…"))
-            anki.call("sync")
+            anki.sync()
         }
         val ankiIndex = anki.collectionIndex()
         log("anki: ${ankiIndex.noteCount} notes indexed")
@@ -384,7 +384,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             }
             if (sync) {
                 progress(tr("Synchronizuję z AnkiWeb…", "Syncing with AnkiWeb…"))
-                syncedAfter = runCatching { anki.call("sync") }.onFailure { log("sync after adding failed: ${it.message}") }.isSuccess
+                syncedAfter = runCatching { anki.sync() }.onFailure { log("sync after adding failed: ${it.message}") }.isSuccess
             }
         }
 

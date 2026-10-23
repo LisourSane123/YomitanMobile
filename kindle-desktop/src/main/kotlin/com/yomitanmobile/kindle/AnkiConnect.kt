@@ -23,18 +23,50 @@ class AnkiConnect(private val endpoint: String) {
         JSONObject(connection.inputStream.bufferedReader().readText()).has("result")
     }.getOrDefault(false)
 
-    fun call(action: String, params: JSONObject = JSONObject()): Any? {
-        val body = JSONObject().put("action", action).put("version", 6).put("params", params)
+    /**
+     * One action. While Anki has the collection closed — a sync, a profile
+     * switch, an import, its own sync on start-up — AnkiConnect answers
+     * "busy" without running anything, so the action is simply asked again
+     * until Anki is back, for at most [BUSY_WAIT_MS].
+     */
+    fun call(action: String, params: JSONObject = JSONObject(), readTimeoutMs: Int = 120_000): Any? {
+        val deadline = System.currentTimeMillis() + BUSY_WAIT_MS
+        while (true) {
+            val response = post(JSONObject().put("action", action).put("version", 6).put("params", params), readTimeoutMs)
+            val error = response.opt("error")
+            if (error == null || error == JSONObject.NULL) return response.opt("result")
+            if (isBusy(error.toString()) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(BUSY_RETRY_MS)
+                continue
+            }
+            throw IllegalStateException("$action: $error")
+        }
+    }
+
+    /**
+     * A full AnkiWeb sync, returning only once it has finished. AnkiConnect
+     * for Anki 26.08 answers a bare `sync` the moment the sync STARTS and runs
+     * it in the background with the collection closed, so the next action was
+     * refused ("Collection lifecycle operation is active") and a failed sync
+     * was never reported. Inside `multi` it waits for the sync and returns its
+     * error; the older add-on, whose `sync` blocked anyway, answers the same.
+     */
+    fun sync() {
+        val action = JSONObject().put("action", "sync").put("version", 6)
+        val results = call("multi", JSONObject().put("actions", JSONArray().put(action)), SYNC_TIMEOUT_MS) as JSONArray
+        val result = results.opt(0)
+        val error = (result as? JSONObject)?.opt("error")
+        if (error != null && error != JSONObject.NULL) throw IllegalStateException("sync: $error")
+    }
+
+    private fun post(body: JSONObject, readTimeoutMs: Int): JSONObject {
         val connection = URL(endpoint).openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.connectTimeout = 5_000
-        connection.readTimeout = 120_000
+        connection.readTimeout = readTimeoutMs
         connection.outputStream.use { it.write(body.toString().toByteArray()) }
-        val response = JSONObject(connection.inputStream.bufferedReader().readText())
-        val error = response.opt("error")
-        if (error != null && error != JSONObject.NULL) throw IllegalStateException("$action: $error")
-        return response.opt("result")
+        return JSONObject(connection.inputStream.bufferedReader().readText())
     }
 
     /**
@@ -223,6 +255,16 @@ class AnkiConnect(private val endpoint: String) {
         } catch (e: Exception) {
             e.message
         }
+
+    companion object {
+        const val BUSY_WAIT_MS = 5 * 60_000L
+        const val BUSY_RETRY_MS = 2_000L
+        const val SYNC_TIMEOUT_MS = 15 * 60_000
+
+        /** AnkiConnect's "busy": nothing was run, asking again is safe. */
+        fun isBusy(error: String): Boolean =
+            "lifecycle operation is active" in error || "collection operation is active" in error
+    }
 }
 
 private data class CardPosition(val id: Long, val due: Long, val fields: Map<String, String>) {

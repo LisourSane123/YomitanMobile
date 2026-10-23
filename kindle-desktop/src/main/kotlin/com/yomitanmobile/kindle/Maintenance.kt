@@ -35,7 +35,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
         check(anki.isUp()) { tr("Anki nie odpowiada — uruchom Anki z AnkiConnect.", "Anki is not answering — start Anki with AnkiConnect.") }
     }
 
-    private fun sync(): Boolean = runCatching { anki.call("sync") }.isSuccess
+    private fun sync(): Boolean = runCatching { anki.sync() }.isSuccess
     private val syncWarning get() = tr(" UWAGA: synchronizacja nie przeszła — kliknij Sync w Anki.", " NOTE: the sync failed — press Sync in Anki.")
 
     /**
@@ -45,7 +45,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
      */
     suspend fun refreshAudio(): Outcome {
         start()
-        if (config.syncAnkiWeb) anki.call("sync")
+        if (config.syncAnkiWeb) anki.sync()
         val infos = anki.call("notesInfo", JSONObject().put("query", "tag:from_kindle")) as JSONArray
         val notes = (0 until infos.length()).map { infos.getJSONObject(it) }.map { info ->
             val fields = info.getJSONObject("fields")
@@ -87,7 +87,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
     suspend fun refreshCards(dryRun: Boolean, excluded: Set<String>): Outcome {
         start()
         config.problems().firstOrNull()?.let { return Outcome(true, it) }
-        if (config.syncAnkiWeb && !dryRun) anki.call("sync")
+        if (config.syncAnkiWeb && !dryRun) anki.sync()
 
         val ids = anki.call("findNotes", JSONObject().put("query", "\"note:${profile.modelName}\"")) as JSONArray
         val notes = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).flatMap { chunk ->
