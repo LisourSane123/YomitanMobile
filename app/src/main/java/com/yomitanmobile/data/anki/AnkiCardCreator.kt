@@ -124,6 +124,17 @@ class AnkiCardCreator(
         private const val MAX_MODEL_CANDIDATES = 8
 
         const val DEFAULT_DECK_NAME = "Mining Deck"
+
+        /**
+         * On every note whose Meaning came from a Japanese-Japanese dictionary
+         * (MonolingualCardResolver), so a J-J card and a J-E one can be told
+         * apart in the browser — `tag:J-J` — without opening either. A word
+         * the J-J dictionaries lack falls back to English and gets no tag.
+         */
+        const val MONOLINGUAL_TAG = "J-J"
+
+        fun tagsFor(entry: WordEntry, base: Set<String>): Set<String> =
+            if (entry.meaningSource.isNotBlank()) base + MONOLINGUAL_TAG else base
         // Bumped from v7 to v8 because we added the Summary field — that's a
         // schema change Anki tracks per-model. Existing v7 cards stay where
         // they are with their old layout; new exports land on v8 with the
@@ -356,10 +367,12 @@ class AnkiCardCreator(
         deckId: Long,
         fields: Array<String>,
         css: String,
-        backTemplate: String = CARD_BACK_TEMPLATE
+        backTemplate: String = CARD_BACK_TEMPLATE,
+        tags: Set<String> = emptySet()
     ): Result<Long> {
+        val tagsOrNull = tags.ifEmpty { null }
         val firstAttempt = runCatching {
-            ankiApi.addNote(modelId, deckId, fields, null)
+            ankiApi.addNote(modelId, deckId, fields, tagsOrNull)
         }
 
         val firstNoteId = firstAttempt.getOrNull()
@@ -375,7 +388,7 @@ class AnkiCardCreator(
             val fallbackModelId = createCompatibleModel(css, backTemplate)
             if (fallbackModelId != null && fallbackModelId != modelId) {
                 val retryAttempt = runCatching {
-                    ankiApi.addNote(fallbackModelId, deckId, fields, null)
+                    ankiApi.addNote(fallbackModelId, deckId, fields, tagsOrNull)
                 }
                 val retryNoteId = retryAttempt.getOrNull()
                 if (retryNoteId != null) {
@@ -475,7 +488,7 @@ class AnkiCardCreator(
         }
     }
 
-    suspend fun addNote(card: AnkiCard, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null): Result<Long> = withContext(Dispatchers.IO) {
+    suspend fun addNote(card: AnkiCard, deckName: String = DEFAULT_DECK_NAME, stylePrefs: CardStylePreferences? = null, tags: Set<String> = emptySet()): Result<Long> = withContext(Dispatchers.IO) {
         try {
             if (!hasAnkiPermission()) {
                 return@withContext Result.failure(SecurityException("AnkiDroid permission not granted"))
@@ -500,7 +513,8 @@ class AnkiCardCreator(
                 deckId = deckId,
                 fields = card.toFieldArray(profile),
                 css = css,
-                backTemplate = backTemplate
+                backTemplate = backTemplate,
+                tags = tags
             )
         } catch (e: Exception) {
             Result.failure(e)
@@ -703,7 +717,7 @@ class AnkiCardCreator(
 
         val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs, aiSummaryText)
             .copy(kanjiBreakdown = kanjiHtml)
-        return addNote(card, deckName, stylePrefs)
+        return addNote(card, deckName, stylePrefs, tagsFor(entry, emptySet()))
     }
 
     /**
@@ -783,7 +797,7 @@ class AnkiCardCreator(
                     .copy(kanjiBreakdown = cardBuilder.buildKanjiBreakdownHtml(entry, kanjiData))
                 notes += ApkgWriter.Note(
                     fields = card.toFieldArray(profile),
-                    tags = tags,
+                    tags = tagsFor(entry, tags),
                     suspended = suspendWord(entry)
                 )
             }
@@ -972,6 +986,7 @@ class AnkiCardCreator(
                 .associateBy { it.kanji }
 
             val fieldsList = ArrayList<Array<String>>(chunk.size)
+            val tagsList = ArrayList<Set<String>>(chunk.size)
             for (entry in chunk) {
                 currentCoroutineContext().ensureActive()
                 // Count the words prepared so far in this chunk too: with TTS
@@ -997,9 +1012,9 @@ class AnkiCardCreator(
                 val card = createAnkiCard(entry, audioFileName, randomFont, stylePrefs)
                     .copy(kanjiBreakdown = cardBuilder.buildKanjiBreakdownHtml(entry, kanjiData))
                 fieldsList.add(card.toFieldArray(profile))
+                tagsList.add(tagsFor(entry, tags))
             }
 
-            val tagsList = List(fieldsList.size) { tags }
             val inserted = runCatching { ankiApi.addNotes(modelId, deckId, fieldsList, tagsList) }
                 .getOrElse { error ->
                     android.util.Log.w("AnkiCardCreator", "addNotes failed for a chunk", error)

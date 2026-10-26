@@ -36,8 +36,12 @@ enum class CardMeaningLanguage(val storageValue: String) {
  * exists.
  *
  * Three rules, in this order:
- *  1. The Meaning field comes from the dictionary the user picked in settings.
- *  2. If that dictionary has no entry for the word, the English definition is
+ *  1. The Meaning field comes from the dictionaries the user picked in
+ *     settings, in the order they were put: the first one that has the word
+ *     supplies it, the next is asked only for the words the first one lacks.
+ *     A definition that is only a pointer at another spelling (Pixiv's
+ *     「ドキドキ」の表記揺れ) is not a meaning and counts as "lacks".
+ *  2. If no dictionary in that list has the word, the English definition is
  *     kept rather than shipping a blank card. A monolingual dictionary covers
  *     far fewer headwords than JMdict, and an empty back is worse than an
  *     English one.
@@ -57,17 +61,18 @@ class MonolingualCardResolver @Inject constructor(
 
     data class Settings(
         val language: CardMeaningLanguage,
-        val dictionaryName: String
+        /** Asked in this order; the first that has the word supplies it. */
+        val dictionaryNames: List<String>
     ) {
         val isMonolingual: Boolean
-            get() = language == CardMeaningLanguage.JAPANESE && dictionaryName.isNotBlank()
+            get() = language == CardMeaningLanguage.JAPANESE && dictionaryNames.isNotEmpty()
     }
 
     suspend fun readSettings(): Settings {
         val prefs = context.dataStore.data.first()
         return Settings(
             language = CardMeaningLanguage.fromStorage(prefs[PreferenceKeys.CARD_MEANING_LANGUAGE]),
-            dictionaryName = prefs[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY].orEmpty()
+            dictionaryNames = parseDictionaryChain(prefs[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY])
         )
     }
 
@@ -90,36 +95,50 @@ class MonolingualCardResolver @Inject constructor(
         }
         if (!settings.isMonolingual) return entries
 
-        val monolingual = runCatching {
-            repository.getEntriesForExpressionsFromDictionary(
-                entries.map { it.expression.ifBlank { it.reading } },
-                settings.dictionaryName
-            )
-        }.getOrElse {
-            Log.w(TAG, "Monolingual lookup failed; keeping English definitions", it)
-            return entries
+        // Rule 1: one query per dictionary, each asked only for the words
+        // the ones before it did not have.
+        val found = arrayOfNulls<List<String>>(entries.size)
+        val source = arrayOfNulls<String>(entries.size)
+        for (dictionaryName in settings.dictionaryNames) {
+            val missing = entries.indices.filter { found[it] == null }
+            if (missing.isEmpty()) break
+            val monolingual = runCatching {
+                repository.getEntriesForExpressionsFromDictionary(
+                    missing.map { entries[it].expression.ifBlank { entries[it].reading } },
+                    dictionaryName
+                )
+            }.onFailure {
+                Log.w(TAG, "Monolingual lookup in $dictionaryName failed; trying the next one", it)
+            }.getOrNull() ?: continue
+
+            // Index by both the exact (expression, reading) pair and the bare
+            // expression: a monolingual dictionary often stores kana-only readings
+            // differently from JMdict, and an expression-level hit is still the
+            // right word as long as the pair didn't match.
+            val byPair = HashMap<String, List<String>>(monolingual.size)
+            val byExpression = HashMap<String, List<String>>(monolingual.size)
+            for (row in monolingual) {
+                val definitions = row.definitions.filter { it.isNotBlank() }
+                if (definitions.isEmpty() || definitions.all(::isSpellingPointer)) continue
+                byPair.putIfAbsent(pairKey(row.expression, row.reading), definitions)
+                byExpression.putIfAbsent(row.expression.trim(), definitions)
+            }
+            for (i in missing) {
+                val entry = entries[i]
+                val expression = entry.expression.ifBlank { entry.reading }
+                val japanese = byPair[pairKey(expression, entry.reading)]
+                    ?: byExpression[expression.trim()]
+                    ?: continue
+                found[i] = japanese
+                source[i] = dictionaryName
+            }
         }
 
-        // Index by both the exact (expression, reading) pair and the bare
-        // expression: a monolingual dictionary often stores kana-only readings
-        // differently from JMdict, and an expression-level hit is still the
-        // right word as long as the pair didn't match.
-        val byPair = HashMap<String, List<String>>(monolingual.size)
-        val byExpression = HashMap<String, List<String>>(monolingual.size)
-        for (row in monolingual) {
-            val definitions = row.definitions.filter { it.isNotBlank() }
-            if (definitions.isEmpty()) continue
-            byPair.putIfAbsent(pairKey(row.expression, row.reading), definitions)
-            byExpression.putIfAbsent(row.expression.trim(), definitions)
-        }
-
-        return entries.map { entry ->
-            val expression = entry.expression.ifBlank { entry.reading }
-            val japanese = byPair[pairKey(expression, entry.reading)]
-                ?: byExpression[expression.trim()]
+        return entries.mapIndexed { i, entry ->
             entry.copy(
                 // Rule 2: no monolingual entry → keep what we had.
-                definitions = japanese ?: entry.definitions,
+                definitions = found[i] ?: entry.definitions,
+                meaningSource = source[i].orEmpty(),
                 // Rule 3: Japanese sentences, no English gloss.
                 exampleSentenceTranslation = "",
                 examples = entry.examples.map { it.copy(en = "") }
@@ -199,8 +218,29 @@ class MonolingualCardResolver @Inject constructor(
         return expr + " " + read
     }
 
-    private companion object {
-        const val TAG = "MonolingualCard"
+    companion object {
+        private const val TAG = "MonolingualCard"
 
+        /**
+         * The setting holds the dictionaries one per line, in the order they
+         * are asked. A value saved before there was a list is one name, which
+         * reads as a list of one — so an existing choice carries over.
+         */
+        fun parseDictionaryChain(raw: String?): List<String> =
+            raw.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+        fun serializeDictionaryChain(names: List<String>): String =
+            names.map { it.trim() }.filter { it.isNotEmpty() }.distinct().joinToString("\n")
+
+        /**
+         * "This is another spelling of X" and nothing more. Pixiv files 18 555
+         * of its 724 000 articles that way (どきどき → 「ドキドキ」の表記揺れ);
+         * on a card it says nothing about the word, so the next dictionary in
+         * the list is asked instead.
+         */
+        private val SPELLING_POINTER = Regex("""^「[^」]+」の(表記揺れ|表記ゆれ|別表記)。?$""")
+
+        fun isSpellingPointer(definition: String): Boolean =
+            SPELLING_POINTER.matches(definition.trim())
     }
 }

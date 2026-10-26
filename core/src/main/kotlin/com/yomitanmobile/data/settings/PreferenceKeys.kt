@@ -84,6 +84,8 @@ object PreferenceKeys {
     // the definition from a monolingual dictionary named by
     // CARD_MONOLINGUAL_DICTIONARY. See MonolingualCardResolver.
     val CARD_MEANING_LANGUAGE = stringPreferencesKey("card_meaning_language")
+    // One dictionary name per line, asked in that order; a value from before
+    // the list existed is a single name and reads as a list of one.
     val CARD_MONOLINGUAL_DICTIONARY = stringPreferencesKey("card_monolingual_dictionary")
     
     // Daily goal

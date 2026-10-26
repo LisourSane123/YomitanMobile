@@ -32,7 +32,11 @@ data class WordEntry(
     // by NotesExtractor (e.g. "see also 食べる", "cf. 召し上がる",
     // "Note: usually written in kana"). Displayed in a dedicated card at
     // the bottom of the detail screen, away from the meaning column.
-    val notes: List<String> = emptyList()
+    val notes: List<String> = emptyList(),
+    // The Japanese-Japanese dictionary the definitions were swapped in from
+    // by MonolingualCardResolver; "" when they are the search dictionaries'
+    // own. It is what puts the J-J tag on the note.
+    val meaningSource: String = ""
 ) {
     fun definitionText(): String = definitions.joinToString("; ")
 

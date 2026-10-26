@@ -208,7 +208,9 @@ class CardBuilder(
             for ((origIdx, gloss) in meaningLines) {
                 append("<li class=\"meaning-item\">")
                 append("<span class=\"gloss\">")
-                append(InputSanitizer.escapeHtml(gloss))
+                // A 国語辞典 writes its senses (① …, ② …) and usage notes on
+                // lines of their own; HTML would run them into one paragraph.
+                append(InputSanitizer.escapeHtml(gloss).replace("\n", "<br>"))
                 append("</span>")
                 examplesByDef[origIdx]?.take(MAX_EXAMPLES_PER_MEANING)?.forEach { ex ->
                     append("<div class=\"meaning-ex\">")

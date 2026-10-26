@@ -68,6 +68,22 @@ class MonolingualCardResolverDbTest {
                     DictionaryEntry(
                         expression = "曖昧", reading = "あいまい",
                         definition = "[\"vague; ambiguous\"]", dictionaryName = "Jitendex"
+                    ),
+                    DictionaryEntry(
+                        expression = "曖昧", reading = "あいまい",
+                        definition = "[\"はっきりしないさま。\"]", dictionaryName = "旺文社国語辞典 第十一版"
+                    ),
+                    DictionaryEntry(
+                        expression = "猫", reading = "ねこ",
+                        definition = "[\"ネコ科ネコ属の動物。\"]", dictionaryName = "Pixiv Light [2025-12-11]"
+                    ),
+                    DictionaryEntry(
+                        expression = "どきどき", reading = "どきどき",
+                        definition = "[\"「ドキドキ」の表記揺れ\"]", dictionaryName = "Pixiv Light [2025-12-11]"
+                    ),
+                    DictionaryEntry(
+                        expression = "どきどき", reading = "どきどき",
+                        definition = "[\"激しく動悸のするさま。\"]", dictionaryName = "旺文社国語辞典 第十一版"
                     )
                 )
             )
@@ -152,5 +168,60 @@ class MonolingualCardResolverDbTest {
 
         assertEquals(listOf("ネコ科の小形の哺乳類。"), result[0].definitions)
         assertEquals(listOf("vague; ambiguous"), result[1].definitions)
+    }
+
+    private val chain = "Pixiv Light [2025-12-11]\n旺文社国語辞典 第十一版"
+
+    @Test
+    fun theFirstDictionaryOnTheListThatHasTheWordSuppliesIt() = runBlocking {
+        setEngine("JA", chain)
+        val result = resolver.apply(
+            listOf(
+                word("猫", "ねこ", "cat"),
+                word("曖昧", "あいまい", "vague; ambiguous"),
+                word("学校", "がっこう", "school")
+            )
+        )
+
+        // Pixiv has 猫, so 旺文社 is never asked for it.
+        assertEquals(listOf("ネコ科ネコ属の動物。"), result[0].definitions)
+        assertEquals("Pixiv Light [2025-12-11]", result[0].meaningSource)
+        // Pixiv lacks 曖昧 here; the second dictionary has it.
+        assertEquals(listOf("はっきりしないさま。"), result[1].definitions)
+        assertEquals("旺文社国語辞典 第十一版", result[1].meaningSource)
+        // Neither has 学校: English stays, and nothing marks it J-J.
+        assertEquals(listOf("school"), result[2].definitions)
+        assertEquals("", result[2].meaningSource)
+    }
+
+    @Test
+    fun aSpellingPointerIsNotAMeaningAndTheNextDictionaryIsAsked() = runBlocking {
+        setEngine("JA", chain)
+        val result = resolver.apply(word("どきどき", "どきどき", "throb"))
+
+        assertEquals(listOf("激しく動悸のするさま。"), result.definitions)
+        assertEquals("旺文社国語辞典 第十一版", result.meaningSource)
+    }
+
+    @Test
+    fun aSingleSavedNameStillReadsAsAListOfOne() {
+        assertEquals(listOf("三省堂"), MonolingualCardResolver.parseDictionaryChain("三省堂"))
+        assertEquals(emptyList<String>(), MonolingualCardResolver.parseDictionaryChain(""))
+        assertEquals(
+            listOf("A", "B"),
+            MonolingualCardResolver.parseDictionaryChain(
+                MonolingualCardResolver.serializeDictionaryChain(listOf("A", " B ", "A"))
+            )
+        )
+    }
+
+    @Test
+    fun onlyAJapaneseMeaningPutsTheJJTagOnTheNote() = runBlocking {
+        setEngine("JA", chain)
+        val result = resolver.apply(listOf(word("猫", "ねこ", "cat"), word("学校", "がっこう", "school")))
+        val base = setOf("yomitan-mobile")
+
+        assertEquals(setOf("yomitan-mobile", "J-J"), AnkiCardCreator.tagsFor(result[0], base))
+        assertEquals(base, AnkiCardCreator.tagsFor(result[1], base))
     }
 }

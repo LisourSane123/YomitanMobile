@@ -152,6 +152,13 @@ class YomitanDictionaryParser @Inject constructor() {
             "frequency-list",
             "audio"
         )
+
+        // Pixiv's dictionaries mark their parts under data.pixiv, not
+        // data.content. Only the summary is a meaning: the parent link
+        // ("←寝る") is the category the article sits in, and the footer is
+        // the "pixivで読む" link — read as text they put "←寝る; …; pixivで読む"
+        // round every definition.
+        val PIXIV_NON_GLOSS = setOf("parent-link", "footer", "read-more-link")
     }
 
     private val json = Json {
@@ -1759,6 +1766,8 @@ class YomitanDictionaryParser @Inject constructor() {
                     // alternate kanji and kana readings ("賢者", "けんじゃ") fuse
                     // onto the end of the meaning column.
                     if (dc in NON_GLOSS_DATA_CONTENT) return ""
+                    val pixivPart = ((element["data"] as? JsonObject)?.get("pixiv") as? JsonPrimitive)?.contentOrNull
+                    if (pixivPart in PIXIV_NON_GLOSS) return ""
 
                     val content = element["content"]
                     val text = element["text"]

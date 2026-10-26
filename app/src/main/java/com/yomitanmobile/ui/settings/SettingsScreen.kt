@@ -25,6 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DarkMode
@@ -83,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.anki.CardMeaningLanguage
+import com.yomitanmobile.data.anki.MonolingualCardResolver
 import com.yomitanmobile.dataStore
 import com.yomitanmobile.domain.model.AppLanguage
 import com.yomitanmobile.util.InputSanitizer
@@ -144,12 +147,21 @@ fun SettingsScreen(
     var currentThemeMode by remember { mutableStateOf("system") }
     var currentLanguage by remember { mutableStateOf("system") }
     var dailyGoalCount by remember { mutableStateOf(0f) }
-    // Card meaning engine (JP-EN vs JP-JP) and the dictionary the JP-JP mode
-    // reads definitions from.
+    // Card meaning engine (JP-EN vs JP-JP) and the dictionaries the JP-JP mode
+    // reads definitions from, in the order they are asked.
     var cardMeaningLanguage by remember { mutableStateOf(CardMeaningLanguage.ENGLISH) }
-    var monolingualDictionary by remember { mutableStateOf("") }
+    var monolingualDictionaries by remember { mutableStateOf(emptyList<String>()) }
     var showMonolingualPicker by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    fun saveMonolingualDictionaries(names: List<String>) {
+        monolingualDictionaries = names
+        coroutineScope.launch {
+            context.dataStore.edit {
+                it[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY] =
+                    MonolingualCardResolver.serializeDictionaryChain(names)
+            }
+        }
+    }
 
     // Load current deck name, theme mode and daily goal
     LaunchedEffect(Unit) {
@@ -158,13 +170,16 @@ fun SettingsScreen(
         currentThemeMode = prefs[PreferenceKeys.THEME_MODE] ?: "system"
         dailyGoalCount = (prefs[PreferenceKeys.DAILY_GOAL_COUNT] ?: 0).toFloat()
         cardMeaningLanguage = CardMeaningLanguage.fromStorage(prefs[PreferenceKeys.CARD_MEANING_LANGUAGE])
-        monolingualDictionary = prefs[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY] ?: ""
+        monolingualDictionaries = MonolingualCardResolver.parseDictionaryChain(
+            prefs[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY]
+        )
         // Language is stored in SharedPreferences (needed for synchronous read at startup)
         val langPrefs = context.getSharedPreferences(MainActivity.LANG_PREFS_NAME, android.content.Context.MODE_PRIVATE)
         currentLanguage = langPrefs.getString(MainActivity.LANG_PREFS_KEY, "system") ?: "system"
     }
 
-    // Picks which installed dictionary supplies JP-JP definitions. Listing the
+    // Adds an installed dictionary to the end of the JP-JP list, or takes it
+    // off. Listing the
     // installed dictionaries (instead of hardcoding a name) is what makes the
     // engine work with any monolingual zip the user imported themselves — the
     // commercial 国語辞典 can't be shipped as downloads.
@@ -188,20 +203,21 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        monolingualDictionary = info.name
-                                        showMonolingualPicker = false
-                                        coroutineScope.launch {
-                                            context.dataStore.edit {
-                                                it[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY] = info.name
+                                        saveMonolingualDictionaries(
+                                            if (info.name in monolingualDictionaries) {
+                                                monolingualDictionaries - info.name
+                                            } else {
+                                                monolingualDictionaries + info.name
                                             }
-                                        }
+                                        )
                                     }
                                     .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(info.name, modifier = Modifier.weight(1f))
-                                if (info.name == monolingualDictionary) {
-                                    Text("✓", color = MaterialTheme.colorScheme.primary)
+                                val position = monolingualDictionaries.indexOf(info.name)
+                                if (position >= 0) {
+                                    Text("${position + 1}", color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                             Divider()
@@ -1411,14 +1427,16 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             tr(
-                                "Język pola „Znaczenie”. W trybie JP-JP definicja pochodzi z wybranego " +
-                                    "słownika japońsko-japońskiego, a zdania z Jitendex zostają bez " +
-                                    "angielskiego tłumaczenia. Gdy słowa nie ma w słowniku JP-JP, " +
-                                    "zostaje definicja angielska.",
+                                "Język pola „Znaczenie”. W trybie JP-JP definicja pochodzi z pierwszego " +
+                                    "słownika japońsko-japońskiego z listy, który ma dane słowo, a zdania " +
+                                    "z Jitendex zostają bez angielskiego tłumaczenia. Gdy słowa nie ma w " +
+                                    "żadnym, zostaje definicja angielska. Karty z definicją JP-JP dostają " +
+                                    "w Anki tag J-J.",
                                 "Language of the Meaning field. In JP-JP mode the definition comes from the " +
-                                    "chosen Japanese-Japanese dictionary and Jitendex sentences keep their " +
-                                    "Japanese only, without the English translation. Words missing from the " +
-                                    "JP-JP dictionary keep their English definition."
+                                    "first Japanese-Japanese dictionary on the list that has the word, and " +
+                                    "Jitendex sentences keep their Japanese only, without the English " +
+                                    "translation. Words none of them has keep their English definition. " +
+                                    "Cards with a JP-JP definition get the J-J tag in Anki."
                             ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1455,22 +1473,67 @@ fun SettingsScreen(
                         if (cardMeaningLanguage == CardMeaningLanguage.JAPANESE) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                tr("Słownik japońsko-japoński", "Japanese-Japanese dictionary"),
+                                tr(
+                                    "Słowniki japońsko-japońskie, w kolejności",
+                                    "Japanese-Japanese dictionaries, in order"
+                                ),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(modifier = Modifier.height(4.dp))
+                            monolingualDictionaries.forEachIndexed { index, name ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "${index + 1}. $name",
+                                        fontSize = 14.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            saveMonolingualDictionaries(
+                                                monolingualDictionaries.toMutableList().apply {
+                                                    add(index - 1, removeAt(index))
+                                                }
+                                            )
+                                        },
+                                        enabled = index > 0
+                                    ) {
+                                        Icon(
+                                            Icons.Default.KeyboardArrowUp,
+                                            contentDescription = tr("Wyżej", "Move up")
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { saveMonolingualDictionaries(monolingualDictionaries - name) }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = tr("Usuń z listy", "Remove from the list")
+                                        )
+                                    }
+                                }
+                            }
+                            if (monolingualDictionaries.isNotEmpty()) {
+                                Text(
+                                    tr(
+                                        "${monolingualDictionaries.size + 1}. angielski (Jitendex)",
+                                        "${monolingualDictionaries.size + 1}. English (Jitendex)"
+                                    ),
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                             OutlinedButton(
                                 onClick = { showMonolingualPicker = true },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(
-                                    monolingualDictionary.ifBlank {
-                                        tr("Wybierz słownik…", "Pick a dictionary…")
-                                    }
-                                )
+                                Text(tr("Dodaj lub usuń słownik…", "Add or remove a dictionary…"))
                             }
-                            if (monolingualDictionary.isBlank()) {
+                            if (monolingualDictionaries.isEmpty()) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     tr(
