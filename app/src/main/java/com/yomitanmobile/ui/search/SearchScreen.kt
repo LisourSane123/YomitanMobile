@@ -74,6 +74,8 @@ import com.yomitanmobile.util.WordCategoryClassifier
 import com.yomitanmobile.util.JlptLevelUtil
 import com.yomitanmobile.util.PartsOfSpeechFormatter
 import kotlinx.coroutines.delay
+import com.yomitanmobile.ui.common.SettingsDivider
+import androidx.compose.material3.Divider
 import com.yomitanmobile.ui.common.rememberTr
 import com.yomitanmobile.ui.common.LocalIsEnglish
 
@@ -232,13 +234,14 @@ fun SearchScreen(
                 }
                 results.isEmpty() -> NoResultsState(query, searchMode, viewModel.appLanguage, isEnglish)
                 else -> {
+                    // Rows and hairlines, like the settings list: a raised card
+                    // per result made ten results ten boxes to read past.
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        contentPadding = PaddingValues(bottom = 8.dp)
                     ) {
                         items(items = results, key = { it.primaryId }) { entry ->
-                            MergedWordEntryCard(
+                            MergedWordEntryRow(
                                 entry = entry,
                                 // Only highlight match terms inside English glosses —
                                 // for JP/romaji modes the user's input doesn't appear
@@ -394,15 +397,13 @@ private fun SearchHistorySection(
     isEnglish: Boolean
 ) {
     val tr = rememberTr()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Styled as a settings section header: the colour and weight are the
+        // break, no box needed.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(start = 16.dp, end = 8.dp, top = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -411,13 +412,14 @@ private fun SearchHistorySection(
                     Icons.Default.History,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.primary
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(10.dp))
                 Text(
                     tr("Historia wyszukiwań", "Search history"),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
             TextButton(onClick = onClearHistory) {
@@ -431,23 +433,14 @@ private fun SearchHistorySection(
             }
         }
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
+        LazyColumn {
             items(items = history, key = { it.id }) { item ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onHistoryClick(item.query) },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .clickable { onHistoryClick(item.query) }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -456,7 +449,7 @@ private fun SearchHistorySection(
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(14.dp))
                         Text(
                             text = item.query,
                             fontSize = 16.sp,
@@ -464,6 +457,11 @@ private fun SearchHistorySection(
                             modifier = Modifier.weight(1f)
                         )
                     }
+                    // Inset to the text, so the clock icons read as a column.
+                    Divider(
+                        modifier = Modifier.padding(start = 16.dp + 18.dp + 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
                 }
             }
         }
@@ -471,7 +469,7 @@ private fun SearchHistorySection(
 }
 
 @Composable
-private fun MergedWordEntryCard(
+private fun MergedWordEntryRow(
     entry: MergedWordEntry,
     highlightQuery: String,
     isEnglish: Boolean,
@@ -479,13 +477,12 @@ private fun MergedWordEntryCard(
     onClick: () -> Unit
 ) {
     val tr = rememberTr()
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -608,6 +605,7 @@ private fun MergedWordEntryCard(
                 )
             }
         }
+        SettingsDivider(inset = false)
     }
 }
 

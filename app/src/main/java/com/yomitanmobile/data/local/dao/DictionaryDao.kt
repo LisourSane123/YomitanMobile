@@ -266,6 +266,13 @@ interface DictionaryDao {
     @Query("DELETE FROM dictionary_entries WHERE dictionary_name = :dictionaryName")
     suspend fun deleteByDictionary(dictionaryName: String)
 
+    /** Deletes up to [limit] rows of one dictionary; returns how many went. */
+    @Query(
+        "DELETE FROM dictionary_entries WHERE id IN " +
+            "(SELECT id FROM dictionary_entries WHERE dictionary_name = :dictionaryName LIMIT :limit)"
+    )
+    suspend fun deleteChunkByDictionary(dictionaryName: String, limit: Int): Int
+
     @Query("SELECT COUNT(*) FROM dictionary_entries")
     suspend fun getEntryCount(): Int
 

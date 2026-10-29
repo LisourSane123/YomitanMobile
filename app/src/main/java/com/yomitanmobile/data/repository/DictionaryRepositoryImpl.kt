@@ -75,6 +75,9 @@ class DictionaryRepositoryImpl @Inject constructor(
         // indistinguishable, which once hid a query-syntax crash for a whole
         // release. Every swallow below logs before it degrades to empty.
         const val TAG = "DictionaryRepo"
+
+        /** Term rows per delete statement: small enough that progress visibly moves. */
+        const val DELETE_CHUNK = 20_000
     }
 
     // NOTE: previously we toggled `PRAGMA synchronous = OFF` and
@@ -760,10 +763,24 @@ class DictionaryRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun deleteDictionary(dictionaryName: String) {
+    override suspend fun deleteDictionary(dictionaryName: String, onProgress: (Float) -> Unit) {
         withContext(Dispatchers.IO) {
             val wasFrequencyList = frequencyDao.getListSetting(dictionaryName) != null
-            dictionaryDao.deleteByDictionary(dictionaryName)
+            // In chunks rather than one statement: every row deleted also
+            // deletes its FTS row through Room's content-sync trigger, so a
+            // 700k-row encyclopedia is minutes of work on a phone. One
+            // statement gave no progress to show and grew the WAL by the
+            // whole dictionary; chunks report progress and let it checkpoint.
+            // An interruption leaves the dictionary listed (its row goes
+            // last), so deleting it again finishes the job.
+            val total = dictionaryDao.getEntryCountForDictionary(dictionaryName)
+            var deleted = 0
+            while (true) {
+                val n = dictionaryDao.deleteChunkByDictionary(dictionaryName, DELETE_CHUNK)
+                if (n == 0) break
+                deleted += n
+                if (total > 0) onProgress((deleted.toFloat() / total).coerceAtMost(1f))
+            }
             kanjiDao.deleteByDictionary(dictionaryName)
             frequencyDao.deleteByDictionary(dictionaryName)
             frequencyDao.deleteListSetting(dictionaryName)
@@ -777,14 +794,10 @@ class DictionaryRepositoryImpl @Inject constructor(
                 }
             }
             jlptTagDao.deleteByDictionary(dictionaryName)
+            // No FTS rebuild here: the BEFORE DELETE trigger has already taken
+            // each row out of the index, and a rebuild re-tokenises every
+            // dictionary that is LEFT — the bulk of the wait, for nothing.
             dictionaryInfoDao.deleteByName(dictionaryName)
-            try {
-                dictionaryDao.rebuildFtsIndex()
-            } catch (e: Exception) {
-                // Same as on import: without the rebuild the deleted
-                // dictionary's terms keep coming back from meaning search.
-                Log.w(TAG, "FTS rebuild after delete failed", e)
-            }
         }
     }
 

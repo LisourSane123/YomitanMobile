@@ -19,14 +19,6 @@ class ImportDictionaryUseCase @Inject constructor(
     }
 }
 
-class DeleteDictionaryUseCase @Inject constructor(
-    private val repository: DictionaryRepository
-) {
-    suspend fun invoke(dictionaryName: String) {
-        repository.deleteDictionary(dictionaryName)
-    }
-}
-
 class GetDictionariesUseCase @Inject constructor(
     private val repository: DictionaryRepository
 ) {

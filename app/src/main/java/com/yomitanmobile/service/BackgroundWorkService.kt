@@ -18,6 +18,7 @@ import com.yomitanmobile.MainActivity
 import com.yomitanmobile.data.download.DictionaryDownloadManager
 import com.yomitanmobile.data.download.DownloadPhase
 import com.yomitanmobile.data.download.QueueState
+import com.yomitanmobile.data.repository.DictionaryRemover
 import com.yomitanmobile.data.repository.FrequencyRecomputer
 import com.yomitanmobile.util.LocaleHelper
 import dagger.hilt.android.AndroidEntryPoint
@@ -39,7 +40,7 @@ import javax.inject.Inject
  * does not stop it — but leaving the APP did: a minimised app with no
  * foreground component is the first thing Android freezes or kills, and a
  * 100 MB dictionary import takes minutes. This service does no work of its
- * own. It watches the download queue and the recomputer, holds a foreground
+ * own. It watches the download queue, the recomputer and dictionary deletes, holds a foreground
  * notification (with progress) and a partial wake lock while either has
  * something to do, and stops itself the moment both are idle.
  */
@@ -48,6 +49,7 @@ class BackgroundWorkService : Service() {
 
     @Inject lateinit var downloadManager: DictionaryDownloadManager
     @Inject lateinit var frequencyRecomputer: FrequencyRecomputer
+    @Inject lateinit var dictionaryRemover: DictionaryRemover
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var watcher: Job? = null
@@ -73,8 +75,9 @@ class BackgroundWorkService : Service() {
         combine(
             downloadManager.queue,
             downloadManager.currentDownload,
-            frequencyRecomputer.isRunning
-        ) { queue, current, recomputing ->
+            frequencyRecomputer.isRunning,
+            dictionaryRemover.removing
+        ) { queue, current, recomputing, removing ->
             val active = queue.filter { it.state == QueueState.WAITING || it.state == QueueState.RUNNING }
             when {
                 active.isNotEmpty() -> {
@@ -87,6 +90,10 @@ class BackgroundWorkService : Service() {
                         percent = progress?.takeIf { it.totalBytes > 0 }
                             ?.let { (it.progressPercent * 100).toInt().coerceIn(0, 100) }
                     )
+                }
+                removing.isNotEmpty() -> {
+                    val (name, progress) = removing.entries.first()
+                    Status.Deleting(name, waiting = removing.size - 1, percent = (progress * 100).toInt())
                 }
                 recomputing -> Status.Recomputing
                 else -> Status.Idle
@@ -151,6 +158,7 @@ class BackgroundWorkService : Service() {
     private sealed interface Status {
         data object Idle : Status
         data object Recomputing : Status
+        data class Deleting(val name: String, val waiting: Int, val percent: Int) : Status
         data class Installing(
             val name: String,
             val waiting: Int,
@@ -188,6 +196,13 @@ class BackgroundWorkService : Service() {
                 } else {
                     builder.setProgress(0, 0, true)
                 }
+            }
+            is Status.Deleting -> {
+                builder.setContentTitle(tr("Usuwanie: ${status.name}", "Deleting: ${status.name}"))
+                if (status.waiting > 0) {
+                    builder.setContentText(tr("W kolejce: ${status.waiting}", "Queued: ${status.waiting}"))
+                }
+                builder.setProgress(100, status.percent, false)
             }
             Status.Recomputing -> builder
                 .setContentTitle(tr("Przeliczanie rankingów częstotliwości…", "Recomputing frequency ranks…"))

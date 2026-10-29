@@ -7,7 +7,6 @@ import com.yomitanmobile.data.local.dao.ExportedWordDao
 import com.yomitanmobile.data.local.entity.DictionaryInfo
 import com.yomitanmobile.domain.model.ImportProgress
 import com.yomitanmobile.domain.model.ImportResult
-import com.yomitanmobile.domain.usecase.DeleteDictionaryUseCase
 import com.yomitanmobile.domain.usecase.GetDictionariesUseCase
 import com.yomitanmobile.domain.usecase.ImportDictionaryUseCase
 import com.yomitanmobile.util.WordCategoryClassifier
@@ -63,7 +62,6 @@ data class MinedCategoryStat(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val importDictionaryUseCase: ImportDictionaryUseCase,
-    private val deleteDictionaryUseCase: DeleteDictionaryUseCase,
     private val backupManager: BackupManager,
     private val reclassifyCategoriesUseCase: com.yomitanmobile.domain.usecase.ReclassifyCategoriesUseCase,
     private val ankiCardCreator: com.yomitanmobile.data.anki.AnkiCardCreator,
@@ -415,13 +413,4 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun deleteDictionary(name: String) {
-        viewModelScope.launch {
-            try {
-                deleteDictionaryUseCase.invoke(name)
-            } catch (e: Exception) {
-                _events.emit(SettingsEvent.ImportError("Failed to delete: ${e.message}"))
-            }
-        }
-    }
 }

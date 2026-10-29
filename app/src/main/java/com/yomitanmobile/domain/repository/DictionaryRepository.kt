@@ -128,7 +128,8 @@ interface DictionaryRepository {
         inputStream: InputStream,
         onProgress: (ImportProgress) -> Unit = {}
     ): ImportResult
-    suspend fun deleteDictionary(dictionaryName: String)
+    /** [onProgress] gets the share of term rows already gone, 0..1. */
+    suspend fun deleteDictionary(dictionaryName: String, onProgress: (Float) -> Unit = {})
     fun getImportedDictionaries(): Flow<List<DictionaryInfo>>
     suspend fun getEntryCount(): Int
 }
