@@ -26,6 +26,9 @@ object ContextCard {
     /** The tag on every onomatopoeia note, so `tag:onomatopoeia` finds them. */
     const val ONOMATOPOEIA_TAG = "onomatopoeia"
 
+    /** The tag on a grammar point's note. */
+    const val GRAMMAR_TAG = "grammar"
+
     /**
      * `Word` is short on purpose: the duplicate scan indexes short fields, and
      * it is what makes this note count as "the word is in Anki". `Frequency`
@@ -83,6 +86,13 @@ object ContextCard {
         .translation { font-size: 18px; min-height: 1.6em; }
         .translation-empty { border: 1px dashed rgba(128, 128, 128, 0.6); border-radius: 6px; min-height: 2.4em; }
         .book-section .book { font-size: 12px; opacity: 0.55; }
+        .grammar-point { text-align: left; }
+        .grammar-meaning { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+        .grammar-explanation { font-size: 15px; line-height: 1.55; margin-bottom: 10px; }
+        .grammar-examples { padding-left: 1.4em; margin: 0; }
+        .grammar-examples li { margin-bottom: 8px; }
+        .grammar-examples .sentence-translation { font-size: 13px; opacity: 0.75; }
+        .grammar-divider { margin: 14px 0; }
     """
 
     /** Templates and CSS for the note type, from the vocabulary card's CSS. */

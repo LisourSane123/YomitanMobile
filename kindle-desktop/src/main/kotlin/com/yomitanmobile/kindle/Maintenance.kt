@@ -2,6 +2,8 @@ package com.yomitanmobile.kindle
 
 import com.yomitanmobile.data.anki.CardBuilder
 import com.yomitanmobile.data.anki.ContextCard
+import com.yomitanmobile.data.anki.GrammarDictionary
+import com.yomitanmobile.data.anki.MonolingualChain
 import com.yomitanmobile.data.anki.RefreshMerge
 import com.yomitanmobile.data.audio.KanjiAlive
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
@@ -137,7 +139,12 @@ class Maintenance(private val config: Config, private val out: Reporter) {
             val font = style.randomFonts.takeIf { style.randomFontsEnabled && it.isNotEmpty() }?.random()
             val rebuilt = profile.fieldNames.zip(builder.buildFields(merged.toWordEntry(), style, kanjiData, randomFont = font)).toMap()
             val after = if (isOnomatopoeia(current)) {
-                RefreshMerge.merge(current, ContextCard.fields(rebuilt, word, "", ""), ContextCard.OWNED_BY_NOTE)
+                // A grammar explanation is the grammar dictionary's, not the
+                // main dictionary's gloss the rebuild would put in its place.
+                val owned = if (GrammarDictionary.isGrammarDefinition(current["Definition"].orEmpty())) {
+                    ContextCard.OWNED_BY_NOTE + "Definition"
+                } else ContextCard.OWNED_BY_NOTE
+                RefreshMerge.merge(current, ContextCard.fields(rebuilt, word, "", ""), owned)
             } else {
                 RefreshMerge.merge(current, rebuilt)
             }
@@ -215,6 +222,147 @@ class Maintenance(private val config: Config, private val out: Reporter) {
         return Outcome(updated < toWrite.size, tr(
             "Wykonano: odświeżono $updated z ${toWrite.size} fiszek (sprawdzone: $verified).",
             "Done: refreshed $updated of ${toWrite.size} cards (verified: $verified).", "完了: ${toWrite.size}枚のうち${updated}枚を更新しました（確認済み: ${verified}）。") + if (syncedAfter) "" else syncWarning)
+    }
+
+    /**
+     * Rewrites the Meaning of UNLEARNED vocabulary cards — never reviewed and
+     * not suspended — from the JP-JP chain, exactly as a new card would get
+     * it, and tags them `J-J`. A card that has been studied keeps the meaning
+     * it was learnt with; so does one whose meaning the user wrote in by
+     * hand, one that is already Japanese, and one no monolingual dictionary
+     * has. Only Meaning changes: same note, same card, same position.
+     *
+     * A dry run writes convert-jj.tsv and touches nothing.
+     */
+    suspend fun convertToJapanese(dryRun: Boolean, excluded: Set<String>): Outcome {
+        start()
+        config.problems().firstOrNull()?.let { return Outcome(true, it) }
+        val parser = YomitanDictionaryParser()
+        val chain = monolingualChain(parser, config, ::log)
+        if (chain.isEmpty()) {
+            return Outcome(true, tr(
+                "Nie wykonano: nie wskazano słowników JP-JP (Ustawienia).",
+                "Not done: no JP-JP dictionaries are configured (Settings).",
+                "未完了: 国語辞典が設定されていません（設定）。"
+            ))
+        }
+        if (config.syncAnkiWeb && !dryRun) anki.sync()
+
+        // One template per note of this type, so "the card is new and not
+        // suspended" is a statement about the note.
+        val query = "\"note:${profile.modelName}\" is:new -is:suspended -tag:${SyncJob.J_J_TAG}"
+        val ids = anki.call("findNotes", JSONObject().put("query", query)) as JSONArray
+        val notes = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).flatMap { chunk ->
+            val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk))) as JSONArray
+            (0 until infos.length()).map { i ->
+                val info = infos.getJSONObject(i)
+                val fields = info.getJSONObject("fields")
+                info.getLong("noteId") to fields.keys().asSequence().associateWith { fields.getJSONObject(it).optString("value") }
+            }
+        }
+        log("unlearned notes of ${profile.modelName} without J-J: ${notes.size}")
+
+        val dictionary = Dictionary.load(parser, config)
+        val words = notes.map { (_, f) -> plain(f["Front"].orEmpty()) }.filter { it.isNotEmpty() }.toSet()
+        val entries = dictionary.collect(words, emptySet()).groupBy { it.expression to it.reading }
+
+        data class Candidate(val id: Long, val word: String, val reading: String, val before: String, val status: String, val entry: MergedWordEntry? = null)
+        val candidates = notes.map { (id, fields) ->
+            val word = plain(fields["Front"].orEmpty())
+            val reading = plain(fields["Reading"].orEmpty())
+            val meaning = fields["Meaning"].orEmpty()
+            val found = entries[word to reading] ?: if (reading.isEmpty()) {
+                entries.filterKeys { it.first == word }.values.flatten().takeIf { it.isNotEmpty() }
+            } else null
+            val status = when {
+                word in excluded -> "EXCLUDED"
+                "Meaning" !in fields -> "NO_MEANING_FIELD"
+                RefreshMerge.hasUserWriting(meaning) -> "HAND_EDITED"
+                RefreshMerge.isJapaneseMeaning(meaning) -> "ALREADY_JAPANESE"
+                word.isEmpty() || found == null -> "NOT_IN_DICTIONARY"
+                else -> "ASK"
+            }
+            Candidate(id, word, reading, meaning, status, found?.takeIf { status == "ASK" }?.let { MergedWordEntry.mergeEntries(it).first() })
+        }
+        val asked = candidates.filter { it.entry != null }
+        out.progress(tr(
+            "Szukam definicji JP-JP dla ${asked.size} nienauczonych fiszek…",
+            "Looking up JP-JP definitions for ${asked.size} unlearned cards…",
+            "未学習のカード${asked.size}枚の国語辞典の定義を検索中…"
+        ))
+        val japanese = MonolingualChain.apply(
+            asked.map { it.entry!!.toWordEntry() },
+            chain.map { it.title },
+            lookup = { title, expressions -> chain.first { it.title == title }.lookup(expressions) },
+            onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") }
+        )
+        val style = phoneStyle(config, anki, ::log).copy(showFrontContextSentence = false)
+        val builder = CardBuilder(profile, config.englishLabels)
+
+        data class Plan(val id: Long, val word: String, val reading: String, val status: String, val source: String, val before: String, val after: String)
+        val converted = asked.zip(japanese).associate { (c, word) ->
+            c.id to if (word.meaningSource.isEmpty()) null else {
+                word.meaningSource to profile.fieldNames.zip(builder.buildFields(word, style)).toMap()["Meaning"].orEmpty()
+            }
+        }
+        val plans = candidates.map { c ->
+            val result = converted[c.id]
+            when {
+                c.status != "ASK" -> Plan(c.id, c.word, c.reading, c.status, "", c.before, c.before)
+                result == null || result.second.isBlank() -> Plan(c.id, c.word, c.reading, "NO_JAPANESE_DEFINITION", "", c.before, c.before)
+                else -> Plan(c.id, c.word, c.reading, "CONVERT", result.first, c.before, result.second)
+            }
+        }
+        val toWrite = plans.filter { it.status == "CONVERT" }
+        val report = File(outDir, "convert-jj.tsv")
+        report.writeText(buildString {
+            appendLine("note\tstatus\tword\treading\tdictionary\tbefore\tafter")
+            for (p in plans) appendLine("${p.id}\t${p.status}\t${p.word}\t${p.reading}\t${p.source}\t${plain(p.before).take(120)}\t${plain(p.after).take(120)}")
+        })
+        val counts = plans.groupingBy { it.status }.eachCount()
+        log("convert-jj: $counts; by dictionary ${toWrite.groupingBy { it.source }.eachCount()}")
+        if (dryRun) {
+            return Outcome(false, tr(
+                "Podgląd: ${toWrite.size} z ${plans.size} nienauczonych fiszek dostanie definicję JP-JP. Raport: ${report.path}",
+                "Preview: ${toWrite.size} of ${plans.size} unlearned cards would get a JP-JP definition. Report: ${report.path}",
+                "プレビュー: 未学習のカード${plans.size}枚のうち${toWrite.size}枚が国語辞典の定義になります。レポート: ${report.path}"
+            ))
+        }
+
+        var updated = 0
+        var verified = 0
+        for (chunk in toWrite.chunked(100)) {
+            val actions = JSONArray()
+            for (p in chunk) {
+                actions.put(JSONObject().put("action", "updateNoteFields")
+                    .put("params", JSONObject().put("note", JSONObject().put("id", p.id).put("fields", JSONObject().put("Meaning", p.after)))))
+            }
+            val results = anki.call("multi", JSONObject().put("actions", actions)) as JSONArray
+            val done = ArrayList<Long>()
+            for (i in 0 until results.length()) {
+                val error = (results.opt(i) as? JSONObject)?.opt("error")
+                if (error == null || error == JSONObject.NULL) done += chunk[i].id else log("not converted: ${chunk[i].word} — $error")
+            }
+            // The tag only where the meaning went in: J-J must never sit on an English card.
+            if (done.isNotEmpty()) anki.call("addTags", JSONObject().put("notes", JSONArray(done)).put("tags", SyncJob.J_J_TAG))
+            updated += done.size
+        }
+        for (chunk in toWrite.chunked(500)) {
+            val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk.map { it.id }))) as JSONArray
+            for (i in 0 until infos.length()) {
+                val info = infos.getJSONObject(i)
+                val meaning = info.getJSONObject("fields").optJSONObject("Meaning")?.optString("value")
+                val tags = info.optJSONArray("tags")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+                if (meaning == chunk[i].after && SyncJob.J_J_TAG in tags) verified++ else log("verify failed: ${chunk[i].word}")
+            }
+        }
+        log("converted $updated of ${toWrite.size}, verified $verified")
+        val syncedAfter = !config.syncAnkiWeb || updated == 0 || sync()
+        return Outcome(updated < toWrite.size || verified < updated, tr(
+            "Wykonano: $updated z ${toWrite.size} nienauczonych fiszek ma definicję JP-JP (sprawdzone: $verified).",
+            "Done: $updated of ${toWrite.size} unlearned cards now have a JP-JP definition (verified: $verified).",
+            "完了: 未学習のカード${toWrite.size}枚のうち${updated}枚を国語辞典の定義にしました（確認済み: $verified）。"
+        ) + if (syncedAfter) "" else syncWarning)
     }
 
     /**

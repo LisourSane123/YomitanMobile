@@ -130,6 +130,17 @@ object WordFilterRules {
         entry.usageTags.any { chip -> chip.split(',', ';').any { it.normalizeTag() in ONOMATOPOEIA_TAGS } } ||
             entry.posTokens().any { it in ONOMATOPOEIA_TAGS }
 
+    /**
+     * The dictionary calls the word grammar in at least one sense: a particle,
+     * conjunction, auxiliary, copula, suffix or set expression. "Any", unlike
+     * [isFunctionWord]'s "all": this is asked only about a word a grammar
+     * dictionary also lists, to keep its plain nouns and adverbs (気, とうとう)
+     * as vocabulary — not to decide alone what grammar is.
+     */
+    fun hasGrammarTag(entry: MergedWordEntry): Boolean = entry.posTokens().any { it in GRAMMAR_POS }
+
+    private val GRAMMAR_POS = setOf("prt", "conj", "aux", "aux-v", "aux-adj", "cop", "exp", "suf")
+
     private val ONOMATOPOEIA_TAGS = setOf("on-mim", "onomat.", "onomatopoeia", "mimetic", "onomatopoeic or mimetic word")
 
     fun isProperName(entry: MergedWordEntry): Boolean {

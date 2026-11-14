@@ -29,6 +29,11 @@ data class Config(
     val monolingual: List<File>,
     /** The surasura onomatopoeia dictionary: what makes a word an onomatopoeia card, and its definition. */
     val onomatopoeia: File?,
+    /**
+     * Grammar dictionaries (Bunpro, then DOJG), asked in this order: a
+     * looked-up grammar point gets a context card with their explanation.
+     */
+    val grammar: List<File>,
     val deck: String,
     val ankiConnect: String,
     /** AnkiWeb sync before (the duplicate check needs a current collection) and after. */
@@ -58,6 +63,7 @@ data class Config(
         kanji?.let { p["kanji"] = it.path }
         p["monolingual"] = monolingual.joinToString(File.pathSeparator) { it.path }
         onomatopoeia?.let { p["onomatopoeia"] = it.path }
+        p["grammar"] = grammar.joinToString(File.pathSeparator) { it.path }
         p["deck"] = deck
         p["ankiConnect"] = ankiConnect
         p["syncAnkiWeb"] = syncAnkiWeb.toString()
@@ -79,6 +85,12 @@ data class Config(
 
     companion object {
         val FILE: File get() = File(Platform.dataDir, "config.properties")
+
+        /** Bunpro first: its explanations are the ones wanted; DOJG covers what it lacks. */
+        val DEFAULT_GRAMMAR = listOf(
+            "[Grammar] Bunpro.zip",
+            "[Grammar] Dictionary of Japanese Grammar 日本語文法辞典 (Recommended).zip"
+        )
 
         /** The cleaned copies `monolingual/dicts/clean_dicts.py` writes, in the order the phone uses them. */
         val DEFAULT_MONOLINGUAL = listOf(
@@ -104,6 +116,9 @@ data class Config(
                     ?.split(File.pathSeparator)?.map { it.trim() }?.filter { it.isNotEmpty() }?.map(::File)
                     ?: DEFAULT_MONOLINGUAL.map { File(dicts, it) }.filter { it.isFile },
                 onomatopoeia = file("onomatopoeia", "KINDLE_SYNC_ONOMATOPOEIA", "[Monolingual Onomatopoeia] surasura.zip"),
+                grammar = (p.getProperty("grammar") ?: System.getenv("KINDLE_SYNC_GRAMMAR"))
+                    ?.split(File.pathSeparator)?.map { it.trim() }?.filter { it.isNotEmpty() }?.map(::File)
+                    ?: DEFAULT_GRAMMAR.map { File(dicts, it) }.filter { it.isFile },
                 deck = p.getProperty("deck") ?: "Japanese",
                 ankiConnect = p.getProperty("ankiConnect") ?: System.getenv("KINDLE_SYNC_ANKI") ?: "http://127.0.0.1:8765",
                 syncAnkiWeb = p.getProperty("syncAnkiWeb")?.toBooleanStrictOrNull() ?: true,

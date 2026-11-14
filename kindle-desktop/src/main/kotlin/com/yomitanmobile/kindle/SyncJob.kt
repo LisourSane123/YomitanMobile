@@ -1,8 +1,10 @@
 package com.yomitanmobile.kindle
 
 import com.yomitanmobile.data.anki.CardBuilder
-import com.yomitanmobile.data.anki.MonolingualChain
 import com.yomitanmobile.data.anki.ContextCard
+import com.yomitanmobile.data.anki.GrammarDictionary
+import com.yomitanmobile.data.anki.GrammarPoint
+import com.yomitanmobile.data.anki.MonolingualChain
 import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.domain.model.CardProfile
@@ -270,21 +272,48 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         val entryReadings = resolved.values.mapTo(HashSet()) { it.reading }
         val forms = WordForms.Lookup(dictionary.collect(emptySet(), entryReadings))
 
+        // ---- grammar dictionaries (Bunpro, DOJG), read whole ---------------
+        val grammarDictionaries = config.grammar.filter { it.isFile }.mapNotNull { zip ->
+            runCatching { GrammarDictionary.read(zip) }.onFailure { log("grammar: ${zip.name} unreadable (${it.message})") }.getOrNull()
+        }
+        log("grammar dictionaries: ${grammarDictionaries.joinToString(" → ") { "${it.title} (${it.size})" }.ifEmpty { "none" }}")
+
         // ---- decide, one word per lookup -----------------------------------
         val report = StringBuilder("#\tstatus\tkindle word\tcard\treading\trank\tsentence\n")
         val toAdd = LinkedHashMap<String, Pair<MergedWordEntry, Lookup>>()
+        val grammarOf = HashMap<String, List<GrammarPoint>>()
         for (lookup in lookups) {
-            val entry = candidatesOf.getValue(lookup).firstNotNullOfOrNull { candidate ->
+            val found = candidatesOf.getValue(lookup).firstNotNullOfOrNull { candidate ->
                 val fromStemOnly = candidate == lookup.stem && candidate != lookup.word &&
                     JapaneseDeconjugator.analyze(lookup.word).none { it.baseForm == candidate }
                 resolved[candidate]?.takeIf { !fromStemOnly || isPrefixOf(it, lookup.word) }
+            }
+            // A grammar point: a grammar dictionary lists what was selected,
+            // and the main dictionary calls it grammar or does not know it —
+            // Bunpro also files 気 and とうとう, which stay vocabulary. Only the
+            // selection is judged, never the sentence around it.
+            val points = if (found == null || WordFilterRules.hasGrammarTag(found)) {
+                val keys = (listOf(lookup.word) + listOfNotNull(found?.primaryExpression, found?.reading) +
+                    found?.alternativeExpressions.orEmpty()).distinct()
+                grammarDictionaries.firstNotNullOfOrNull { d -> d.find(keys).takeIf { it.isNotEmpty() } }.orEmpty()
+            } else emptyList()
+            // Grammar the main dictionary has no entry for still gets a card,
+            // built on the grammar dictionary's own headword.
+            val entry = found ?: points.firstOrNull()?.let { point ->
+                MergedWordEntry.mergeEntries(listOf(WordEntry(
+                    expression = point.headword,
+                    reading = point.headword.takeIf { it.all(JapaneseTokenizer::isKana) }.orEmpty(),
+                    definitions = listOf(point.meaning.ifEmpty { point.explanation })
+                ))).firstOrNull()
             }
             val status = when {
                 entry == null -> "NOT_IN_DICTIONARY"
                 entry.definitions.none { it.isNotBlank() } -> "NO_DEFINITION"
                 // A single kana is a mis-tap on the Kindle (と out of とぼとぼ).
                 entry.primaryExpression.length == 1 && JapaneseTokenizer.isKana(entry.primaryExpression[0]) -> "SINGLE_KANA"
-                entry.primaryExpression in TextScanPlanner.FUNCTION_WORDS -> "FUNCTION_WORD"
+                // Looked-up grammar is the exception to "basics are not cards":
+                // it was looked up because it was not known.
+                points.isEmpty() && entry.primaryExpression in TextScanPlanner.FUNCTION_WORDS -> "FUNCTION_WORD"
                 ankiIndex.containsAny(
                     listOf(entry.primaryExpression) + entry.alternativeExpressions,
                     entry.reading,
@@ -294,7 +323,8 @@ class SyncJob(private val config: Config, private val out: Reporter) {
                 "${entry.primaryExpression}|${entry.reading}" in toAdd -> "REPEAT"
                 else -> {
                     toAdd["${entry.primaryExpression}|${entry.reading}"] = entry to lookup
-                    "NEW"
+                    if (points.isNotEmpty()) grammarOf["${entry.primaryExpression}|${entry.reading}"] = points
+                    if (points.isNotEmpty()) "NEW_GRAMMAR" else "NEW"
                 }
             }
             report.append("${lookup.timestamp}\t$status\t${lookup.word}\t${entry?.primaryExpression.orEmpty()}\t")
@@ -331,11 +361,16 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             val (entry, lookup) = pair
             val isOnomatopoeia = WordFilterRules.isOnomatopoeia(entry) ||
                 entry.primaryExpression in surasuraWords || entry.reading in surasuraWords
-            if (!isOnomatopoeia) continue
-            ContextCard.underline(sentenceFor(lookup, entry), onomatopoeiaTokens(entry, lookup))?.let { sentenceOf[key] = it }
-                ?: log("onomatopoeia without a usable sentence, vocabulary card: ${entry.primaryExpression}")
+            if (!isOnomatopoeia && key !in grammarOf) continue
+            ContextCard.underline(sentenceFor(lookup, entry), contextTokens(entry, lookup, grammar = key in grammarOf))?.let { sentenceOf[key] = it }
+                ?: run {
+                    // No sentence, no context card: the grammar explanation would have nothing to explain.
+                    grammarOf.remove(key)
+                    log("no usable sentence, vocabulary card: ${entry.primaryExpression}")
+                }
         }
-        log("onomatopoeia cards: ${sentenceOf.size} (${sentenceOf.keys.joinToString(", ") { it.substringBefore('|') }})")
+        log("context cards: ${sentenceOf.size}, of them grammar ${grammarOf.size} " +
+            "(${sentenceOf.keys.joinToString(", ") { it.substringBefore('|') }})")
 
         // ---- meanings: the JP-JP chain where it has the word, English otherwise
         // Onomatopoeia ask surasura first and skip the encyclopedia.
@@ -353,8 +388,10 @@ class SyncJob(private val config: Config, private val out: Reporter) {
                 lookup = { title, expressions -> dictionaries.first { it.title == title }.lookup(expressions) },
                 onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") }
             )).toMap()
+        // A grammar point's explanation is the grammar dictionary's; no chain is asked.
         val words = meanings(toAdd.keys.filter { it !in sentenceOf }, chain) +
-            meanings(toAdd.keys.filter { it in sentenceOf }, onomatopoeiaChain)
+            meanings(toAdd.keys.filter { it in sentenceOf && it !in grammarOf }, onomatopoeiaChain) +
+            grammarOf.keys.associateWith { baseWords.getValue(it) }
         log("meaning: ${words.values.count { it.meaningSource.isNotEmpty() }} of ${words.size} from JP-JP " +
             words.values.groupingBy { it.meaningSource.ifEmpty { "EN" } }.eachCount())
 
@@ -367,14 +404,22 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             val recording = audio[entry.primaryExpression to entry.reading]
             if (recording != null) vocabulary["Audio"] = "[sound:${recording.name}]"
             val sentence = sentenceOf[key]
+            val grammar = grammarOf[key]
             val tags = listOf(
                 "yomitan-mobile", "from_kindle", slug(lookup.book),
-                if (sentence != null) ContextCard.ONOMATOPOEIA_TAG else "",
+                when {
+                    grammar != null -> ContextCard.GRAMMAR_TAG
+                    sentence != null -> ContextCard.ONOMATOPOEIA_TAG
+                    else -> ""
+                },
+                // "bunpro-n3": which dictionary explained it, and its level when it gives one.
+                grammar?.firstOrNull()?.level?.takeIf { it.isNotEmpty() }?.let { "bunpro-${it.lowercase()}" }.orEmpty(),
                 if (word.meaningSource.isNotEmpty()) J_J_TAG else ""
             ).filter { it.isNotEmpty() }
             if (sentence != null) {
-                Note(entry.primaryExpression, ContextCard.fields(vocabulary, entry.primaryExpression, sentence, lookup.book),
-                    tags, recording, ContextCard.MODEL_NAME)
+                val fields = ContextCard.fields(vocabulary, entry.primaryExpression, sentence, lookup.book)
+                if (grammar != null) fields["Definition"] = GrammarDictionary.definitionHtml(grammar)
+                Note(entry.primaryExpression, fields, tags, recording, ContextCard.MODEL_NAME)
             } else {
                 Note(entry.primaryExpression, vocabulary, tags, recording, profile.modelName)
             }
@@ -477,13 +522,15 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         (listOf(entry.primaryExpression) + entry.alternativeExpressions).any { it.length >= 2 && word.startsWith(it) }
 
     /**
-     * What may be underlined: the selection as the reader made it (minus a
-     * trailing と, which is the sentence's), the headword, its reading, its
-     * other spellings.
+     * What may be underlined: the selection as the reader made it, the
+     * headword, its reading, its other spellings. An onomatopoeia's trailing
+     * と is the sentence's and is left out; a grammar point's is its own
+     * (となると).
      */
-    private fun onomatopoeiaTokens(entry: MergedWordEntry, lookup: Lookup): List<String> =
-        listOf(lookup.word.removeSuffix("と").takeIf { it.length >= 2 } ?: lookup.word, entry.primaryExpression, entry.reading) +
-            entry.alternativeExpressions
+    private fun contextTokens(entry: MergedWordEntry, lookup: Lookup, grammar: Boolean): List<String> {
+        val selection = if (grammar) lookup.word else lookup.word.removeSuffix("と").takeIf { it.length >= 2 } ?: lookup.word
+        return listOf(selection, entry.primaryExpression, entry.reading) + entry.alternativeExpressions
+    }
 
     private fun slug(title: String): String =
         title.trim().replace(Regex("[\\s　]+"), "_").replace(Regex("[\"'`]"), "").take(60)

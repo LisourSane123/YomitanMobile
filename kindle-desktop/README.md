@@ -28,6 +28,12 @@ Plug the Kindle in, click **Sync from Kindle**. That's it.
    word underlined; on the back an empty box for your translation (edit the
    note's `ContextTranslation` in Anki to fill it) and a Japanese definition.
    Find them with `tag:onomatopoeia`.
+   *(optional)* **Grammar cards**: point *Settings → Grammar 1–2* at the
+   Bunpro dictionary (and DOJG as the second). A grammar point you look up —
+   one Bunpro lists and your main dictionary calls a particle, conjunction,
+   auxiliary or expression, or does not know — gets the same sentence card,
+   with Bunpro's meaning, explanation and examples on the back, tagged
+   `grammar` and `bunpro-n3`. Basic grammar is otherwise never made a card.
 3. *(optional)* **Audio**: Kanji alive's native-speaker recordings
    (`--install-native-audio`, ~74 MB) and/or VOICEVOX installed with its own
    downloader. Without either, a word gets the system's own Japanese voice
@@ -81,3 +87,15 @@ and a desktop session that starts `graphical-session.target` (KDE, GNOME).
 ./gradlew :kindle-desktop:fatJar      # build/libs/kindle-sync.jar
 ./gradlew :kindle-desktop:jpackage    # an installer for the system you are on
 ```
+
+## Giving cards you have not started a JP-JP meaning
+
+```
+kindle-sync --convert-jj --dry-run    # writes convert-jj.tsv, changes nothing
+kindle-sync --convert-jj
+```
+
+Only cards that were never reviewed and are not suspended, and only their
+Meaning field: a card you have studied keeps the meaning you learnt it with.
+A meaning you edited by hand, or one no JP-JP dictionary has, is left alone.
+Back up the collection first (File → Export in Anki).

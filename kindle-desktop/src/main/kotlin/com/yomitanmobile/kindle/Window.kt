@@ -212,6 +212,9 @@ class Window internal constructor(private var config: Config) {
             fileRow(tr("Słownik JP-JP ${i + 1} (opcjonalnie)", "JP-JP dictionary ${i + 1} (optional)", "国語辞典 ${i + 1}（任意）"), config.monolingual.getOrNull(i))
         }
         val onomatopoeia = fileRow(tr("Onomatopeje (surasura .zip)", "Onomatopoeia (surasura .zip)", "オノマトペ（surasura .zip）"), config.onomatopoeia)
+        val grammar = (0 until 2).map { i ->
+            fileRow(tr("Gramatyka ${i + 1} (Bunpro, DOJG .zip)", "Grammar ${i + 1} (Bunpro, DOJG .zip)", "文法辞典 ${i + 1}（Bunpro、DOJG .zip）"), config.grammar.getOrNull(i))
+        }
         label(tr("Talia", "Deck", "デッキ")); val deck = JTextField(config.deck); field(deck)
         label("AnkiConnect"); val connect = JTextField(config.ankiConnect); field(connect)
         val sync = JCheckBox(tr("Synchronizuj z AnkiWeb przed i po", "Sync with AnkiWeb before and after", "前後にAnkiWebと同期する"), config.syncAnkiWeb)
@@ -240,6 +243,7 @@ class Window internal constructor(private var config: Config) {
                     // A fourth one put in config.properties by hand is kept.
                     monolingual = monolingual.mapNotNull(::f) + config.monolingual.drop(monolingual.size),
                     onomatopoeia = f(onomatopoeia),
+                    grammar = grammar.mapNotNull(::f) + config.grammar.drop(grammar.size),
                     deck = deck.text.trim().ifEmpty { "Japanese" },
                     ankiConnect = connect.text.trim().ifEmpty { "http://127.0.0.1:8765" },
                     syncAnkiWeb = sync.isSelected,
