@@ -101,7 +101,7 @@ fun AnkiScanScreen(
     if (confirmRefresh) {
         AlertDialog(
             onDismissRequest = { confirmRefresh = false },
-            title = { Text(tr("Przepisać pola fiszek?", "Rewrite the card fields?")) },
+            title = { Text(tr("Przepisać pola fiszek?", "Rewrite the card fields?", "カードのフィールドを書き直しますか？")) },
             text = {
                 Text(
                     tr(
@@ -126,7 +126,7 @@ fun AnkiScanScreen(
                             "Careful: a field you edited by hand (a meaning you shortened, " +
                             "say) is overwritten with the dictionary's version — the app " +
                             "cannot recognise your edit.\n\n" +
-                            "Back up your collection in AnkiDroid first."
+                            "Back up your collection in AnkiDroid first.", "このアプリのすべてのノートを今日のデータで作り直します: メインのリストの頻度、ピッチアクセント、漢字の内訳、アーカイブの録音。学習履歴、デッキ、スケジュールはそのままで — フィールドの内容だけが変わります。\n\n作り直せないフィールド（AI要約、本の文）は元の内容を保ちます。インストール済みのどの辞書にもない単語はまるごとスキップします。\n\n注意: 手で編集したフィールド（短くした意味など）は辞書の内容で上書きされます — アプリは編集を見分けられません。\n\n先にAnkiDroidでコレクションをバックアップしてください。"
                     ),
                     fontSize = 13.sp
                 )
@@ -136,12 +136,12 @@ fun AnkiScanScreen(
                     confirmRefresh = false
                     withAnkiPermission { viewModel.refreshNotes(audioWanted = true) }
                 }) {
-                    Text(tr("Przepisz", "Rewrite"))
+                    Text(tr("Przepisz", "Rewrite", "書き直す"))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { confirmRefresh = false }) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -150,10 +150,10 @@ fun AnkiScanScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Skan kolekcji Anki", "Anki collection scan")) },
+                title = { Text(tr("Skan kolekcji Anki", "Anki collection scan", "Ankiコレクションのスキャン")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 }
             )
@@ -175,7 +175,7 @@ fun AnkiScanScreen(
                             "czysto japońskie pole.",
                         "Reads the whole AnkiDroid collection and stores the Japanese words you already have, so " +
                             "the app never creates a second card for a word from Core, Kaishi or earlier mining. " +
-                            "The scan is note-type agnostic — it takes every short, purely Japanese field."
+                            "The scan is note-type agnostic — it takes every short, purely Japanese field.", "AnkiDroidのコレクション全体を読み取り、すでに持っている日本語の単語を保存します。これでCore、Kaishi、以前の採取にある単語のカードを二度作ることはありません。スキャンはノートタイプを問わず、短い日本語だけのフィールドをすべて読み取ります。"
                     ),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -195,17 +195,17 @@ fun AnkiScanScreen(
                                 modifier = Modifier.height(18.dp),
                                 strokeWidth = 2.dp
                             )
-                            Text("  " + tr("Skanuję…", "Scanning…"))
+                            Text("  " + tr("Skanuję…", "Scanning…", "スキャン中…"))
                         } else {
                             Text(
-                                if (storedWordCount > 0) tr("Skanuj ponownie", "Rescan")
-                                else tr("Skanuj kolekcję", "Scan collection")
+                                if (storedWordCount > 0) tr("Skanuj ponownie", "Rescan", "再スキャン")
+                                else tr("Skanuj kolekcję", "Scan collection", "コレクションをスキャン")
                             )
                         }
                     }
                     if (storedWordCount > 0) {
                         OutlinedButton(onClick = { viewModel.clear() }) {
-                            Text(tr("Wyczyść", "Clear"))
+                            Text(tr("Wyczyść", "Clear", "消去"))
                         }
                     }
                 }
@@ -229,7 +229,7 @@ fun AnkiScanScreen(
                                     "„Enable AnkiDroid API”. Poprzedni wynik został zachowany.",
                                 "The collection could not be read. Check that AnkiDroid is installed, the " +
                                     "permission was granted, and “Enable AnkiDroid API” is on in AnkiDroid's " +
-                                    "settings. The previous result was kept."
+                                    "settings. The previous result was kept.", "コレクションを読み取れませんでした。AnkiDroidがインストールされていること、権限が許可されていること、AnkiDroidの設定で「AnkiDroid APIを有効にする」がオンであることを確認してください。前回の結果は保持しました。"
                             ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onErrorContainer,
@@ -243,15 +243,13 @@ fun AnkiScanScreen(
                             Text(
                                 tr(
                                     "Przeskanowano ${result.noteCount} notatek",
-                                    "Scanned ${result.noteCount} notes"
-                                ),
+                                    "Scanned ${result.noteCount} notes", "${result.noteCount}件のノートをスキャンしました"),
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
                                 tr(
                                     "Znaleziono ${result.wordCount} japońskich słów",
-                                    "Found ${result.wordCount} Japanese words"
-                                ),
+                                    "Found ${result.wordCount} Japanese words", "日本語の単語を${result.wordCount}語見つけました"),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -264,14 +262,14 @@ fun AnkiScanScreen(
                                         "W tym ${result.matureWordCount} na fiszkach dojrzałych " +
                                             "(interwał od 21 dni, nieuśpione)",
                                         "Of those, ${result.matureWordCount} sit on mature cards " +
-                                            "(interval 21 days or more, not suspended)"
+                                            "(interval 21 days or more, not suspended)", "そのうち${result.matureWordCount}語は成熟したカード（間隔21日以上、保留を除く）にあります"
                                     )
                                 } else {
                                     tr(
                                         "Twoja wersja AnkiDroida nie podała dojrzałości fiszek — " +
                                             "pozostaje liczba słów, jakie masz w kolekcji.",
                                         "Your AnkiDroid did not report card maturity — the word " +
-                                            "count is all there is."
+                                            "count is all there is.", "AnkiDroidがカードの成熟度を報告しませんでした — 分かるのは単語数だけです。"
                                     )
                                 },
                                 fontSize = 13.sp,
@@ -287,7 +285,7 @@ fun AnkiScanScreen(
                                     "More words than notes is expected: each note is indexed under both " +
                                         "its written form and its reading (食べる and たべる). AnkiDroid's " +
                                         "card count is a third number again — one note with two templates " +
-                                        "makes two cards."
+                                        "makes two cards.", "単語数がノート数より多いのは正常です: 各ノートは表記と読みの両方で登録されます（食べるとたべる）。AnkiDroidのカード数はさらに別の数です — テンプレートが2つあるノートは2枚のカードになります。"
                                 ),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -301,7 +299,7 @@ fun AnkiScanScreen(
                                             "które już masz.",
                                         "The scan stopped at its safety ceiling and did not cover the " +
                                             "whole collection. Duplicate detection may miss words you " +
-                                            "already have."
+                                            "already have.", "スキャンは安全上限で止まり、コレクション全体を読み取れませんでした。すでに持っている単語の重複を見逃すことがあります。"
                                     ),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.error
@@ -314,7 +312,7 @@ fun AnkiScanScreen(
                                         "Zero notatek przy niepustej kolekcji oznacza, że provider AnkiDroida " +
                                             "odrzucił zapytanie — to nie jest poprawny wynik.",
                                         "Zero notes on a non-empty collection means AnkiDroid's provider " +
-                                            "rejected the query — that is not a valid result."
+                                            "rejected the query — that is not a valid result.", "空でないコレクションでノートが0件なのは、AnkiDroidのプロバイダーがクエリを拒否したということです — 有効な結果ではありません。"
                                     ),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.error
@@ -323,7 +321,7 @@ fun AnkiScanScreen(
                             if (result.scannedAt > 0) {
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    tr("Ostatni skan: ", "Last scan: ") +
+                                    tr("Ostatni skan: ", "Last scan: ", "前回のスキャン: ") +
                                         DateFormat.getDateTimeInstance(
                                             DateFormat.SHORT,
                                             DateFormat.SHORT
@@ -355,8 +353,7 @@ fun AnkiScanScreen(
                         Text(
                             tr(
                                 "Zapisany skan: $storedWordCount słów",
-                                "Stored scan: $storedWordCount words"
-                            ),
+                                "Stored scan: $storedWordCount words", "保存済みのスキャン: ${storedWordCount}語"),
                             modifier = Modifier.padding(16.dp),
                             fontWeight = FontWeight.SemiBold
                         )
@@ -368,7 +365,7 @@ fun AnkiScanScreen(
             if (sources.isNotEmpty()) {
                 item {
                     Text(
-                        tr("Typy notatek", "Note types"),
+                        tr("Typy notatek", "Note types", "ノートタイプ"),
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
                     )
@@ -379,7 +376,7 @@ fun AnkiScanScreen(
                                 onClick = {},
                                 label = {
                                     Text(
-                                        (entry.source.ifBlank { tr("nieznany", "unknown") }) +
+                                        (entry.source.ifBlank { tr("nieznany", "unknown", "不明") }) +
                                             " · ${entry.wordCount}"
                                     )
                                 }
@@ -395,7 +392,7 @@ fun AnkiScanScreen(
                     OutlinedTextField(
                         value = query,
                         onValueChange = viewModel::setQuery,
-                        label = { Text(tr("Szukaj w wykrytych słowach", "Search detected words")) },
+                        label = { Text(tr("Szukaj w wykrytych słowach", "Search detected words", "見つかった単語を検索")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -406,14 +403,14 @@ fun AnkiScanScreen(
                                 clipboard.setText(AnnotatedString(viewModel.exportText()))
                                 Toast.makeText(
                                     context,
-                                    tr("Skopiowano listę do schowka", "Word list copied to clipboard"),
+                                    tr("Skopiowano listę do schowka", "Word list copied to clipboard", "単語リストをクリップボードにコピーしました"),
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(tr("Kopiuj listę słów", "Copy word list"))
+                        Text(tr("Kopiuj listę słów", "Copy word list", "単語リストをコピー"))
                     }
                     Spacer(Modifier.height(8.dp))
                     Divider()
@@ -443,8 +440,7 @@ fun AnkiScanScreen(
                         Text(
                             tr(
                                 "Pokazano pierwsze 500 — użyj wyszukiwarki, żeby sprawdzić konkretne słowo.",
-                                "Showing the first 500 — use the search box to check a specific word."
-                            ),
+                                "Showing the first 500 — use the search box to check a specific word.", "最初の500語を表示しています — 特定の単語は検索欄で確認してください。"),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 12.dp)
@@ -457,8 +453,7 @@ fun AnkiScanScreen(
                     Text(
                         tr(
                             "Brak zapisanego skanu. Naciśnij „Skanuj kolekcję”.",
-                            "No stored scan yet. Press “Scan collection”."
-                        ),
+                            "No stored scan yet. Press “Scan collection”.", "保存済みのスキャンはまだありません。「コレクションをスキャン」を押してください。"),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -498,8 +493,7 @@ private fun StrayNoteTypeCard(
             Text(
                 tr(
                     "${strays.size} zbędnych typów notatek",
-                    "${strays.size} redundant note types"
-                ),
+                    "${strays.size} redundant note types", "不要なノートタイプ ${strays.size}件"),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onErrorContainer
             )
@@ -510,7 +504,7 @@ private fun StrayNoteTypeCard(
                         "Nowe eksporty już tego nie robią.",
                     "Older versions of this app minted a new note type whenever AnkiDroid " +
                         "refused a template write — $singles of these hold a single note. " +
-                        "New exports no longer do that."
+                        "New exports no longer do that.", "以前のバージョンのアプリは、AnkiDroidがテンプレートの書き込みを拒否するたびに新しいノートタイプを作っていました — そのうち${singles}件はノートが1件だけです。新しいエクスポートではもう起きません。"
                 ),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onErrorContainer
@@ -525,7 +519,7 @@ private fun StrayNoteTypeCard(
                     "The fix has to happen in Anki on the desktop: Browse → select the " +
                         "notes → Notes → Change Note Type. The app cannot do it — AnkiDroid " +
                         "has no way to change a note's type, and the workaround (new note, " +
-                        "delete the old) throws away its review history."
+                        "delete the old) throws away its review history.", "修正はパソコンのAnkiで行う必要があります: ブラウズ → ノートを選択 → ノート → ノートタイプを変更。アプリにはできません — AnkiDroidにはノートタイプを変える方法がなく、代わりの方法（新しいノートを作って古いものを削除）では学習履歴が失われます。"
                 ),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onErrorContainer
@@ -535,8 +529,7 @@ private fun StrayNoteTypeCard(
                 Text(
                     tr(
                         "${stray.name} — ${stray.notes} notatek",
-                        "${stray.name} — ${stray.notes} notes"
-                    ),
+                        "${stray.name} — ${stray.notes} notes", "${stray.name} — ${stray.notes}件のノート"),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -545,8 +538,7 @@ private fun StrayNoteTypeCard(
                 Text(
                     tr(
                         "...oraz ${strays.size - STRAY_PREVIEW_LIMIT} kolejnych",
-                        "...and ${strays.size - STRAY_PREVIEW_LIMIT} more"
-                    ),
+                        "...and ${strays.size - STRAY_PREVIEW_LIMIT} more", "…ほか${strays.size - STRAY_PREVIEW_LIMIT}件"),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -588,14 +580,13 @@ private fun RefreshSection(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(
-                tr("Odśwież fiszki tej aplikacji", "Refresh this app's cards"),
+                tr("Odśwież fiszki tej aplikacji", "Refresh this app's cards", "このアプリのカードを更新"),
                 fontWeight = FontWeight.SemiBold
             )
             Text(
                 tr(
                     "${survey.noteCount} notatek w ${survey.modelCount} typach notatek.",
-                    "${survey.noteCount} notes across ${survey.modelCount} note types."
-                ),
+                    "${survey.noteCount} notes across ${survey.modelCount} note types.", "${survey.modelCount}種類のノートタイプに${survey.noteCount}件のノート。"),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -608,7 +599,7 @@ private fun RefreshSection(
                         "żadnej notatki.",
                     "Look: rewrites the templates and CSS on every note type of ours — the " +
                         "duplicates and the older, leaner ones included: the template is built " +
-                        "from the fields each type actually has. No note is touched."
+                        "from the fields each type actually has. No note is touched.", "見た目: このアプリのすべてのノートタイプのテンプレートとCSSを書き直します — 重複したものや、フィールドの少ない古いものも含みます。テンプレートは各タイプが実際に持つフィールドから作られます。ノートには触れません。"
                 ),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -618,7 +609,7 @@ private fun RefreshSection(
                     "Treść: przepisuje pola z dzisiejszych danych — częstotliwość, akcent, " +
                         "kanji, wymowa z archiwum. Historia powtórek zostaje.",
                     "Contents: rewrites the fields from today's data — frequency, pitch, kanji, " +
-                        "a recording from the archive. Review history is kept."
+                        "a recording from the archive. Review history is kept.", "内容: 今日のデータでフィールドを書き直します — 頻度、ピッチ、漢字、アーカイブの録音。学習履歴は保持されます。"
                 ),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -628,7 +619,7 @@ private fun RefreshSection(
                 Spacer(Modifier.height(8.dp))
                 val (done, total, word) = progress
                 Text(
-                    tr("$done / $total — $word", "$done / $total — $word"),
+                    tr("$done / $total — $word", "$done / $total — $word", "$done / $total — $word"),
                     fontSize = 12.sp
                 )
                 LinearProgressIndicator(
@@ -646,40 +637,38 @@ private fun RefreshSection(
                                 "Odświeżono wygląd ${outcome.restyled} typów; " +
                                     "${outcome.refused} odrzucił AnkiDroid.",
                                 "Restyled ${outcome.restyled} note types; AnkiDroid refused " +
-                                    "${outcome.refused}."
+                                    "${outcome.refused}.", "${outcome.restyled}件のノートタイプのスタイルを更新しました。AnkiDroidが拒否: ${outcome.refused}件。"
                             )
                         } else {
                             tr(
                                 "Odświeżono wygląd ${outcome.restyled} typów notatek.",
-                                "Restyled ${outcome.restyled} note types."
-                            )
+                                "Restyled ${outcome.restyled} note types.", "${outcome.restyled}件のノートタイプのスタイルを更新しました。")
                         }
                         is RefreshReport.Refreshed -> tr(
                             "Przepisano ${outcome.updated} notatek; ${outcome.missing} słów " +
                                 "nie ma w żadnym słowniku; ${outcome.refused} odrzucił AnkiDroid.",
                             "Rewrote ${outcome.updated} notes; ${outcome.missing} words are in " +
-                                "no dictionary; AnkiDroid refused ${outcome.refused}."
+                                "no dictionary; AnkiDroid refused ${outcome.refused}.", "${outcome.updated}件のノートを書き直しました。どの辞書にもない単語: ${outcome.missing}件。AnkiDroidが拒否: ${outcome.refused}件。"
                         )
                         RefreshReport.Failed -> tr(
                             "Nie udało się — sprawdź uprawnienie do AnkiDroida.",
-                            "It failed — check the AnkiDroid permission."
-                        )
+                            "It failed — check the AnkiDroid permission.", "失敗しました — AnkiDroidの権限を確認してください。")
                     },
                     fontSize = 13.sp
                 )
-                TextButton(onClick = onDismissReport) { Text(tr("OK", "OK")) }
+                TextButton(onClick = onDismissReport) { Text(tr("OK", "OK", "OK")) }
             }
 
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onRestyle, enabled = !refreshing) {
-                    Text(tr("Odśwież wygląd", "Refresh the look"))
+                    Text(tr("Odśwież wygląd", "Refresh the look", "見た目を更新"))
                 }
                 OutlinedButton(onClick = onRefresh, enabled = !refreshing) {
-                    Text(tr("Przepisz pola", "Rewrite the fields"))
+                    Text(tr("Przepisz pola", "Rewrite the fields", "フィールドを書き直す"))
                 }
                 if (refreshing) {
-                    TextButton(onClick = onCancel) { Text(tr("Przerwij", "Stop")) }
+                    TextButton(onClick = onCancel) { Text(tr("Przerwij", "Stop", "停止")) }
                 }
             }
         }

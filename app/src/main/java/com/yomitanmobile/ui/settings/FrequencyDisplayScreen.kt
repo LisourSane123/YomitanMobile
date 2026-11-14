@@ -69,10 +69,10 @@ fun FrequencyDisplayScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Wyświetlanie częstotliwości", "Frequency display")) },
+                title = { Text(tr("Wyświetlanie częstotliwości", "Frequency display", "頻度の表示")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 }
             )
@@ -86,7 +86,7 @@ fun FrequencyDisplayScreen(
                 .padding(16.dp)
         ) {
             Text(
-                tr("Główna lista", "Leading list"),
+                tr("Główna lista", "Leading list", "メインのリスト"),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -98,7 +98,7 @@ fun FrequencyDisplayScreen(
                         "na ekranie słowa, a strzałki ustalają ich kolejność.",
                     "Tap a list to make it leading. \"Top 3K\" badges and the number on the card come from it " +
                         "alone, and it orders search results. The other lists show on the word screen; the " +
-                        "arrows set their order."
+                        "arrows set their order.", "リストをタップするとメインになります。「Top 3K」などの表示とカードの数値はそのリストだけから取られ、検索結果の並び順も決まります。ほかのリストは単語の画面に表示され、矢印で順番を決めます。"
                 ),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -109,8 +109,7 @@ fun FrequencyDisplayScreen(
                 Text(
                     tr(
                         "Brak zainstalowanych list częstotliwości. Pobierz je z ekranu słowników.",
-                        "No frequency lists installed. Download some from the dictionaries screen."
-                    ),
+                        "No frequency lists installed. Download some from the dictionaries screen.", "頻度リストがインストールされていません。辞書の画面からダウンロードしてください。"),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 12.dp)
@@ -140,7 +139,7 @@ fun FrequencyDisplayScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            tr("Pokaż wszystkie listy", "Show all lists"),
+                            tr("Pokaż wszystkie listy", "Show all lists", "すべてのリストを表示"),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -149,7 +148,7 @@ fun FrequencyDisplayScreen(
                                 "Dotyczy ekranu słowa. Na liście wyników zawsze widać tylko listę główną; " +
                                     "po wejściu w słowo — wszystkie zainstalowane listy. Wyłączone: także tam tylko główna.",
                                 "Applies to the word screen. The result list always shows the leading list alone; " +
-                                    "opening a word shows every installed list. Off: that screen shows only the leading one too."
+                                    "opening a word shows every installed list. Off: that screen shows only the leading one too.", "単語の画面に関する設定です。検索結果には常にメインのリストだけが表示され、単語を開くとインストール済みのすべてのリストが表示されます。オフ: 単語の画面でもメインだけを表示します。"
                             ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -168,7 +167,7 @@ fun FrequencyDisplayScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            tr("Trzymaj się tylko głównej listy", "Stick to the leading list only"),
+                            tr("Trzymaj się tylko głównej listy", "Stick to the leading list only", "メインのリストだけを使う"),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -180,7 +179,7 @@ fun FrequencyDisplayScreen(
                                     "na fiszce zawsze pochodzą tylko z głównej listy.",
                                 "Affects search order and the deck generators' \"too rare\" filters. On: a word the " +
                                     "leading list does not know counts as unranked. Off: its standing is taken from " +
-                                    "another list. Top 3K badges and the card number always come from the leading list alone."
+                                    "another list. Top 3K badges and the card number always come from the leading list alone.", "検索の並び順と、デッキ生成の「まれすぎる」フィルターに影響します。オン: メインのリストにない単語は順位なしとして扱います。オフ: ほかのリストの順位を使います。Top 3Kなどの表示とカードの数値は常にメインのリストだけから取られます。"
                             ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -243,7 +242,7 @@ private fun FrequencyListCard(
                 )
                 if (isLeading) {
                     Text(
-                        tr("GŁÓWNA — Top 3K itd. i liczba na fiszce", "LEADING — Top 3K etc. and the card number"),
+                        tr("GŁÓWNA — Top 3K itd. i liczba na fiszce", "LEADING — Top 3K etc. and the card number", "メイン — Top 3Kなどとカードの数値"),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary
@@ -253,7 +252,7 @@ private fun FrequencyListCard(
                 // ("JPDBv2", "CEJC-LUW") says who made it, not what is in it.
                 FrequencyCorpus.labelFor(name)?.let { label ->
                     Text(
-                        if (isEnglish) label.en else label.pl,
+                        com.yomitanmobile.util.trI(isEnglish, label.pl, label.en, label.ja),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -264,10 +263,10 @@ private fun FrequencyListCard(
             if (!isLeading) {
                 Column {
                     IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = tr("W górę", "Move up"))
+                        Icon(Icons.Default.KeyboardArrowUp, contentDescription = tr("W górę", "Move up", "上へ"))
                     }
                     IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = tr("W dół", "Move down"))
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = tr("W dół", "Move down", "下へ"))
                     }
                 }
             }
@@ -293,9 +292,9 @@ private fun FormatBadge(isCounted: Boolean, isLeading: Boolean) {
         Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
             Text(
                 if (isCounted) {
-                    tr("Format: LICZBA WYSTĄPIEŃ  ↓ malejąco", "Format: OCCURRENCE COUNTS  ↓ descending")
+                    tr("Format: LICZBA WYSTĄPIEŃ  ↓ malejąco", "Format: OCCURRENCE COUNTS  ↓ descending", "形式: 出現回数  ↓ 降順")
                 } else {
-                    tr("Format: RANKING  ↑ rosnąco", "Format: RANKS  ↑ ascending")
+                    tr("Format: RANKING  ↑ rosnąco", "Format: RANKS  ↑ ascending", "形式: 順位  ↑ 昇順")
                 },
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
@@ -304,13 +303,11 @@ private fun FormatBadge(isCounted: Boolean, isLeading: Boolean) {
                 if (isCounted) {
                     tr(
                         "Większa liczba = częstsze słowo (np. 120000× częściej niż 50×).",
-                        "Higher number = commoner word (e.g. 120000× is commoner than 50×)."
-                    )
+                        "Higher number = commoner word (e.g. 120000× is commoner than 50×).", "数が大きいほどよく使う語（例: 120000×は50×よりよく使う）。")
                 } else {
                     tr(
                         "Mniejsza liczba = częstsze słowo (#1 to najczęstsze).",
-                        "Lower number = commoner word (#1 is the commonest)."
-                    )
+                        "Lower number = commoner word (#1 is the commonest).", "数が小さいほどよく使う語（1位が最もよく使う）。")
                 },
                 fontSize = 12.sp
             )
@@ -319,13 +316,11 @@ private fun FormatBadge(isCounted: Boolean, isLeading: Boolean) {
                     if (isCounted) {
                         tr(
                             "Na fiszkę trafia ta liczba bez zmian — w Anki sortuj pole Frequency malejąco.",
-                            "The card gets this number unchanged — sort the Frequency field descending in Anki."
-                        )
+                            "The card gets this number unchanged — sort the Frequency field descending in Anki.", "カードにはこの数がそのまま入ります — AnkiではFrequencyフィールドを降順で並べてください。")
                     } else {
                         tr(
                             "Na fiszkę trafia ta liczba bez zmian — w Anki sortuj pole Frequency rosnąco.",
-                            "The card gets this number unchanged — sort the Frequency field ascending in Anki."
-                        )
+                            "The card gets this number unchanged — sort the Frequency field ascending in Anki.", "カードにはこの数がそのまま入ります — AnkiではFrequencyフィールドを昇順で並べてください。")
                     },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -366,7 +361,7 @@ private fun RecomputingOverlay() {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    tr("Przeliczanie rankingów…", "Recomputing ranks…"),
+                    tr("Przeliczanie rankingów…", "Recomputing ranks…", "順位を再計算中…"),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -374,8 +369,7 @@ private fun RecomputingOverlay() {
                 Text(
                     tr(
                         "Może to potrwać kilka–kilkanaście sekund. Możesz wyjść z ekranu lub zminimalizować aplikację — przeliczanie dokończy się w tle.",
-                        "This can take several seconds. You can leave the screen or minimise the app — it will finish in the background."
-                    ),
+                        "This can take several seconds. You can leave the screen or minimise the app — it will finish in the background.", "数秒かかることがあります。画面を離れても、アプリを最小化しても、バックグラウンドで完了します。"),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center

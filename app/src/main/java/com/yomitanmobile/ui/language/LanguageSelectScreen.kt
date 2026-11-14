@@ -62,7 +62,7 @@ fun LanguageSelectScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = tr("Czego się uczysz?", "What are you learning?"),
+                text = tr("Czego się uczysz?", "What are you learning?", "何を勉強しますか？"),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
@@ -73,7 +73,7 @@ fun LanguageSelectScreen(
                     "Wybór decyduje o słownikach, wyszukiwaniu i formacie fiszek. " +
                         "Możesz go później zmienić w ustawieniach.",
                     "This decides the dictionaries, the search, and the card format. " +
-                        "You can change it later in settings."
+                        "You can change it later in settings.", "ここで選んだ言語で、辞書、検索、カードの形式が決まります。あとで設定から変更できます。"
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -83,31 +83,28 @@ fun LanguageSelectScreen(
 
             LanguageCard(
                 flag = "🇯🇵",
-                title = tr("Japoński", "Japanese"),
+                title = tr("Japoński", "Japanese", "日本語"),
                 subtitle = tr(
                     "Kanji, furigana, akcent tonalny, poziomy JLPT. Znaczenia po angielsku.",
-                    "Kanji, furigana, pitch accent, JLPT levels. English meanings."
-                ),
+                    "Kanji, furigana, pitch accent, JLPT levels. English meanings.", "漢字、ふりがな、ピッチアクセント、JLPTレベル。意味は英語。"),
                 onClick = { viewModel.choose(AppLanguage.JAPANESE) }
             )
             Spacer(modifier = Modifier.height(16.dp))
             LanguageCard(
                 flag = "🇬🇧",
-                title = tr("Angielski", "English"),
+                title = tr("Angielski", "English", "英語"),
                 subtitle = tr(
                     "Znaczenia po polsku, wymowa IPA, przykłady zdań z tłumaczeniem.",
-                    "Polish meanings, IPA pronunciation, example sentences with translations."
-                ),
+                    "Polish meanings, IPA pronunciation, example sentences with translations.", "ポーランド語の意味、IPA発音、訳付きの例文。"),
                 onClick = { viewModel.choose(AppLanguage.ENGLISH) }
             )
             Spacer(modifier = Modifier.height(16.dp))
             LanguageCard(
                 flag = "🇪🇸",
-                title = tr("Hiszpański", "Spanish"),
+                title = tr("Hiszpański", "Spanish", "スペイン語"),
                 subtitle = tr(
                     "Znaczenia po angielsku, wymowa IPA, formy odmienione (hablando → hablar).",
-                    "English meanings, IPA pronunciation, inflected forms (hablando → hablar)."
-                ),
+                    "English meanings, IPA pronunciation, inflected forms (hablando → hablar).", "英語の意味、IPA発音、活用形（hablando → hablar）。"),
                 onClick = { viewModel.choose(AppLanguage.SPANISH) }
             )
         }

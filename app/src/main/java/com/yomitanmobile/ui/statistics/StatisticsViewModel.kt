@@ -125,7 +125,7 @@ class StatisticsViewModel @Inject constructor(
         }
 
         internal fun categoryLabel(categoryCode: String, isEnglish: Boolean = false): String {
-            return WordCategoryClassifier.displayName(categoryCode, isEnglish)
+            return WordCategoryClassifier.displayName(categoryCode, isEnglish, japanese = com.yomitanmobile.util.LocaleHelper.active == com.yomitanmobile.util.UiLanguage.JAPANESE)
         }
 
         internal fun toHourlyActivity(items: List<HourlyActivityCount>): List<HourlyActivity> {

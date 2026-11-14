@@ -54,7 +54,7 @@ fun ToolsScreen(
     onNavigateToKanji: () -> Unit
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text(tr("Narzędzia", "Tools")) }) }
+        topBar = { TopAppBar(title = { Text(tr("Narzędzia", "Tools", "ツール")) }) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -68,68 +68,63 @@ fun ToolsScreen(
             // shown for English it led to a screen that could only fail.
             val studyLanguage = com.yomitanmobile.ui.common.LocalStudyLanguage.current
             val scale = com.yomitanmobile.domain.model.LevelScale.forLanguage(studyLanguage)
-            SectionLabel(tr("Tworzenie fiszek", "Building cards"))
+            SectionLabel(tr("Tworzenie fiszek", "Building cards", "カードの作成"))
             if (scale != null) ToolCard(
                 icon = Icons.Default.School,
-                title = tr("Generator talii ${scale.displayName}", "${scale.displayName} deck generator"),
+                title = tr("Generator talii ${scale.displayName}", "${scale.displayName} deck generator", "${scale.displayName}デッキの生成"),
                 subtitle = tr(
                     "Cały poziom naraz, bez kopania słowo po słowie.",
-                    "A whole level at once, without mining word by word."
-                ),
+                    "A whole level at once, without mining word by word.", "単語を一つずつ採取せずに、レベル全体を一度に。"),
                 onClick = onNavigateToJlptDeck
             )
             // The scanner is no longer Japanese-only: English and Spanish
             // read the same files through LatinTokenizer.
             ToolCard(
                 icon = Icons.Default.MenuBook,
-                title = tr("Fiszki z napisów lub książki", "Cards from subtitles or a book"),
+                title = tr("Fiszki z napisów lub książki", "Cards from subtitles or a book", "字幕や本からカードを作る"),
                 subtitle = tr(
                     "Skanuje plik i robi fiszki ze słów, których jeszcze nie znasz.",
-                    "Scans a file and makes cards for the words you do not know yet."
-                ),
+                    "Scans a file and makes cards for the words you do not know yet.", "ファイルをスキャンして、まだ知らない単語のカードを作ります。"),
                 onClick = onNavigateToTextScan
             )
             ToolCard(
                 icon = Icons.Default.Search,
-                title = tr("Skan kolekcji Anki", "Anki collection scan"),
+                title = tr("Skan kolekcji Anki", "Anki collection scan", "Ankiコレクションのスキャン"),
                 subtitle = tr(
                     "Czyta twoją kolekcję, żeby nie tworzyć fiszek, które już masz.",
-                    "Reads your collection so no card is made twice."
-                ),
+                    "Reads your collection so no card is made twice.", "コレクションを読み取り、同じカードを二度作らないようにします。"),
                 onClick = onNavigateToAnkiScan
             )
 
             Spacer(Modifier.height(20.dp))
-            SectionLabel(tr("Słowniki i słowa", "Dictionaries and words"))
+            SectionLabel(tr("Słowniki i słowa", "Dictionaries and words", "辞書と単語"))
             ToolCard(
                 icon = Icons.Default.LibraryBooks,
-                title = tr("Pobierz słowniki", "Download dictionaries"),
+                title = tr("Pobierz słowniki", "Download dictionaries", "辞書をダウンロード"),
                 subtitle = tr(
                     "Kolejka działa w tle — możesz wrócić do nauki.",
-                    "The queue runs in the background — go back to studying."
-                ),
+                    "The queue runs in the background — go back to studying.", "キューはバックグラウンドで進みます — 勉強に戻ってください。"),
                 onClick = onNavigateToDownload
             )
             ToolCard(
                 icon = Icons.Default.Category,
-                title = tr("Zainstalowane słowniki", "Installed dictionaries"),
-                subtitle = tr("Przeglądaj i zarządzaj słownikami", "Browse and manage dictionaries"),
+                title = tr("Zainstalowane słowniki", "Installed dictionaries", "インストール済みの辞書"),
+                subtitle = tr("Przeglądaj i zarządzaj słownikami", "Browse and manage dictionaries", "辞書の一覧と管理"),
                 onClick = onNavigateToDictionaries
             )
             if (studyLanguage.hasJapaneseFeatures) ToolCard(
                 icon = Icons.Default.Translate,
-                title = tr("Kanji", "Kanji"),
+                title = tr("Kanji", "Kanji", "漢字"),
                 subtitle = tr(
                     "Znaki według poziomu i ile z nich masz już w kolekcji",
-                    "Characters by level, and how many your collection covers"
-                ),
+                    "Characters by level, and how many your collection covers", "レベル別の漢字と、コレクションのカバー率"),
                 onClick = onNavigateToKanji
             )
 
             ToolCard(
                 icon = Icons.Default.FavoriteBorder,
-                title = tr("Ulubione", "Favourites"),
-                subtitle = tr("Słowa odłożone na później", "Words saved for later"),
+                title = tr("Ulubione", "Favourites", "お気に入り"),
+                subtitle = tr("Słowa odłożone na później", "Words saved for later", "あとで見るために保存した単語"),
                 onClick = onNavigateToFavorites
             )
         }

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Yomitan Mobile</string>
+    <string name="search_hint">日本語の単語を入力</string>
+    <string name="settings">設定</string>
+    <string name="import_dictionary">辞書をインポート</string>
+    <string name="export_to_anki">Ankiにエクスポート</string>
+    <string name="play_audio">音声を再生</string>
+    <string name="stop_audio">音声を停止</string>
+    <string name="no_results">結果なし</string>
+    <string name="loading">読み込み中…</string>
+    <string name="error_occurred">エラーが発生しました</string>
+    <string name="reading">読み</string>
+    <string name="definition">定義</string>
+    <string name="frequency">頻度</string>
+    <string name="pitch_accent">ピッチアクセント</string>
+    <string name="parts_of_speech">品詞</string>
+    <string name="example_sentence">例文</string>
+    <string name="dictionaries">辞書</string>
+    <string name="delete_dictionary">辞書を削除</string>
+    <string name="import_progress">インポート中…</string>
+    <string name="import_success">インポートが完了しました</string>
+    <string name="import_error">インポートエラー</string>
+    <string name="anki_export_success">AnkiDroidにエクスポートしました</string>
+    <string name="anki_export_error">AnkiDroidへのエクスポートエラー</string>
+    <string name="no_dictionaries">辞書がありません。Yomitan辞書（ZIP）をインポートしてください。</string>
+    <string name="back">戻る</string>
+    <string name="entries_count">件</string>
+    <string name="widget_description">日本語の単語をすばやく検索</string>
+    <string name="widget_quick_description">クイック検索ランチャー</string>
+    <string name="widget_search_icon_cd">検索</string>
+    <string name="widget_search_hint">日本語の単語を入力…</string>
+    <string name="widget_word_of_day">✨ 今日の単語</string>
+</resources>

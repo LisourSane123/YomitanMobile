@@ -187,14 +187,13 @@ fun SettingsScreen(
         val installed by viewModel.dictionaries.collectAsState()
         AlertDialog(
             onDismissRequest = { showMonolingualPicker = false },
-            title = { Text(tr("Słownik JP-JP", "JP-JP dictionary")) },
+            title = { Text(tr("Słownik JP-JP", "JP-JP dictionary", "JP-JP辞書")) },
             text = {
                 if (installed.isEmpty()) {
                     Text(
                         tr(
                             "Brak zainstalowanych słowników.",
-                            "No dictionaries installed."
-                        )
+                            "No dictionaries installed.", "辞書がインストールされていません。")
                     )
                 } else {
                     LazyColumn {
@@ -227,7 +226,7 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showMonolingualPicker = false }) {
-                    Text(tr("Zamknij", "Close"))
+                    Text(tr("Zamknij", "Close", "閉じる"))
                 }
             }
         )
@@ -240,9 +239,9 @@ fun SettingsScreen(
             try {
                 val inputStream = context.contentResolver.openInputStream(it)
                 if (inputStream != null) viewModel.importDictionary(inputStream)
-                else Toast.makeText(context, tr("Nie można otworzyć pliku", "Cannot open file"), Toast.LENGTH_SHORT).show()
+                else Toast.makeText(context, tr("Nie można otworzyć pliku", "Cannot open file", "ファイルを開けません"), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(context, tr("Błąd: ${e.message}", "Error: ${e.message}"), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Błąd: ${e.message}", "Error: ${e.message}", "エラー: ${e.message}"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -257,9 +256,9 @@ fun SettingsScreen(
             try {
                 val inputStream = context.contentResolver.openInputStream(it)
                 if (inputStream != null) viewModel.importSettings(inputStream)
-                else Toast.makeText(context, tr("Nie można otworzyć pliku", "Cannot open file"), Toast.LENGTH_SHORT).show()
+                else Toast.makeText(context, tr("Nie można otworzyć pliku", "Cannot open file", "ファイルを開けません"), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(context, tr("Błąd: ${e.message}", "Error: ${e.message}"), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Błąd: ${e.message}", "Error: ${e.message}", "エラー: ${e.message}"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -291,8 +290,7 @@ fun SettingsScreen(
                             append(
                                 tr(
                                     "Zaimportowano ${event.result.dictionaryName}: ${event.result.entriesImported} wpisów",
-                                    "Imported ${event.result.dictionaryName}: ${event.result.entriesImported} entries"
-                                )
+                                    "Imported ${event.result.dictionaryName}: ${event.result.entriesImported} entries", "${event.result.dictionaryName}をインポートしました: ${event.result.entriesImported}件")
                             )
                             // The index that meaning search reads did not
                             // rebuild — say so, instead of leaving the user
@@ -303,54 +301,50 @@ fun SettingsScreen(
                                 append(
                                     tr(
                                         "uwaga: indeks wyszukiwania po znaczeniu nie odświeżył się, powtórz import",
-                                        "warning: the meaning-search index did not refresh, re-run the import"
-                                    )
+                                        "warning: the meaning-search index did not refresh, re-run the import", "警告: 意味検索の索引が更新されませんでした。インポートをやり直してください")
                                 )
                             }
                         },
                         Toast.LENGTH_LONG
                     ).show()
                 is SettingsEvent.ImportError ->
-                    Toast.makeText(context, tr("Błąd importu: ${event.message}", "Import error: ${event.message}"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Błąd importu: ${event.message}", "Import error: ${event.message}", "インポートエラー: ${event.message}"), Toast.LENGTH_LONG).show()
                 is SettingsEvent.BackupSuccess -> {
-                    Toast.makeText(context, tr("Kopia zapasowa utworzona", "Backup created"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Kopia zapasowa utworzona", "Backup created", "バックアップを作成しました"), Toast.LENGTH_LONG).show()
                     showBackupDialog = false
                 }
                 is SettingsEvent.BackupError ->
-                    Toast.makeText(context, tr("Błąd: ${event.message}", "Error: ${event.message}"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Błąd: ${event.message}", "Error: ${event.message}", "エラー: ${event.message}"), Toast.LENGTH_LONG).show()
                 is SettingsEvent.RestoreSuccess -> {
                     showRestoreDialog = false
                     showRestartRequiredDialog = true
                 }
                 is SettingsEvent.RestoreError ->
-                    Toast.makeText(context, tr("Błąd przywracania: ${event.message}", "Restore error: ${event.message}"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Błąd przywracania: ${event.message}", "Restore error: ${event.message}", "復元エラー: ${event.message}"), Toast.LENGTH_LONG).show()
                 is SettingsEvent.SettingsImported -> {
                     val msg = if (event.applied > 0) {
                         tr(
                             "Zaimportowano ustawienia (${event.applied})",
-                            "Settings imported (${event.applied})"
-                        )
+                            "Settings imported (${event.applied})", "設定をインポートしました（${event.applied}）")
                     } else {
                         tr(
                             "Plik nie zawiera żadnych rozpoznanych ustawień",
-                            "The file contains no recognised settings"
-                        )
+                            "The file contains no recognised settings", "ファイルに認識できる設定がありません")
                     }
                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 }
                 is SettingsEvent.SettingsImportError ->
-                    Toast.makeText(context, tr("Błąd importu ustawień: ${event.message}", "Settings import error: ${event.message}"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Błąd importu ustawień: ${event.message}", "Settings import error: ${event.message}", "設定のインポートエラー: ${event.message}"), Toast.LENGTH_LONG).show()
                 is SettingsEvent.ReclassifyDone -> {
                     val msg = tr(
                         "Przeliczono ${event.updated}, zachowano ręcznych ${event.skippedManual}, pominięto ${event.skippedMissing}",
-                        "Updated ${event.updated}, kept ${event.skippedManual} manual, skipped ${event.skippedMissing}"
-                    )
+                        "Updated ${event.updated}, kept ${event.skippedManual} manual, skipped ${event.skippedMissing}", "更新 ${event.updated}件、手動の保持 ${event.skippedManual}件、スキップ ${event.skippedMissing}件")
                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 }
                 is SettingsEvent.ReclassifyError ->
                     Toast.makeText(
                         context,
-                        tr("Błąd: ${event.message}", "Error: ${event.message}"),
+                        tr("Błąd: ${event.message}", "Error: ${event.message}", "エラー: ${event.message}"),
                         Toast.LENGTH_LONG
                     ).show()
                 is SettingsEvent.AudioArchiveIndexed ->
@@ -358,8 +352,7 @@ fun SettingsScreen(
                         context,
                         tr(
                             "Zindeksowano ${event.files} nagrań",
-                            "Indexed ${event.files} recordings"
-                        ),
+                            "Indexed ${event.files} recordings", "${event.files}件の録音を索引に登録しました"),
                         Toast.LENGTH_LONG
                     ).show()
                 is SettingsEvent.AudioArchiveEmpty ->
@@ -367,8 +360,7 @@ fun SettingsScreen(
                         context,
                         tr(
                             "W tym folderze nie ma plików audio z japońskimi nazwami — poprzednie archiwum zostało bez zmian.",
-                            "That folder holds no audio files with Japanese names — the previous archive was left alone."
-                        ),
+                            "That folder holds no audio files with Japanese names — the previous archive was left alone.", "そのフォルダーには日本語名の音声ファイルがありません — 以前のアーカイブはそのままです。"),
                         Toast.LENGTH_LONG
                     ).show()
             }
@@ -398,17 +390,17 @@ fun SettingsScreen(
 
         AlertDialog(
             onDismissRequest = { showDeckEditDialog = false },
-            title = { Text(tr("Zmień talię Anki", "Change Anki deck")) },
+            title = { Text(tr("Zmień talię Anki", "Change Anki deck", "Ankiのデッキを変更")) },
             text = {
                 Column {
                     Text(
-                        tr("Nowe fiszki będą dodawane do wybranej talii.", "New cards will be added to the selected deck."),
+                        tr("Nowe fiszki będą dodawane do wybranej talii.", "New cards will be added to the selected deck.", "新しいカードは選んだデッキに追加されます。"),
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
                     if (availableSettingsDecks.isNotEmpty()) {
                         Text(
-                            tr("Istniejące talie:", "Existing decks:"),
+                            tr("Istniejące talie:", "Existing decks:", "既存のデッキ:"),
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -431,7 +423,7 @@ fun SettingsScreen(
                         Divider()
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            tr("Lub utwórz nową talię:", "Or create a new deck:"),
+                            tr("Lub utwórz nową talię:", "Or create a new deck:", "または新しいデッキを作成:"),
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -440,7 +432,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = editedDeckName,
                         onValueChange = { editedDeckName = it },
-                        label = { Text(tr("Nazwa talii", "Deck name")) },
+                        label = { Text(tr("Nazwa talii", "Deck name", "デッキ名")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -448,12 +440,12 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { saveDeck(editedDeckName) }) {
-                    Text(tr("Zapisz", "Save"))
+                    Text(tr("Zapisz", "Save", "保存"))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeckEditDialog = false }) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -465,13 +457,12 @@ fun SettingsScreen(
         // forward is killing the process so Hilt rebuilds the graph.
         AlertDialog(
             onDismissRequest = { /* no-op: must restart */ },
-            title = { Text(tr("Wymagany restart", "Restart required")) },
+            title = { Text(tr("Wymagany restart", "Restart required", "再起動が必要です")) },
             text = {
                 Text(
                     tr(
                         "Kopia została przywrócona. Aplikacja musi zostać uruchomiona ponownie, aby załadować przywrócone dane.",
-                        "Backup restored. The app must restart to load the restored data."
-                    ),
+                        "Backup restored. The app must restart to load the restored data.", "バックアップを復元しました。復元したデータを読み込むにはアプリの再起動が必要です。"),
                     fontSize = 14.sp
                 )
             },
@@ -483,7 +474,7 @@ fun SettingsScreen(
                     (context as? Activity)?.finishAffinity()
                     kotlin.system.exitProcess(0)
                 }) {
-                    Text(tr("Uruchom ponownie", "Restart now"))
+                    Text(tr("Uruchom ponownie", "Restart now", "今すぐ再起動"))
                 }
             }
         )
@@ -492,14 +483,14 @@ fun SettingsScreen(
     if (showLanguagePicker) {
         AlertDialog(
             onDismissRequest = { showLanguagePicker = false },
-            title = { Text(tr("Język nauki", "Study language")) },
+            title = { Text(tr("Język nauki", "Study language", "学習する言語")) },
             text = {
                 Column {
                     AppLanguage.entries.forEach { language ->
                         val label = when (language) {
-                            AppLanguage.JAPANESE -> tr("🇯🇵  Japoński", "🇯🇵  Japanese")
-                            AppLanguage.ENGLISH -> tr("🇬🇧  Angielski → polski", "🇬🇧  English → Polish")
-                            AppLanguage.SPANISH -> tr("🇪🇸  Hiszpański → angielski", "🇪🇸  Spanish → English")
+                            AppLanguage.JAPANESE -> tr("🇯🇵  Japoński", "🇯🇵  Japanese", "🇯🇵  日本語")
+                            AppLanguage.ENGLISH -> tr("🇬🇧  Angielski → polski", "🇬🇧  English → Polish", "🇬🇧  英語 → ポーランド語")
+                            AppLanguage.SPANISH -> tr("🇪🇸  Hiszpański → angielski", "🇪🇸  Spanish → English", "🇪🇸  スペイン語 → 英語")
                         }
                         TextButton(
                             onClick = {
@@ -527,7 +518,7 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showLanguagePicker = false }) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -537,7 +528,7 @@ fun SettingsScreen(
     if (pendingLanguageTarget != null) {
         AlertDialog(
             onDismissRequest = { pendingStudyLanguage = null },
-            title = { Text(tr("Zmienić język nauki?", "Change study language?")) },
+            title = { Text(tr("Zmienić język nauki?", "Change study language?", "学習する言語を変更しますか？")) },
             text = {
                 Text(
                     tr(
@@ -554,7 +545,7 @@ fun SettingsScreen(
                             "the other language's dictionaries simply stop appearing in " +
                             "results until you switch back. If you have no dictionaries " +
                             "for the new language yet, download them under Dictionaries " +
-                            "after the restart."
+                            "after the restart.", "アプリは完全に終了し、ご自分でもう一度起動する必要があります。\n\n辞書、カード、設定はそのままです — もう一方の言語の辞書が、戻すまで検索結果に出なくなるだけです。新しい言語の辞書をまだ持っていない場合は、再起動後に「辞書」からダウンロードしてください。"
                     ),
                     fontSize = 14.sp
                 )
@@ -570,12 +561,12 @@ fun SettingsScreen(
                         kotlin.system.exitProcess(0)
                     }
                 }) {
-                    Text(tr("Zmień i zamknij", "Change and close"))
+                    Text(tr("Zmień i zamknij", "Change and close", "変更して閉じる"))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingStudyLanguage = null }) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -585,18 +576,18 @@ fun SettingsScreen(
         val backup = selectedBackupForRestore
         AlertDialog(
             onDismissRequest = { showRestoreDialog = false },
-            title = { Text(tr("Przywróć kopię zapasową", "Restore backup")) },
+            title = { Text(tr("Przywróć kopię zapasową", "Restore backup", "バックアップを復元")) },
             text = {
                 Column {
                     Text(
                         tr(
                             "Czy na pewno chcesz przywrócić tę kopię zapasową?\n${backup?.name ?: ""}\n\nAktualne dane zostaną zastąpione.",
-                            "Are you sure you want to restore this backup?\n${backup?.name ?: ""}\n\nCurrent data will be replaced."
+                            "Are you sure you want to restore this backup?\n${backup?.name ?: ""}\n\nCurrent data will be replaced.", "このバックアップを本当に復元しますか？\n${backup?.name ?: ""}\n\n現在のデータは置き換えられます。"
                         ),
                         fontSize = 14.sp
                     )
                     Text(
-                        tr("Aplikacja musi być zrestartowana po przywróceniu.", "App must be restarted after restore."),
+                        tr("Aplikacja musi być zrestartowana po przywróceniu.", "App must be restarted after restore.", "復元後はアプリの再起動が必要です。"),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp)
@@ -609,12 +600,12 @@ fun SettingsScreen(
                         viewModel.restoreBackup(selectedBackupForRestore!!)
                     }
                 }, enabled = !isRestoring) {
-                    Text(tr("Przywróć", "Restore"))
+                    Text(tr("Przywróć", "Restore", "復元"))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showRestoreDialog = false }, enabled = !isRestoring) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -623,23 +614,21 @@ fun SettingsScreen(
     if (showLicensesDialog) {
         AlertDialog(
             onDismissRequest = { showLicensesDialog = false },
-            title = { Text(tr("O aplikacji i licencje", "About app and licenses")) },
+            title = { Text(tr("O aplikacji i licencje", "About app and licenses", "アプリについて・ライセンス")) },
             text = {
                 LazyColumn {
                     item {
                         Text(
                             tr(
                                 "Wersja aplikacji: ${com.yomitanmobile.BuildConfig.VERSION_NAME}",
-                                "App version: ${com.yomitanmobile.BuildConfig.VERSION_NAME}"
-                            ),
+                                "App version: ${com.yomitanmobile.BuildConfig.VERSION_NAME}", "アプリのバージョン: ${com.yomitanmobile.BuildConfig.VERSION_NAME}"),
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
                                 "Aplikacja korzysta z otwartych słowników do działania. Dostępne słowniki m.in. JMdict oraz KANJIDIC są udostępniane na licencjach Creative Commons Attribution-ShareAlike 4.0 International lub podobnych.\n\nWłasność i prawa autorskie:",
-                                "The app uses open dictionaries. Available dictionaries including JMdict and KANJIDIC are shared under Creative Commons Attribution-ShareAlike 4.0 International licenses or similar.\n\nOwnership and copyrights:"
-                            ),
+                                "The app uses open dictionaries. Available dictionaries including JMdict and KANJIDIC are shared under Creative Commons Attribution-ShareAlike 4.0 International licenses or similar.\n\nOwnership and copyrights:", "このアプリはオープンな辞書を使用しています。JMdictやKANJIDICをはじめとする利用可能な辞書は、クリエイティブ・コモンズ 表示-継承 4.0 国際ライセンスまたは同等のライセンスで公開されています。\n\n権利と著作権:"),
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(4.dp))
@@ -648,49 +637,43 @@ fun SettingsScreen(
                         Text(
                             tr(
                                 "Poziomy CEFR (jeśli pobrane): The CEFR-J Wordlist Version 1.5, Yukio Tono, Tokyo University of Foreign Studies; Octanove Vocabulary Profile C1/C2, CC BY-SA 4.0.",
-                                "CEFR levels (if downloaded): The CEFR-J Wordlist Version 1.5, Yukio Tono, Tokyo University of Foreign Studies; Octanove Vocabulary Profile C1/C2, CC BY-SA 4.0."
-                            )
+                                "CEFR levels (if downloaded): The CEFR-J Wordlist Version 1.5, Yukio Tono, Tokyo University of Foreign Studies; Octanove Vocabulary Profile C1/C2, CC BY-SA 4.0.", "CEFRレベル（ダウンロードした場合）: The CEFR-J Wordlist Version 1.5、投野由紀夫、東京外国語大学; Octanove Vocabulary Profile C1/C2、CC BY-SA 4.0。")
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
                                 "Częstość słów angielskich i hiszpańskich (jeśli pobrana): wordfreq (Robyn Speer) oraz FrequencyWords (Hermit Dave, z OpenSubtitles 2018), CC BY-SA 4.0.",
-                                "English and Spanish word frequency (if downloaded): wordfreq (Robyn Speer) and FrequencyWords (Hermit Dave, from OpenSubtitles 2018), CC BY-SA 4.0."
-                            )
+                                "English and Spanish word frequency (if downloaded): wordfreq (Robyn Speer) and FrequencyWords (Hermit Dave, from OpenSubtitles 2018), CC BY-SA 4.0.", "英語・スペイン語の単語頻度（ダウンロードした場合）: wordfreq（Robyn Speer）およびFrequencyWords（Hermit Dave、OpenSubtitles 2018より）、CC BY-SA 4.0。")
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
                                 "Nagrania native speakerów dla angielskiego i hiszpańskiego (jeśli włączone): ${com.yomitanmobile.data.audio.LinguaLibre.CREDIT}.",
-                                "Native-speaker recordings for English and Spanish (if switched on): ${com.yomitanmobile.data.audio.LinguaLibre.CREDIT}."
-                            )
+                                "Native-speaker recordings for English and Spanish (if switched on): ${com.yomitanmobile.data.audio.LinguaLibre.CREDIT}.", "英語・スペイン語のネイティブ録音（オンにした場合）: ${com.yomitanmobile.data.audio.LinguaLibre.CREDIT}。")
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
                                 "Nagrania native speakerów (jeśli pobrane): ${com.yomitanmobile.data.audio.KanjiAlive.CREDIT}.",
-                                "Native-speaker recordings (if downloaded): ${com.yomitanmobile.data.audio.KanjiAlive.CREDIT}."
-                            )
+                                "Native-speaker recordings (if downloaded): ${com.yomitanmobile.data.audio.KanjiAlive.CREDIT}.", "ネイティブ録音（ダウンロードした場合）: ${com.yomitanmobile.data.audio.KanjiAlive.CREDIT}。")
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
                                 "Głos wymowy (jeśli pobrany): ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.CREDIT}, silnik VOICEVOX CORE (MIT).",
-                                "Pronunciation voice (if downloaded): ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.CREDIT}, VOICEVOX CORE engine (MIT)."
-                            )
+                                "Pronunciation voice (if downloaded): ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.CREDIT}, VOICEVOX CORE engine (MIT).", "発音の音声（ダウンロードした場合）: ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.CREDIT}、VOICEVOX COREエンジン（MIT）。")
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
                             tr(
                                 "Tatoeba Project (CC-BY 2.0 FR) dla przykładowych zdań (jeśli zaimportowane).",
-                                "Tatoeba Project (CC-BY 2.0 FR) for example sentences (if imported)."
-                            )
+                                "Tatoeba Project (CC-BY 2.0 FR) for example sentences (if imported).", "例文はTatoeba Project（CC-BY 2.0 FR）による（インポートした場合）。")
                         )
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showLicensesDialog = false }) { Text(tr("Zamknij", "Close")) }
+                TextButton(onClick = { showLicensesDialog = false }) { Text(tr("Zamknij", "Close", "閉じる")) }
             }
         )
     }
@@ -698,7 +681,7 @@ fun SettingsScreen(
     if (showVoicevoxTerms) {
         AlertDialog(
             onDismissRequest = { showVoicevoxTerms = false },
-            title = { Text(tr("Głos VOICEVOX — regulamin", "VOICEVOX voice — terms")) },
+            title = { Text(tr("Głos VOICEVOX — regulamin", "VOICEVOX voice — terms", "VOICEVOXの音声 — 利用規約")) },
             text = {
                 Column {
                     Text(
@@ -712,12 +695,12 @@ fun SettingsScreen(
                                 "${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MB, from GitHub.\n\n" +
                                 "The voice terms allow the recordings for study, with credit: " +
                                 "\"VOICEVOX Nemo\" (any use) and \"VOICEVOX:No.7\" (non-commercial only). " +
-                                "Card recordings stay with you — publishing them requires that credit."
+                                "Card recordings stay with you — publishing them requires that credit.", "VOICEVOXの音声モデルとOpen JTalkの発音辞書、合計約${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MBをGitHubからダウンロードします。\n\n音声の利用規約では、クレジット表記のうえで学習用に録音を使えます: 「VOICEVOX Nemo」（用途を問わず）と「VOICEVOX:No.7」（非商用のみ）。カードの録音は手元に残ります — 公開する場合はクレジット表記が必要です。"
                         ),
                         fontSize = 14.sp
                     )
                     TextButton(onClick = { uriHandler.openUri(com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TERMS_URL) }) {
-                        Text(tr("Pełny regulamin (TERMS.txt)", "Full terms (TERMS.txt)"))
+                        Text(tr("Pełny regulamin (TERMS.txt)", "Full terms (TERMS.txt)", "規約の全文（TERMS.txt）"))
                     }
                 }
             },
@@ -725,10 +708,10 @@ fun SettingsScreen(
                 Button(onClick = {
                     showVoicevoxTerms = false
                     viewModel.installVoicevox()
-                }) { Text(tr("Akceptuję i pobieram", "Accept and download")) }
+                }) { Text(tr("Akceptuję i pobieram", "Accept and download", "同意してダウンロード")) }
             },
             dismissButton = {
-                TextButton(onClick = { showVoicevoxTerms = false }) { Text(tr("Anuluj", "Cancel")) }
+                TextButton(onClick = { showVoicevoxTerms = false }) { Text(tr("Anuluj", "Cancel", "キャンセル")) }
             }
         )
     }
@@ -736,22 +719,21 @@ fun SettingsScreen(
     if (showPrivacyDialog) {
         AlertDialog(
             onDismissRequest = { showPrivacyDialog = false },
-            title = { Text(tr("Polityka Prywatności", "Privacy Policy")) },
+            title = { Text(tr("Polityka Prywatności", "Privacy Policy", "プライバシーポリシー")) },
             text = {
                 LazyColumn {
                     item {
                         Text(
                             tr(
                                 "1. Zakres danych\nYomitan Mobile nie wymaga konta i nie zbiera danych osobowych w centralnym backendzie.\nDomyślnie dane użytkownika (np. historia wyszukiwań, ustawienia, lista eksportów) są przechowywane lokalnie na urządzeniu.\n\n2. Kiedy aplikacja łączy się z internetem\nAplikacja może używać sieci w dwóch scenariuszach:\n1) Pobieranie słowników na życzenie użytkownika.\n2) Opcjonalne pobieranie zdań przykładowych z zewnętrznego API (tylko po wyrażeniu zgody).\n\n3. Opcjonalne API zdań\nFunkcja zdań online jest dobrowolna i domyślnie wyłączona.\nPo włączeniu aplikacja wysyła zapytanie zawierające szukane słowo do zewnętrznego API wyłącznie w celu pobrania przykładowego zdania.\nZgodę można w każdej chwili cofnąć w ustawieniach aplikacji.\n\n4. Przechowywanie lokalne\nDane tworzone przez aplikację (m.in. historia wyszukiwań, preferencje, metadane eksportu do Anki) są przechowywane lokalnie.\nUżytkownik może usunąć je przez wyczyszczenie danych aplikacji w ustawieniach systemu Android.\n\n5. Integracja z AnkiDroid\nEksport do AnkiDroid wykorzystuje oficjalne API AnkiDroid i lokalny mechanizm Content Provider.\n\n6. Kontakt\nW razie pytań lub wątpliwości dotyczących prywatności prosimy o otwarcie zgłoszenia (Issue) w repozytorium projektu.\n\nStan na dzień: 18 kwietnia 2026.",
-                                "1. Data scope\nYomitan Mobile does not require an account and does not collect personal data in a central backend.\nBy default, user data (search history, settings, export list) is stored locally on the device.\n\n2. When the app connects to the internet\nThe app may use the network in two cases:\n1) Downloading dictionaries on user request.\n2) Optional fetching of example sentences from an external API (only with consent).\n\n3. Optional sentence API\nThe online sentence feature is optional and disabled by default.\nWhen enabled, the app sends the searched word to an external sentence API solely to fetch an example sentence.\nConsent can be revoked at any time in the app settings.\n\n4. Local storage\nData created by the app (search history, preferences, Anki export metadata) is stored locally.\nYou can delete it by clearing app data in Android system settings.\n\n5. AnkiDroid integration\nExport to AnkiDroid uses the official AnkiDroid API and a local Content Provider mechanism.\n\n6. Contact\nIf you have questions or privacy concerns, please open an Issue in the project repository.\n\nStatus as of: April 18, 2026."
-                            ),
+                                "1. Data scope\nYomitan Mobile does not require an account and does not collect personal data in a central backend.\nBy default, user data (search history, settings, export list) is stored locally on the device.\n\n2. When the app connects to the internet\nThe app may use the network in two cases:\n1) Downloading dictionaries on user request.\n2) Optional fetching of example sentences from an external API (only with consent).\n\n3. Optional sentence API\nThe online sentence feature is optional and disabled by default.\nWhen enabled, the app sends the searched word to an external sentence API solely to fetch an example sentence.\nConsent can be revoked at any time in the app settings.\n\n4. Local storage\nData created by the app (search history, preferences, Anki export metadata) is stored locally.\nYou can delete it by clearing app data in Android system settings.\n\n5. AnkiDroid integration\nExport to AnkiDroid uses the official AnkiDroid API and a local Content Provider mechanism.\n\n6. Contact\nIf you have questions or privacy concerns, please open an Issue in the project repository.\n\nStatus as of: April 18, 2026.", "1. データの範囲\nYomitan Mobileはアカウントを必要とせず、中央のサーバーで個人データを収集しません。\n初期設定では、ユーザーのデータ（検索履歴、設定、エクスポートの一覧）は端末内に保存されます。\n\n2. アプリがインターネットに接続するとき\nアプリがネットワークを使うのは次の2つの場合です:\n1) ユーザーの要求による辞書のダウンロード。\n2) 外部APIからの例文の取得（同意した場合のみ、任意）。\n\n3. 任意の例文API\nオンライン例文機能は任意で、初期設定では無効です。\n有効にすると、例文を取得する目的に限り、検索した単語を外部の例文APIに送信します。\n同意はアプリの設定でいつでも取り消せます。\n\n4. 端末内の保存\nアプリが作成するデータ（検索履歴、設定、Ankiエクスポートの情報）は端末内に保存されます。\nAndroidの設定でアプリのデータを消去すると削除できます。\n\n5. AnkiDroidとの連携\nAnkiDroidへのエクスポートには、公式のAnkiDroid APIと端末内のContent Providerの仕組みを使います。\n\n6. お問い合わせ\nご質問やプライバシーに関する懸念がある場合は、プロジェクトのリポジトリでIssueを作成してください。\n\n2026年4月18日現在。"),
                             fontSize = 12.sp
                         )
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showPrivacyDialog = false }) { Text(tr("Zamknij", "Close")) }
+                TextButton(onClick = { showPrivacyDialog = false }) { Text(tr("Zamknij", "Close", "閉じる")) }
             }
         )
     }
@@ -759,10 +741,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Ustawienia", "Settings")) },
+                title = { Text(tr("Ustawienia", "Settings", "設定")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -785,7 +767,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Translate,
-                    title = tr("Język nauki", "Study language"),
+                    title = tr("Język nauki", "Study language", "学習する言語"),
                     first = true
                 )
             }
@@ -795,14 +777,13 @@ fun SettingsScreen(
                 SettingsClickableItem(
                     icon = Icons.Default.Translate,
                     title = when (current) {
-                        AppLanguage.JAPANESE -> tr("Japoński", "Japanese")
-                        AppLanguage.ENGLISH -> tr("Angielski → polski", "English → Polish")
-                        AppLanguage.SPANISH -> tr("Hiszpański → angielski", "Spanish → English")
+                        AppLanguage.JAPANESE -> tr("Japoński", "Japanese", "日本語")
+                        AppLanguage.ENGLISH -> tr("Angielski → polski", "English → Polish", "英語 → ポーランド語")
+                        AppLanguage.SPANISH -> tr("Hiszpański → angielski", "Spanish → English", "スペイン語 → 英語")
                     },
                     subtitle = tr(
                         "Dotknij, aby zmienić. Wymaga restartu aplikacji.",
-                        "Tap to change. Requires an app restart."
-                    ),
+                        "Tap to change. Requires an app restart.", "タップして変更。アプリの再起動が必要です。"),
                     onClick = { showLanguagePicker = true }
                 )
             }
@@ -820,12 +801,10 @@ fun SettingsScreen(
                                 when (viewModel.studyLanguage) {
                                     AppLanguage.SPANISH -> tr(
                                         "Czego nie ma w trybie hiszpańskim",
-                                        "Not available in Spanish mode"
-                                    )
+                                        "Not available in Spanish mode", "スペイン語モードでは利用できません")
                                     else -> tr(
                                         "Czego nie ma w trybie angielskim",
-                                        "Not available in English mode"
-                                    )
+                                        "Not available in English mode", "英語モードでは利用できません")
                                 },
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp
@@ -859,7 +838,7 @@ fun SettingsScreen(
                                                 "base word - the dictionary does not list them."
                                         } else {
                                             ""
-                                        }
+                                        }, "• 頻度順位 — 英語にはYomitan形式のリストがないため、結果は単語のよく使われる順に並びません。\n• JLPTデッキの生成、字幕/EPUBスキャン、Ankiコレクションのスキャンは無効です — どれも英語には情報源のないもの（JLPTタグ、頻度に基づく学習順、日本語フィールドの判別）に依存しています。\n• ピッチアクセント、ふりがな、漢字の内訳 — IPAに置き換わります。${if (viewModel.studyLanguage == AppLanguage.ENGLISH) "\n• 不規則な形（went, better）は基本形で入力する必要があります — 辞書に載っていないためです。" else ""}"
                                 ),
                                 fontSize = 13.sp,
                                 lineHeight = 19.sp
@@ -874,7 +853,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.MenuBook,
-                    title = tr("Słowniki", "Dictionaries")
+                    title = tr("Słowniki", "Dictionaries", "辞書")
                 )
             }
 
@@ -887,7 +866,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(tr("Pobierz słowniki z internetu", "Download dictionaries from the internet"))
+                    Text(tr("Pobierz słowniki z internetu", "Download dictionaries from the internet", "インターネットから辞書をダウンロード"))
                 }
             }
 
@@ -901,15 +880,15 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(tr("Importuj słownik Yomitan (.zip)", "Import Yomitan dictionary (.zip)"))
+                    Text(tr("Importuj słownik Yomitan (.zip)", "Import Yomitan dictionary (.zip)", "Yomitan辞書（.zip）をインポート"))
                 }
             }
 
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.MenuBook,
-                    title = tr("Zainstalowane słowniki", "Installed dictionaries"),
-                    subtitle = tr("Przeglądaj i zarządzaj słownikami", "Browse and manage dictionaries"),
+                    title = tr("Zainstalowane słowniki", "Installed dictionaries", "インストール済みの辞書"),
+                    subtitle = tr("Przeglądaj i zarządzaj słownikami", "Browse and manage dictionaries", "辞書の一覧と管理"),
                     onClick = onNavigateToDictionaries
                 )
             }
@@ -924,7 +903,7 @@ fun SettingsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                                 Spacer(Modifier.width(12.dp))
-                                Text(tr("Importowanie słownika...", "Importing dictionary..."))
+                                Text(tr("Importowanie słownika...", "Importing dictionary...", "辞書をインポート中…"))
                             }
                             importProgress?.let { progress ->
                                 Spacer(Modifier.height(12.dp))
@@ -933,8 +912,7 @@ fun SettingsScreen(
                                 Text(
                                     tr(
                                         "Plik ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} wpisów",
-                                        "File ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} entries"
-                                    ),
+                                        "File ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed} entries", "ファイル ${progress.filesProcessed}/${progress.totalFiles} • ${progress.entriesProcessed}件"),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
@@ -950,7 +928,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Palette,
-                    title = tr("Wygląd", "Appearance")
+                    title = tr("Wygląd", "Appearance", "外観")
                 )
             }
 
@@ -959,7 +937,7 @@ fun SettingsScreen(
                 SettingsBlock {
                     Column {
                         Text(
-                            tr("Motyw", "Theme"),
+                            tr("Motyw", "Theme", "テーマ"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -976,7 +954,7 @@ fun SettingsScreen(
                                         context.dataStore.edit { it[PreferenceKeys.THEME_MODE] = "system" }
                                     }
                                 },
-                                label = { Text(tr("Systemowy", "System")) },
+                                label = { Text(tr("Systemowy", "System", "システム")) },
                                 modifier = Modifier.weight(1f)
                             )
                             FilterChip(
@@ -987,7 +965,7 @@ fun SettingsScreen(
                                         context.dataStore.edit { it[PreferenceKeys.THEME_MODE] = "light" }
                                     }
                                 },
-                                label = { Text(tr("Jasny", "Light")) },
+                                label = { Text(tr("Jasny", "Light", "ライト")) },
                                 leadingIcon = if (currentThemeMode == "light") null else {
                                     { Icon(Icons.Default.LightMode, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 },
@@ -1001,7 +979,7 @@ fun SettingsScreen(
                                         context.dataStore.edit { it[PreferenceKeys.THEME_MODE] = "dark" }
                                     }
                                 },
-                                label = { Text(tr("Ciemny", "Dark")) },
+                                label = { Text(tr("Ciemny", "Dark", "ダーク")) },
                                 leadingIcon = if (currentThemeMode == "dark") null else {
                                     { Icon(Icons.Default.DarkMode, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 },
@@ -1016,8 +994,8 @@ fun SettingsScreen(
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.Style,
-                    title = tr("Wygląd fiszki Anki", "Anki card style"),
-                    subtitle = tr("Czcionka, rozmiar, kolory, podgląd", "Font, size, colors, preview"),
+                    title = tr("Wygląd fiszki Anki", "Anki card style", "Ankiカードのスタイル"),
+                    subtitle = tr("Czcionka, rozmiar, kolory, podgląd", "Font, size, colors, preview", "フォント、サイズ、色、プレビュー"),
                     onClick = onNavigateToCardStyle
                 )
             }
@@ -1026,8 +1004,8 @@ fun SettingsScreen(
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.BarChart,
-                    title = tr("Wyświetlanie częstotliwości", "Frequency display"),
-                    subtitle = tr("Kolejność list, pokaż wszystkie", "List order, show all"),
+                    title = tr("Wyświetlanie częstotliwości", "Frequency display", "頻度の表示"),
+                    subtitle = tr("Kolejność list, pokaż wszystkie", "List order, show all", "リストの順番、すべて表示"),
                     onClick = onNavigateToFrequencyDisplay
                 )
             }
@@ -1046,7 +1024,7 @@ fun SettingsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    tr("Archiwum wymowy", "Pronunciation archive"),
+                                    tr("Archiwum wymowy", "Pronunciation archive", "発音アーカイブ"),
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -1054,18 +1032,16 @@ fun SettingsScreen(
                                     when {
                                         audioArchiveIndexing -> tr(
                                             "Indeksowanie folderu…",
-                                            "Indexing the folder…"
-                                        )
+                                            "Indexing the folder…", "フォルダーを索引に登録中…")
                                         audioArchiveFiles > 0 -> tr(
                                             "$audioArchiveFiles nagrań" +
                                                 (audioArchiveLabel?.let { " — $it" } ?: ""),
                                             "$audioArchiveFiles recordings" +
-                                                (audioArchiveLabel?.let { " — $it" } ?: "")
+                                                (audioArchiveLabel?.let { " — $it" } ?: ""), "録音${audioArchiveFiles}件${audioArchiveLabel?.let { " — $it" } ?: ""}"
                                         )
                                         else -> tr(
                                             "Brak. Fiszki mówią głosem syntezatora, który czyta hasło bez kontekstu i gubi akcent.",
-                                            "None. Cards speak with the synthesiser, which reads a headword without context and drops the accent."
-                                        )
+                                            "None. Cards speak with the synthesiser, which reads a headword without context and drops the accent.", "なし。カードは合成音声で読み上げます。合成音声は見出し語を文脈なしで読み、アクセントも失われます。")
                                     },
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1079,8 +1055,8 @@ fun SettingsScreen(
                                 enabled = !audioArchiveIndexing
                             ) {
                                 Text(
-                                    if (audioArchiveFiles > 0) tr("Zmień folder", "Change folder")
-                                    else tr("Wskaż folder", "Pick a folder")
+                                    if (audioArchiveFiles > 0) tr("Zmień folder", "Change folder", "フォルダーを変更")
+                                    else tr("Wskaż folder", "Pick a folder", "フォルダーを選ぶ")
                                 )
                             }
                             if (audioArchiveFiles > 0) {
@@ -1088,7 +1064,7 @@ fun SettingsScreen(
                                     onClick = viewModel::forgetAudioArchive,
                                     enabled = !audioArchiveIndexing
                                 ) {
-                                    Text(tr("Usuń", "Remove"))
+                                    Text(tr("Usuń", "Remove", "削除"))
                                 }
                             }
                         }
@@ -1112,7 +1088,7 @@ fun SettingsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    tr("Nagrania native speakerów", "Native-speaker recordings"),
+                                    tr("Nagrania native speakerów", "Native-speaker recordings", "ネイティブの録音"),
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -1124,16 +1100,14 @@ fun SettingsScreen(
                                                 "na nowych fiszkach i w generatorach talii.",
                                             "Installed. Over 10,000 words read by native Japanese speakers — " +
                                                 "used everywhere before a synthesised voice: playback, new cards " +
-                                                "and the deck generators."
+                                                "and the deck generators.", "インストール済み。ネイティブの日本人が読んだ1万語以上 — 合成音声より先に、再生、新しいカード、デッキ生成のすべてで使われます。"
                                         )
                                         is com.yomitanmobile.data.audio.NativeAudioPack.State.Downloading -> tr(
                                             "Pobieranie… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB",
-                                            "Downloading… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB"
-                                        )
+                                            "Downloading… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB", "ダウンロード中… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB")
                                         is com.yomitanmobile.data.audio.NativeAudioPack.State.Failed -> tr(
                                             "Pobieranie nie powiodło się: ${state.message}",
-                                            "Download failed: ${state.message}"
-                                        )
+                                            "Download failed: ${state.message}", "ダウンロードに失敗しました: ${state.message}")
                                         else -> tr(
                                             "Ponad 10 000 słów czytanych przez Japończyków (kobiety i mężczyźni), " +
                                                 "na wolnej licencji. Słowo, którego nie ma w nagraniach, dalej " +
@@ -1142,7 +1116,7 @@ fun SettingsScreen(
                                             "Over 10,000 words read by native Japanese speakers (women and men), " +
                                                 "freely licensed. A word they do not cover is still said by " +
                                                 "VOICEVOX or the system TTS. A download of about " +
-                                                "${com.yomitanmobile.data.audio.KanjiAlive.AUDIO_ZIP_BYTES / 1_000_000} MB."
+                                                "${com.yomitanmobile.data.audio.KanjiAlive.AUDIO_ZIP_BYTES / 1_000_000} MB.", "ネイティブの日本人（女性と男性）が読んだ1万語以上、自由なライセンス。録音のない単語は引き続きVOICEVOXかシステムの読み上げで発音します。ダウンロードは約${com.yomitanmobile.data.audio.KanjiAlive.AUDIO_ZIP_BYTES / 1_000_000} MB。"
                                         )
                                     },
                                     fontSize = 12.sp,
@@ -1163,18 +1137,18 @@ fun SettingsScreen(
                             when (nativeAudioState) {
                                 is com.yomitanmobile.data.audio.NativeAudioPack.State.Installed -> {
                                     Button(onClick = viewModel::previewNativeAudio) {
-                                        Text(tr("Odsłuchaj", "Listen"))
+                                        Text(tr("Odsłuchaj", "Listen", "聞く"))
                                     }
                                     OutlinedButton(onClick = viewModel::uninstallNativeAudio) {
-                                        Text(tr("Usuń", "Remove"))
+                                        Text(tr("Usuń", "Remove", "削除"))
                                     }
                                 }
                                 is com.yomitanmobile.data.audio.NativeAudioPack.State.Downloading -> Unit
                                 else -> Button(onClick = viewModel::installNativeAudio) {
                                     Text(
                                         if (nativeAudioState is com.yomitanmobile.data.audio.NativeAudioPack.State.Failed)
-                                            tr("Spróbuj ponownie", "Try again")
-                                        else tr("Pobierz nagrania", "Download the recordings")
+                                            tr("Spróbuj ponownie", "Try again", "再試行")
+                                        else tr("Pobierz nagrania", "Download the recordings", "録音をダウンロード")
                                     )
                                 }
                             }
@@ -1201,7 +1175,7 @@ fun SettingsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    tr("Nagrania native speakerów", "Native-speaker recordings"),
+                                    tr("Nagrania native speakerów", "Native-speaker recordings", "ネイティブの録音"),
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -1213,23 +1187,21 @@ fun SettingsScreen(
                                                 "użyciu słowa — potrzebny jest wtedy internet.",
                                             "On. A word a native speaker recorded is played and put on the card before " +
                                                 "any synthesised voice. Each recording is fetched once, the first time the " +
-                                                "word is used — that needs the internet."
+                                                "word is used — that needs the internet.", "オン。ネイティブが録音した単語は、合成音声より先に再生され、カードに入ります。録音は単語を初めて使うときに一度だけ取得します — そのときインターネットが必要です。"
                                         )
                                         is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Installing -> tr(
                                             "Pobieranie spisu nagrań…",
-                                            "Downloading the list of recordings…"
-                                        )
+                                            "Downloading the list of recordings…", "録音の一覧をダウンロード中…")
                                         is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Failed -> tr(
                                             "Nie udało się pobrać spisu: ${state.message}",
-                                            "Could not download the list: ${state.message}"
-                                        )
+                                            "Could not download the list: ${state.message}", "一覧をダウンロードできませんでした: ${state.message}")
                                         else -> tr(
                                             "Słowa czytane przez native speakerów z projektu Lingua Libre: dla angielskiego " +
                                                 "98% z tysiąca najczęstszych słów. Włączenie pobiera sam spis (kilka MB); " +
                                                 "nagranie ściąga się przy pierwszym użyciu słowa i zostaje w telefonie.",
                                             "Words read by native speakers, from Lingua Libre: for English, 98% of the " +
                                                 "thousand commonest words. Switching on downloads the list only (a few MB); " +
-                                                "a recording is fetched the first time its word is used and kept."
+                                                "a recording is fetched the first time its word is used and kept.", "Lingua Libreのネイティブによる単語の録音: 英語ではよく使う1000語の98%。オンにすると一覧（数MB）だけをダウンロードし、録音は単語を初めて使うときに取得して保存します。"
                                         )
                                     },
                                     fontSize = 12.sp,
@@ -1246,18 +1218,18 @@ fun SettingsScreen(
                             when (linguaLibreState) {
                                 is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Installed -> {
                                     Button(onClick = viewModel::previewLinguaLibre) {
-                                        Text(tr("Odsłuchaj", "Listen"))
+                                        Text(tr("Odsłuchaj", "Listen", "聞く"))
                                     }
                                     OutlinedButton(onClick = viewModel::uninstallLinguaLibre) {
-                                        Text(tr("Wyłącz", "Switch off"))
+                                        Text(tr("Wyłącz", "Switch off", "オフにする"))
                                     }
                                 }
                                 is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Installing -> Unit
                                 else -> Button(onClick = viewModel::installLinguaLibre) {
                                     Text(
                                         if (linguaLibreState is com.yomitanmobile.data.audio.LinguaLibreAudio.State.Failed)
-                                            tr("Spróbuj ponownie", "Try again")
-                                        else tr("Włącz nagrania", "Switch on")
+                                            tr("Spróbuj ponownie", "Try again", "再試行")
+                                        else tr("Włącz nagrania", "Switch on", "オンにする")
                                     )
                                 }
                             }
@@ -1285,7 +1257,7 @@ fun SettingsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    tr("Głos VOICEVOX", "VOICEVOX voice"),
+                                    tr("Głos VOICEVOX", "VOICEVOX voice", "VOICEVOXの音声"),
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -1295,21 +1267,19 @@ fun SettingsScreen(
                                             "Neuronowy głos japoński, offline. Mówi czytanie z akcentem z karty. " +
                                                 "Używany dla słów bez nagrania native speakera, przed systemowym TTS.",
                                             "Neural Japanese voice, offline. Says the reading with the card's accent. " +
-                                                "Used for words no native speaker recorded, before the system TTS."
+                                                "Used for words no native speaker recorded, before the system TTS.", "ニューラルの日本語音声、オフライン。カードのアクセントで読みを発音します。ネイティブの録音がない単語に、システムの読み上げより先に使います。"
                                         )
                                         is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Downloading -> tr(
                                             "Pobieranie… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB",
-                                            "Downloading… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB"
-                                        )
+                                            "Downloading… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB", "ダウンロード中… ${state.done / 1_000_000} / ${state.total / 1_000_000} MB")
                                         is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Failed -> tr(
                                             "Pobieranie nie powiodło się: ${state.message}",
-                                            "Download failed: ${state.message}"
-                                        )
+                                            "Download failed: ${state.message}", "ダウンロードに失敗しました: ${state.message}")
                                         else -> tr(
                                             "Dużo lepszy od systemowego TTS: neuronowy, offline, z akcentem z karty. " +
                                                 "Wymaga pobrania ok. ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MB.",
                                             "Far better than the system TTS: neural, offline, with the card's accent. " +
-                                                "Needs a download of about ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MB."
+                                                "Needs a download of about ${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MB.", "システムの読み上げよりはるかに良い: ニューラル、オフライン、カードのアクセント付き。約${com.yomitanmobile.data.audio.voicevox.VoicevoxAssets.TOTAL_BYTES / 1_000_000} MBのダウンロードが必要です。"
                                         )
                                     },
                                     fontSize = 12.sp,
@@ -1336,18 +1306,18 @@ fun SettingsScreen(
                             when (voicevoxState) {
                                 is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Installed -> {
                                     Button(onClick = viewModel::previewVoicevox, enabled = voicevoxEnabled) {
-                                        Text(tr("Odsłuchaj", "Listen"))
+                                        Text(tr("Odsłuchaj", "Listen", "聞く"))
                                     }
                                     OutlinedButton(onClick = viewModel::uninstallVoicevox) {
-                                        Text(tr("Usuń", "Remove"))
+                                        Text(tr("Usuń", "Remove", "削除"))
                                     }
                                 }
                                 is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Downloading -> Unit
                                 else -> Button(onClick = { showVoicevoxTerms = true }) {
                                     Text(
                                         if (voicevoxState is com.yomitanmobile.data.audio.voicevox.VoicevoxVoice.State.Failed)
-                                            tr("Spróbuj ponownie", "Try again")
-                                        else tr("Pobierz głos", "Download the voice")
+                                            tr("Spróbuj ponownie", "Try again", "再試行")
+                                        else tr("Pobierz głos", "Download the voice", "音声をダウンロード")
                                     )
                                 }
                             }
@@ -1387,13 +1357,13 @@ fun SettingsScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                tr("Talia Anki", "Anki deck"),
+                                tr("Talia Anki", "Anki deck", "Ankiのデッキ"),
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 if (currentDeckName.isNotBlank()) currentDeckName
-                                else tr("Nie wybrano (zostaniesz zapytany przy eksporcie)", "Not selected (you will be asked during export)"),
+                                else tr("Nie wybrano (zostaniesz zapytany przy eksporcie)", "Not selected (you will be asked during export)", "未選択（エクスポート時に確認します）"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1401,7 +1371,7 @@ fun SettingsScreen(
                         IconButton(onClick = { showDeckEditDialog = true }) {
                             Icon(
                                 Icons.Default.Edit,
-                                contentDescription = tr("Zmień talię", "Change deck"),
+                                contentDescription = tr("Zmień talię", "Change deck", "デッキを変更"),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -1420,7 +1390,7 @@ fun SettingsScreen(
                 SettingsBlock {
                     Column {
                         Text(
-                            tr("Silnik fiszek", "Card engine"),
+                            tr("Silnik fiszek", "Card engine", "カードの作り方"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -1436,7 +1406,7 @@ fun SettingsScreen(
                                     "first Japanese-Japanese dictionary on the list that has the word, and " +
                                     "Jitendex sentences keep their Japanese only, without the English " +
                                     "translation. Words none of them has keep their English definition. " +
-                                    "Cards with a JP-JP definition get the J-J tag in Anki."
+                                    "Cards with a JP-JP definition get the J-J tag in Anki.", "「意味」フィールドの言語。JP-JPモードでは、その単語がある国語辞典のうち、リストの最初のものから定義を取り、Jitendexの例文は英訳なしの日本語だけになります。どの辞書にもない単語は英語の定義のままです。JP-JPの定義を持つカードにはAnkiでJ-Jタグが付きます。"
                             ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1475,8 +1445,7 @@ fun SettingsScreen(
                             Text(
                                 tr(
                                     "Słowniki japońsko-japońskie, w kolejności",
-                                    "Japanese-Japanese dictionaries, in order"
-                                ),
+                                    "Japanese-Japanese dictionaries, in order", "国語辞典（順番どおりに使用）"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -1503,7 +1472,7 @@ fun SettingsScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.KeyboardArrowUp,
-                                            contentDescription = tr("Wyżej", "Move up")
+                                            contentDescription = tr("Wyżej", "Move up", "上へ")
                                         )
                                     }
                                     IconButton(
@@ -1511,7 +1480,7 @@ fun SettingsScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.Close,
-                                            contentDescription = tr("Usuń z listy", "Remove from the list")
+                                            contentDescription = tr("Usuń z listy", "Remove from the list", "リストから外す")
                                         )
                                     }
                                 }
@@ -1520,8 +1489,7 @@ fun SettingsScreen(
                                 Text(
                                     tr(
                                         "${monolingualDictionaries.size + 1}. angielski (Jitendex)",
-                                        "${monolingualDictionaries.size + 1}. English (Jitendex)"
-                                    ),
+                                        "${monolingualDictionaries.size + 1}. English (Jitendex)", "${monolingualDictionaries.size + 1}. 英語（Jitendex）"),
                                     fontSize = 14.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1531,7 +1499,7 @@ fun SettingsScreen(
                                 onClick = { showMonolingualPicker = true },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(tr("Dodaj lub usuń słownik…", "Add or remove a dictionary…"))
+                                Text(tr("Dodaj lub usuń słownik…", "Add or remove a dictionary…", "辞書を追加・削除…"))
                             }
                             if (monolingualDictionaries.isEmpty()) {
                                 Spacer(modifier = Modifier.height(6.dp))
@@ -1542,7 +1510,7 @@ fun SettingsScreen(
                                             "słownik (三省堂, 明鏡…) z pliku.",
                                         "With no dictionary chosen JP-JP mode changes nothing. Install e.g. " +
                                             "“日本語 Wiktionary” from the download screen, or import your own " +
-                                            "dictionary (三省堂, 明鏡…) from a file."
+                                            "dictionary (三省堂, 明鏡…) from a file.", "辞書を選ばないとJP-JPモードは何も変えません。ダウンロード画面から「日本語 Wiktionary」などをインストールするか、自分の辞書（三省堂、明鏡…）をファイルからインポートしてください。"
                                     ),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.error
@@ -1564,7 +1532,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.BarChart,
-                    title = tr("Statystyki i cele", "Stats & goals")
+                    title = tr("Statystyki i cele", "Stats & goals", "統計と目標")
                 )
             }
 
@@ -1582,13 +1550,13 @@ fun SettingsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    tr("Cel dzienny fiszek", "Daily card goal"),
+                                    tr("Cel dzienny fiszek", "Daily card goal", "1日のカード目標"),
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    if (dailyGoalCount.toInt() == 0) tr("Wyłączony", "Disabled")
-                                    else tr("${dailyGoalCount.toInt()} fiszek dziennie", "${dailyGoalCount.toInt()} cards/day"),
+                                    if (dailyGoalCount.toInt() == 0) tr("Wyłączony", "Disabled", "無効")
+                                    else tr("${dailyGoalCount.toInt()} fiszek dziennie", "${dailyGoalCount.toInt()} cards/day", "1日${dailyGoalCount.toInt()}枚"),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1600,7 +1568,7 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                if (dailyGoalCount.toInt() == 0) tr("Wyłączony", "Disabled") else "${dailyGoalCount.toInt()}",
+                                if (dailyGoalCount.toInt() == 0) tr("Wyłączony", "Disabled", "無効") else "${dailyGoalCount.toInt()}",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -1621,7 +1589,7 @@ fun SettingsScreen(
                             steps = 49
                         )
                         Text(
-                            tr("Ustaw na 0 aby wyłączyć cel dzienny", "Set to 0 to disable daily goal"),
+                            tr("Ustaw na 0 aby wyłączyć cel dzienny", "Set to 0 to disable daily goal", "0にすると1日の目標が無効になります"),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1637,14 +1605,13 @@ fun SettingsScreen(
                 val isReclassifying by viewModel.isReclassifying.collectAsState()
                 SettingsClickableItem(
                     icon = Icons.Default.List,
-                    title = tr("Przelicz kategorie", "Recompute categories"),
+                    title = tr("Przelicz kategorie", "Recompute categories", "カテゴリーを再計算"),
                     subtitle = if (isReclassifying) {
-                        tr("Przeliczanie…", "Recomputing…")
+                        tr("Przeliczanie…", "Recomputing…", "再計算中…")
                     } else {
                         tr(
                             "Przepisz kategorie wyeksportowanych słów po zmianie reguł",
-                            "Rewrite categories of exported words after rule changes"
-                        )
+                            "Rewrite categories of exported words after rule changes", "ルールの変更後、エクスポートした単語のカテゴリーを書き直します")
                     },
                     onClick = {
                         if (!isReclassifying) viewModel.reclassifyCategories()
@@ -1658,7 +1625,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Language,
-                    title = tr("Aplikacja", "App")
+                    title = tr("Aplikacja", "App", "アプリ")
                 )
             }
 
@@ -1676,7 +1643,7 @@ fun SettingsScreen(
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    tr("Język aplikacji", "App language"),
+                                    tr("Język aplikacji", "App language", "アプリの言語"),
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -1733,18 +1700,17 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.CloudDownload,
-                    title = tr("Kopia zapasowa", "Backup & Restore")
+                    title = tr("Kopia zapasowa", "Backup & Restore", "バックアップと復元")
                 )
             }
 
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.CloudDownload,
-                    title = tr("Kopie zapasowe", "Backups"),
+                    title = tr("Kopie zapasowe", "Backups", "バックアップ"),
                     subtitle = tr(
                         "Utwórz, przywróć lub zaimportuj ustawienia z pliku",
-                        "Create, restore, or import settings from a file"
-                    ),
+                        "Create, restore, or import settings from a file", "バックアップの作成・復元、ファイルからの設定のインポート"),
                     onClick = onNavigateToBackup
                 )
             }
@@ -1755,15 +1721,15 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Shield,
-                    title = tr("Prywatność i integracje", "Privacy & integrations")
+                    title = tr("Prywatność i integracje", "Privacy & integrations", "プライバシーと連携")
                 )
             }
 
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.Policy,
-                    title = tr("Polityka Prywatności", "Privacy Policy"),
-                    subtitle = tr("Zasady prywatności i lokalne przetwarzanie danych", "Privacy rules and local data processing"),
+                    title = tr("Polityka Prywatności", "Privacy Policy", "プライバシーポリシー"),
+                    subtitle = tr("Zasady prywatności i lokalne przetwarzanie danych", "Privacy rules and local data processing", "プライバシーの規則と端末内でのデータ処理"),
                     onClick = { showPrivacyDialog = true }
                 )
             }
@@ -1774,15 +1740,15 @@ fun SettingsScreen(
             item {
                 SectionHeader(
                     icon = Icons.Default.Info,
-                    title = tr("Informacje i licencje", "Information & licenses")
+                    title = tr("Informacje i licencje", "Information & licenses", "情報とライセンス")
                 )
             }
             item { Spacer(Modifier.height(8.dp)) }
             item {
                 SettingsClickableItem(
                     icon = Icons.Default.MenuBook,
-                    title = tr("Licencje słowników", "Dictionary licenses"),
-                    subtitle = tr("Informacje o otwartych danych i prawach autorskich", "Open data and copyright information"),
+                    title = tr("Licencje słowników", "Dictionary licenses", "辞書のライセンス"),
+                    subtitle = tr("Informacje o otwartych danych i prawach autorskich", "Open data and copyright information", "オープンデータと著作権の情報"),
                     onClick = { showLicensesDialog = true }
                 )
             }

@@ -62,7 +62,7 @@ fun KanjiDetailScreen(
                 title = { Text(viewModel.kanji) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 }
             )
@@ -81,14 +81,14 @@ fun KanjiDetailScreen(
                     Spacer(Modifier.padding(horizontal = 8.dp))
                     Column {
                         if (info != null && info.onyomi.isNotBlank()) {
-                            Text(tr("On: ${info.onyomi}", "On: ${info.onyomi}"), fontSize = 14.sp)
+                            Text(tr("On: ${info.onyomi}", "On: ${info.onyomi}", "音: ${info.onyomi}"), fontSize = 14.sp)
                         }
                         if (info != null && info.kunyomi.isNotBlank()) {
-                            Text(tr("Kun: ${info.kunyomi}", "Kun: ${info.kunyomi}"), fontSize = 14.sp)
+                            Text(tr("Kun: ${info.kunyomi}", "Kun: ${info.kunyomi}", "訓: ${info.kunyomi}"), fontSize = 14.sp)
                         }
                         if (known) {
                             Text(
-                                tr("Masz fiszkę z tym znakiem", "A card in your collection uses it"),
+                                tr("Masz fiszkę z tym znakiem", "A card in your collection uses it", "コレクションのカードで使われています"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -104,7 +104,7 @@ fun KanjiDetailScreen(
                         if (row.strokes > 0) {
                             AssistChip(
                                 onClick = {},
-                                label = { Text(tr("${row.strokes} kresek", "${row.strokes} strokes")) }
+                                label = { Text(tr("${row.strokes} kresek", "${row.strokes} strokes", "${row.strokes}画")) }
                             )
                         }
                         if (row.grade > 0) {
@@ -124,7 +124,7 @@ fun KanjiDetailScreen(
                 item {
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        tr("Znaczenie", "Meaning"),
+                        tr("Znaczenie", "Meaning", "意味"),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -135,7 +135,7 @@ fun KanjiDetailScreen(
             item {
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    tr("Słowa z tym znakiem", "Words written with it"),
+                    tr("Słowa z tym znakiem", "Words written with it", "この字を使う単語"),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -143,8 +143,7 @@ fun KanjiDetailScreen(
                     Text(
                         tr(
                             "Żaden zainstalowany słownik nie ma słowa z tym znakiem.",
-                            "No installed dictionary has a word written with it."
-                        ),
+                            "No installed dictionary has a word written with it.", "この字を使う単語はインストール済みの辞書にありません。"),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

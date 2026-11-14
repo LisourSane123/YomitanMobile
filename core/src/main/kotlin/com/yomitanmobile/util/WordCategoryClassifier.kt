@@ -805,16 +805,22 @@ object WordCategoryClassifier {
         return base + strong - penalty
     }
 
-    fun displayName(categoryCode: String, isEnglish: Boolean = false): String {
+    /** Japanese names for a Japanese interface, by category code. */
+    private val JAPANESE_LABELS = mapOf(
+        CATEGORY_FOOD to "食べ物", CATEGORY_ANIMALS to "動物", CATEGORY_TRAVEL to "旅行",
+        CATEGORY_ECONOMY to "経済", CATEGORY_EDUCATION to "教育", CATEGORY_WORK to "仕事",
+        CATEGORY_HEALTH to "健康", CATEGORY_TECHNOLOGY to "技術", CATEGORY_SHOPPING to "買い物",
+        CATEGORY_HOME_DAILY to "家と日常", CATEGORY_CULTURE to "文化と娯楽", CATEGORY_RELATIONSHIPS to "人間関係",
+        CATEGORY_OTHER to "その他"
+    )
+
+    fun displayName(categoryCode: String, isEnglish: Boolean = false, japanese: Boolean = false): String {
+        if (japanese) JAPANESE_LABELS[categoryCode]?.let { return it }
         val match = rules.firstOrNull { it.code == categoryCode }
-        if (match == null) return if (isEnglish) "Other" else "Inne"
+        if (match == null) return if (japanese) "その他" else if (isEnglish) "Other" else "Inne"
         return if (isEnglish) match.labelEn else match.labelPl
     }
 
-    fun mostImportantCategories(isEnglish: Boolean = false): List<Pair<String, String>> {
-        val primary = rules.map { rule ->
-            rule.code to if (isEnglish) rule.labelEn else rule.labelPl
-        }
-        return primary + (CATEGORY_OTHER to if (isEnglish) "Other" else "Inne")
-    }
+    fun mostImportantCategories(isEnglish: Boolean = false, japanese: Boolean = false): List<Pair<String, String>> =
+        (rules.map { it.code } + CATEGORY_OTHER).map { code -> code to displayName(code, isEnglish, japanese) }
 }

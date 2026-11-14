@@ -48,11 +48,11 @@ class Window internal constructor(private var config: Config) {
         wrapStyleWord = true
         font = Font(Font.MONOSPACED, Font.PLAIN, 12)
     }
-    private val syncButton = JButton(tr("Synchronizuj z Kindle", "Sync from Kindle"))
-    private val fileButton = JButton(tr("Z pliku vocab.db…", "From a vocab.db file…"))
-    private val settingsButton = JButton(tr("Ustawienia…", "Settings…"))
-    private val reportButton = JButton(tr("Raport", "Report"))
-    private val dryRun = JCheckBox(tr("Tylko podgląd (nic nie dodawaj)", "Preview only (add nothing)"))
+    private val syncButton = JButton(tr("Synchronizuj z Kindle", "Sync from Kindle", "Kindleから同期"))
+    private val fileButton = JButton(tr("Z pliku vocab.db…", "From a vocab.db file…", "vocab.dbファイルから…"))
+    private val settingsButton = JButton(tr("Ustawienia…", "Settings…", "設定…"))
+    private val reportButton = JButton(tr("Raport", "Report", "レポート"))
+    private val dryRun = JCheckBox(tr("Tylko podgląd (nic nie dodawaj)", "Preview only (add nothing)", "プレビューのみ（何も追加しない）"))
 
     internal fun build(visible: Boolean = true) {
         frame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
@@ -71,7 +71,7 @@ class Window internal constructor(private var config: Config) {
         syncButton.addActionListener { start(SyncJob.Options(dryRun = dryRun.isSelected, waitSeconds = 20)) }
         fileButton.addActionListener {
             val chooser = JFileChooser().apply {
-                dialogTitle = tr("Wskaż vocab.db (Kindle: system/vocabulary)", "Pick vocab.db (Kindle: system/vocabulary)")
+                dialogTitle = tr("Wskaż vocab.db (Kindle: system/vocabulary)", "Pick vocab.db (Kindle: system/vocabulary)", "vocab.dbを選ぶ（Kindle: system/vocabulary）")
                 fileFilter = FileNameExtensionFilter("vocab.db", "db")
             }
             if (chooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
@@ -97,7 +97,7 @@ class Window internal constructor(private var config: Config) {
             add(controls, BorderLayout.SOUTH)
         }
         root.add(north, BorderLayout.NORTH)
-        root.add(JScrollPane(logArea).apply { border = BorderFactory.createTitledBorder(tr("Szczegóły", "Details")) }, BorderLayout.CENTER)
+        root.add(JScrollPane(logArea).apply { border = BorderFactory.createTitledBorder(tr("Szczegóły", "Details", "詳細")) }, BorderLayout.CENTER)
 
         frame.contentPane = root
         // The accent-coloured button, and the one Enter presses.
@@ -120,7 +120,7 @@ class Window internal constructor(private var config: Config) {
             fileButton.isEnabled = false
         } else {
             setStatus(tr("Podłącz Kindle kablem USB, odblokuj jego ekran i kliknij „Synchronizuj”.",
-                "Plug the Kindle in over USB, unlock its screen and click “Sync”."), failed = null)
+                "Plug the Kindle in over USB, unlock its screen and click “Sync”.", "KindleをUSBで接続し、画面のロックを解除して「Kindleから同期」をクリックしてください。"), failed = null)
             syncButton.isEnabled = true
             fileButton.isEnabled = true
         }
@@ -157,7 +157,7 @@ class Window internal constructor(private var config: Config) {
         }
         Thread({
             val outcome = runCatching { runBlocking { SyncJob(config, reporter).sync(options) } }
-                .getOrElse { Outcome(true, tr("Nie wykonano: ", "Not done: ") + (it.message ?: it.toString())) }
+                .getOrElse { Outcome(true, tr("Nie wykonano: ", "Not done: ", "未完了: ") + (it.message ?: it.toString())) }
             SwingUtilities.invokeLater {
                 progress.isVisible = false
                 setStatus(outcome.message, failed = outcome.failed)
@@ -171,12 +171,12 @@ class Window internal constructor(private var config: Config) {
 
     private fun open(file: File) {
         runCatching { Desktop.getDesktop().open(file) }
-            .onFailure { appendLog(tr("Nie da się otworzyć ${file.path}", "Cannot open ${file.path}")) }
+            .onFailure { appendLog(tr("Nie da się otworzyć ${file.path}", "Cannot open ${file.path}", "${file.path}を開けません")) }
     }
 
     /** Everything [Config] holds, one row each. */
     private fun settings() {
-        val dialog = JDialog(frame, tr("Ustawienia", "Settings"), true)
+        val dialog = JDialog(frame, tr("Ustawienia", "Settings", "設定"), true)
         val panel = JPanel(GridBagLayout()).apply { border = BorderFactory.createEmptyBorder(14, 14, 14, 14) }
         var row = 0
         fun label(text: String) = panel.add(JLabel(text), GridBagConstraints().apply {
@@ -204,33 +204,35 @@ class Window internal constructor(private var config: Config) {
             return box
         }
 
-        val dict = fileRow(tr("Słownik (Jitendex .zip) *", "Dictionary (Jitendex .zip) *"), config.dictionary)
-        val freq = fileRow(tr("Lista częstości (.zip)", "Frequency list (.zip)"), config.frequency)
-        val pitch = fileRow(tr("Akcent (kanjium .zip)", "Pitch accent (kanjium .zip)"), config.pitch)
-        val kanji = fileRow(tr("Kanji (KANJIDIC .zip)", "Kanji (KANJIDIC .zip)"), config.kanji)
+        val dict = fileRow(tr("Słownik (Jitendex .zip) *", "Dictionary (Jitendex .zip) *", "辞書（Jitendex .zip）*"), config.dictionary)
+        val freq = fileRow(tr("Lista częstości (.zip)", "Frequency list (.zip)", "頻度リスト（.zip）"), config.frequency)
+        val pitch = fileRow(tr("Akcent (kanjium .zip)", "Pitch accent (kanjium .zip)", "ピッチアクセント（kanjium .zip）"), config.pitch)
+        val kanji = fileRow(tr("Kanji (KANJIDIC .zip)", "Kanji (KANJIDIC .zip)", "漢字（KANJIDIC .zip）"), config.kanji)
         val monolingual = (0 until 3).map { i ->
-            fileRow(tr("Słownik JP-JP ${i + 1} (opcjonalnie)", "JP-JP dictionary ${i + 1} (optional)"), config.monolingual.getOrNull(i))
+            fileRow(tr("Słownik JP-JP ${i + 1} (opcjonalnie)", "JP-JP dictionary ${i + 1} (optional)", "国語辞典 ${i + 1}（任意）"), config.monolingual.getOrNull(i))
         }
-        val onomatopoeia = fileRow(tr("Onomatopeje (surasura .zip)", "Onomatopoeia (surasura .zip)"), config.onomatopoeia)
-        label(tr("Talia", "Deck")); val deck = JTextField(config.deck); field(deck)
+        val onomatopoeia = fileRow(tr("Onomatopeje (surasura .zip)", "Onomatopoeia (surasura .zip)", "オノマトペ（surasura .zip）"), config.onomatopoeia)
+        label(tr("Talia", "Deck", "デッキ")); val deck = JTextField(config.deck); field(deck)
         label("AnkiConnect"); val connect = JTextField(config.ankiConnect); field(connect)
-        val sync = JCheckBox(tr("Synchronizuj z AnkiWeb przed i po", "Sync with AnkiWeb before and after"), config.syncAnkiWeb)
+        val sync = JCheckBox(tr("Synchronizuj z AnkiWeb przed i po", "Sync with AnkiWeb before and after", "前後にAnkiWebと同期する"), config.syncAnkiWeb)
         label(""); field(sync)
         val languages = arrayOf("Polski", "English")
-        label(tr("Język okna", "Window language"))
-        val ui = JComboBox(languages).apply { selectedIndex = if (config.language == "pl") 0 else 1 }; field(ui)
-        label(tr("Język etykiet na fiszkach", "Card label language"))
+        val uiCodes = arrayOf("pl", "en", "ja")
+        label(tr("Język okna", "Window language", "ウィンドウの言語"))
+        // The window can speak Japanese; the card labels stay PL/EN (a Japanese
+        // meaning gets Japanese labels by itself).
+        val ui = JComboBox(languages + "日本語").apply { selectedIndex = uiCodes.indexOf(config.language).coerceAtLeast(0) }; field(ui)
+        label(tr("Język etykiet na fiszkach", "Card label language", "カードのラベルの言語"))
         val labels = JComboBox(languages).apply { selectedIndex = if (config.englishLabels) 1 else 0 }; field(labels)
-        val voicevox = fileRow(tr("VOICEVOX (folder, opcjonalnie)", "VOICEVOX (folder, optional)"), config.voicevox, directory = true)
-        val archive = fileRow(tr("Własne nagrania (folder, opcjonalnie)", "Own recordings (folder, optional)"), config.audioArchive, directory = true)
+        val voicevox = fileRow(tr("VOICEVOX (folder, opcjonalnie)", "VOICEVOX (folder, optional)", "VOICEVOX（フォルダー、任意）"), config.voicevox, directory = true)
+        val archive = fileRow(tr("Własne nagrania (folder, opcjonalnie)", "Own recordings (folder, optional)", "自分の録音（フォルダー、任意）"), config.audioArchive, directory = true)
 
         val hint = JLabel(tr(
             "<html>* Wymagane. Słowniki to te same pliki .zip, które instaluje aplikacja na telefonie (Yomitan).<br>Anki musi mieć dodatek AnkiConnect (kod 2055492159).</html>",
-            "<html>* Required. The dictionaries are the same Yomitan .zip files the phone app installs.<br>Anki needs the AnkiConnect add-on (code 2055492159).</html>"
-        )).apply { foreground = Color.GRAY }
+            "<html>* Required. The dictionaries are the same Yomitan .zip files the phone app installs.<br>Anki needs the AnkiConnect add-on (code 2055492159).</html>", "<html>* 必須。辞書はスマホのアプリがインストールするのと同じYomitanの.zipファイルです。<br>AnkiにはAnkiConnectアドオン（コード 2055492159）が必要です。</html>")).apply { foreground = Color.GRAY }
         panel.add(hint, GridBagConstraints().apply { gridx = 0; gridy = row++; gridwidth = 3; anchor = GridBagConstraints.WEST; insets = Insets(10, 0, 6, 0) })
 
-        val save = JButton(tr("Zapisz", "Save")).apply {
+        val save = JButton(tr("Zapisz", "Save", "保存")).apply {
             addActionListener {
                 fun f(box: JTextField) = box.text.trim().takeIf { it.isNotEmpty() }?.let(::File)
                 config = config.copy(
@@ -241,20 +243,20 @@ class Window internal constructor(private var config: Config) {
                     deck = deck.text.trim().ifEmpty { "Japanese" },
                     ankiConnect = connect.text.trim().ifEmpty { "http://127.0.0.1:8765" },
                     syncAnkiWeb = sync.isSelected,
-                    language = if (ui.selectedIndex == 0) "pl" else "en",
+                    language = uiCodes[ui.selectedIndex],
                     englishLabels = labels.selectedIndex == 1,
                     voicevox = f(voicevox) ?: config.voicevox,
                     audioArchive = f(archive) ?: config.audioArchive
                 )
                 config.save()
                 dialog.dispose()
-                if ((config.language == "pl") != polishUi) {
-                    appendLog(tr("Język okna zmieni się po ponownym uruchomieniu.", "The window language changes after a restart."))
+                if (config.language != uiLanguage) {
+                    appendLog(tr("Język okna zmieni się po ponownym uruchomieniu.", "The window language changes after a restart.", "ウィンドウの言語は再起動後に変わります。"))
                 }
                 showIdle()
             }
         }
-        val cancel = JButton(tr("Anuluj", "Cancel")).apply { addActionListener { dialog.dispose() } }
+        val cancel = JButton(tr("Anuluj", "Cancel", "キャンセル")).apply { addActionListener { dialog.dispose() } }
         panel.add(JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply { add(cancel); add(save) },
             GridBagConstraints().apply { gridx = 0; gridy = row; gridwidth = 3; anchor = GridBagConstraints.EAST; insets = Insets(8, 0, 0, 0) })
 

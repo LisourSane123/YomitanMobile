@@ -141,6 +141,7 @@ class MainActivity : ComponentActivity() {
                 // provided it, so the default (`false`) stood everywhere and an
                 // English device saw a Polish interface.
                 val ui = com.yomitanmobile.ui.common.uiLanguage()
+                com.yomitanmobile.util.LocaleHelper.active = ui
                 CompositionLocalProvider(
                     com.yomitanmobile.ui.common.LocalUiLanguage provides ui,
                     LocalIsEnglish provides (ui != com.yomitanmobile.util.UiLanguage.POLISH),

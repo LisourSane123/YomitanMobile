@@ -153,7 +153,7 @@ fun SearchScreen(
                     // favourites stays here, being a list of words and so part
                     // of searching rather than a place of its own.
                     IconButton(onClick = onFavoritesClick) {
-                        Icon(Icons.Default.Favorite, contentDescription = tr("Ulubione", "Favorites"))
+                        Icon(Icons.Default.Favorite, contentDescription = tr("Ulubione", "Favorites", "お気に入り"))
                     }
                 }
             )
@@ -182,12 +182,12 @@ fun SearchScreen(
                     // someone learning English.
                     Text(
                         when (viewModel.appLanguage) {
-                            AppLanguage.ENGLISH -> tr("Wpisz słowo po angielsku lub polsku...", "Type an English or Polish word...")
-                            AppLanguage.SPANISH -> tr("Wpisz słowo po hiszpańsku lub angielsku...", "Type a Spanish or English word...")
+                            AppLanguage.ENGLISH -> tr("Wpisz słowo po angielsku lub polsku...", "Type an English or Polish word...", "英語またはポーランド語の単語を入力…")
+                            AppLanguage.SPANISH -> tr("Wpisz słowo po hiszpańsku lub angielsku...", "Type a Spanish or English word...", "スペイン語または英語の単語を入力…")
                             AppLanguage.JAPANESE -> when (searchMode) {
-                                SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku...", "Type a Japanese word...")
-                                SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku...", "Type an English word...")
-                                SearchMode.ROMAJI -> tr("taberu, nomu, miru...", "taberu, nomu, miru...")
+                                SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku...", "Type a Japanese word...", "日本語の単語を入力…")
+                                SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku...", "Type an English word...", "英語の単語を入力…")
+                                SearchMode.ROMAJI -> tr("taberu, nomu, miru...", "taberu, nomu, miru...", "taberu, nomu, miru…")
                             }
                         }
                     )
@@ -195,7 +195,7 @@ fun SearchScreen(
                 trailingIcon = {
                     AnimatedVisibility(visible = query.isNotBlank(), enter = fadeIn(), exit = fadeOut()) {
                         IconButton(onClick = viewModel::clearQuery) {
-                            Icon(Icons.Default.Clear, contentDescription = tr("Wyczyść", "Clear"))
+                            Icon(Icons.Default.Clear, contentDescription = tr("Wyczyść", "Clear", "消去"))
                         }
                     }
                 }
@@ -285,7 +285,7 @@ private fun DeconjugationHintsCard(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
-                text = tr("Rozpoznane formy podstawowe", "Detected base forms"),
+                text = tr("Rozpoznane formy podstawowe", "Detected base forms", "見つかった基本形"),
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -363,7 +363,7 @@ private fun DailyGoalBanner(dailyGoal: DailyGoalState, isEnglish: Boolean) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = if (dailyGoal.isCompleted) tr("Cel dzienny osiągnięty!", "Daily goal achieved!") else tr("Cel dzienny", "Daily goal"),
+                        text = if (dailyGoal.isCompleted) tr("Cel dzienny osiągnięty!", "Daily goal achieved!", "1日の目標を達成しました！") else tr("Cel dzienny", "Daily goal", "1日の目標"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = contentColor
@@ -416,7 +416,7 @@ private fun SearchHistorySection(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    tr("Historia wyszukiwań", "Search history"),
+                    tr("Historia wyszukiwań", "Search history", "検索履歴"),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -425,11 +425,11 @@ private fun SearchHistorySection(
             TextButton(onClick = onClearHistory) {
                 Icon(
                     Icons.Default.DeleteSweep,
-                    contentDescription = tr("Wyczyść historię", "Clear search history"),
+                    contentDescription = tr("Wyczyść historię", "Clear search history", "検索履歴を消去"),
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.width(4.dp))
-                Text(tr("Wyczyść", "Clear"), fontSize = 12.sp)
+                Text(tr("Wyczyść", "Clear", "消去"), fontSize = 12.sp)
             }
         }
 
@@ -496,7 +496,7 @@ private fun MergedWordEntryRow(
                 }
                 if (entry.alternativeExpressions.isNotEmpty()) {
                     Text(
-                        text = tr("Formy: ", "Forms: ") + entry.alternativeExpressions.joinToString(", "),
+                        text = tr("Formy: ", "Forms: ", "活用形: ") + entry.alternativeExpressions.joinToString(", "),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.padding(top = 2.dp)
@@ -546,8 +546,7 @@ private fun MergedWordEntryRow(
                     Text(
                         text = tr(
                             "…i ${entry.definitions.size - 3} więcej",
-                            "…and ${entry.definitions.size - 3} more"
-                        ),
+                            "…and ${entry.definitions.size - 3} more", "…ほか${entry.definitions.size - 3}件"),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -626,12 +625,12 @@ private fun EmptySearchState(
             Spacer(Modifier.height(16.dp))
             Text(
                 when (appLanguage) {
-                    AppLanguage.ENGLISH -> tr("Wpisz słowo po angielsku lub polsku", "Type an English or Polish word")
-                    AppLanguage.SPANISH -> tr("Wpisz słowo po hiszpańsku lub angielsku", "Type a Spanish or English word")
+                    AppLanguage.ENGLISH -> tr("Wpisz słowo po angielsku lub polsku", "Type an English or Polish word", "英語またはポーランド語の単語を入力")
+                    AppLanguage.SPANISH -> tr("Wpisz słowo po hiszpańsku lub angielsku", "Type a Spanish or English word", "スペイン語または英語の単語を入力")
                     AppLanguage.JAPANESE -> when (searchMode) {
-                        SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku", "Type a Japanese word")
-                        SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku", "Type an English word")
-                        SearchMode.ROMAJI -> tr("Wpisz słowo w romaji", "Type a word in romaji")
+                        SearchMode.JAPANESE -> tr("Wpisz słowo po japońsku", "Type a Japanese word", "日本語の単語を入力")
+                        SearchMode.ENGLISH -> tr("Wpisz słowo po angielsku", "Type an English word", "英語の単語を入力")
+                        SearchMode.ROMAJI -> tr("Wpisz słowo w romaji", "Type a word in romaji", "ローマ字で単語を入力")
                     }
                 },
                 style = MaterialTheme.typography.bodyLarge,
@@ -640,9 +639,9 @@ private fun EmptySearchState(
             Spacer(Modifier.height(8.dp))
             Text(
                 when (searchMode) {
-                    SearchMode.JAPANESE -> tr("漢字、ひらがな、カタカナ", "Kanji, hiragana, katakana")
-                    SearchMode.ENGLISH -> tr("e.g. eat → 食べる, drink → 飲む", "e.g. eat → 食べる, drink → 飲む")
-                    SearchMode.ROMAJI -> tr("np. taberu → 食べる, nomu → 飲む", "e.g. taberu → 食べる, nomu → 飲む")
+                    SearchMode.JAPANESE -> tr("漢字、ひらがな、カタカナ", "Kanji, hiragana, katakana", "漢字、ひらがな、カタカナ")
+                    SearchMode.ENGLISH -> tr("e.g. eat → 食べる, drink → 飲む", "e.g. eat → 食べる, drink → 飲む", "例: eat → 食べる、drink → 飲む")
+                    SearchMode.ROMAJI -> tr("np. taberu → 食べる, nomu → 飲む", "e.g. taberu → 食べる, nomu → 飲む", "例: taberu → 食べる、nomu → 飲む")
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -737,27 +736,25 @@ private fun NoResultsState(
     val tr = rememberTr()
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(tr("Brak wyników dla:", "No results for:"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Brak wyników dla:", "No results for:", "検索結果なし:"), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             // Corner brackets are Japanese punctuation; around an English or
             // Spanish word they just look wrong.
-            val quoted = if (appLanguage == AppLanguage.JAPANESE) "「$query」" else "\u201C$query\u201D"
+            val quoted = if (appLanguage == AppLanguage.JAPANESE) "「${query}」" else "\u201C$query\u201D"
             Text(quoted, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(16.dp))
             Text(
                 when (appLanguage) {
                     AppLanguage.ENGLISH -> tr(
                         "Sprawdź pisownię. Formy nieregularne (went, better) wpisz w podstawowej postaci.",
-                        "Check the spelling. Type irregular forms (went, better) as the base word."
-                    )
+                        "Check the spelling. Type irregular forms (went, better) as the base word.", "綴りを確認してください。不規則な形（went, better）は基本形で入力してください。")
                     AppLanguage.SPANISH -> tr(
                         "Sprawdź pisownię lub zaimportuj słownik",
-                        "Check the spelling or import a dictionary"
-                    )
+                        "Check the spelling or import a dictionary", "表記を確認するか、辞書をインポートしてください")
                     AppLanguage.JAPANESE -> when (searchMode) {
-                        SearchMode.JAPANESE -> tr("Sprawdź pisownię lub zaimportuj słownik", "Check the spelling or import a dictionary")
-                        SearchMode.ENGLISH -> tr("Spróbuj innego słowa angielskiego", "Try a different English word")
-                        SearchMode.ROMAJI -> tr("Sprawdź pisownię romaji", "Check the romaji spelling")
+                        SearchMode.JAPANESE -> tr("Sprawdź pisownię lub zaimportuj słownik", "Check the spelling or import a dictionary", "表記を確認するか、辞書をインポートしてください")
+                        SearchMode.ENGLISH -> tr("Spróbuj innego słowa angielskiego", "Try a different English word", "別の英単語を試してください")
+                        SearchMode.ROMAJI -> tr("Sprawdź pisownię romaji", "Check the romaji spelling", "ローマ字の綴りを確認してください")
                     }
                 },
                 style = MaterialTheme.typography.bodyMedium,

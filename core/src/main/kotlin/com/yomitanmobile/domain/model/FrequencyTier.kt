@@ -19,8 +19,8 @@ enum class FrequencyTier(val maxRank: Int) {
     ALL(0);
 
     /** Short label for chips: "Top 10K", "Top 30K", "bez limitu". */
-    fun label(isEnglish: Boolean): String = when (this) {
-        ALL -> if (isEnglish) "All" else "Wszystkie"
+    fun label(isEnglish: Boolean, japanese: Boolean = false): String = when (this) {
+        ALL -> if (japanese) "すべて" else if (isEnglish) "All" else "Wszystkie"
         else -> "Top ${maxRank / 1000}K"
     }
 

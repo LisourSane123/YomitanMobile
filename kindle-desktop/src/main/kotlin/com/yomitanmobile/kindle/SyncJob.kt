@@ -68,7 +68,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         out.progress(message)
     }
 
-    private fun fail(message: String) = Outcome(true, tr("Nie wykonano: ", "Not done: ") + message)
+    private fun fail(message: String) = Outcome(true, tr("Nie wykonano: ", "Not done: ", "未完了: ") + message)
 
     // ---- the sync ---------------------------------------------------------
 
@@ -83,10 +83,10 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         val vocab = File(outDir, "vocab.work.db")
         vocab.delete()
         if (options.vocab != null) {
-            progress(tr("Czytam słówka z pliku ${options.vocab.name}…", "Reading words from ${options.vocab.name}…"))
+            progress(tr("Czytam słówka z pliku ${options.vocab.name}…", "Reading words from ${options.vocab.name}…", "${options.vocab.name}から単語を読み込み中…"))
             options.vocab.copyTo(vocab, overwrite = true)
         } else {
-            progress(tr("Szukam Kindle i odczytuję słówka z Vocabulary Buildera…", "Looking for the Kindle and reading Vocabulary Builder…"))
+            progress(tr("Szukam Kindle i odczytuję słówka z Vocabulary Buildera…", "Looking for the Kindle and reading Vocabulary Builder…", "Kindleを探して単語帳（Vocabulary Builder）を読み込み中…"))
             val device = KindleDevice(::log)
             val deadline = System.currentTimeMillis() + options.waitSeconds * 1000L
             while (!device.copyVocab(vocab)) {
@@ -94,12 +94,10 @@ class SyncJob(private val config: Config, private val out: Reporter) {
                     return when (device.onUsb()) {
                         true -> fail(tr(
                             "Kindle jest podłączony, ale nie udało się odczytać vocab.db (odblokuj ekran Kindle, sprawdź tryb USB).",
-                            "the Kindle is plugged in but vocab.db could not be read (unlock the Kindle's screen, check its USB mode)."
-                        ))
+                            "the Kindle is plugged in but vocab.db could not be read (unlock the Kindle's screen, check its USB mode).", "Kindleは接続されていますが、vocab.dbを読み取れませんでした（Kindleの画面のロックを解除し、USBモードを確認してください）。"))
                         else -> fail(tr(
                             "nie znaleziono Kindle. Podłącz go kablem USB i odblokuj ekran — albo wskaż plik vocab.db ręcznie.",
-                            "no Kindle found. Plug it in over USB and unlock its screen — or pick vocab.db by hand."
-                        ))
+                            "no Kindle found. Plug it in over USB and unlock its screen — or pick vocab.db by hand.", "Kindleが見つかりません。USBで接続して画面のロックを解除するか、vocab.dbを手動で選んでください。"))
                     }
                 }
                 Thread.sleep(3_000)
@@ -112,18 +110,18 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         val marker = File(Platform.stateDir, "last_timestamp")
         val since = if (options.all) 0L else marker.takeIf { it.isFile }?.readText()?.trim()?.toLongOrNull() ?: 0L
         val lookups = runCatching { readLookups(vocab, since) }.getOrElse {
-            return fail(tr("plik vocab.db jest nieczytelny (${it.message}).", "vocab.db cannot be read (${it.message})."))
+            return fail(tr("plik vocab.db jest nieczytelny (${it.message}).", "vocab.db cannot be read (${it.message}).", "vocab.dbを読み取れません（${it.message}）。"))
         }
         log("${lookups.size} new lookups since $since")
         if (lookups.isEmpty()) {
-            return Outcome(false, tr("Wykonano: brak nowych słów w Vocabulary Builderze.", "Done: no new words in Vocabulary Builder."))
+            return Outcome(false, tr("Wykonano: brak nowych słów w Vocabulary Builderze.", "Done: no new words in Vocabulary Builder.", "完了: 単語帳に新しい単語はありません。"))
         }
-        progress(tr("Odczytano słówka: ${lookups.size} nowych wyszukań od ostatniego razu.", "Read ${lookups.size} new lookups since last time."))
+        progress(tr("Odczytano słówka: ${lookups.size} nowych wyszukań od ostatniego razu.", "Read ${lookups.size} new lookups since last time.", "前回から${lookups.size}件の新しい検索を読み込みました。"))
         pullPhoneSettings(config, ::log)
 
         // ---- 3. Anki must be answering ------------------------------------
         if (!anki.isUp()) {
-            if (Platform.startAnki()) progress(tr("Uruchamiam Anki…", "Starting Anki…"))
+            if (Platform.startAnki()) progress(tr("Uruchamiam Anki…", "Starting Anki…", "Ankiを起動中…"))
             // Anki takes a while to load a big collection; two minutes is generous.
             for (attempt in 1..40) {
                 if (anki.isUp()) break
@@ -133,14 +131,13 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         if (!anki.isUp()) {
             return fail(tr(
                 "Anki nie odpowiada — uruchom Anki z dodatkiem AnkiConnect. Nic nie dodano.",
-                "Anki is not answering — start Anki with the AnkiConnect add-on. Nothing was added."
-            ))
+                "Anki is not answering — start Anki with the AnkiConnect add-on. Nothing was added.", "Ankiが応答しません — AnkiConnectアドオン付きでAnkiを起動してください。何も追加していません。"))
         }
 
         // ---- 4. the pipeline ------------------------------------------------
         val result = runCatching { cards(lookups, deck, dryRun, syncWeb) }.getOrElse {
             log("failed: $it")
-            return fail(tr("błąd przetwarzania albo synchronizacji (nic nie dodano): ${it.message}", "processing or sync failed (nothing added): ${it.message}"))
+            return fail(tr("błąd przetwarzania albo synchronizacji (nic nie dodano): ${it.message}", "processing or sync failed (nothing added): ${it.message}", "処理または同期に失敗しました（何も追加していません）: ${it.message}"))
         }
 
         // The marker moves only when the lookups were really dealt with: cards
@@ -198,27 +195,23 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             var m = when {
                 dryRun -> tr(
                     "Podgląd (nic nie dodano): ${fiszki(new)} do dodania ($lookups wyszukań, $inAnki już w Anki).",
-                    "Preview (nothing added): $new new cards to add ($lookups lookups, $inAnki already in Anki)."
-                )
+                    "Preview (nothing added): $new new cards to add ($lookups lookups, $inAnki already in Anki).", "プレビュー（何も追加していません）: 追加予定${new}枚（検索${lookups}件、Ankiに既存${inAnki}件）。")
                 added == 0 && new > 0 -> tr(
                     "Nie wykonano: $new fiszek do dodania, żadna nie weszła — spróbuję ponownie następnym razem.",
-                    "Not done: $new cards to add, none went in — the next run tries again."
-                )
+                    "Not done: $new cards to add, none went in — the next run tries again.", "未完了: 追加予定の${new}枚が1枚も追加されませんでした — 次回の実行で再試行します。")
                 else -> tr(
                     "Wykonano: ${fiszki(added)} w talii $deck ($lookups wyszukań, $inAnki już było w Anki).",
-                    "Done: $added new cards in deck $deck ($lookups lookups, $inAnki already in Anki)."
-                )
+                    "Done: $added new cards in deck $deck ($lookups lookups, $inAnki already in Anki).", "完了: デッキ${deck}に新しいカード${added}枚（検索${lookups}件、Ankiに既存${inAnki}件）。")
             }
-            if (reordered >= 0) m += tr(" Kolejność ustawiona (AutoReorder).", " Order set (AutoReorder).")
+            if (reordered >= 0) m += tr(" Kolejność ustawiona (AutoReorder).", " Order set (AutoReorder).", " 並び順を設定しました（AutoReorder）。")
             if (duplicatesAfter.isNotEmpty()) m += tr(
                 " UWAGA: ${duplicatesAfter.size} słów jest teraz w Anki dwa razy — telefon dodał je w trakcie: ${duplicatesAfter.joinToString(", ")}.",
-                " NOTE: ${duplicatesAfter.size} words are now in Anki twice — the phone added them meanwhile: ${duplicatesAfter.joinToString(", ")}."
+                " NOTE: ${duplicatesAfter.size} words are now in Anki twice — the phone added them meanwhile: ${duplicatesAfter.joinToString(", ")}.", " 注意: ${duplicatesAfter.size}語がAnkiに2枚ずつあります — 実行中にスマホが追加しました: ${duplicatesAfter.joinToString(", ")}。"
             )
             if (reorderCovers == "false") m += tr(
                 " UWAGA: AutoReorder nie obejmuje talii $deck — nowe fiszki nie są ułożone wg częstości.",
-                " NOTE: AutoReorder does not cover deck $deck — the new cards are not in frequency order."
-            )
-            if (!syncedAfter) m += tr(" UWAGA: synchronizacja po dodaniu nie przeszła — kliknij Sync w Anki.", " NOTE: the sync after adding failed — press Sync in Anki.")
+                " NOTE: AutoReorder does not cover deck $deck — the new cards are not in frequency order.", " 注意: AutoReorderはデッキ${deck}を対象にしていません — 新しいカードは頻度順に並んでいません。")
+            if (!syncedAfter) m += tr(" UWAGA: synchronizacja po dodaniu nie przeszła — kliknij Sync w Anki.", " NOTE: the sync after adding failed — press Sync in Anki.", " 注意: 追加後の同期に失敗しました — AnkiでSyncを押してください。")
             return m
         }
     }
@@ -238,7 +231,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         val needed = candidatesOf.values.flatten().toHashSet()
 
         // ---- dictionary + frequency, streamed from the zips ---------------
-        progress(tr("Szukam słów w słowniku…", "Looking the words up…"))
+        progress(tr("Szukam słów w słowniku…", "Looking the words up…", "単語を辞書で検索中…"))
         val parser = YomitanDictionaryParser()
         val dictionary = Dictionary.load(parser, config)
         val firstPass = dictionary.collect(needed, needed)
@@ -266,7 +259,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         // reads, and a card added on the phone since the last sync is exactly
         // the duplicate it would miss. A failure here stops the run.
         if (sync && !dryRun) {
-            progress(tr("Synchronizuję z AnkiWeb, żeby sprawdzić, co już masz…", "Syncing with AnkiWeb to see what you already have…"))
+            progress(tr("Synchronizuję z AnkiWeb, żeby sprawdzić, co już masz…", "Syncing with AnkiWeb to see what you already have…", "既存のカードを確認するためAnkiWebと同期中…"))
             anki.sync()
         }
         val ankiIndex = anki.collectionIndex()
@@ -311,7 +304,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         log("plan: $summary")
         progress(tr(
             "Z ${lookups.size} wyszukań: ${toAdd.size} nowych słów, ${summary["IN_ANKI"] ?: 0} już w Anki" + if (toAdd.isEmpty()) "." else " — tworzę fiszki…",
-            "Of ${lookups.size} lookups: ${toAdd.size} new words, ${summary["IN_ANKI"] ?: 0} already in Anki" + if (toAdd.isEmpty()) "." else " — making cards…"
+            "Of ${lookups.size} lookups: ${toAdd.size} new words, ${summary["IN_ANKI"] ?: 0} already in Anki" + if (toAdd.isEmpty()) "." else " — making cards…", "${lookups.size}件の検索のうち: 新しい単語${toAdd.size}語、Ankiに既存${summary["IN_ANKI"] ?: 0}語${if (toAdd.isEmpty()) "。" else " — カードを作成中…"}"
         ))
 
         // ---- cards -----------------------------------------------------------
@@ -323,7 +316,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             parser, config.kanji,
             toAdd.values.flatMapTo(HashSet()) { (e, _) -> e.primaryExpression.filter(JapaneseTokenizer::isKanji).map(Char::toString) }
         )
-        if (!dryRun && toAdd.isNotEmpty()) progress(tr("Nagrywam wymowę dla ${toAdd.size} słów…", "Recording pronunciation for ${toAdd.size} words…"))
+        if (!dryRun && toAdd.isNotEmpty()) progress(tr("Nagrywam wymowę dla ${toAdd.size} słów…", "Recording pronunciation for ${toAdd.size} words…", "${toAdd.size}語の発音を録音中…"))
         val audio = if (dryRun) emptyMap() else AudioMaker(config, ::log).use { maker ->
             maker.speak(toAdd.values.map { (e, _) -> Spoken(e.primaryExpression, e.reading, e.pitchAccent) }, outDir)
         }
@@ -348,7 +341,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         // Onomatopoeia ask surasura first and skip the encyclopedia.
         val chain = monolingualChain(parser, config, ::log)
         val onomatopoeiaChain = listOfNotNull(surasura) + chain.filterNot { it.isEncyclopedia }
-        if (chain.isNotEmpty() && toAdd.isNotEmpty()) progress(tr("Szukam definicji w słownikach JP-JP…", "Looking up JP-JP definitions…"))
+        if (chain.isNotEmpty() && toAdd.isNotEmpty()) progress(tr("Szukam definicji w słownikach JP-JP…", "Looking up JP-JP definitions…", "国語辞典の定義を検索中…"))
         val baseWords = toAdd.mapValues { (_, pair) ->
             val (entry, lookup) = pair
             entry.toWordEntry().copy(exampleSentence = sentenceFor(lookup, entry), exampleSentenceTranslation = "")
@@ -398,7 +391,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         if (dryRun || notes.isEmpty()) {
             log(if (dryRun) "dry run: ${notes.size} cards would be added to $deck" else "nothing new")
         } else {
-            progress(tr("Dodaję ${fiszki(notes.size)} do talii $deck…", "Adding ${notes.size} cards to deck $deck…"))
+            progress(tr("Dodaję ${fiszki(notes.size)} do talii $deck…", "Adding ${notes.size} cards to deck $deck…", "デッキ${deck}に${notes.size}枚のカードを追加中…"))
             val (css, front, back) = builder.packageStyling(style)
             anki.ensureModel(profile, css, front, back)
             if (notes.any { it.model == OnomatopoeiaCard.MODEL_NAME }) {
@@ -429,7 +422,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
                 val covered = anki.countCards("\"deck:$deck\" is:new (${cfg.search})")
                 reorderCovers = (mine > 0 && covered == mine).toString()
                 if (reorderCovers == "true") {
-                    progress(tr("Układam kolejność nowych kart (AutoReorder)…", "Ordering new cards (AutoReorder)…"))
+                    progress(tr("Układam kolejność nowych kart (AutoReorder)…", "Ordering new cards (AutoReorder)…", "新しいカードを並べ替え中（AutoReorder）…"))
                     reordered = anki.reorder(cfg)
                     log("reorder (${cfg.search}, by ${cfg.field}): $reordered cards moved")
                 } else {
@@ -438,7 +431,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
                 }
             }
             if (sync) {
-                progress(tr("Synchronizuję z AnkiWeb…", "Syncing with AnkiWeb…"))
+                progress(tr("Synchronizuję z AnkiWeb…", "Syncing with AnkiWeb…", "AnkiWebと同期中…"))
                 syncedAfter = runCatching { anki.sync() }.onFailure { log("sync after adding failed: ${it.message}") }.isSuccess
             }
         }

@@ -118,10 +118,10 @@ fun KanjiBrowseScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Kanji", "Kanji")) },
+                title = { Text(tr("Kanji", "Kanji", "漢字")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 }
             )
@@ -139,12 +139,12 @@ fun KanjiBrowseScreen(
                     FilterChip(
                         selected = !showMine,
                         onClick = { showMine = false },
-                        label = { Text(tr("Pokrycie", "Coverage")) }
+                        label = { Text(tr("Pokrycie", "Coverage", "カバー率")) }
                     )
                     FilterChip(
                         selected = showMine,
                         onClick = { showMine = true },
-                        label = { Text(tr("Moje kanji", "My kanji")) }
+                        label = { Text(tr("Moje kanji", "My kanji", "自分の漢字")) }
                     )
                 }
             }
@@ -173,7 +173,7 @@ fun KanjiBrowseScreen(
                         "Żaden zainstalowany słownik nie opisuje kanji. Pobierz KANJIDIC " +
                             "z ekranu słowników — bez niego ten ekran nie ma czego pokazać.",
                         "No installed dictionary describes kanji. Install KANJIDIC from the " +
-                            "dictionary screen — without it this screen has nothing to show."
+                            "dictionary screen — without it this screen has nothing to show.", "漢字を説明する辞書がインストールされていません。辞書の画面からKANJIDICをインストールしてください — それがないとこの画面には何も表示できません。"
                     )
                 )
 
@@ -187,7 +187,7 @@ fun KanjiBrowseScreen(
                                     "ponownie, aby podzielić znaki na poziomy.",
                                 "Your kanji dictionary carries no grades or JLPT levels — it " +
                                     "was imported before the app read them. Re-import it to get " +
-                                    "the buckets."
+                                    "the buckets.", "漢字辞書に学年やJLPTレベルがありません — アプリがそれを読み取る前にインポートされたためです。もう一度インポートするとレベル別に分かれます。"
                             )
                         )
                     }
@@ -211,8 +211,7 @@ fun KanjiBrowseScreen(
                         Text(
                             tr(
                                 "Masz fiszki z ${bucket.known} z ${bucket.total} znaków",
-                                "You have cards using ${bucket.known} of ${bucket.total} characters"
-                            ),
+                                "You have cards using ${bucket.known} of ${bucket.total} characters", "${bucket.total}字のうち${bucket.known}字を使うカードがあります"),
                             fontWeight = FontWeight.Medium
                         )
                         Spacer(Modifier.height(4.dp))
@@ -229,7 +228,7 @@ fun KanjiBrowseScreen(
                                         "która mówi coś o pamięci.",
                                     "Of those, ${bucket.mature} sit on mature cards (interval " +
                                         "21 days or more) — that is the number that says " +
-                                        "something about memory."
+                                        "something about memory.", "そのうち${bucket.mature}字は成熟したカード（間隔21日以上）にあります — 記憶について何かを語るのはこの数です。"
                                 )
                             } else {
                                 tr(
@@ -238,7 +237,7 @@ fun KanjiBrowseScreen(
                                         "żeby poznać też dojrzałość kart.",
                                     "“Known” means: some card in the collection carries this " +
                                         "character. It is not a measure of recall — rescan the " +
-                                        "collection to learn card maturity too."
+                                        "collection to learn card maturity too.", "「既知」とは、コレクションのどれかのカードにこの字が含まれているという意味です。記憶の度合いではありません — カードの成熟度も知るにはコレクションを再スキャンしてください。"
                                 )
                             },
                             fontSize = 11.sp,
@@ -312,9 +311,9 @@ private fun MyKanjiSection(
         // rotation is not something to build a study list on — so there is no
         // separate switch for them.
         listOf(
-            AnkiCollectionStore.Scope.STUDIED to tr("Zaczęte", "Started"),
-            AnkiCollectionStore.Scope.MATURE to tr("Dojrzałe", "Mature"),
-            AnkiCollectionStore.Scope.ANY to tr("Wszystkie karty", "All cards")
+            AnkiCollectionStore.Scope.STUDIED to tr("Zaczęte", "Started", "学習開始済み"),
+            AnkiCollectionStore.Scope.MATURE to tr("Dojrzałe", "Mature", "成熟"),
+            AnkiCollectionStore.Scope.ANY to tr("Wszystkie karty", "All cards", "すべてのカード")
         ).forEach { (value, label) ->
             FilterChip(
                 selected = scope == value,
@@ -327,17 +326,15 @@ private fun MyKanjiSection(
         when (scope) {
             AnkiCollectionStore.Scope.STUDIED -> tr(
                 "Słowa z kart, które już się pojawiły — bez nowych i bez zawieszonych.",
-                "Words from cards that have come up at least once — no new ones, none suspended."
-            )
+                "Words from cards that have come up at least once — no new ones, none suspended.", "一度以上出題されたカードの単語 — 新規・保留中は除く。")
             AnkiCollectionStore.Scope.MATURE -> tr(
                 "Tylko karty z interwałem 21 dni lub więcej. To ta liczba, która mówi coś o pamięci.",
                 "Only cards with an interval of 21 days or more — the number that says something " +
-                    "about memory."
+                    "about memory.", "間隔が21日以上のカードだけ — 記憶について何かを語る数です。"
             )
             AnkiCollectionStore.Scope.ANY -> tr(
                 "Każde słowo ze skanu, także z kart nowych i zawieszonych.",
-                "Every word in the scan, including new and suspended cards."
-            )
+                "Every word in the scan, including new and suspended cards.", "スキャンしたすべての単語（新規・保留中のカードを含む）。")
         },
         fontSize = 11.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -353,14 +350,14 @@ private fun MyKanjiSection(
                         "(Narzędzia → Skan kolekcji Anki).",
                     "No card in this scope carries a kanji. Card state is only known to a scan " +
                         "taken by a newer version of the app — rescan the collection " +
-                        "(Tools → Anki collection scan)."
+                        "(Tools → Anki collection scan).", "この範囲のカードには漢字がありません。カードの状態は新しいバージョンのアプリでのスキャンにしかありません — コレクションを再スキャンしてください（ツール → Ankiコレクションのスキャン）。"
                 )
             } else {
                 tr(
                     "Nie ma zapisanego skanu kolekcji. Zrób go w Narzędzia → Skan kolekcji " +
                         "Anki; ten ekran liczy kanji w słowach, które skan znalazł.",
                     "There is no stored collection scan. Take one in Tools → Anki collection " +
-                        "scan; this screen counts the kanji in the words it found."
+                        "scan; this screen counts the kanji in the words it found.", "保存済みのコレクションスキャンがありません。ツール → Ankiコレクションのスキャンで作成してください。この画面はスキャンで見つかった単語の漢字を数えます。"
                 )
             }
         )
@@ -373,7 +370,7 @@ private fun MyKanjiSection(
             "${tally.distinctKanji} różnych kanji, ${tally.totalOccurrences} wystąpień " +
                 "w ${tally.wordsWithKanji} słowach",
             "${tally.distinctKanji} different kanji, ${tally.totalOccurrences} occurrences " +
-                "across ${tally.wordsWithKanji} words"
+                "across ${tally.wordsWithKanji} words", "異なる漢字${tally.distinctKanji}字、${tally.wordsWithKanji}語の中に${tally.totalOccurrences}回"
         ),
         fontWeight = FontWeight.Medium
     )
@@ -382,7 +379,7 @@ private fun MyKanjiSection(
             "Liczone po słowach ze skanu kolekcji. 日曜日 to jedno słowo z 日 i dwa " +
                 "wystąpienia.",
             "Counted over the words in the collection scan. 日曜日 is one word with 日 in it " +
-                "and two occurrences."
+                "and two occurrences.", "コレクションスキャンの単語で数えています。日曜日は日を含む1語で、出現は2回です。"
         ),
         fontSize = 11.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -396,7 +393,7 @@ private fun MyKanjiSection(
                     "z jednego słowa — te nie mają się gdzie utrwalić.",
                 "For Kanji Study: ${exportPlan.kanji.size} characters in ${exportPlan.sets.size} " +
                     "sets of ${exportPlan.setSize}. Without the ${exportPlan.dropped} characters " +
-                    "that sit in a single word — those have nowhere to stick."
+                    "that sit in a single word — those have nowhere to stick.", "Kanji Study用: ${exportPlan.kanji.size}字を${exportPlan.setSize}字ずつ${exportPlan.sets.size}セットに。1語にしか出てこない${exportPlan.dropped}字は除きます — 定着させる場がないためです。"
             ),
             fontSize = 12.sp
         )
@@ -408,14 +405,14 @@ private fun MyKanjiSection(
                         "KANJIDIC ponownie, żeby je ułożyć sensownie.",
                     "Order: most of my words first. Your kanji dictionary gives no media " +
                         "frequency, so ties fall back to the character itself — re-import " +
-                        "KANJIDIC to order them properly."
+                        "KANJIDIC to order them properly.", "並び順: 自分の単語に多く出る字から。漢字辞書にメディアでの頻度がないため、同数のときは字そのもので並びます — 正しく並べるにはKANJIDICを再インポートしてください。"
                 )
             } else {
                 tr(
                     "Kolejność: najwięcej moich słów najpierw, remisy po częstości w mediach " +
                         "(KANJIDIC). Każda linia pliku to jeden zestaw w aplikacji.",
                     "Order: most of my words first, ties by media frequency (KANJIDIC). Each " +
-                        "line of the file is one set in the app."
+                        "line of the file is one set in the app.", "並び順: 自分の単語に多く出る字から、同数のときはメディアでの頻度（KANJIDIC）順。ファイルの1行がアプリの1セットになります。"
                 )
             },
             fontSize = 11.sp,
@@ -423,10 +420,10 @@ private fun MyKanjiSection(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onSave) {
-                Text(tr("Zapisz plik", "Save file"))
+                Text(tr("Zapisz plik", "Save file", "ファイルに保存"))
             }
             TextButton(onClick = onShare) {
-                Text(tr("Udostępnij", "Share"))
+                Text(tr("Udostępnij", "Share", "共有"))
             }
         }
     }
@@ -453,7 +450,7 @@ private fun MyKanjiSection(
                     Text(
                         tr(
                             "w ${row.words} ${wordsPl(row.words)}",
-                            "in ${row.words} ${if (row.words == 1) "word" else "words"}"
+                            "in ${row.words} ${if (row.words == 1) "word" else "words"}", "${row.words}語"
                         ),
                         fontSize = 13.sp
                     )
@@ -467,7 +464,7 @@ private fun MyKanjiSection(
                 }
                 if (row.occurrences != row.words) {
                     Text(
-                        tr("${row.occurrences}×", "${row.occurrences}×"),
+                        tr("${row.occurrences}×", "${row.occurrences}×", "${row.occurrences}×"),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 8.dp)

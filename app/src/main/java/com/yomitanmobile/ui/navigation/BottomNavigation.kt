@@ -32,12 +32,13 @@ enum class BottomDestination(
     val screen: Screen,
     val icon: ImageVector,
     val pl: String,
-    val en: String
+    val en: String,
+    val ja: String
 ) {
-    SEARCH(Screen.Search, Icons.Default.Search, "Szukaj", "Search"),
-    TOOLS(Screen.Tools, Icons.Default.Build, "Narzędzia", "Tools"),
-    STATISTICS(Screen.Statistics, Icons.Default.BarChart, "Statystyki", "Stats"),
-    SETTINGS(Screen.Settings, Icons.Default.Settings, "Ustawienia", "Settings")
+    SEARCH(Screen.Search, Icons.Default.Search, "Szukaj", "Search", "検索"),
+    TOOLS(Screen.Tools, Icons.Default.Build, "Narzędzia", "Tools", "ツール"),
+    STATISTICS(Screen.Statistics, Icons.Default.BarChart, "Statystyki", "Stats", "統計"),
+    SETTINGS(Screen.Settings, Icons.Default.Settings, "Ustawienia", "Settings", "設定")
 }
 
 /** Routes that show the bar. Anything deeper is a detail view and hides it. */
@@ -54,7 +55,7 @@ fun AppBottomBar(navController: NavHostController, modifier: Modifier = Modifier
         DownloadQueueStrip()
         NavigationBar {
             for (destination in BottomDestination.entries) {
-                val label = tr(destination.pl, destination.en)
+                val label = tr(destination.pl, destination.en, destination.ja)
                 NavigationBarItem(
                     selected = currentRoute == destination.screen.route,
                     onClick = {

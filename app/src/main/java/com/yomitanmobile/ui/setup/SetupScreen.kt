@@ -77,7 +77,7 @@ fun SetupScreen(
                     onContinue = onSetupComplete
                 )
                 SetupState.ERROR -> ErrorContent(
-                    message = errorMessage ?: if (isEnglish) "Unknown error" else "Nieznany błąd",
+                    message = errorMessage ?: com.yomitanmobile.util.trI(isEnglish, "Nieznany błąd", "Unknown error", "不明なエラー"),
                     onRetry = { viewModel.retry() },
                     onSkip = {
                         viewModel.skip()
@@ -128,9 +128,9 @@ private fun WelcomeContent(
 
         Text(
             when (language) {
-                AppLanguage.JAPANESE -> tr("Słownik japońsko-angielski", "Japanese-English dictionary")
-                AppLanguage.ENGLISH -> tr("Słownik angielsko-polski", "English-Polish dictionary")
-                AppLanguage.SPANISH -> tr("Słownik hiszpańsko-angielski", "Spanish-English dictionary")
+                AppLanguage.JAPANESE -> tr("Słownik japońsko-angielski", "Japanese-English dictionary", "和英辞書")
+                AppLanguage.ENGLISH -> tr("Słownik angielsko-polski", "English-Polish dictionary", "英ポ辞書")
+                AppLanguage.SPANISH -> tr("Słownik hiszpańsko-angielski", "Spanish-English dictionary", "西英辞書")
             },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -152,7 +152,7 @@ private fun WelcomeContent(
                         "• JLPT tags - N5-N1 levels\n" +
                         "• JPDB Frequency - frequency ranking\n" +
                         "• Kanjium - pitch accent\n" +
-                        "• KANJIDIC - kanji breakdown on cards"
+                        "• KANJIDIC - kanji breakdown on cards", "アプリを十分に使うために、おすすめの辞書をダウンロードしてください:\n• Jitendex — メインの辞書（約20万項目）\n• JLPTタグ — N5〜N1のレベル\n• JPDB Frequency — 頻度順位\n• Kanjium — ピッチアクセント\n• KANJIDIC — カードの漢字の内訳"
                 )
                 AppLanguage.ENGLISH -> tr(
                     "Pobierz rekomendowane słowniki, aby w pełni korzystać z aplikacji:\n" +
@@ -164,7 +164,7 @@ private fun WelcomeContent(
                         "• Wiktionary EN→PL - ~79,000 headwords with Polish meanings\n" +
                         "• IPA pronunciation - phonetic transcription\n\n" +
                         "The English-English dictionary (the fallback for words with no " +
-                        "Polish gloss) is a 120 MB download you can add later in settings."
+                        "Polish gloss) is a 120 MB download you can add later in settings.", "アプリを十分に使うために、おすすめの辞書をダウンロードしてください:\n• Wiktionary EN→PL — ポーランド語の意味付きの約79,000語\n• IPA発音 — 発音記号\n\n英英辞書（ポーランド語の訳がない単語の予備）は120 MBで、あとから設定で追加できます。"
                 )
                 AppLanguage.SPANISH -> tr(
                     "Pobierz rekomendowane słowniki, aby w pełni korzystać z aplikacji:\n" +
@@ -178,7 +178,7 @@ private fun WelcomeContent(
                         "inflected forms included (hablando → hablar)\n" +
                         "• IPA pronunciation - phonetic transcription\n\n" +
                         "The import takes several minutes and needs about 600 MB of " +
-                        "device storage."
+                        "device storage.", "アプリを十分に使うために、おすすめの辞書をダウンロードしてください:\n• Wiktionary ES→EN — 英語の意味付きの116万語、活用形も含む（hablando → hablar）\n• IPA発音 — 発音記号\n\nインポートには数分かかり、端末の空き容量が約600 MB必要です。"
                 )
             },
             style = MaterialTheme.typography.bodyLarge,
@@ -203,9 +203,9 @@ private fun WelcomeContent(
             Spacer(Modifier.size(12.dp))
             Text(
                 text = when (language) {
-                    AppLanguage.JAPANESE -> tr("Pobierz rekomendowane (~19 MB)", "Download recommended (~19 MB)")
-                    AppLanguage.ENGLISH -> tr("Pobierz rekomendowane (~6 MB)", "Download recommended (~6 MB)")
-                    AppLanguage.SPANISH -> tr("Pobierz rekomendowane (~32 MB)", "Download recommended (~32 MB)")
+                    AppLanguage.JAPANESE -> tr("Pobierz rekomendowane (~19 MB)", "Download recommended (~19 MB)", "おすすめをダウンロード（約19 MB）")
+                    AppLanguage.ENGLISH -> tr("Pobierz rekomendowane (~6 MB)", "Download recommended (~6 MB)", "おすすめをダウンロード（約6 MB）")
+                    AppLanguage.SPANISH -> tr("Pobierz rekomendowane (~32 MB)", "Download recommended (~32 MB)", "おすすめをダウンロード（約32 MB）")
                 },
                 fontSize = 16.sp
             )
@@ -221,9 +221,9 @@ private fun WelcomeContent(
         ) {
             Text(
                 when (language) {
-                    AppLanguage.JAPANESE -> tr("Tylko JMdict (~15 MB)", "JMdict only (~15 MB)")
-                    AppLanguage.ENGLISH -> tr("Tylko słownik EN→PL (~4 MB)", "EN→PL dictionary only (~4 MB)")
-                    AppLanguage.SPANISH -> tr("Tylko słownik ES→EN (~21 MB)", "ES→EN dictionary only (~21 MB)")
+                    AppLanguage.JAPANESE -> tr("Tylko JMdict (~15 MB)", "JMdict only (~15 MB)", "JMdictのみ（約15 MB）")
+                    AppLanguage.ENGLISH -> tr("Tylko słownik EN→PL (~4 MB)", "EN→PL dictionary only (~4 MB)", "英→ポ辞書のみ（約4 MB）")
+                    AppLanguage.SPANISH -> tr("Tylko słownik ES→EN (~21 MB)", "ES→EN dictionary only (~21 MB)", "西→英辞書のみ（約21 MB）")
                 },
                 fontSize = 14.sp
             )
@@ -232,7 +232,7 @@ private fun WelcomeContent(
         Spacer(Modifier.height(16.dp))
 
         TextButton(onClick = onSkip) {
-            Text(tr("Pomiń — zaimportuję ręcznie", "Skip - I'll import manually"))
+            Text(tr("Pomiń — zaimportuję ręcznie", "Skip - I'll import manually", "スキップ — 自分でインポートする"))
         }
     }
 }
@@ -257,11 +257,11 @@ private fun DownloadingContent(
         Spacer(Modifier.height(32.dp))
 
         val phaseText = when (progress?.phase) {
-            DownloadPhase.DOWNLOADING -> if (isEnglish) "Downloading ${progress.dictionaryName}…" else "Pobieranie ${progress.dictionaryName}…"
-            DownloadPhase.IMPORTING -> if (isEnglish) "Importing ${progress.dictionaryName}…" else "Importowanie ${progress.dictionaryName}…"
-            DownloadPhase.COMPLETED -> if (isEnglish) "Done!" else "Gotowe!"
-            DownloadPhase.ERROR -> if (isEnglish) "Error!" else "Błąd!"
-            null -> if (isEnglish) "Preparing…" else "Przygotowywanie…"
+            DownloadPhase.DOWNLOADING -> com.yomitanmobile.util.trI(isEnglish, "Pobieranie ${progress.dictionaryName}…", "Downloading ${progress.dictionaryName}…", "${progress.dictionaryName}をダウンロード中…")
+            DownloadPhase.IMPORTING -> com.yomitanmobile.util.trI(isEnglish, "Importowanie ${progress.dictionaryName}…", "Importing ${progress.dictionaryName}…", "${progress.dictionaryName}をインポート中…")
+            DownloadPhase.COMPLETED -> com.yomitanmobile.util.trI(isEnglish, "Gotowe!", "Done!", "完了！")
+            DownloadPhase.ERROR -> com.yomitanmobile.util.trI(isEnglish, "Błąd!", "Error!", "エラー！")
+            null -> com.yomitanmobile.util.trI(isEnglish, "Przygotowywanie…", "Preparing…", "準備中…")
         }
 
         Text(
@@ -290,7 +290,7 @@ private fun DownloadingContent(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             Text(
-                text = if (isEnglish) "This may take a few minutes…" else "To może zająć kilka minut…",
+                text = com.yomitanmobile.util.trI(isEnglish, "To może zająć kilka minut…", "This may take a few minutes…", "数分かかることがあります…"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -320,7 +320,7 @@ private fun CompletedContent(onContinue: () -> Unit) {
         Spacer(Modifier.height(24.dp))
 
         Text(
-            text = if (isEnglish) "Dictionary installed!" else "Słownik zainstalowany!",
+            text = com.yomitanmobile.util.trI(isEnglish, "Słownik zainstalowany!", "Dictionary installed!", "辞書をインストールしました！"),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.tertiary
@@ -329,15 +329,18 @@ private fun CompletedContent(onContinue: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = if (isEnglish) {
-                "JMdict (English) has been successfully downloaded and imported.\n" +
-                "You can now search words offline.\n\n" +
-                "Pronunciation via TTS is available automatically through Google TTS."
-            } else {
+            text = com.yomitanmobile.util.trI(
+                isEnglish,
                 "JMdict (English) został pomyślnie pobrany i zaimportowany.\n" +
-                "Możesz teraz wyszukiwać słowa offline.\n\n" +
-                "Wymowa TTS jest dostępna automatycznie przez Google TTS."
-            },
+                    "Możesz teraz wyszukiwać słowa offline.\n\n" +
+                    "Wymowa TTS jest dostępna automatycznie przez Google TTS.",
+                "JMdict (English) has been successfully downloaded and imported.\n" +
+                    "You can now search words offline.\n\n" +
+                    "Pronunciation via TTS is available automatically through Google TTS.",
+                "JMdict（英語）のダウンロードとインポートが完了しました。\n" +
+                    "オフラインで単語を検索できます。\n\n" +
+                    "読み上げはGoogleの読み上げで自動的に使えます。"
+            ),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             lineHeight = 24.sp
@@ -351,7 +354,7 @@ private fun CompletedContent(onContinue: () -> Unit) {
                 .fillMaxWidth()
                 .height(56.dp)
         ) {
-            Text(text = if (isEnglish) "Start searching" else "Rozpocznij wyszukiwanie", fontSize = 16.sp)
+            Text(text = com.yomitanmobile.util.trI(isEnglish, "Rozpocznij wyszukiwanie", "Start searching", "検索を始める"), fontSize = 16.sp)
         }
     }
 }
@@ -380,7 +383,7 @@ private fun ErrorContent(
         Spacer(Modifier.height(24.dp))
 
         Text(
-            text = if (isEnglish) "Download error" else "Błąd pobierania",
+            text = com.yomitanmobile.util.trI(isEnglish, "Błąd pobierania", "Download error", "ダウンロードエラー"),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.error
@@ -398,7 +401,7 @@ private fun ErrorContent(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = if (isEnglish) "Check your internet connection and try again." else "Sprawdź połączenie z internetem i spróbuj ponownie.",
+            text = com.yomitanmobile.util.trI(isEnglish, "Sprawdź połączenie z internetem i spróbuj ponownie.", "Check your internet connection and try again.", "インターネット接続を確認して、もう一度お試しください。"),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -412,7 +415,7 @@ private fun ErrorContent(
                 .fillMaxWidth()
                 .height(48.dp)
         ) {
-            Text(text = if (isEnglish) "Try again" else "Spróbuj ponownie")
+            Text(text = com.yomitanmobile.util.trI(isEnglish, "Spróbuj ponownie", "Try again", "再試行"))
         }
 
         Spacer(Modifier.height(12.dp))
@@ -421,7 +424,7 @@ private fun ErrorContent(
             onClick = onSkip,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (isEnglish) "Skip" else "Pomiń")
+            Text(com.yomitanmobile.util.trI(isEnglish, "Pomiń", "Skip", "スキップ"))
         }
     }
 }

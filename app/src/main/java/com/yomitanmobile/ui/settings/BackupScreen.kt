@@ -84,9 +84,9 @@ fun BackupScreen(
             try {
                 val stream = context.contentResolver.openInputStream(it)
                 if (stream != null) viewModel.importSettings(stream)
-                else Toast.makeText(context, tr("Nie można otworzyć pliku", "Cannot open file"), Toast.LENGTH_SHORT).show()
+                else Toast.makeText(context, tr("Nie można otworzyć pliku", "Cannot open file", "ファイルを開けません"), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(context, tr("Błąd: ${e.message}", "Error: ${e.message}"), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Błąd: ${e.message}", "Error: ${e.message}", "エラー: ${e.message}"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -95,19 +95,19 @@ fun BackupScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is SettingsEvent.BackupSuccess ->
-                    Toast.makeText(context, tr("Kopia zapasowa utworzona", "Backup created"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Kopia zapasowa utworzona", "Backup created", "バックアップを作成しました"), Toast.LENGTH_LONG).show()
                 is SettingsEvent.BackupError ->
-                    Toast.makeText(context, tr("Błąd: ${event.message}", "Error: ${event.message}"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Błąd: ${event.message}", "Error: ${event.message}", "エラー: ${event.message}"), Toast.LENGTH_LONG).show()
                 is SettingsEvent.RestoreSuccess -> {
                     showRestoreDialog = false
                     Toast.makeText(
                         context,
-                        tr("Przywrócono — uruchom aplikację ponownie", "Restored — restart the app"),
+                        tr("Przywrócono — uruchom aplikację ponownie", "Restored — restart the app", "復元しました — アプリを再起動してください"),
                         Toast.LENGTH_LONG
                     ).show()
                 }
                 is SettingsEvent.RestoreError ->
-                    Toast.makeText(context, tr("Błąd przywracania: ${event.message}", "Restore failed: ${event.message}"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("Błąd przywracania: ${event.message}", "Restore failed: ${event.message}", "復元に失敗しました: ${event.message}"), Toast.LENGTH_LONG).show()
                 else -> Unit
             }
         }
@@ -117,14 +117,14 @@ fun BackupScreen(
         val folder = selectedBackupForRestore!!
         AlertDialog(
             onDismissRequest = { showRestoreDialog = false },
-            title = { Text(tr("Przywrócić kopię zapasową?", "Restore this backup?")) },
+            title = { Text(tr("Przywrócić kopię zapasową?", "Restore this backup?", "このバックアップを復元しますか？")) },
             text = {
                 Text(
                     tr(
                         "Obecne słowniki i postęp zostaną zastąpione zawartością kopii " +
                             "z ${folder.name}. Aplikacja musi być zrestartowana po przywróceniu.",
                         "The dictionaries and progress you have now are replaced by the backup " +
-                            "from ${folder.name}. The app has to be restarted afterwards."
+                            "from ${folder.name}. The app has to be restarted afterwards.", "いまの辞書と進捗は、${folder.name}のバックアップの内容に置き換わります。復元後はアプリの再起動が必要です。"
                     )
                 )
             },
@@ -132,11 +132,11 @@ fun BackupScreen(
                 TextButton(
                     onClick = { viewModel.restoreBackup(folder) },
                     enabled = !isRestoring
-                ) { Text(tr("Przywróć", "Restore")) }
+                ) { Text(tr("Przywróć", "Restore", "復元")) }
             },
             dismissButton = {
                 TextButton(onClick = { showRestoreDialog = false }, enabled = !isRestoring) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -145,10 +145,10 @@ fun BackupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Kopia zapasowa", "Backup & Restore")) },
+                title = { Text(tr("Kopia zapasowa", "Backup & Restore", "バックアップと復元")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 }
             )
@@ -177,8 +177,7 @@ fun BackupScreen(
                     Text(
                         tr(
                             "Dołącz ustawienia (bez klucza AI)",
-                            "Include settings (without AI key)"
-                        ),
+                            "Include settings (without AI key)", "設定を含める（AIキーを除く）"),
                         fontSize = 14.sp,
                         modifier = Modifier.weight(1f)
                     )
@@ -199,7 +198,7 @@ fun BackupScreen(
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 1.dp)
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text(tr("Utwórz kopię zapasową", "Create backup"))
+                    Text(tr("Utwórz kopię zapasową", "Create backup", "バックアップを作成"))
                 }
             }
 
@@ -215,13 +214,12 @@ fun BackupScreen(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(tr("Importuj ustawienia z pliku", "Import settings from file"))
+                    Text(tr("Importuj ustawienia z pliku", "Import settings from file", "ファイルから設定をインポート"))
                 }
                 Text(
                     tr(
                         "Wybierz settings.json z folderu kopii zapasowej. Baza danych nie jest zmieniana; klucz AI nigdy nie jest przenoszony.",
-                        "Pick a settings.json from a backup folder. The database is untouched; the AI key is never carried over."
-                    ),
+                        "Pick a settings.json from a backup folder. The database is untouched; the AI key is never carried over.", "バックアップフォルダーのsettings.jsonを選んでください。データベースには触れず、AIキーは引き継がれません。"),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
@@ -231,7 +229,7 @@ fun BackupScreen(
             if (backups.isNotEmpty()) {
                 item {
                     Text(
-                        tr("Dostępne kopie (${backups.size}):", "Available backups (${backups.size}):"),
+                        tr("Dostępne kopie (${backups.size}):", "Available backups (${backups.size}):", "利用できるバックアップ（${backups.size}件）:"),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(top = 8.dp)
@@ -280,7 +278,7 @@ fun BackupScreen(
                                     if (isRestoring && selectedBackupForRestore == backup) {
                                         CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.dp)
                                     } else {
-                                        Text(tr("Przywróć", "Restore"), fontSize = 11.sp)
+                                        Text(tr("Przywróć", "Restore", "復元"), fontSize = 11.sp)
                                     }
                                 }
                                 
@@ -288,7 +286,7 @@ fun BackupScreen(
                                     onClick = { viewModel.deleteBackup(backup) },
                                     modifier = Modifier.height(36.dp)
                                 ) {
-                                    Text(tr("Usuń", "Delete"), fontSize = 11.sp)
+                                    Text(tr("Usuń", "Delete", "削除"), fontSize = 11.sp)
                                 }
                             }
                         }

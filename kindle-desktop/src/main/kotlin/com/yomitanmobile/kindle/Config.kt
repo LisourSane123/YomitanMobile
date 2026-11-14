@@ -39,7 +39,7 @@ data class Config(
      * system says English.
      */
     val englishLabels: Boolean,
-    /** The window's and the messages' language: "pl" or "en". */
+    /** The window's and the messages' language: "pl", "en" or "ja". */
     val language: String,
     /** VOICEVOX as its own downloader lays it out (models/vvms, dict, onnxruntime). */
     val voicevox: File,
@@ -73,7 +73,7 @@ data class Config(
     /** What is missing before a run can start, in the user's words; empty when ready. */
     fun problems(): List<String> = buildList {
         if (dictionary == null || !dictionary.isFile) {
-            add(tr("Nie wskazano słownika (np. Jitendex .zip) — Ustawienia.", "No dictionary chosen (e.g. Jitendex .zip) — open Settings."))
+            add(tr("Nie wskazano słownika (np. Jitendex .zip) — Ustawienia.", "No dictionary chosen (e.g. Jitendex .zip) — open Settings.", "辞書が選ばれていません（例: Jitendex .zip） — 設定を開いてください。"))
         }
     }
 
@@ -94,7 +94,7 @@ data class Config(
                 (p.getProperty(key) ?: System.getenv(env) ?: default?.let { File(dicts, it).path })
                     ?.let(::File)?.takeIf { p.getProperty(key) != null || System.getenv(env) != null || it.isFile }
             val data = Platform.dataDir
-            val language = p.getProperty("language") ?: if (Locale.getDefault().language == "pl") "pl" else "en"
+            val language = p.getProperty("language") ?: when (Locale.getDefault().language) { "pl" -> "pl"; "ja" -> "ja"; else -> "en" }
             return Config(
                 dictionary = file("dictionary", "KINDLE_SYNC_DICT", "jitendex-yomitan.zip"),
                 frequency = file("frequency", "KINDLE_SYNC_FREQ", "JPDB_v2.2_Frequency.zip"),
@@ -118,9 +118,19 @@ data class Config(
 }
 
 /**
- * The window and the messages speak the configured language — Polish or
- * English, the two the phone app speaks. Set once at start from [Config.language].
+ * The window and the messages speak the configured language — Polish, English
+ * or Japanese, the three the phone app speaks. Set once at start from
+ * [Config.language]. A string with no Japanese falls back to English.
  */
-var polishUi: Boolean = Locale.getDefault().language == "pl"
+var uiLanguage: String = when (Locale.getDefault().language) { "pl" -> "pl"; "ja" -> "ja"; else -> "en" }
 
-fun tr(pl: String, en: String): String = if (polishUi) pl else en
+/** Kept for the code and tests that set the two-language switch. */
+var polishUi: Boolean
+    get() = uiLanguage == "pl"
+    set(value) { uiLanguage = if (value) "pl" else "en" }
+
+fun tr(pl: String, en: String, ja: String? = null): String = when (uiLanguage) {
+    "pl" -> pl
+    "ja" -> ja ?: en
+    else -> en
+}

@@ -31,6 +31,14 @@ object LocaleHelper {
     @Volatile
     var chosen: UiLanguage? = null
 
+    /**
+     * The language the interface is showing right now, set by MainActivity on
+     * every composition. What [trI] reads in the helpers that were only ever
+     * handed an `isEnglish` flag.
+     */
+    @Volatile
+    var active: UiLanguage = UiLanguage.ENGLISH
+
     fun language(config: Configuration): UiLanguage {
         chosen?.let { return it }
         val locales = config.locales
@@ -76,4 +84,15 @@ object LocaleHelper {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(PREFS_KEY, null)
         )
     }
+}
+
+/**
+ * For helpers that only receive `isEnglish`: Polish when it is false, else
+ * Japanese when that is the language showing ([LocaleHelper.active]), else
+ * English.
+ */
+fun trI(isEnglish: Boolean, pl: String, en: String, ja: String): String = when {
+    !isEnglish -> pl
+    LocaleHelper.active == UiLanguage.JAPANESE -> ja
+    else -> en
 }

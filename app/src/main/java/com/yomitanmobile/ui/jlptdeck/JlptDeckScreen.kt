@@ -118,31 +118,30 @@ fun JlptDeckScreen(
                         (if (event.result.failed > 0) " (${event.result.failed} skipped: duplicates or errors)" else "") +
                         (if (!event.result.recordedAsKnown) " — the collection scan was left untouched" else "")
                 )
-                is JlptDeckEvent.Error -> tr("Błąd: ${event.message}", "Error: ${event.message}")
+                is JlptDeckEvent.Error -> tr("Błąd: ${event.message}", "Error: ${event.message}", "エラー: ${event.message}")
                 JlptDeckEvent.PermissionRequired -> {
                     withAnkiPermission { viewModel.generate() }
-                    tr("Potrzebne uprawnienie do AnkiDroida", "AnkiDroid permission needed")
+                    tr("Potrzebne uprawnienie do AnkiDroida", "AnkiDroid permission needed", "AnkiDroidの権限が必要です")
                 }
-                JlptDeckEvent.AnkiNotInstalled -> tr("AnkiDroid nie jest zainstalowany", "AnkiDroid is not installed")
-                JlptDeckEvent.Cancelled -> tr("Przerwano generowanie", "Generation cancelled")
+                JlptDeckEvent.AnkiNotInstalled -> tr("AnkiDroid nie jest zainstalowany", "AnkiDroid is not installed", "AnkiDroidがインストールされていません")
+                JlptDeckEvent.Cancelled -> tr("Przerwano generowanie", "Generation cancelled", "生成をキャンセルしました")
                 is JlptDeckEvent.SuspendNeedsAnki -> tr(
                     "AnkiDroid nie pozwala usypiać fiszek z zewnątrz. ${event.count} kart " +
                         "dostało tag „${event.tag}” — wyszukaj go w Anki i uśpij jednym " +
                         "ruchem. Zapis do pliku .apkg usypia je od razu.",
                     "AnkiDroid does not let another app suspend cards. ${event.count} of them " +
                         "carry the tag “${event.tag}” — search for it in Anki and suspend them " +
-                        "in one go. Exporting to an .apkg file suspends them outright."
+                        "in one go. Exporting to an .apkg file suspends them outright.", "AnkiDroidでは他のアプリがカードを保留にできません。${event.count}枚にタグ「${event.tag}」が付いています — Ankiでこのタグを検索して、まとめて保留にしてください。.apkgファイルへの書き出しなら最初から保留になります。"
                 )
                 is JlptDeckEvent.FileWritten -> tr(
                     "Zapisano plik: ${event.notes} fiszek, w tym ${event.suspended} uśpionych. " +
                         "Zaimportuj go w Anki.",
                     "File written: ${event.notes} cards, ${event.suspended} of them suspended. " +
-                        "Import it in Anki."
+                        "Import it in Anki.", "ファイルを書き出しました: カード${event.notes}枚、うち保留${event.suspended}枚。Ankiでインポートしてください。"
                 )
                 JlptDeckEvent.AudioUnavailable -> tr(
                     "Brak działającego syntezatora mowy — karty powstaną bez audio.",
-                    "No working text-to-speech voice — cards will be created without audio."
-                )
+                    "No working text-to-speech voice — cards will be created without audio.", "使える読み上げ音声がありません — 音声なしでカードを作成します。")
             }
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
@@ -151,10 +150,10 @@ fun JlptDeckScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Talia ${scale.displayName}", "${scale.displayName} deck")) },
+                title = { Text(tr("Talia ${scale.displayName}", "${scale.displayName} deck", "${scale.displayName}デッキ")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 }
             )
@@ -172,7 +171,7 @@ fun JlptDeckScreen(
                     "Tworzy gotową talię ze wszystkich słów wybranego poziomu ${scale.displayName} — bez kopania słowo po słowie. " +
                         "Fiszki mają dokładnie ten sam wygląd, co eksport ze szczegółów słowa.",
                     "Builds a ready deck from every word of the chosen ${scale.displayName} level — no word-by-word mining. " +
-                        "The cards use exactly the same styling as a single export from the detail screen."
+                        "The cards use exactly the same styling as a single export from the detail screen.", "選んだ${scale.displayName}レベルのすべての単語から、すぐ使えるデッキを作ります — 単語を一つずつ採取する必要はありません。カードの見た目は、詳細画面から1枚ずつエクスポートしたものとまったく同じです。"
                 ),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -180,7 +179,7 @@ fun JlptDeckScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            SectionTitle(tr("Poziom", "Level"))
+            SectionTitle(tr("Poziom", "Level", "レベル"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 scale.levels.forEach { candidate ->
                     FilterChip(
@@ -214,7 +213,7 @@ fun JlptDeckScreen(
                                 (if (scale == LevelScale.JLPT) "The deck would be built from the short built-in list only — install the "
                                 else "The deck would be empty — install the ") +
                                 "“${scale.tagDictionaryName}” dictionary from the dictionary download screen " +
-                                "to get the full level."
+                                "to get the full level.", "レベル${scale.label(level)}の単語にタグを付けている辞書がインストールされていません。${if (scale == LevelScale.JLPT) "デッキは内蔵の短いリストだけから作られます — " else "デッキは空になります — "}レベル全体を得るには、辞書のダウンロード画面から「${scale.tagDictionaryName}」をインストールしてください。"
                         ),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onErrorContainer,
@@ -228,14 +227,14 @@ fun JlptDeckScreen(
             OutlinedTextField(
                 value = deckName,
                 onValueChange = viewModel::setDeckName,
-                label = { Text(tr("Nazwa talii w Anki", "Anki deck name")) },
+                label = { Text(tr("Nazwa talii w Anki", "Anki deck name", "Ankiのデッキ名")) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(Modifier.height(16.dp))
 
-            SectionTitle(tr("Filtry", "Filters"))
+            SectionTitle(tr("Filtry", "Filters", "フィルター"))
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -243,10 +242,9 @@ fun JlptDeckScreen(
                         if (filters.maxFrequencyRank > 0) {
                             tr(
                                 "Pomiń słowa rzadsze niż #${filters.maxFrequencyRank}",
-                                "Skip words rarer than #${filters.maxFrequencyRank}"
-                            )
+                                "Skip words rarer than #${filters.maxFrequencyRank}", "${filters.maxFrequencyRank}位よりまれな単語を除く")
                         } else {
-                            tr("Bez limitu rzadkości", "No rarity limit")
+                            tr("Bez limitu rzadkości", "No rarity limit", "まれさの上限なし")
                         },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium
@@ -254,8 +252,7 @@ fun JlptDeckScreen(
                     Text(
                         tr(
                             "Ranga z zainstalowanych list częstotliwości. 0 = filtr wyłączony.",
-                            "Rank from the installed frequency lists. 0 = filter off."
-                        ),
+                            "Rank from the installed frequency lists. 0 = filter off.", "インストール済みの頻度リストの順位。0 = フィルターなし。"),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -270,11 +267,10 @@ fun JlptDeckScreen(
                     )
 
                     ToggleRow(
-                        title = tr("Uwzględnij słowa bez rangi", "Include unranked words"),
+                        title = tr("Uwzględnij słowa bez rangi", "Include unranked words", "順位のない単語も含める"),
                         subtitle = tr(
                             "Bez zainstalowanej listy częstotliwości wszystkie słowa są „bez rangi” — wyłączenie tego da pustą talię.",
-                            "With no frequency list installed every word is unranked — turning this off yields an empty deck."
-                        ),
+                            "With no frequency list installed every word is unranked — turning this off yields an empty deck.", "頻度リストがないとすべての単語が順位なしになります — これをオフにすると空のデッキになります。"),
                         checked = filters.includeUnranked,
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(includeUnranked = value) }
@@ -284,15 +280,14 @@ fun JlptDeckScreen(
                     ToggleRow(
                         title = tr(
                             "Zapamiętaj utworzone słowa jako posiadane",
-                            "Remember the created words as owned"
-                        ),
+                            "Remember the created words as owned", "作成した単語を所有済みとして記録する"),
                         subtitle = tr(
                             "Zapisany skan kolekcji to jedyny ślad po tej talii — fiszki " +
                                 "generowane nie trafiają do statystyk kopania. Wyłącz przy " +
                                 "talii próbnej: skan zostanie nietknięty, aż zrobisz go sam.",
                             "The stored collection scan is the only record this deck exists — " +
                                 "generated cards stay out of the mining statistics. Turn it off " +
-                                "for a trial deck: the scan stays untouched until you rescan."
+                                "for a trial deck: the scan stays untouched until you rescan.", "保存済みのコレクションスキャンが、このデッキの唯一の記録です — 生成したカードは採取の統計に入りません。試しのデッキではオフにしてください: 再スキャンするまでスキャンはそのままです。"
                         ),
                         checked = recordAsKnown,
                         onCheckedChange = viewModel::setRecordAsKnown,
@@ -300,11 +295,10 @@ fun JlptDeckScreen(
                     )
 
                     ToggleRow(
-                        title = tr("Pomiń archaizmy i słowa rzadkie", "Skip archaic and rare words"),
+                        title = tr("Pomiń archaizmy i słowa rzadkie", "Skip archaic and rare words", "古語・まれな語を除く"),
                         subtitle = tr(
                             "Tagi: archaic, obsolete, rare, dated.",
-                            "Tags: archaic, obsolete, rare, dated."
-                        ),
+                            "Tags: archaic, obsolete, rare, dated.", "タグ: 古語、廃語、まれ、古風。"),
                         checked = filters.skipArchaic,
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(skipArchaic = value) }
@@ -312,11 +306,10 @@ fun JlptDeckScreen(
                     )
 
                     ToggleRow(
-                        title = tr("Pomiń nazwy własne", "Skip proper names"),
+                        title = tr("Pomiń nazwy własne", "Skip proper names", "固有名詞を除く"),
                         subtitle = tr(
                             "Wpisy z JMnedict: nazwiska, miejsca, firmy.",
-                            "JMnedict entries: surnames, places, companies."
-                        ),
+                            "JMnedict entries: surnames, places, companies.", "JMnedictの項目: 姓、地名、会社名。"),
                         checked = filters.skipProperNames,
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(skipProperNames = value) }
@@ -324,11 +317,10 @@ fun JlptDeckScreen(
                     )
 
                     ToggleRow(
-                        title = tr("Pomiń słowa już w Anki", "Skip words already in Anki"),
+                        title = tr("Pomiń słowa już w Anki", "Skip words already in Anki", "Ankiにある単語を除く"),
                         subtitle = tr(
                             "Skanuje całą kolekcję, także talie Core 2k/6k/10k i Kaishi 1.5k oraz wcześniej wygenerowane poziomy.",
-                            "Scans the whole collection, including Core 2k/6k/10k and Kaishi 1.5k decks and previously generated levels."
-                        ),
+                            "Scans the whole collection, including Core 2k/6k/10k and Kaishi 1.5k decks and previously generated levels.", "コレクション全体をスキャンします。Core 2k/6k/10k、Kaishi 1.5kのデッキや以前生成したレベルも含みます。"),
                         checked = filters.skipAlreadyInAnki,
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(skipAlreadyInAnki = value) }
@@ -336,11 +328,10 @@ fun JlptDeckScreen(
                     )
 
                     ToggleRow(
-                        title = tr("Pomiń słowa już wykopane", "Skip words already mined"),
+                        title = tr("Pomiń słowa już wykopane", "Skip words already mined", "採取済みの単語を除く"),
                         subtitle = tr(
                             "Słowa wyeksportowane wcześniej z tej aplikacji.",
-                            "Words this app exported before."
-                        ),
+                            "Words this app exported before.", "このアプリが以前エクスポートした単語。"),
                         checked = filters.skipAlreadyMined,
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(skipAlreadyMined = value) }
@@ -348,11 +339,10 @@ fun JlptDeckScreen(
                     )
 
                     ToggleRow(
-                        title = tr("Generuj audio (wolne)", "Generate audio (slow)"),
+                        title = tr("Generuj audio (wolne)", "Generate audio (slow)", "音声を生成する（遅い）"),
                         subtitle = tr(
                             "Syntezator mowy dla każdego słowa — około sekundy na kartę.",
-                            "Text-to-speech per word — roughly a second per card."
-                        ),
+                            "Text-to-speech per word — roughly a second per card.", "単語ごとの読み上げ — 1枚あたり約1秒。"),
                         checked = filters.generateAudio,
                         onCheckedChange = { value ->
                             viewModel.updateFilters { it.copy(generateAudio = value) }
@@ -362,9 +352,9 @@ fun JlptDeckScreen(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         if (filters.maxWords > 0) {
-                            tr("Maksymalnie ${filters.maxWords} kart", "At most ${filters.maxWords} cards")
+                            tr("Maksymalnie ${filters.maxWords} kart", "At most ${filters.maxWords} cards", "最大${filters.maxWords}枚")
                         } else {
-                            tr("Bez limitu liczby kart", "No card-count limit")
+                            tr("Bez limitu liczby kart", "No card-count limit", "枚数の上限なし")
                         },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium
@@ -372,8 +362,7 @@ fun JlptDeckScreen(
                     Text(
                         tr(
                             "Przy limicie zostają słowa najczęstsze.",
-                            "When capped, the most frequent words are kept."
-                        ),
+                            "When capped, the most frequent words are kept.", "上限があるときは、よく使う単語が残ります。"),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -403,9 +392,9 @@ fun JlptDeckScreen(
                         strokeWidth = 2.dp
                     )
                     Spacer(Modifier.height(0.dp))
-                    Text("  " + tr("Analizuję…", "Analysing…"))
+                    Text("  " + tr("Analizuję…", "Analysing…", "分析中…"))
                 } else {
-                    Text(tr("Sprawdź, co powstanie", "Check what would be created"))
+                    Text(tr("Sprawdź, co powstanie", "Check what would be created", "作成される内容を確認"))
                 }
             }
 
@@ -417,16 +406,14 @@ fun JlptDeckScreen(
                         Text(
                             tr(
                                 "Do utworzenia: ${currentPlan.selectedCount} kart",
-                                "To create: ${currentPlan.selectedCount} cards"
-                            ),
+                                "To create: ${currentPlan.selectedCount} cards", "作成予定: ${currentPlan.selectedCount}枚"),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             tr(
                                 "Kandydatów na poziomie ${scale.label(currentPlan.level)}: ${currentPlan.candidateCount}",
-                                "Candidates at level ${scale.label(currentPlan.level)}: ${currentPlan.candidateCount}"
-                            ),
+                                "Candidates at level ${scale.label(currentPlan.level)}: ${currentPlan.candidateCount}", "レベル${scale.label(currentPlan.level)}の候補: ${currentPlan.candidateCount}"),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -439,15 +426,14 @@ fun JlptDeckScreen(
                                 (24L * 60L * 60L * 1000L)).toInt()
                             val age = when {
                                 currentPlan.scannedAt <= 0L -> ""
-                                days <= 0 -> tr(", skan z dzisiaj", ", scanned today")
-                                days == 1 -> tr(", skan sprzed 1 dnia", ", scanned 1 day ago")
-                                else -> tr(", skan sprzed $days dni", ", scanned $days days ago")
+                                days <= 0 -> tr(", skan z dzisiaj", ", scanned today", "、今日スキャン")
+                                days == 1 -> tr(", skan sprzed 1 dnia", ", scanned 1 day ago", "、1日前にスキャン")
+                                else -> tr(", skan sprzed $days dni", ", scanned $days days ago", "、${days}日前にスキャン")
                             }
                             Text(
                                 tr(
                                     "Twoja kolekcja Anki: ${currentPlan.scannedWordCount} słów$age",
-                                    "Your Anki collection: ${currentPlan.scannedWordCount} words$age"
-                                ),
+                                    "Your Anki collection: ${currentPlan.scannedWordCount} words$age", "Ankiコレクション: ${currentPlan.scannedWordCount}語$age"),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -458,7 +444,7 @@ fun JlptDeckScreen(
                                             "przeskanuj kolekcję ponownie, jeśli od tego czasu " +
                                             "coś doszło.",
                                         "Cards added after that scan are not taken into account — " +
-                                            "rescan the collection if anything has been added since."
+                                            "rescan the collection if anything has been added since.", "そのスキャン後に追加したカードは考慮されません — その後に何か追加したなら、コレクションを再スキャンしてください。"
                                     ),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.error
@@ -469,8 +455,7 @@ fun JlptDeckScreen(
                             Text(
                                 tr(
                                     "Nie udało się odczytać kolekcji Anki — sprawdzanie duplikatów wyłączone.",
-                                    "Could not read the Anki collection — duplicate check disabled."
-                                ),
+                                    "Could not read the Anki collection — duplicate check disabled.", "Ankiコレクションを読み取れませんでした — 重複チェックは無効です。"),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -483,7 +468,7 @@ fun JlptDeckScreen(
                                     "Żadne zainstalowane słowniki nie mają słów z tego poziomu. Pobierz " +
                                         "słownik „${scale.tagDictionaryName}” z ekranu pobierania słowników.",
                                     "None of the installed dictionaries cover this level. Download the " +
-                                        "“${scale.tagDictionaryName}” dictionary from the dictionary download screen."
+                                        "“${scale.tagDictionaryName}” dictionary from the dictionary download screen.", "インストール済みの辞書にこのレベルの単語はありません。辞書のダウンロード画面から「${scale.tagDictionaryName}」をダウンロードしてください。"
                                 ),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.error
@@ -517,8 +502,7 @@ fun JlptDeckScreen(
                             Text(
                                 tr(
                                     "Pierwsze słowa (talia powstaje od najczęstszych):",
-                                    "First words (the deck is created most-frequent-first):"
-                                ),
+                                    "First words (the deck is created most-frequent-first):", "最初の単語（デッキはよく使う順に作成されます）:"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -545,7 +529,7 @@ fun JlptDeckScreen(
                                         "$unranked of ${currentPlan.selectedCount} words carry no " +
                                             "frequency rank — they go to the end of the deck, in " +
                                             "random order. Install a frequency dictionary to order " +
-                                            "the whole deck."
+                                            "the whole deck.", "${currentPlan.selectedCount}語のうち${unranked}語には頻度順位がありません — デッキの最後にランダムな順で入ります。デッキ全体を並べるには頻度辞書をインストールしてください。"
                                     ),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -583,8 +567,7 @@ fun JlptDeckScreen(
                     Text(
                         tr(
                             "Utwórz ${currentPlan.selectedCount} fiszek",
-                            "Create ${currentPlan.selectedCount} cards"
-                        )
+                            "Create ${currentPlan.selectedCount} cards", "${currentPlan.selectedCount}枚のカードを作成")
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -597,14 +580,14 @@ fun JlptDeckScreen(
                     enabled = currentPlan.selectedCount > 0 && !busy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(tr("Zapisz jako plik .apkg", "Save as an .apkg file"))
+                    Text(tr("Zapisz jako plik .apkg", "Save as an .apkg file", ".apkgファイルとして保存"))
                 }
                 Text(
                     tr(
                         "Plik nie potrzebuje AnkiDroida, ma dokładnie jeden typ notatki i " +
                             "naprawdę usypia zaznaczone fiszki — czego API AnkiDroida nie potrafi.",
                         "A file needs no AnkiDroid, carries exactly one note type, and really " +
-                            "suspends the cards you marked — which AnkiDroid's API cannot do."
+                            "suspends the cards you marked — which AnkiDroid's API cannot do.", "ファイルならAnkiDroidは不要で、ノートタイプはちょうど1つ、選んだカードを本当に保留にできます — AnkiDroidのAPIにはできないことです。"
                     ),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -616,7 +599,7 @@ fun JlptDeckScreen(
                         "Karty dostają tagi yomitan-mobile i ${scale.tag(currentPlan.level)}, więc łatwo je w Anki odnaleźć lub usunąć. " +
                             "Nie są liczone w statystykach kopania.",
                         "Cards are tagged yomitan-mobile and ${scale.tag(currentPlan.level)}, so they are easy to find or delete in Anki. " +
-                            "They are not counted in the mining statistics."
+                            "They are not counted in the mining statistics.", "カードにはyomitan-mobileと${scale.tag(currentPlan.level)}のタグが付くので、Ankiで探したり削除したりしやすくなります。採取の統計には数えません。"
                     ),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -632,8 +615,7 @@ fun JlptDeckScreen(
                         Text(
                             tr(
                                 "Tworzę fiszki: ${currentProgress.done} / ${currentProgress.total}",
-                                "Creating cards: ${currentProgress.done} / ${currentProgress.total}"
-                            ),
+                                "Creating cards: ${currentProgress.done} / ${currentProgress.total}", "カードを作成中: ${currentProgress.done} / ${currentProgress.total}"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -656,7 +638,7 @@ fun JlptDeckScreen(
                             onClick = { viewModel.cancelGeneration() },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(tr("Przerwij", "Cancel"))
+                            Text(tr("Przerwij", "Cancel", "キャンセル"))
                         }
                     }
                 }
@@ -673,19 +655,19 @@ private const val ANKI_PERMISSION = "com.ichi2.anki.permission.READ_WRITE_DATABA
 
 private fun skipReasonLabel(reason: JlptSkipReason, isEnglish: Boolean): String = when (reason) {
     JlptSkipReason.NO_DEFINITION ->
-        if (isEnglish) "No definition in the dictionary" else "Brak definicji w słowniku"
+        com.yomitanmobile.util.trI(isEnglish, "Brak definicji w słowniku", "No definition in the dictionary", "辞書に定義がない")
     JlptSkipReason.TOO_RARE ->
-        if (isEnglish) "Too rare" else "Zbyt rzadkie"
+        com.yomitanmobile.util.trI(isEnglish, "Zbyt rzadkie", "Too rare", "まれすぎる")
     JlptSkipReason.UNRANKED ->
-        if (isEnglish) "No frequency data" else "Bez danych o częstości"
+        com.yomitanmobile.util.trI(isEnglish, "Bez danych o częstości", "No frequency data", "頻度のデータなし")
     JlptSkipReason.ARCHAIC ->
-        if (isEnglish) "Archaic / obsolete / rare" else "Archaizmy i przestarzałe"
+        com.yomitanmobile.util.trI(isEnglish, "Archaizmy i przestarzałe", "Archaic / obsolete / rare", "古語・廃語・まれ")
     JlptSkipReason.PROPER_NAME ->
-        if (isEnglish) "Proper names" else "Nazwy własne"
+        com.yomitanmobile.util.trI(isEnglish, "Nazwy własne", "Proper names", "固有名詞")
     JlptSkipReason.ALREADY_IN_ANKI ->
-        if (isEnglish) "Already in Anki" else "Już w Anki"
+        com.yomitanmobile.util.trI(isEnglish, "Już w Anki", "Already in Anki", "すでにAnkiにある")
     JlptSkipReason.ALREADY_MINED ->
-        if (isEnglish) "Already mined in the app" else "Już wykopane w aplikacji"
+        com.yomitanmobile.util.trI(isEnglish, "Już wykopane w aplikacji", "Already mined in the app", "アプリで採取済み")
     JlptSkipReason.OVER_LIMIT ->
-        if (isEnglish) "Over the card limit" else "Ponad limit kart"
+        com.yomitanmobile.util.trI(isEnglish, "Ponad limit kart", "Over the card limit", "カードの上限超過")
 }

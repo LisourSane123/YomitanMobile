@@ -69,8 +69,7 @@ fun DictionariesScreen(
             snackbar.showSnackbar(
                 tr(
                     "Nie udało się usunąć „${failure.dictionary}”: ${failure.message}",
-                    "Could not delete \"${failure.dictionary}\": ${failure.message}"
-                )
+                    "Could not delete \"${failure.dictionary}\": ${failure.message}", "「${failure.dictionary}」を削除できませんでした: ${failure.message}")
             )
         }
     }
@@ -78,10 +77,10 @@ fun DictionariesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Słowniki", "Dictionaries")) },
+                title = { Text(tr("Słowniki", "Dictionaries", "辞書")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -94,7 +93,7 @@ fun DictionariesScreen(
     ) { paddingValues ->
         if (dictionaries.isEmpty()) {
             Text(
-                text = tr("Brak zainstalowanych słowników", "No dictionaries installed"),
+                text = tr("Brak zainstalowanych słowników", "No dictionaries installed", "辞書がインストールされていません"),
                 modifier = Modifier.padding(paddingValues).padding(16.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -131,13 +130,12 @@ fun DictionariesScreen(
     confirmDelete?.let { name ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text(tr("Usunąć słownik?", "Delete dictionary?")) },
+            title = { Text(tr("Usunąć słownik?", "Delete dictionary?", "辞書を削除しますか？")) },
             text = {
                 Text(
                     tr(
                         "„$name” zniknie z wyszukiwania i kart. Duży słownik usuwa się kilka minut — możesz w tym czasie wyjść z tego ekranu.",
-                        "\"$name\" will be gone from search and cards. A big dictionary takes a few minutes to delete — you can leave this screen meanwhile."
-                    )
+                        "\"$name\" will be gone from search and cards. A big dictionary takes a few minutes to delete — you can leave this screen meanwhile.", "「${name}」は検索とカードから消えます。大きな辞書の削除には数分かかります — その間、この画面を離れても大丈夫です。")
                 )
             },
             confirmButton = {
@@ -145,12 +143,12 @@ fun DictionariesScreen(
                     viewModel.delete(name)
                     confirmDelete = null
                 }) {
-                    Text(tr("Usuń", "Delete"), color = MaterialTheme.colorScheme.error)
+                    Text(tr("Usuń", "Delete", "削除"), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { confirmDelete = null }) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -167,9 +165,9 @@ private fun DictionaryRow(
     val tr = rememberTr()
     val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()) }
     val details = buildList {
-        add("${"%,d".format(dictionary.entryCount).replace(',', ' ')} ${tr("wpisów", "entries")}")
+        add("${"%,d".format(dictionary.entryCount).replace(',', ' ')} ${tr("wpisów", "entries", "件")}")
         if (dictionary.revision.isNotBlank()) add(dictionary.revision)
-        add(tr("dodano", "added") + " " + dateFormat.format(Date(dictionary.importDate)))
+        add(tr("dodano", "added", "追加日") + " " + dateFormat.format(Date(dictionary.importDate)))
     }.joinToString(" · ")
 
     SettingsRow(
@@ -178,7 +176,7 @@ private fun DictionaryRow(
         subtitle = if (progress == null) {
             details
         } else {
-            tr("Usuwanie… ${(progress * 100).toInt()}%", "Deleting… ${(progress * 100).toInt()}%")
+            tr("Usuwanie… ${(progress * 100).toInt()}%", "Deleting… ${(progress * 100).toInt()}%", "削除中… ${(progress * 100).toInt()}%")
         },
         showDivider = showDivider,
         trailing = {
@@ -186,7 +184,7 @@ private fun DictionaryRow(
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = tr("Usuń ${dictionary.name}", "Delete ${dictionary.name}"),
+                        contentDescription = tr("Usuń ${dictionary.name}", "Delete ${dictionary.name}", "${dictionary.name}を削除"),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -203,8 +201,8 @@ private fun DictionaryRow(
 private val LANGUAGE_ORDER = listOf("ja", "en", "es")
 
 private fun languageName(code: String, tr: com.yomitanmobile.ui.common.Tr) = when (code) {
-    "ja" -> tr("Japoński", "Japanese")
-    "en" -> tr("Angielski", "English")
-    "es" -> tr("Hiszpański", "Spanish")
+    "ja" -> tr("Japoński", "Japanese", "日本語")
+    "en" -> tr("Angielski", "English", "英語")
+    "es" -> tr("Hiszpański", "Spanish", "スペイン語")
     else -> code
 }

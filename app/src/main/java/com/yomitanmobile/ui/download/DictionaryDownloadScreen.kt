@@ -92,12 +92,12 @@ fun DictionaryDownloadScreen(
             when (event) {
                 is DownloadEvent.Success -> {
                     snackbarHostState.showSnackbar(
-                        tr("✓ ${event.name}: ${event.entries} wpisów zaimportowano", "✓ ${event.name}: ${event.entries} entries imported")
+                        tr("✓ ${event.name}: ${event.entries} wpisów zaimportowano", "✓ ${event.name}: ${event.entries} entries imported", "✓ ${event.name}: ${event.entries}件をインポートしました")
                     )
                 }
                 is DownloadEvent.Error -> {
                     snackbarHostState.showSnackbar(
-                        tr("✗ ${event.name}: ${event.message}", "✗ ${event.name}: ${event.message}")
+                        tr("✗ ${event.name}: ${event.message}", "✗ ${event.name}: ${event.message}", "✗ ${event.name}: ${event.message}")
                     )
                 }
             }
@@ -107,10 +107,10 @@ fun DictionaryDownloadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Pobierz słowniki", "Download dictionaries")) },
+                title = { Text(tr("Pobierz słowniki", "Download dictionaries", "辞書をダウンロード")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 }
             )
@@ -173,7 +173,7 @@ fun DictionaryDownloadScreen(
                     FilterChip(
                         selected = selectedCategory == null,
                         onClick = { viewModel.selectCategory(null) },
-                        label = { Text(tr("Wszystkie", "All")) }
+                        label = { Text(tr("Wszystkie", "All", "すべて")) }
                     )
                     DictionaryCategory.entries.forEach { category ->
                         FilterChip(
@@ -214,15 +214,14 @@ fun DictionaryDownloadScreen(
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                tr("Pobieranie słowników", "Dictionary downloads"),
+                                tr("Pobieranie słowników", "Dictionary downloads", "辞書のダウンロード"),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
                                 tr(
                                     "Słowniki zostaną pobrane z internetu i zaimportowane offline. Po pobraniu nie potrzebujesz internetu do wyszukiwania.",
-                                    "The dictionaries will be downloaded from the internet and imported offline. After that, you do not need the internet to search."
-                                ),
+                                    "The dictionaries will be downloaded from the internet and imported offline. After that, you do not need the internet to search.", "辞書はインターネットからダウンロードし、オフラインでインポートします。その後の検索にインターネットは不要です。"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -244,7 +243,7 @@ fun DictionaryDownloadScreen(
                 ) {
                     Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(tr("Pobierz wszystkie rekomendowane", "Download all recommended"))
+                    Text(tr("Pobierz wszystkie rekomendowane", "Download all recommended", "おすすめをすべてダウンロード"))
                 }
             }
 
@@ -269,8 +268,7 @@ fun DictionaryDownloadScreen(
                         Text(
                             tr(
                                 "Pobierz wszystkie listy częstotliwości ($frequencyCount)",
-                                "Download all frequency lists ($frequencyCount)"
-                            )
+                                "Download all frequency lists ($frequencyCount)", "頻度リストをすべてダウンロード（${frequencyCount}）")
                         )
                     }
                 }
@@ -317,7 +315,7 @@ fun DictionaryDownloadScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            tr("💡 Wskazówki", "💡 Tips"),
+                            tr("💡 Wskazówki", "💡 Tips", "💡 ヒント"),
                             style = MaterialTheme.typography.titleSmall
                         )
                         Spacer(Modifier.height(8.dp))
@@ -332,7 +330,7 @@ fun DictionaryDownloadScreen(
                                     "• Frequency - lets you sort words by usage frequency\n" +
                                     "• Pitch Accent - shows word pitch accent patterns\n" +
                                     "• TTS pronunciation - automatically available via Google TTS (no download needed)\n" +
-                                    "• You can also import your own dictionaries (ZIP) in Settings"
+                                    "• You can also import your own dictionaries (ZIP) in Settings", "• JMdict（英語） — メインの辞書。最初にインストールしてください\n• 頻度 — 単語を使用頻度で並べられます\n• ピッチアクセント — 単語のアクセントの型を表示\n• 読み上げ — Googleの読み上げで自動的に利用できます（ダウンロード不要）\n• 設定から自分の辞書（ZIP）もインポートできます"
                             ),
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -366,13 +364,13 @@ private fun QueueCard(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    tr("Kolejka instalacji", "Install queue"),
+                    tr("Kolejka instalacji", "Install queue", "インストールのキュー"),
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
                 if (finished > 0) {
                     TextButton(onClick = onClearFinished) {
-                        Text(tr("Wyczyść", "Clear"))
+                        Text(tr("Wyczyść", "Clear", "消去"))
                     }
                 }
             }
@@ -407,7 +405,7 @@ private fun QueueCard(
                         IconButton(onClick = { onCancel(item.info.id) }) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = tr("Usuń z kolejki", "Remove from queue")
+                                contentDescription = tr("Usuń z kolejki", "Remove from queue", "キューから外す")
                             )
                         }
                     }
@@ -416,8 +414,7 @@ private fun QueueCard(
             Text(
                 tr(
                     "Instalacja idzie dalej, gdy wyjdziesz z tego ekranu.",
-                    "The install keeps going when you leave this screen."
-                ),
+                    "The install keeps going when you leave this screen.", "この画面を離れてもインストールは続きます。"),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp)
@@ -428,11 +425,11 @@ private fun QueueCard(
 
 @Composable
 private fun queueStateLabel(state: QueueState): String = when (state) {
-    QueueState.WAITING -> tr("w kolejce", "queued")
-    QueueState.RUNNING -> tr("instaluję…", "installing…")
-    QueueState.DONE -> tr("gotowe", "done")
-    QueueState.FAILED -> tr("błąd", "failed")
-    QueueState.CANCELLED -> tr("anulowane", "cancelled")
+    QueueState.WAITING -> tr("w kolejce", "queued", "待機中")
+    QueueState.RUNNING -> tr("instaluję…", "installing…", "インストール中…")
+    QueueState.DONE -> tr("gotowe", "done", "完了")
+    QueueState.FAILED -> tr("błąd", "failed", "失敗")
+    QueueState.CANCELLED -> tr("anulowane", "cancelled", "キャンセル済み")
 }
 
 @Composable
@@ -460,7 +457,7 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            tr("Pobieranie: ${progress.dictionaryName}", "Downloading: ${progress.dictionaryName}"),
+                            tr("Pobieranie: ${progress.dictionaryName}", "Downloading: ${progress.dictionaryName}", "ダウンロード中: ${progress.dictionaryName}"),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -470,13 +467,13 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(
-                                tr("Importowanie: ${progress.dictionaryName}", "Importing: ${progress.dictionaryName}"),
+                                tr("Importowanie: ${progress.dictionaryName}", "Importing: ${progress.dictionaryName}", "インポート中: ${progress.dictionaryName}"),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
                             if (progress.totalBytes > 0) {
                                 Text(
-                                    tr("${progress.bytesDownloaded}/${progress.totalBytes} wpisów", "${progress.bytesDownloaded}/${progress.totalBytes} entries"),
+                                    tr("${progress.bytesDownloaded}/${progress.totalBytes} wpisów", "${progress.bytesDownloaded}/${progress.totalBytes} entries", "${progress.bytesDownloaded}/${progress.totalBytes}件"),
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
@@ -486,7 +483,7 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                         Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            tr("Gotowe: ${progress.dictionaryName}", "Done: ${progress.dictionaryName}"),
+                            tr("Gotowe: ${progress.dictionaryName}", "Done: ${progress.dictionaryName}", "完了: ${progress.dictionaryName}"),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -495,7 +492,7 @@ private fun DownloadProgressBanner(progress: com.yomitanmobile.data.download.Dow
                         Icon(Icons.Default.Error, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            tr("Błąd: ${progress.dictionaryName}", "Error: ${progress.dictionaryName}"),
+                            tr("Błąd: ${progress.dictionaryName}", "Error: ${progress.dictionaryName}", "エラー: ${progress.dictionaryName}"),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -609,7 +606,7 @@ private fun DictionaryDownloadCard(
                         // whether it is the list you want leading.
                         FrequencyCorpus.labelFor(info.name)?.let { label ->
                             Text(
-                                if (isEnglish) label.en else label.pl,
+                                com.yomitanmobile.util.trI(isEnglish, label.pl, label.en, label.ja),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -619,7 +616,7 @@ private fun DictionaryDownloadCard(
                         Spacer(Modifier.width(8.dp))
                         Icon(
                             Icons.Default.CheckCircle,
-                            contentDescription = tr("Zainstalowany", "Installed"),
+                            contentDescription = tr("Zainstalowany", "Installed", "インストール済み"),
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.tertiary
                         )
@@ -664,10 +661,10 @@ private fun DictionaryDownloadCard(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 when {
-                                    isQueued -> tr("W kolejce", "Queued")
-                                    isInstalled && allowReimport -> tr("Zaktualizuj", "Update")
-                                    isInstalled -> tr("Zainstalowany", "Installed")
-                                    else -> tr("Pobierz", "Download")
+                                    isQueued -> tr("W kolejce", "Queued", "待機中")
+                                    isInstalled && allowReimport -> tr("Zaktualizuj", "Update", "更新")
+                                    isInstalled -> tr("Zainstalowany", "Installed", "インストール済み")
+                                    else -> tr("Pobierz", "Download", "ダウンロード")
                                 }
                             )
                         }
@@ -679,10 +676,10 @@ private fun DictionaryDownloadCard(
 }
 
 private fun categoryLabel(category: DictionaryCategory, isEnglish: Boolean): String = when (category) {
-    DictionaryCategory.DICTIONARY -> if (isEnglish) "Dictionary" else "Słownik"
-    DictionaryCategory.FREQUENCY -> if (isEnglish) "Frequency" else "Częstotliwość"
-    DictionaryCategory.PITCH_ACCENT -> if (isEnglish) "Pitch Accent" else "Akcent tonalny"
-    DictionaryCategory.KANJI -> if (isEnglish) "Kanji" else "Kanji"
+    DictionaryCategory.DICTIONARY -> com.yomitanmobile.util.trI(isEnglish, "Słownik", "Dictionary", "辞書")
+    DictionaryCategory.FREQUENCY -> com.yomitanmobile.util.trI(isEnglish, "Częstotliwość", "Frequency", "頻度")
+    DictionaryCategory.PITCH_ACCENT -> com.yomitanmobile.util.trI(isEnglish, "Akcent tonalny", "Pitch Accent", "ピッチアクセント")
+    DictionaryCategory.KANJI -> com.yomitanmobile.util.trI(isEnglish, "Kanji", "Kanji", "漢字")
 }
 
 private fun categoryIcon(category: DictionaryCategory): ImageVector = when (category) {

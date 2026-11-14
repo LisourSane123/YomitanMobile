@@ -66,18 +66,18 @@ fun FavoritesScreen(
     if (showClearAllDialog) {
         AlertDialog(
             onDismissRequest = { showClearAllDialog = false },
-            title = { Text(tr("Wyczyść ulubione", "Clear favorites")) },
-            text = { Text(tr("Czy na pewno chcesz usunąć wszystkie ulubione słowa?", "Are you sure you want to remove all favorite words?")) },
+            title = { Text(tr("Wyczyść ulubione", "Clear favorites", "お気に入りを消去")) },
+            text = { Text(tr("Czy na pewno chcesz usunąć wszystkie ulubione słowa?", "Are you sure you want to remove all favorite words?", "お気に入りの単語をすべて削除しますか？")) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAll()
                     showClearAllDialog = false
                 }) {
-                    Text(tr("Usuń wszystko", "Delete all"), color = MaterialTheme.colorScheme.error)
+                    Text(tr("Usuń wszystko", "Delete all", "すべて削除"), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearAllDialog = false }) { Text(tr("Anuluj", "Cancel")) }
+                TextButton(onClick = { showClearAllDialog = false }) { Text(tr("Anuluj", "Cancel", "キャンセル")) }
             }
         )
     }
@@ -85,16 +85,16 @@ fun FavoritesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Ulubione (${favorites.size})", "Favorites (${favorites.size})")) },
+                title = { Text(tr("Ulubione (${favorites.size})", "Favorites (${favorites.size})", "お気に入り（${favorites.size}）")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 },
                 actions = {
                     if (favorites.isNotEmpty()) {
                         IconButton(onClick = { showClearAllDialog = true }) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = tr("Wyczyść wszystko", "Clear all"))
+                            Icon(Icons.Default.DeleteSweep, contentDescription = tr("Wyczyść wszystko", "Clear all", "すべて消去"))
                         }
                     }
                 },
@@ -119,7 +119,7 @@ fun FavoritesScreen(
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        tr("Brak ulubionych słów", "No favorite words"),
+                        tr("Brak ulubionych słów", "No favorite words", "お気に入りの単語はありません"),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -127,8 +127,7 @@ fun FavoritesScreen(
                     Text(
                         tr(
                             "Dodaj słowo do ulubionych klikając ❤ na stronie szczegółów",
-                            "Add a word to favorites by tapping ❤ on the detail page"
-                        ),
+                            "Add a word to favorites by tapping ❤ on the detail page", "詳細画面の❤をタップするとお気に入りに追加できます"),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -208,7 +207,7 @@ private fun FavoriteWordCard(
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = tr("Usuń z ulubionych", "Remove from favorites"),
+                    contentDescription = tr("Usuń z ulubionych", "Remove from favorites", "お気に入りから外す"),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             }

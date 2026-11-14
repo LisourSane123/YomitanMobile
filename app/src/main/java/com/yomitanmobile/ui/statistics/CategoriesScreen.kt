@@ -45,10 +45,10 @@ fun CategoriesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Kategorie słów", "Word categories")) },
+                title = { Text(tr("Kategorie słów", "Word categories", "単語のカテゴリー")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -66,7 +66,7 @@ fun CategoriesScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Text(tr("Kategorie kopanych słów (ostatnie 7 dni)", "Categories of learned words (last 7 days)"), fontSize = 18.sp, modifier = Modifier.padding(bottom = 4.dp))
+                Text(tr("Kategorie kopanych słów (ostatnie 7 dni)", "Categories of learned words (last 7 days)", "覚えた単語のカテゴリー（過去7日間）"), fontSize = 18.sp, modifier = Modifier.padding(bottom = 4.dp))
             }
 
             items(state.categoryActivity) { cat ->

@@ -121,20 +121,19 @@ fun DeckPreviewSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    tr("Przejrzyj fiszki", "Review the cards"),
+                    tr("Przejrzyj fiszki", "Review the cards", "カードを確認"),
                     fontWeight = FontWeight.Medium
                 )
                 Text(
                     tr(
                         "$toStudy do nauki · $markedHere uśpionych",
-                        "$toStudy to study · $markedHere suspended"
-                    ),
+                        "$toStudy to study · $markedHere suspended", "学習 ${toStudy}枚 · 保留 ${markedHere}枚"),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             OutlinedButton(onClick = { reviewing = true }, enabled = rows.isNotEmpty()) {
-                Text(tr("Zaznacz ręcznie", "Mark by hand"))
+                Text(tr("Zaznacz ręcznie", "Mark by hand", "手動で選ぶ"))
             }
         }
         Text(
@@ -142,7 +141,7 @@ fun DeckPreviewSection(
                 "Zaznacz słowa, które już znasz. Powstaną jako fiszki, ale uśpione — " +
                     "talia jest kompletna, a nauka nie zaczyna się od tego, co umiesz.",
                 "Tick the words you already know. They are still created, but suspended — " +
-                    "the deck stays complete and studying does not start with what you know."
+                    "the deck stays complete and studying does not start with what you know.", "すでに知っている単語にチェックを付けてください。作成はされますが保留になります — デッキは完全なまま、知っている単語から学習が始まることはありません。"
             ),
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -223,12 +222,11 @@ private fun DeckReviewDialog(
                     TopAppBar(
                         title = {
                             Column {
-                                Text(tr("Przejrzyj fiszki", "Review the cards"))
+                                Text(tr("Przejrzyj fiszki", "Review the cards", "カードを確認"))
                                 Text(
                                     tr(
                                         "${items.size - markedHere} do nauki · $markedHere uśpionych",
-                                        "${items.size - markedHere} to study · $markedHere suspended"
-                                    ),
+                                        "${items.size - markedHere} to study · $markedHere suspended", "学習 ${items.size - markedHere}枚 · 保留 ${markedHere}枚"),
                                     fontSize = 12.sp
                                 )
                             }
@@ -237,7 +235,7 @@ private fun DeckReviewDialog(
                             IconButton(onClick = onDismiss) {
                                 Icon(
                                     Icons.Default.Close,
-                                    contentDescription = tr("Zamknij", "Close")
+                                    contentDescription = tr("Zamknij", "Close", "閉じる")
                                 )
                             }
                         }
@@ -249,7 +247,7 @@ private fun DeckReviewDialog(
                             onClick = onDismiss,
                             modifier = Modifier.fillMaxWidth().padding(16.dp)
                         ) {
-                            Text(tr("Gotowe", "Done"))
+                            Text(tr("Gotowe", "Done", "完了"))
                         }
                     }
                 }
@@ -259,14 +257,14 @@ private fun DeckReviewDialog(
                         value = query,
                         onValueChange = { query = it },
                         singleLine = true,
-                        label = { Text(tr("Szukaj w talii", "Search the deck")) },
+                        label = { Text(tr("Szukaj w talii", "Search the deck", "デッキを検索")) },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
                             if (query.isNotEmpty()) {
                                 IconButton(onClick = { query = "" }) {
                                     Icon(
                                         Icons.Default.Close,
-                                        contentDescription = tr("Wyczyść", "Clear")
+                                        contentDescription = tr("Wyczyść", "Clear", "消去")
                                     )
                                 }
                             }
@@ -283,17 +281,17 @@ private fun DeckReviewDialog(
                         FilterChip(
                             selected = filter == ReviewFilter.ALL,
                             onClick = { filter = ReviewFilter.ALL },
-                            label = { Text(tr("Wszystkie", "All")) }
+                            label = { Text(tr("Wszystkie", "All", "すべて")) }
                         )
                         FilterChip(
                             selected = filter == ReviewFilter.STUDY,
                             onClick = { filter = ReviewFilter.STUDY },
-                            label = { Text(tr("Do nauki", "To study")) }
+                            label = { Text(tr("Do nauki", "To study", "学習する")) }
                         )
                         FilterChip(
                             selected = filter == ReviewFilter.SUSPENDED,
                             onClick = { filter = ReviewFilter.SUSPENDED },
-                            label = { Text(tr("Uśpione", "Suspended")) }
+                            label = { Text(tr("Uśpione", "Suspended", "保留")) }
                         )
                     }
 
@@ -309,21 +307,21 @@ private fun DeckReviewDialog(
                             onClick = { onSetSuspended(visible.map { it.key }, true) },
                             enabled = visible.isNotEmpty()
                         ) {
-                            Text(tr("Uśpij widoczne (${visible.size})", "Suspend shown (${visible.size})"))
+                            Text(tr("Uśpij widoczne (${visible.size})", "Suspend shown (${visible.size})", "表示中を保留にする（${visible.size}）"))
                         }
                         TextButton(
                             onClick = { onSetSuspended(visible.map { it.key }, false) },
                             enabled = visible.isNotEmpty()
                         ) {
-                            Text(tr("Odznacz widoczne", "Unmark shown"))
+                            Text(tr("Odznacz widoczne", "Unmark shown", "表示中の選択を外す"))
                         }
                         if (onSuspendFirst != null) {
                             TextButton(onClick = { onSuspendFirst(FIRST_BATCH) }) {
-                                Text(tr("Pierwsze $FIRST_BATCH", "First $FIRST_BATCH"))
+                                Text(tr("Pierwsze $FIRST_BATCH", "First $FIRST_BATCH", "最初の${FIRST_BATCH}枚"))
                             }
                         }
-                        TextButton(onClick = onSuspendAll) { Text(tr("Wszystkie", "All")) }
-                        TextButton(onClick = onClearSuspended) { Text(tr("Wyczyść", "Clear")) }
+                        TextButton(onClick = onSuspendAll) { Text(tr("Wszystkie", "All", "すべて")) }
+                        TextButton(onClick = onClearSuspended) { Text(tr("Wyczyść", "Clear", "消去")) }
                     }
 
                     // Said here because this is where the decision is made,
@@ -338,7 +336,7 @@ private fun DeckReviewDialog(
                                 "je w Anki jednym zaznaczeniem. Plik .apkg usypia je od razu.",
                             "Through AnkiDroid a marked card gets the tag “yomitan-suspend” — " +
                                 "you suspend them in Anki in one go. An .apkg file suspends " +
-                                "them outright."
+                                "them outright.", "AnkiDroid経由では、選んだカードにタグ「yomitan-suspend」が付きます — Ankiでまとめて保留にしてください。.apkgファイルなら最初から保留になります。"
                         ),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -353,7 +351,7 @@ private fun DeckReviewDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                tr("Nic nie pasuje", "Nothing matches"),
+                                tr("Nic nie pasuje", "Nothing matches", "該当なし"),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

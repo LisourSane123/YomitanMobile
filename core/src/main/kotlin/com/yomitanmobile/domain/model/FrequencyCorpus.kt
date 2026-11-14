@@ -14,25 +14,25 @@ package com.yomitanmobile.domain.model
  */
 object FrequencyCorpus {
 
-    data class Label(val pl: String, val en: String)
+    data class Label(val pl: String, val en: String, val ja: String = en)
 
     private val BY_KEY: List<Pair<String, Label>> = listOf(
-        "jpdb" to Label("anime, visual novele, light novele", "anime, visual novels, light novels"),
-        "wordfreq" to Label("wiele źródeł: Wikipedia, książki, napisy, wiadomości", "many sources: Wikipedia, books, subtitles, news"),
-        "opensubtitles" to Label("napisy filmowe i serialowe — język mówiony", "film and TV subtitles — spoken language"),
-        "bccwj" to Label("prasa, książki, teksty formalne", "news, books, formal writing"),
-        "cejc" to Label("rozmowy codzienne", "everyday conversation"),
-        "csj" to Label("mowa spontaniczna, wykłady", "spontaneous speech, lectures"),
-        "nwjc" to Label("internet: blogi, fora", "the web: blogs, forums"),
-        "aozora" to Label("literatura klasyczna", "classical literature"),
-        "innocent" to Label("light novele", "light novels"),
-        "netflix" to Label("napisy filmowe i serialowe", "film and TV subtitles"),
+        "jpdb" to Label("anime, visual novele, light novele", "anime, visual novels, light novels", "アニメ、ビジュアルノベル、ライトノベル"),
+        "wordfreq" to Label("wiele źródeł: Wikipedia, książki, napisy, wiadomości", "many sources: Wikipedia, books, subtitles, news", "多くの出典: Wikipedia、本、字幕、ニュース"),
+        "opensubtitles" to Label("napisy filmowe i serialowe — język mówiony", "film and TV subtitles — spoken language", "映画・ドラマの字幕 — 話し言葉"),
+        "bccwj" to Label("prasa, książki, teksty formalne", "news, books, formal writing", "ニュース、本、書き言葉"),
+        "cejc" to Label("rozmowy codzienne", "everyday conversation", "日常会話"),
+        "csj" to Label("mowa spontaniczna, wykłady", "spontaneous speech, lectures", "自発的な話し言葉、講演"),
+        "nwjc" to Label("internet: blogi, fora", "the web: blogs, forums", "ウェブ: ブログ、掲示板"),
+        "aozora" to Label("literatura klasyczna", "classical literature", "古典文学"),
+        "innocent" to Label("light novele", "light novels", "ライトノベル"),
+        "netflix" to Label("napisy filmowe i serialowe", "film and TV subtitles", "映画・ドラマの字幕"),
         "wikipedia" to Label("Wikipedia", "Wikipedia"),
-        "novel" to Label("powieści", "novels"),
-        "anime" to Label("anime", "anime"),
-        "drama" to Label("dramy", "TV drama"),
+        "novel" to Label("powieści", "novels", "小説"),
+        "anime" to Label("anime", "anime", "アニメ"),
+        "drama" to Label("dramy", "TV drama", "ドラマ"),
         "youtube" to Label("YouTube", "YouTube"),
-        "vn" to Label("visual novele", "visual novels")
+        "vn" to Label("visual novele", "visual novels", "ビジュアルノベル")
     )
 
     /** What this list counted, or null when the name says nothing we know. */

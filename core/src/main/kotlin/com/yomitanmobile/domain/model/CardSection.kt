@@ -12,14 +12,15 @@ package com.yomitanmobile.domain.model
 enum class CardSection(
     val storageValue: String,
     val polishLabel: String,
-    val englishLabel: String
+    val englishLabel: String,
+    val japaneseLabel: String
 ) {
-    PITCH("pitch", "Akcent toniczny", "Pitch accent"),
-    SUMMARY("summary", "Streszczenie AI", "AI summary"),
-    MEANING("meaning", "Znaczenie", "Meaning"),
-    SENTENCE("sentence", "Przykładowe zdanie", "Example sentence"),
-    AUDIO("audio", "Audio", "Audio"),
-    KANJI("kanji", "Rozkład kanji", "Kanji breakdown");
+    PITCH("pitch", "Akcent toniczny", "Pitch accent", "ピッチアクセント"),
+    SUMMARY("summary", "Streszczenie AI", "AI summary", "AI要約"),
+    MEANING("meaning", "Znaczenie", "Meaning", "意味"),
+    SENTENCE("sentence", "Przykładowe zdanie", "Example sentence", "例文"),
+    AUDIO("audio", "Audio", "Audio", "音声"),
+    KANJI("kanji", "Rozkład kanji", "Kanji breakdown", "漢字の内訳");
 
     /**
      * Label for this section under a given study language.
@@ -28,11 +29,11 @@ enum class CardSection(
      * Japanese, the IPA pronunciation everywhere else. Calling it "pitch
      * accent" on an English card names something that card does not have.
      */
-    fun labelFor(language: AppLanguage, english: Boolean): String {
+    fun labelFor(language: AppLanguage, english: Boolean, japanese: Boolean = false): String {
         if (this == PITCH && !language.hasJapaneseFeatures) {
-            return if (english) "Pronunciation" else "Wymowa"
+            return if (japanese) "発音" else if (english) "Pronunciation" else "Wymowa"
         }
-        return if (english) englishLabel else polishLabel
+        return if (japanese) japaneseLabel else if (english) englishLabel else polishLabel
     }
 
     companion object {

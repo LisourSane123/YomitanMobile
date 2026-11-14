@@ -46,8 +46,8 @@ fun DownloadQueueStrip(
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val phase = when (progress?.phase) {
-                    DownloadPhase.IMPORTING -> tr("Importowanie", "Importing")
-                    else -> tr("Pobieranie", "Downloading")
+                    DownloadPhase.IMPORTING -> tr("Importowanie", "Importing", "インポート中")
+                    else -> tr("Pobieranie", "Downloading", "ダウンロード中")
                 }
                 Text(
                     "$phase: ${running.info.name}",
@@ -59,7 +59,7 @@ fun DownloadQueueStrip(
                 )
                 if (waiting > 0) {
                     Text(
-                        tr("w kolejce: $waiting", "queued: $waiting"),
+                        tr("w kolejce: $waiting", "queued: $waiting", "待機: $waiting"),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )

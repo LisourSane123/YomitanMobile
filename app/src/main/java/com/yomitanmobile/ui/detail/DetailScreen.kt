@@ -137,13 +137,13 @@ fun DetailScreen(
     collectionDuplicate?.let { expression ->
         AlertDialog(
             onDismissRequest = { collectionDuplicate = null },
-            title = { Text(tr("Masz już to słowo w Anki", "You already have this word in Anki")) },
+            title = { Text(tr("Masz już to słowo w Anki", "You already have this word in Anki", "この単語はすでにAnkiにあります")) },
             text = {
                 Text(tr(
                     "Skan kolekcji znalazł fiszkę ze słowem \"$expression\" (np. z Core, Kaishi albo " +
                         "wcześniejszego kopania). Utworzyć mimo to?",
                     "The collection scan found a card containing \"$expression\" (e.g. from Core, Kaishi or " +
-                        "earlier mining). Create it anyway?"
+                        "earlier mining). Create it anyway?", "コレクションスキャンで「${expression}」を含むカードが見つかりました（Core、Kaishi、以前の採取など）。それでも作成しますか？"
                 ))
             },
             confirmButton = {
@@ -151,12 +151,12 @@ fun DetailScreen(
                     collectionDuplicate = null
                     viewModel.forceExport(pendingIncludeAi)
                 }) {
-                    Text(tr("Utwórz mimo to", "Create anyway"))
+                    Text(tr("Utwórz mimo to", "Create anyway", "それでも作成"))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { collectionDuplicate = null }) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -166,24 +166,23 @@ fun DetailScreen(
     if (showDuplicateDialog) {
         AlertDialog(
             onDismissRequest = { showDuplicateDialog = false },
-            title = { Text(tr("Fiszka już wyeksportowana", "Card already exported")) },
+            title = { Text(tr("Fiszka już wyeksportowana", "Card already exported", "カードはエクスポート済みです")) },
             text = {
                 Text(tr(
                     "Słowo \"${duplicateInfo.first}\" zostało już wyeksportowane do talii \"${duplicateInfo.second}\". Czy chcesz wyeksportować ponownie?",
-                    "The word \"${duplicateInfo.first}\" has already been exported to the deck \"${duplicateInfo.second}\". Do you want to export it again?"
-                ))
+                    "The word \"${duplicateInfo.first}\" has already been exported to the deck \"${duplicateInfo.second}\". Do you want to export it again?", "「${duplicateInfo.first}」はすでにデッキ「${duplicateInfo.second}」にエクスポートされています。もう一度エクスポートしますか？"))
             },
             confirmButton = {
                 TextButton(onClick = {
                     showDuplicateDialog = false
                     viewModel.forceExport(pendingIncludeAi)
                 }) {
-                    Text(tr("Eksportuj ponownie", "Export again"))
+                    Text(tr("Eksportuj ponownie", "Export again", "もう一度エクスポート"))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDuplicateDialog = false }) {
-                    Text(tr("Anuluj", "Cancel"))
+                    Text(tr("Anuluj", "Cancel", "キャンセル"))
                 }
             }
         )
@@ -193,13 +192,13 @@ fun DetailScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is DetailEvent.AnkiExportSuccess ->
-                    snackbarHostState.showSnackbar(tr("Fiszka dodana do Anki!", "Card added to Anki!"))
+                    snackbarHostState.showSnackbar(tr("Fiszka dodana do Anki!", "Card added to Anki!", "Ankiにカードを追加しました！"))
                 is DetailEvent.AnkiExportError ->
-                    snackbarHostState.showSnackbar(tr("Błąd: ${event.message}", "Error: ${event.message}"))
+                    snackbarHostState.showSnackbar(tr("Błąd: ${event.message}", "Error: ${event.message}", "エラー: ${event.message}"))
                 is DetailEvent.AnkiPermissionRequired ->
                     withAnkiPermission { viewModel.exportToAnki(pendingIncludeAi) }
                 is DetailEvent.AnkiNotInstalled ->
-                    Toast.makeText(context, tr("AnkiDroid nie jest zainstalowany!", "AnkiDroid is not installed!"), Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, tr("AnkiDroid nie jest zainstalowany!", "AnkiDroid is not installed!", "AnkiDroidがインストールされていません！"), Toast.LENGTH_LONG).show()
                 is DetailEvent.AnkiDeckSelectionRequired -> {
                     availableDecks = event.decks
                     showDeckDialog = true
@@ -215,7 +214,7 @@ fun DetailScreen(
                     aiFailureMessage = event.message
                 is DetailEvent.AnkiExportCancelled ->
                     snackbarHostState.showSnackbar(
-                        tr("Eksport anulowany.", "Export cancelled.")
+                        tr("Eksport anulowany.", "Export cancelled.", "エクスポートをキャンセルしました。")
                     )
             }
         }
@@ -232,13 +231,12 @@ fun DetailScreen(
                 aiFailureMessage = null
                 viewModel.resolveAiFailure(AiFailureChoice.CANCEL_EXPORT)
             },
-            title = { Text(tr("Streszczenie AI nie powiodło się", "AI summary failed")) },
+            title = { Text(tr("Streszczenie AI nie powiodło się", "AI summary failed", "AI要約に失敗しました")) },
             text = {
                 Text(
                     tr(
                         "Powód: $message\n\nMożesz utworzyć fiszkę bez streszczenia lub przerwać eksport.",
-                        "Reason: $message\n\nYou can still create the card without the summary, or abort the export."
-                    )
+                        "Reason: $message\n\nYou can still create the card without the summary, or abort the export.", "理由: $message\n\n要約なしでカードを作成するか、エクスポートを中止できます。")
                 )
             },
             confirmButton = {
@@ -246,7 +244,7 @@ fun DetailScreen(
                     aiFailureMessage = null
                     viewModel.resolveAiFailure(AiFailureChoice.CONTINUE_WITHOUT_AI)
                 }) {
-                    Text(tr("Utwórz bez AI", "Create without AI"))
+                    Text(tr("Utwórz bez AI", "Create without AI", "AIなしで作成"))
                 }
             },
             dismissButton = {
@@ -254,7 +252,7 @@ fun DetailScreen(
                     aiFailureMessage = null
                     viewModel.resolveAiFailure(AiFailureChoice.CANCEL_EXPORT)
                 }) {
-                    Text(tr("Anuluj eksport", "Cancel export"))
+                    Text(tr("Anuluj eksport", "Cancel export", "エクスポートを中止"))
                 }
             }
         )
@@ -263,10 +261,10 @@ fun DetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(entry?.displayText() ?: tr("Szczegóły", "Details")) },
+                title = { Text(entry?.displayText() ?: tr("Szczegóły", "Details", "詳細")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 },
                 actions = {
@@ -274,7 +272,7 @@ fun DetailScreen(
                         IconButton(onClick = { viewModel.toggleFavorite() }) {
                             Icon(
                                 if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = if (isFavorite) tr("Usuń z ulubionych", "Remove from favorites") else tr("Dodaj do ulubionych", "Add to favorites"),
+                                contentDescription = if (isFavorite) tr("Usuń z ulubionych", "Remove from favorites", "お気に入りから外す") else tr("Dodaj do ulubionych", "Add to favorites", "お気に入りに追加"),
                                 tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -295,7 +293,7 @@ fun DetailScreen(
                             } else {
                                 Icon(
                                     Icons.Default.Add,
-                                    contentDescription = tr("Eksportuj do Anki", "Export to Anki"),
+                                    contentDescription = tr("Eksportuj do Anki", "Export to Anki", "Ankiにエクスポート"),
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
@@ -341,8 +339,7 @@ fun DetailScreen(
                                             Icons.Default.AutoAwesome,
                                             contentDescription = tr(
                                                 "Eksportuj do Anki ze streszczeniem AI",
-                                                "Export to Anki with AI summary"
-                                            ),
+                                                "Export to Anki with AI summary", "AI要約付きでAnkiにエクスポート"),
                                             tint = Color.White,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -368,7 +365,7 @@ fun DetailScreen(
             }
             entry == null -> {
                 Box(Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
-                    Text(tr("Nie znaleziono wpisu", "Entry not found"))
+                    Text(tr("Nie znaleziono wpisu", "Entry not found", "項目が見つかりません"))
                 }
             }
             else -> {
@@ -451,7 +448,7 @@ private fun WordDetailContent(
                     Text(
                         text = tr(
                             "Alternatywne formy: ${entry.alternativeExpressions.joinToString(", ")}",
-                            "Alternative forms: ${entry.alternativeExpressions.joinToString(", ")}"
+                            "Alternative forms: ${entry.alternativeExpressions.joinToString(", ")}", "別の表記: ${entry.alternativeExpressions.joinToString("、")}"
                         ),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -512,23 +509,22 @@ private fun WordDetailContent(
                     askLeading?.let { name ->
                         AlertDialog(
                             onDismissRequest = { askLeading = null },
-                            title = { Text(tr("Ustawić jako główną listę?", "Make this the leading list?")) },
+                            title = { Text(tr("Ustawić jako główną listę?", "Make this the leading list?", "これをメインのリストにしますか？")) },
                             text = {
                                 Text(
                                     tr(
                                         "„$name” będzie źródłem oznaczeń Top 3K, liczby na fiszce i kolejności wyników.",
-                                        "\"$name\" will supply Top 3K badges, the card number and the search order."
-                                    )
+                                        "\"$name\" will supply Top 3K badges, the card number and the search order.", "「${name}」がTop 3Kなどの表示、カードの数値、検索の並び順を決めます。")
                                 )
                             },
                             confirmButton = {
                                 TextButton(onClick = {
                                     onMakeLeading(name)
                                     askLeading = null
-                                }) { Text(tr("Ustaw", "Make leading")) }
+                                }) { Text(tr("Ustaw", "Make leading", "メインにする")) }
                             },
                             dismissButton = {
-                                TextButton(onClick = { askLeading = null }) { Text(tr("Anuluj", "Cancel")) }
+                                TextButton(onClick = { askLeading = null }) { Text(tr("Anuluj", "Cancel", "キャンセル")) }
                             }
                         )
                     }
@@ -575,8 +571,7 @@ private fun WordDetailContent(
                         Text(
                             text = tr(
                                 "Sprawdzone ${previousLookups}×",
-                                "Looked up ${previousLookups}×"
-                            ),
+                                "Looked up ${previousLookups}×", "${previousLookups}回検索しました"),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -610,15 +605,14 @@ private fun WordDetailContent(
                         Text(
                             text = tr(
                                 "Sprawdzasz to słowo regularnie — może warto je dodać do ulubionych?",
-                                "You keep coming back to this word — maybe favorite it?"
-                            ),
+                                "You keep coming back to this word — maybe favorite it?", "この単語を何度も調べていますね — お気に入りにしますか？"),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(8.dp))
                         OutlinedButton(onClick = onToggleFavorite) {
-                            Text(tr("Dodaj", "Favorite"))
+                            Text(tr("Dodaj", "Favorite", "お気に入り"))
                         }
                     }
                 }
@@ -629,11 +623,11 @@ private fun WordDetailContent(
                 ) {
                     Icon(
                         if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) tr("Zatrzymaj", "Stop") else tr("Odtwórz wymowę", "Play pronunciation"),
+                        contentDescription = if (isPlaying) tr("Zatrzymaj", "Stop", "停止") else tr("Odtwórz wymowę", "Play pronunciation", "発音を再生"),
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(if (isPlaying) tr("Zatrzymaj", "Stop") else tr("Odtwórz wymowę", "Play pronunciation"))
+                    Text(if (isPlaying) tr("Zatrzymaj", "Stop", "停止") else tr("Odtwórz wymowę", "Play pronunciation", "発音を再生"))
                 }
             }
         }
@@ -646,14 +640,14 @@ private fun WordDetailContent(
         // is.
         if (entry.pitchAccent.isNotBlank()) {
             if (!studyLanguage.hasJapaneseFeatures) {
-                SectionCard(title = tr("Wymowa", "Pronunciation")) {
+                SectionCard(title = tr("Wymowa", "Pronunciation", "発音")) {
                     Text(
                         text = entry.pitchAccent,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
             } else {
-                SectionCard(title = tr("Akcent tonalny", "Pitch accent")) {
+                SectionCard(title = tr("Akcent tonalny", "Pitch accent", "ピッチアクセント")) {
                     PitchAccentDiagram(
                         reading = entry.reading.ifBlank { entry.primaryExpression },
                         pitchPositions = entry.pitchAccent
@@ -668,7 +662,7 @@ private fun WordDetailContent(
         // register/usage caveat before reading the gloss — easy to miss when
         // it's just a small chip next to the JLPT badge.
         if (entry.usageTags.isNotEmpty()) {
-            SectionCard(title = tr("Notatki", "Notes")) {
+            SectionCard(title = tr("Notatki", "Notes", "備考")) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -696,7 +690,7 @@ private fun WordDetailContent(
         // directly underneath. Examples whose definitionIndex is -1 are
         // unattached (legacy data, online Tatoeba results, plain JMDict
         // imports) — those are shown after the last meaning.
-        SectionCard(title = tr("Znaczenie", "Meaning")) {
+        SectionCard(title = tr("Znaczenie", "Meaning", "意味")) {
             val examplesByDef = entry.examples.groupBy { it.definitionIndex }
             entry.definitions.forEachIndexed { index, definition ->
                 if (index > 0) Divider(modifier = Modifier.padding(vertical = 8.dp))
@@ -770,7 +764,7 @@ private fun WordDetailContent(
         // Parts of speech
         val posLabel = PartsOfSpeechFormatter.format(entry.partsOfSpeech.joinToString(" "), english = isEnglish)
         if (posLabel.isNotEmpty()) {
-            SectionCard(title = tr("Część mowy", "Part of speech")) {
+            SectionCard(title = tr("Część mowy", "Part of speech", "品詞")) {
                 Text(posLabel, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(12.dp))
@@ -781,7 +775,7 @@ private fun WordDetailContent(
         // readings, meanings). Only shown when the word actually contains
         // kanji and a kanji dictionary supplied entries for them.
         if (kanjiInfo.isNotEmpty()) {
-            SectionCard(title = tr("Kanji", "Kanji")) {
+            SectionCard(title = tr("Kanji", "Kanji", "漢字")) {
                 kanjiInfo.forEachIndexed { index, kanji ->
                     if (index > 0) Divider(modifier = Modifier.padding(vertical = 8.dp))
                     // The whole row opens the character's own screen: its
@@ -802,10 +796,10 @@ private fun WordDetailContent(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             val readings = buildString {
-                                if (kanji.onyomi.isNotBlank()) append(tr("On: ", "On: ")).append(kanji.onyomi)
+                                if (kanji.onyomi.isNotBlank()) append(tr("On: ", "On: ", "音: ")).append(kanji.onyomi)
                                 if (kanji.kunyomi.isNotBlank()) {
                                     if (isNotEmpty()) append("   ")
-                                    append(tr("Kun: ", "Kun: ")).append(kanji.kunyomi)
+                                    append(tr("Kun: ", "Kun: ", "訓: ")).append(kanji.kunyomi)
                                 }
                             }
                             if (readings.isNotBlank()) {
@@ -834,7 +828,7 @@ private fun WordDetailContent(
 
         // Dictionary source
         if (entry.dictionaryName.isNotBlank()) {
-            Text(tr("Źródło: ${entry.dictionaryName}", "Source: ${entry.dictionaryName}"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+            Text(tr("Źródło: ${entry.dictionaryName}", "Source: ${entry.dictionaryName}", "出典: ${entry.dictionaryName}"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
             Spacer(Modifier.height(16.dp))
         }
 
@@ -844,7 +838,7 @@ private fun WordDetailContent(
         // still surfacing the auxiliary information at the bottom for the
         // reader who scrolls down looking for it.
         if (entry.notes.isNotEmpty()) {
-            SectionCard(title = tr("Uwagi i odsyłacze", "Notes & see also")) {
+            SectionCard(title = tr("Uwagi i odsyłacze", "Notes & see also", "備考・参照")) {
                 entry.notes.forEachIndexed { index, note ->
                     if (index > 0) Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.Top) {
@@ -1104,12 +1098,12 @@ private fun DeckSelectionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(tr("Wybierz talię Anki", "Choose Anki deck")) },
+        title = { Text(tr("Wybierz talię Anki", "Choose Anki deck", "Ankiのデッキを選ぶ")) },
         text = {
             Column {
                 if (existingDecks.isNotEmpty()) {
                     Text(
-                        tr("Istniejące talie:", "Existing decks:"),
+                        tr("Istniejące talie:", "Existing decks:", "既存のデッキ:"),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -1129,7 +1123,7 @@ private fun DeckSelectionDialog(
                     Spacer(Modifier.height(12.dp))
                 }
                 Text(
-                    tr("Lub utwórz nową talię:", "Or create a new deck:"),
+                    tr("Lub utwórz nową talię:", "Or create a new deck:", "または新しいデッキを作成:"),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -1137,8 +1131,8 @@ private fun DeckSelectionDialog(
                 OutlinedTextField(
                     value = newDeckName,
                     onValueChange = { newDeckName = it },
-                    label = { Text(tr("Nazwa talii", "Deck name")) },
-                    placeholder = { Text(tr("np. Mining Deck", "e.g. Mining Deck")) },
+                    label = { Text(tr("Nazwa talii", "Deck name", "デッキ名")) },
+                    placeholder = { Text(tr("np. Mining Deck", "e.g. Mining Deck", "例: Mining Deck")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1149,11 +1143,11 @@ private fun DeckSelectionDialog(
                 onClick = { onDeckSelected(newDeckName.ifBlank { "Mining Deck" }) },
                 enabled = true
             ) {
-                Text(tr("Utwórz", "Create"))
+                Text(tr("Utwórz", "Create", "作成"))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(tr("Anuluj", "Cancel")) }
+            TextButton(onClick = onDismiss) { Text(tr("Anuluj", "Cancel", "キャンセル")) }
         }
     )
 }

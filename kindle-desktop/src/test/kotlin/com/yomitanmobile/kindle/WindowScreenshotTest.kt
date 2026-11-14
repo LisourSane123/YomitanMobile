@@ -19,8 +19,8 @@ class WindowScreenshotTest {
     fun paintsTheWindow() {
         Assume.assumeFalse("no display", GraphicsEnvironment.isHeadless())
         com.formdev.flatlaf.FlatLightLaf.setup()
-        for (language in listOf("pl", "en")) {
-            polishUi = language == "pl"
+        for (language in listOf("pl", "en", "ja")) {
+            uiLanguage = language
             var image: BufferedImage? = null
             SwingUtilities.invokeAndWait {
                 val window = Window(Config.load().copy(language = language))

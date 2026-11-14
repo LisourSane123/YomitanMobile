@@ -33,7 +33,7 @@ Settings: """
  */
 fun main(args: Array<String>) {
     val config = Config.load()
-    polishUi = config.language == "pl"
+    uiLanguage = config.language
     if (args.isEmpty() || args.contentEquals(arrayOf("--gui"))) {
         if (GraphicsEnvironment.isHeadless()) {
             System.err.println("No display: run with --help for the command line.")
@@ -82,7 +82,7 @@ private fun commandLine(config: Config, args: List<String>): Int {
     // runs its shutdown hooks, and the user is told the run did not finish.
     var finished = false
     Runtime.getRuntime().addShutdownHook(Thread {
-        if (!finished) notifier?.done(tr("Nie wykonano: przebieg przerwany z zewnątrz.", "Not done: the run was stopped from outside."), failed = true)
+        if (!finished) notifier?.done(tr("Nie wykonano: przebieg przerwany z zewnątrz.", "Not done: the run was stopped from outside.", "未完了: 外部から実行が停止されました。"), failed = true)
     })
     val outcome = try {
         runBlocking {
@@ -91,9 +91,9 @@ private fun commandLine(config: Config, args: List<String>): Int {
             when (command) {
                 "sync" -> job.sync(options)
                 "pull-settings" -> if (pullPhoneSettings(config, reporter::log)) {
-                    Outcome(false, tr("Wykonano: styl fiszek pobrany z telefonu.", "Done: card style copied from the phone."))
+                    Outcome(false, tr("Wykonano: styl fiszek pobrany z telefonu.", "Done: card style copied from the phone.", "完了: スマホのカードスタイルをコピーしました。"))
                 } else {
-                    Outcome(true, tr("Nie wykonano: nie pobrano stylu z telefonu (szczegóły wyżej).", "Not done: the phone's style was not copied (see above)."))
+                    Outcome(true, tr("Nie wykonano: nie pobrano stylu z telefonu (szczegóły wyżej).", "Not done: the phone's style was not copied (see above).", "未完了: スマホのスタイルをコピーできませんでした（上記参照）。"))
                 }
                 "refresh-audio" -> maintenance.refreshAudio()
                 "refresh-cards" -> maintenance.refreshCards(options.dryRun, excluded)
@@ -107,7 +107,7 @@ private fun commandLine(config: Config, args: List<String>): Int {
         // Every way a run can end says so: a run that died silently used to
         // leave the last progress bubble standing, which reads as "still working".
         reporter.log("failed: $t")
-        Outcome(true, tr("Nie wykonano: przebieg przerwany (${t.message ?: t.javaClass.simpleName}).", "Not done: the run stopped (${t.message ?: t.javaClass.simpleName})."))
+        Outcome(true, tr("Nie wykonano: przebieg przerwany (${t.message ?: t.javaClass.simpleName}).", "Not done: the run stopped (${t.message ?: t.javaClass.simpleName}).", "未完了: 実行が停止しました（${t.message ?: t.javaClass.simpleName}）。"))
     }
     reporter.log(outcome.message)
     notifier?.done(outcome.message, outcome.failed)

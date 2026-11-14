@@ -30,8 +30,7 @@ fun rememberAnkiPermissionGate(): (() -> Unit) -> Unit {
     val context = LocalContext.current
     val deniedMessage = tr(
         "Bez uprawnienia do AnkiDroida nie da się przeczytać kolekcji ani dodać fiszek.",
-        "Without AnkiDroid permission the collection cannot be read and no cards can be added."
-    )
+        "Without AnkiDroid permission the collection cannot be read and no cards can be added.", "AnkiDroidの権限がないと、コレクションを読み取れず、カードも追加できません。")
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()

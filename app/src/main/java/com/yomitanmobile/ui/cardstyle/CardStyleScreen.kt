@@ -301,10 +301,10 @@ fun CardStyleScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(tr("Wygląd fiszki", "Card style")) },
+                title = { Text(tr("Wygląd fiszki", "Card style", "カードのスタイル")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 },
                 actions = {
@@ -338,7 +338,7 @@ fun CardStyleScreen(
                     }) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(tr("Reset", "Reset"))
+                        Text(tr("Reset", "Reset", "リセット"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -363,12 +363,12 @@ fun CardStyleScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        tr("Podgląd fiszki", "Card preview"),
+                        tr("Podgląd fiszki", "Card preview", "カードのプレビュー"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     TextButton(onClick = { previewExpanded = !previewExpanded }) {
-                        Text(if (previewExpanded) tr("Zwiń", "Collapse") else tr("Rozwiń", "Expand"))
+                        Text(if (previewExpanded) tr("Zwiń", "Collapse", "折りたたむ") else tr("Rozwiń", "Expand", "展開"))
                         Spacer(Modifier.width(4.dp))
                         Icon(
                             if (previewExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -419,7 +419,7 @@ fun CardStyleScreen(
             // Font section
             item {
                 Text(
-                    tr("Czcionka", "Font"),
+                    tr("Czcionka", "Font", "フォント"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -446,8 +446,8 @@ fun CardStyleScreen(
             // Bold toggle
             item {
                 SettingRow(
-                    title = tr("Pogrubione słowo", "Bold expression"),
-                    subtitle = tr("Główne wyrażenie na fiszce będzie pogrubione", "The main expression on the card will be bold")
+                    title = tr("Pogrubione słowo", "Bold expression", "見出し語を太字に"),
+                    subtitle = tr("Główne wyrażenie na fiszce będzie pogrubione", "The main expression on the card will be bold", "カードの見出し語を太字にします")
                 ) {
                     Switch(
                         checked = expressionBold,
@@ -459,7 +459,7 @@ fun CardStyleScreen(
             // Font sizes
             item {
                 Text(
-                    tr("Rozmiary czcionek", "Font sizes"),
+                    tr("Rozmiary czcionek", "Font sizes", "文字の大きさ"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -468,7 +468,7 @@ fun CardStyleScreen(
 
             item {
                 FontSizeSlider(
-                    label = tr("Wyrażenie", "Expression"),
+                    label = tr("Wyrażenie", "Expression", "見出し語"),
                     value = expressionFontSize,
                     onValueChange = { expressionFontSize = it },
                     valueRange = 24f..72f
@@ -477,7 +477,7 @@ fun CardStyleScreen(
 
             item {
                 FontSizeSlider(
-                    label = tr("Czytanie", "Reading"),
+                    label = tr("Czytanie", "Reading", "読み"),
                     value = readingFontSize,
                     onValueChange = { readingFontSize = it },
                     valueRange = 16f..48f
@@ -486,7 +486,7 @@ fun CardStyleScreen(
 
             item {
                 FontSizeSlider(
-                    label = tr("Znaczenie", "Meaning"),
+                    label = tr("Znaczenie", "Meaning", "意味"),
                     value = meaningFontSize,
                     onValueChange = { meaningFontSize = it },
                     valueRange = 12f..36f
@@ -495,7 +495,7 @@ fun CardStyleScreen(
 
             item {
                 FontSizeSlider(
-                    label = tr("Zdanie na froncie", "Front sentence"),
+                    label = tr("Zdanie na froncie", "Front sentence", "表面の文"),
                     value = frontContextSentenceFontSize,
                     onValueChange = { frontContextSentenceFontSize = it },
                     valueRange = 10f..28f
@@ -504,7 +504,7 @@ fun CardStyleScreen(
 
             item {
                 FontSizeSlider(
-                    label = tr("Zdanie z tyłu", "Back sentence"),
+                    label = tr("Zdanie z tyłu", "Back sentence", "裏面の文"),
                     value = backSentenceFontSize,
                     onValueChange = { backSentenceFontSize = it },
                     valueRange = 10f..28f
@@ -514,7 +514,7 @@ fun CardStyleScreen(
             // Colors
             item {
                 Text(
-                    tr("Kolory", "Colors"),
+                    tr("Kolory", "Colors", "色"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -523,7 +523,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = tr("Tło karty", "Card background"),
+                    label = tr("Tło karty", "Card background", "カードの背景"),
                     currentColor = backgroundColor,
                     presetColors = listOf("#1a1a1a", "#000000", "#1e1e2e", "#2d2d2d", "#0d1117", "#1a1b26"),
                     onColorSelected = { backgroundColor = it }
@@ -532,7 +532,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = tr("Kolor wyrażenia", "Expression color"),
+                    label = tr("Kolor wyrażenia", "Expression color", "見出し語の色"),
                     currentColor = expressionColor,
                     presetColors = listOf("#ffffff", "#e0e0e0", "#bb86fc", "#03dac6", "#ff7043", "#ffb74d"),
                     onColorSelected = { expressionColor = it }
@@ -541,7 +541,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = tr("Kolor czytania", "Reading color"),
+                    label = tr("Kolor czytania", "Reading color", "読みの色"),
                     currentColor = readingColor,
                     presetColors = listOf("#80cbc4", "#03dac6", "#64b5f6", "#81c784", "#ffb74d", "#ce93d8"),
                     onColorSelected = { readingColor = it }
@@ -550,7 +550,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = tr("Kolor znaczenia", "Meaning color"),
+                    label = tr("Kolor znaczenia", "Meaning color", "意味の色"),
                     currentColor = meaningColor,
                     presetColors = listOf("#e0e0e0", "#ffffff", "#b0bec5", "#cfd8dc", "#a5d6a7", "#ffcc80"),
                     onColorSelected = { meaningColor = it }
@@ -559,7 +559,7 @@ fun CardStyleScreen(
 
             item {
                 ColorPickerRow(
-                    label = tr("Kolor akcentu", "Accent color"),
+                    label = tr("Kolor akcentu", "Accent color", "アクセントカラー"),
                     currentColor = accentColor,
                     presetColors = listOf("#80cbc4", "#03dac6", "#bb86fc", "#ff7043", "#64b5f6", "#ffb74d"),
                     onColorSelected = { accentColor = it }
@@ -573,11 +573,10 @@ fun CardStyleScreen(
             if (studyLanguage.hasJapaneseFeatures) {
             item {
                 SettingRow(
-                    title = tr("Furigana w kolorze tekstu", "Furigana same color as text"),
+                    title = tr("Furigana w kolorze tekstu", "Furigana same color as text", "ふりがなを本文と同じ色に"),
                     subtitle = tr(
                         "Czytanie nad kanji w przykładach ma ten sam kolor co tekst zdania",
-                        "The reading above kanji in examples uses the sentence text color"
-                    )
+                        "The reading above kanji in examples uses the sentence text color", "例文の漢字の上の読みに、例文の文字色を使います")
                 ) {
                     Switch(
                         checked = furiganaColor.isBlank(),
@@ -591,7 +590,7 @@ fun CardStyleScreen(
             if (furiganaColor.isNotBlank()) {
                 item {
                     ColorPickerRow(
-                        label = tr("Kolor furigany", "Furigana color"),
+                        label = tr("Kolor furigany", "Furigana color", "ふりがなの色"),
                         currentColor = furiganaColor,
                         presetColors = listOf("#80cbc4", "#ffffff", "#ffb74d", "#64b5f6", "#81c784", "#ce93d8"),
                         onColorSelected = { furiganaColor = it }
@@ -603,7 +602,7 @@ fun CardStyleScreen(
             // Visibility toggles
             item {
                 Text(
-                    tr("Widoczność elementów", "Element visibility"),
+                    tr("Widoczność elementów", "Element visibility", "表示する要素"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp)
@@ -613,7 +612,7 @@ fun CardStyleScreen(
             item {
                 SettingRow(
                     title = "Pitch accent",
-                    subtitle = tr("Pokaż wzorzec akcentu tonalnego", "Show pitch accent pattern")
+                    subtitle = tr("Pokaż wzorzec akcentu tonalnego", "Show pitch accent pattern", "ピッチアクセントの型を表示")
                 ) {
                     Switch(
                         checked = showPitchAccent,
@@ -631,14 +630,13 @@ fun CardStyleScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = tr("Styl pitch accent", "Pitch accent style"),
+                            text = tr("Styl pitch accent", "Pitch accent style", "ピッチアクセントの表示形式"),
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = tr(
                                 "Wybierz klasyczny zapis albo wariant z kropkami i liniami oraz kana pod spodem",
-                                "Choose classic rendering or dots and lines with kana below"
-                            ),
+                                "Choose classic rendering or dots and lines with kana below", "従来の表示か、仮名の下に点と線を描く表示かを選びます"),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 2.dp)
@@ -651,12 +649,12 @@ fun CardStyleScreen(
                             FilterChip(
                                 selected = pitchAccentStyle == PitchAccentStyle.LEGACY,
                                 onClick = { pitchAccentStyle = PitchAccentStyle.LEGACY },
-                                label = { Text(tr("Klasyczny", "Classic")) }
+                                label = { Text(tr("Klasyczny", "Classic", "従来")) }
                             )
                             FilterChip(
                                 selected = pitchAccentStyle == PitchAccentStyle.DOT_LINE,
                                 onClick = { pitchAccentStyle = PitchAccentStyle.DOT_LINE },
-                                label = { Text(tr("Kropki + linie", "Dots + lines")) }
+                                label = { Text(tr("Kropki + linie", "Dots + lines", "点＋線")) }
                             )
                         }
                     }
@@ -665,8 +663,8 @@ fun CardStyleScreen(
 
             item {
                 SettingRow(
-                    title = tr("Częstotliwość", "Frequency"),
-                    subtitle = tr("Pokaż ranking częstotliwości słowa", "Show frequency ranking of the word")
+                    title = tr("Częstotliwość", "Frequency", "頻度"),
+                    subtitle = tr("Pokaż ranking częstotliwości słowa", "Show frequency ranking of the word", "単語の頻度順位を表示")
                 ) {
                     Switch(
                         checked = showFrequency,
@@ -677,8 +675,8 @@ fun CardStyleScreen(
 
             item {
                 SettingRow(
-                    title = tr("Przykładowe zdanie", "Example sentence"),
-                    subtitle = tr("Pokaż przykładowe zdanie na fiszce", "Show an example sentence on the card")
+                    title = tr("Przykładowe zdanie", "Example sentence", "例文"),
+                    subtitle = tr("Pokaż przykładowe zdanie na fiszce", "Show an example sentence on the card", "カードに例文を表示")
                 ) {
                     Switch(
                         checked = showSentence,
@@ -689,11 +687,10 @@ fun CardStyleScreen(
 
             item {
                 SettingRow(
-                    title = tr("Zdanie kontekstowe na froncie", "Front context sentence"),
+                    title = tr("Zdanie kontekstowe na froncie", "Front context sentence", "表面の文脈の文"),
                     subtitle = tr(
                         "Pokaż pod słowem japońskie zdanie i pogrub w nim szukane słowo (także w formie odmienionej lub w katakanie)",
-                        "Show a Japanese sentence under the word and highlight the target word (also when inflected or written in katakana)"
-                    )
+                        "Show a Japanese sentence under the word and highlight the target word (also when inflected or written in katakana)", "単語の下に日本語の文を表示し、対象の単語を強調します（活用形やカタカナ表記でも）")
                 ) {
                     Switch(
                         checked = showFrontContextSentence,
@@ -704,11 +701,10 @@ fun CardStyleScreen(
 
             item {
                 SettingRow(
-                    title = tr("Linie rozdzielające sekcje", "Section divider lines"),
+                    title = tr("Linie rozdzielające sekcje", "Section divider lines", "区切り線"),
                     subtitle = tr(
                         "Pokaż linie oddzielające czytanie, akcent, znaczenie, zdania i kanji",
-                        "Show lines separating reading, pitch, meaning, sentences, and kanji"
-                    )
+                        "Show lines separating reading, pitch, meaning, sentences, and kanji", "読み、ピッチ、意味、例文、漢字を分ける線を表示")
                 ) {
                     Switch(
                         checked = showSectionDividers,
@@ -723,11 +719,10 @@ fun CardStyleScreen(
             if (studyLanguage.hasJapaneseFeatures) {
             item {
                 SettingRow(
-                    title = tr("Linia między słowem a resztą", "Word divider line"),
+                    title = tr("Linia między słowem a resztą", "Word divider line", "見出し語の区切り線"),
                     subtitle = tr(
                         "Pokaż grubą linię między słowem a czytaniem w nagłówku fiszki",
-                        "Show the bold line between the word and the reading in the card header"
-                    )
+                        "Show the bold line between the word and the reading in the card header", "カード上部の見出し語と読みの間に太い線を表示")
                 ) {
                     Switch(
                         checked = showWordDivider,
@@ -746,15 +741,14 @@ fun CardStyleScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = tr("Kolejność sekcji", "Section order"),
+                            text = tr("Kolejność sekcji", "Section order", "セクションの順番"),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = tr(
                                 "Przeciągaj strzałkami żeby zmienić kolejność sekcji pod nagłówkiem (akcent, znaczenie, kanji itd.).",
-                                "Use the arrows to reorder the sections below the header (pitch, meaning, kanji, etc.)."
-                            ),
+                                "Use the arrows to reorder the sections below the header (pitch, meaning, kanji, etc.).", "矢印でヘッダー下のセクション（ピッチ、意味、漢字など）を並べ替えます。"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -772,7 +766,7 @@ fun CardStyleScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${index + 1}. " + section.labelFor(studyLanguage, isEnglish),
+                                    text = "${index + 1}. " + section.labelFor(studyLanguage, isEnglish, japanese = com.yomitanmobile.util.LocaleHelper.active == com.yomitanmobile.util.UiLanguage.JAPANESE),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.weight(1f)
@@ -789,7 +783,7 @@ fun CardStyleScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.KeyboardArrowUp,
-                                        contentDescription = tr("Wyżej", "Move up")
+                                        contentDescription = tr("Wyżej", "Move up", "上へ")
                                     )
                                 }
                                 IconButton(
@@ -804,13 +798,13 @@ fun CardStyleScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.KeyboardArrowDown,
-                                        contentDescription = tr("Niżej", "Move down")
+                                        contentDescription = tr("Niżej", "Move down", "下へ")
                                     )
                                 }
                             }
                         }
                         TextButton(onClick = { sectionOrder = CardSection.defaultOrder() }) {
-                            Text(tr("Przywróć domyślną kolejność", "Reset to default order"))
+                            Text(tr("Przywróć domyślną kolejność", "Reset to default order", "初期の順番に戻す"))
                         }
                     }
                 }
@@ -831,15 +825,14 @@ fun CardStyleScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = tr("Streszczenie AI", "AI summary"),
+                                    text = tr("Streszczenie AI", "AI summary", "AI要約"),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = tr(
                                         "Skonfiguruj dostawcę AI i klucz. Wybór czy dołączyć streszczenie do fiszki dokonujesz osobnym przyciskiem przy eksporcie.",
-                                        "Configure the AI provider and API key. Whether to include the summary on a card is chosen per-export with the dedicated AI button."
-                                    ),
+                                        "Configure the AI provider and API key. Whether to include the summary on a card is chosen per-export with the dedicated AI button.", "AIのプロバイダーとAPIキーを設定します。要約をカードに入れるかどうかは、エクスポートのたびに専用のAIボタンで選びます。"),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -853,7 +846,7 @@ fun CardStyleScreen(
                         if (aiSummaryEnabled) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = tr("Dostawca", "Provider"),
+                                text = tr("Dostawca", "Provider", "プロバイダー"),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -875,7 +868,7 @@ fun CardStyleScreen(
                             OutlinedTextField(
                                 value = aiApiKey,
                                 onValueChange = { aiApiKey = it },
-                                label = { Text(tr("Klucz API", "API key")) },
+                                label = { Text(tr("Klucz API", "API key", "APIキー")) },
                                 singleLine = true,
                                 visualTransformation = if (aiApiKeyVisible) {
                                     VisualTransformation.None
@@ -892,9 +885,9 @@ fun CardStyleScreen(
                                                 Icons.Filled.Visibility
                                             },
                                             contentDescription = if (aiApiKeyVisible) {
-                                                tr("Ukryj klucz", "Hide key")
+                                                tr("Ukryj klucz", "Hide key", "キーを隠す")
                                             } else {
-                                                tr("Pokaż klucz", "Show key")
+                                                tr("Pokaż klucz", "Show key", "キーを表示")
                                             }
                                         )
                                     }
@@ -909,8 +902,7 @@ fun CardStyleScreen(
                                     Text(
                                         tr(
                                             "Nazwa modelu (puste = ${aiProvider.defaultModel})",
-                                            "Model name (blank = ${aiProvider.defaultModel})"
-                                        )
+                                            "Model name (blank = ${aiProvider.defaultModel})", "モデル名（空欄 = ${aiProvider.defaultModel}）")
                                     )
                                 },
                                 placeholder = { Text(aiProvider.defaultModel) },
@@ -921,8 +913,7 @@ fun CardStyleScreen(
                             Text(
                                 text = tr(
                                     "Prompt (placeholdery: {expression}, {reading}, {meaning}, {language})",
-                                    "Prompt (placeholders: {expression}, {reading}, {meaning}, {language})"
-                                ),
+                                    "Prompt (placeholders: {expression}, {reading}, {meaning}, {language})", "プロンプト（プレースホルダー: {expression}, {reading}, {meaning}, {language}）"),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -937,7 +928,7 @@ fun CardStyleScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             TextButton(onClick = { aiPrompt = AI_DEFAULT_PROMPT }) {
-                                Text(tr("Przywróć domyślny prompt", "Reset to default prompt"))
+                                Text(tr("Przywróć domyślny prompt", "Reset to default prompt", "初期のプロンプトに戻す"))
                             }
                         }
                     }
@@ -957,15 +948,14 @@ fun CardStyleScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = tr("Losowa czcionka słowa", "Random expression font"),
+                                    text = tr("Losowa czcionka słowa", "Random expression font", "見出し語のフォントをランダムに"),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = tr(
                                         "Przy eksporcie fiszki, słowo na froncie otrzyma losową czcionkę z wybranych",
-                                        "When exporting a card, the front expression will use a random font from selected ones"
-                                    ),
+                                        "When exporting a card, the front expression will use a random font from selected ones", "カードのエクスポート時、表面の見出し語に選んだフォントからランダムに1つを使います"),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1016,15 +1006,14 @@ fun CardStyleScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = tr("Losowy głos TTS (Japoński)", "Random TTS voice (Japanese)"),
+                                    text = tr("Losowy głos TTS (Japoński)", "Random TTS voice (Japanese)", "読み上げ音声をランダムに（日本語）"),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = tr(
                                         "Przy eksporcie fiszki z audio TTS, użyty zostanie losowy głos z wybranych",
-                                        "When exporting a card with TTS audio, a random voice from selected ones will be used"
-                                    ),
+                                        "When exporting a card with TTS audio, a random voice from selected ones will be used", "読み上げ音声付きでエクスポートするとき、選んだ音声からランダムに1つを使います"),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1074,7 +1063,7 @@ fun CardStyleScreen(
                     onClick = {
                         savePreferences()
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar(tr("Ustawienia fiszki zapisane ✓", "Card style settings saved ✓"))
+                            snackbarHostState.showSnackbar(tr("Ustawienia fiszki zapisane ✓", "Card style settings saved ✓", "カードのスタイル設定を保存しました ✓"))
                         }
                     },
                     modifier = Modifier
@@ -1091,7 +1080,7 @@ fun CardStyleScreen(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(tr("Zapisz", "Save"), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Zapisz", "Save", "保存"), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -1203,7 +1192,7 @@ private fun ColorPickerRow(
     if (showCustomPicker) {
         AlertDialog(
             onDismissRequest = { showCustomPicker = false },
-            title = { Text(tr("Własny kolor - $label", "Custom color - $label")) },
+            title = { Text(tr("Własny kolor - $label", "Custom color - $label", "カスタムカラー - $label")) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     // Color preview swatch
@@ -1265,10 +1254,10 @@ private fun ColorPickerRow(
                 Button(onClick = {
                     onColorSelected(customHex)
                     showCustomPicker = false
-                }) { Text(tr("Wybierz", "Select")) }
+                }) { Text(tr("Wybierz", "Select", "選択")) }
             },
             dismissButton = {
-                TextButton(onClick = { showCustomPicker = false }) { Text(tr("Anuluj", "Cancel")) }
+                TextButton(onClick = { showCustomPicker = false }) { Text(tr("Anuluj", "Cancel", "キャンセル")) }
             }
         )
     }
@@ -1330,7 +1319,7 @@ private fun ColorPickerRow(
                     if (!isCustomSelected) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = tr("Własny kolor", "Custom color"),
+                            contentDescription = tr("Własny kolor", "Custom color", "カスタムカラー"),
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )

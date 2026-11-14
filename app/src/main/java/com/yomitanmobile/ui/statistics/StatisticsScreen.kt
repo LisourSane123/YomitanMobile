@@ -79,7 +79,7 @@ fun StatisticsScreen(
     }
     val allTimeCategoryStats = remember(state.categoryActivityAllTime, isEnglish) {
         val countsByCode = state.categoryActivityAllTime.associate { it.categoryCode to it.count }
-        WordCategoryClassifier.mostImportantCategories(isEnglish).map { (code, label) ->
+        WordCategoryClassifier.mostImportantCategories(isEnglish, japanese = com.yomitanmobile.util.LocaleHelper.active == com.yomitanmobile.util.UiLanguage.JAPANESE).map { (code, label) ->
             CategoryActivity(
                 categoryCode = code,
                 categoryLabel = label,
@@ -91,10 +91,10 @@ fun StatisticsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tr("Statystyki", "Statistics")) },
+                title = { Text(tr("Statystyki", "Statistics", "統計")) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back"))
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Wróć", "Back", "戻る"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -134,7 +134,7 @@ fun StatisticsScreen(
 
                 item {
                     Text(
-                        tr("Przegląd", "Overview"),
+                        tr("Przegląd", "Overview", "概要"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -163,7 +163,7 @@ fun StatisticsScreen(
                 if (state.dailyCounts.any { it.count > 0 }) {
                     item {
                         Text(
-                            tr("Fiszki dziennie", "Flashcards per day"),
+                            tr("Fiszki dziennie", "Flashcards per day", "1日あたりのカード数"),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
@@ -181,7 +181,7 @@ fun StatisticsScreen(
 
                 item {
                     Text(
-                        tr("Słówka z ostatnich 7 dni", "Words from the last 7 days"),
+                        tr("Słówka z ostatnich 7 dni", "Words from the last 7 days", "過去7日間の単語"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
@@ -194,10 +194,10 @@ fun StatisticsScreen(
                         isEnglish = isEnglish,
                         onCopyClick = {
                             if (weeklyWordsForCopy.isBlank()) {
-                                Toast.makeText(context, tr("Brak słówek do skopiowania", "No words to copy"), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, tr("Brak słówek do skopiowania", "No words to copy", "コピーする単語がありません"), Toast.LENGTH_SHORT).show()
                             } else {
                                 clipboardManager.setText(AnnotatedString(weeklyWordsForCopy))
-                                Toast.makeText(context, tr("Skopiowano listę słówek", "Copied the words list"), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, tr("Skopiowano listę słówek", "Copied the words list", "単語リストをコピーしました"), Toast.LENGTH_SHORT).show()
                             }
                         }
                     )
@@ -249,15 +249,14 @@ private fun CategoryDistributionCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                tr("Kategorie kopanych slow", "Mined word categories"),
+                tr("Kategorie kopanych slow", "Mined word categories", "採取した単語のカテゴリー"),
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 tr(
                     "Rozklad wszystkich skopanych slow wedlug kategorii.",
-                    "Distribution of all mined words by category."
-                ),
+                    "Distribution of all mined words by category.", "採取したすべての単語のカテゴリー別分布。"),
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -266,8 +265,7 @@ private fun CategoryDistributionCard(
                 Text(
                     tr(
                         "Brak danych kategorii. Skop pierwsze slowa, aby zobaczyc wykres.",
-                        "No category data yet. Mine your first words to see the chart."
-                    ),
+                        "No category data yet. Mine your first words to see the chart.", "カテゴリーのデータはまだありません。最初の単語を採取するとグラフが表示されます。"),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -304,7 +302,7 @@ private fun CategoryDistributionCard(
                 }
 
                 Text(
-                    tr("Top 3 kategorie", "Top 3 categories"),
+                    tr("Top 3 kategorie", "Top 3 categories", "上位3カテゴリー"),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -331,7 +329,7 @@ private fun CategoryDistributionCard(
                     }
 
                 Text(
-                    tr("Wszystkie kategorie", "All categories"),
+                    tr("Wszystkie kategorie", "All categories", "すべてのカテゴリー"),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp)
@@ -383,25 +381,25 @@ private fun HourlyImmersionCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                tr("Aktywność godzinowa (7 dni)", "Hourly activity (7 days)"),
+                tr("Aktywność godzinowa (7 dni)", "Hourly activity (7 days)", "時間帯別の活動（7日間）"),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
 
             if (mostActiveHour != null && mostActiveHourCount > 0) {
                         Text(
-                            text = if (isEnglish) "Most active time: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}" else "Najbardziej aktywna pora: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}",
+                            text = com.yomitanmobile.util.trI(isEnglish, "Najbardziej aktywna pora: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}", "Most active time: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}", "最も活発な時間帯: ${StatisticsViewModel.hourRangeLabel(mostActiveHour)}"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (isEnglish) "Mined words: $mostActiveHourCount" else "Skopanych słów: $mostActiveHourCount",
+                            text = com.yomitanmobile.util.trI(isEnglish, "Skopanych słów: $mostActiveHourCount", "Mined words: $mostActiveHourCount", "採取した単語: $mostActiveHourCount"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
             } else {
                         Text(
-                            text = if (isEnglish) "No hourly activity data from the last week." else "Brak danych aktywności godzinowej z ostatniego tygodnia.",
+                            text = com.yomitanmobile.util.trI(isEnglish, "Brak danych aktywności godzinowej z ostatniego tygodnia.", "No hourly activity data from the last week.", "過去1週間の時間帯別データはありません。"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -453,23 +451,27 @@ private fun StreakCard(
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    if (isEnglish) "Streak" else "Streak",
+                    com.yomitanmobile.util.trI(isEnglish, "Streak", "Streak", "連続記録"),
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = if (streak > 0) {
-                        if (isEnglish) "$streak ${if (streak == 1) "day" else "days"} in a row!"
-                        else "$streak ${if (streak == 1) "dzień" else "dni"} z rzędu!"
+                        com.yomitanmobile.util.trI(
+                            isEnglish,
+                            "$streak ${if (streak == 1) "dzień" else "dni"} z rzędu!",
+                            "$streak ${if (streak == 1) "day" else "days"} in a row!",
+                            "${streak}日連続！"
+                        )
                     } else {
-                        if (isEnglish) "Start a streak! Goal: $dailyGoal cards/day" else "Zacznij streak! Cel: $dailyGoal fiszek/dzień"
+                        com.yomitanmobile.util.trI(isEnglish, "Zacznij streak! Cel: $dailyGoal fiszek/dzień", "Start a streak! Goal: $dailyGoal cards/day", "連続記録を始めよう！ 目標: 1日${dailyGoal}枚")
                     },
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = if (isEnglish) "Today: $todayCount / $dailyGoal" else "Dzisiaj: $todayCount / $dailyGoal",
+                    text = com.yomitanmobile.util.trI(isEnglish, "Dzisiaj: $todayCount / $dailyGoal", "Today: $todayCount / $dailyGoal", "今日: $todayCount / $dailyGoal"),
                     fontSize = 12.sp,
                     color = if (goalMet) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     fontWeight = if (goalMet) FontWeight.Bold else FontWeight.Normal
@@ -509,24 +511,24 @@ private fun WeeklyLearnedWordsCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                            tr("Nauczone słowa: ${words.size}", "Learned words: ${words.size}"),
+                            tr("Nauczone słowa: ${words.size}", "Learned words: ${words.size}", "覚えた単語: ${words.size}"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                            tr("Lista do szybkiego wysłania np. korepetytorowi", "A quick list to send, e.g. to a tutor"),
+                            tr("Lista do szybkiego wysłania np. korepetytorowi", "A quick list to send, e.g. to a tutor", "先生などに送れる簡単なリスト"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onCopyClick, enabled = words.isNotEmpty()) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = tr("Kopiuj listę słów", "Copy word list"))
+                        Icon(Icons.Default.ContentCopy, contentDescription = tr("Kopiuj listę słów", "Copy word list", "単語リストをコピー"))
                 }
             }
 
             if (words.isEmpty()) {
                 Text(
-                    tr("Brak wyeksportowanych słów w ostatnim tygodniu.", "No exported words in the last week."),
+                    tr("Brak wyeksportowanych słów w ostatnim tygodniu.", "No exported words in the last week.", "先週エクスポートした単語はありません。"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -546,7 +548,7 @@ private fun WeeklyLearnedWordsCard(
                 }
                 if (words.size > previewLimit) {
                     Text(
-                        text = tr("...oraz ${words.size - previewLimit} kolejnych", "...and ${words.size - previewLimit} more"),
+                        text = tr("...oraz ${words.size - previewLimit} kolejnych", "...and ${words.size - previewLimit} more", "…ほか${words.size - previewLimit}語"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -577,7 +579,7 @@ private fun DailyFlashcardChart(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(16.dp), tint = goalColor)
                     Spacer(Modifier.width(4.dp))
-                    Text(text = if (isEnglish) "Goal: $dailyGoal cards/day" else "Cel: $dailyGoal fiszek/dzień", fontSize = 12.sp, color = goalColor)
+                    Text(text = com.yomitanmobile.util.trI(isEnglish, "Cel: $dailyGoal fiszek/dzień", "Goal: $dailyGoal cards/day", "目標: 1日${dailyGoal}枚"), fontSize = 12.sp, color = goalColor)
                 }
                 Spacer(Modifier.height(8.dp))
             }

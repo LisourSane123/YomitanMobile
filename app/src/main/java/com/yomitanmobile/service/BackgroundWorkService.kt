@@ -167,7 +167,7 @@ class BackgroundWorkService : Service() {
         ) : Status
     }
 
-    private fun tr(pl: String, en: String) = LocaleHelper.tr(resources.configuration, pl, en)
+    private fun tr(pl: String, en: String, ja: String? = null) = LocaleHelper.tr(resources.configuration, pl, en, ja)
 
     private fun buildNotification(status: Status): android.app.Notification {
         ensureChannel()
@@ -186,10 +186,10 @@ class BackgroundWorkService : Service() {
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         when (status) {
             is Status.Installing -> {
-                val phase = if (status.importing) tr("Importowanie", "Importing") else tr("Pobieranie", "Downloading")
+                val phase = if (status.importing) tr("Importowanie", "Importing", "インポート中") else tr("Pobieranie", "Downloading", "ダウンロード中")
                 builder.setContentTitle("$phase: ${status.name}")
                 if (status.waiting > 0) {
-                    builder.setContentText(tr("W kolejce: ${status.waiting}", "Queued: ${status.waiting}"))
+                    builder.setContentText(tr("W kolejce: ${status.waiting}", "Queued: ${status.waiting}", "待機: ${status.waiting}"))
                 }
                 if (status.percent != null) {
                     builder.setProgress(100, status.percent, false)
@@ -198,17 +198,17 @@ class BackgroundWorkService : Service() {
                 }
             }
             is Status.Deleting -> {
-                builder.setContentTitle(tr("Usuwanie: ${status.name}", "Deleting: ${status.name}"))
+                builder.setContentTitle(tr("Usuwanie: ${status.name}", "Deleting: ${status.name}", "削除中: ${status.name}"))
                 if (status.waiting > 0) {
-                    builder.setContentText(tr("W kolejce: ${status.waiting}", "Queued: ${status.waiting}"))
+                    builder.setContentText(tr("W kolejce: ${status.waiting}", "Queued: ${status.waiting}", "待機: ${status.waiting}"))
                 }
                 builder.setProgress(100, status.percent, false)
             }
             Status.Recomputing -> builder
-                .setContentTitle(tr("Przeliczanie rankingów częstotliwości…", "Recomputing frequency ranks…"))
+                .setContentTitle(tr("Przeliczanie rankingów częstotliwości…", "Recomputing frequency ranks…", "頻度順位を再計算中…"))
                 .setProgress(0, 0, true)
             Status.Idle -> builder
-                .setContentTitle(tr("Praca w tle…", "Working in the background…"))
+                .setContentTitle(tr("Praca w tle…", "Working in the background…", "バックグラウンドで処理中…"))
                 .setProgress(0, 0, true)
         }
         return builder.build()
@@ -224,7 +224,7 @@ class BackgroundWorkService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                tr("Instalowanie słowników", "Dictionary installs"),
+                tr("Instalowanie słowników", "Dictionary installs", "辞書のインストール"),
                 NotificationManager.IMPORTANCE_LOW
             )
         )
