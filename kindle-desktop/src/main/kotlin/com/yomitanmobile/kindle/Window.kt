@@ -208,6 +208,10 @@ class Window internal constructor(private var config: Config) {
         val freq = fileRow(tr("Lista częstości (.zip)", "Frequency list (.zip)"), config.frequency)
         val pitch = fileRow(tr("Akcent (kanjium .zip)", "Pitch accent (kanjium .zip)"), config.pitch)
         val kanji = fileRow(tr("Kanji (KANJIDIC .zip)", "Kanji (KANJIDIC .zip)"), config.kanji)
+        val monolingual = (0 until 3).map { i ->
+            fileRow(tr("Słownik JP-JP ${i + 1} (opcjonalnie)", "JP-JP dictionary ${i + 1} (optional)"), config.monolingual.getOrNull(i))
+        }
+        val onomatopoeia = fileRow(tr("Onomatopeje (surasura .zip)", "Onomatopoeia (surasura .zip)"), config.onomatopoeia)
         label(tr("Talia", "Deck")); val deck = JTextField(config.deck); field(deck)
         label("AnkiConnect"); val connect = JTextField(config.ankiConnect); field(connect)
         val sync = JCheckBox(tr("Synchronizuj z AnkiWeb przed i po", "Sync with AnkiWeb before and after"), config.syncAnkiWeb)
@@ -231,6 +235,9 @@ class Window internal constructor(private var config: Config) {
                 fun f(box: JTextField) = box.text.trim().takeIf { it.isNotEmpty() }?.let(::File)
                 config = config.copy(
                     dictionary = f(dict), frequency = f(freq), pitch = f(pitch), kanji = f(kanji),
+                    // A fourth one put in config.properties by hand is kept.
+                    monolingual = monolingual.mapNotNull(::f) + config.monolingual.drop(monolingual.size),
+                    onomatopoeia = f(onomatopoeia),
                     deck = deck.text.trim().ifEmpty { "Japanese" },
                     ankiConnect = connect.text.trim().ifEmpty { "http://127.0.0.1:8765" },
                     syncAnkiWeb = sync.isSelected,

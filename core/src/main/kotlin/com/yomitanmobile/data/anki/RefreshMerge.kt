@@ -39,6 +39,14 @@ object RefreshMerge {
     const val FREQUENCY = "Frequency"
 
     /**
+     * A meaning already written in Japanese (the JP-JP chain answered when the
+     * card was made) is not taken back to English by a refresh whose rebuild
+     * only had the English gloss — the refresh does not ask the monolingual
+     * dictionaries, so its English is not news, it is a step back.
+     */
+    const val MEANING = "Meaning"
+
+    /**
      * The new value of every field of [current], by name.
      *
      * Only names [current] has are returned — a note type without Summary never
@@ -52,6 +60,7 @@ object RefreshMerge {
             out[name] = when {
                 name in OWNED_BY_NOTE -> if (old.isNotBlank()) old else fresh
                 hasUserWriting(old) -> old
+                name == MEANING && isJapaneseMeaning(old) && !isJapaneseMeaning(fresh) -> old
                 name == FREQUENCY -> when {
                     fresh.isNotBlank() -> fresh
                     isPlainRank(old) -> old
@@ -87,6 +96,19 @@ object RefreshMerge {
     private val RUBY_READING = Regex("""<rt[^>]*>.*?</rt>""", RegexOption.DOT_MATCHES_ALL)
     private val TAG = Regex("<[^>]+>")
     private const val POLISH_LETTERS = "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ"
+
+    /**
+     * Whether a meaning reads as Japanese: outside the app's own labels and
+     * furigana, Japanese characters outnumber Latin letters. A count rather
+     * than "no Latin at all", because a Japanese definition may name SNS or
+     * a title in English, and an English gloss may quote its kanji.
+     */
+    fun isJapaneseMeaning(value: String): Boolean {
+        val text = value.replace(APP_LABELS, " ").replace(RUBY_READING, " ").replace(TAG, " ")
+        val japanese = text.count { it in '\u3040'..'\u30FF' || it in '\u4E00'..'\u9FFF' }
+        val latin = text.count { it in 'A'..'Z' || it in 'a'..'z' }
+        return japanese > 0 && japanese > latin
+    }
 
     /** "4821" yes; "★★★ Top 1K", "" and "4821 (JPDB)" no. */
     fun isPlainRank(value: String): Boolean {

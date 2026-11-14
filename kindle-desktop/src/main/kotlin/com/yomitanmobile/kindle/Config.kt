@@ -21,6 +21,14 @@ data class Config(
     val frequency: File?,
     val pitch: File?,
     val kanji: File?,
+    /**
+     * Monolingual (JP-JP) dictionaries for the card's Meaning. Asked in the
+     * phone's order when its settings.json names them, in this order
+     * otherwise; empty means English meanings, as before.
+     */
+    val monolingual: List<File>,
+    /** The surasura onomatopoeia dictionary: what makes a word an onomatopoeia card, and its definition. */
+    val onomatopoeia: File?,
     val deck: String,
     val ankiConnect: String,
     /** AnkiWeb sync before (the duplicate check needs a current collection) and after. */
@@ -48,6 +56,8 @@ data class Config(
         frequency?.let { p["frequency"] = it.path }
         pitch?.let { p["pitch"] = it.path }
         kanji?.let { p["kanji"] = it.path }
+        p["monolingual"] = monolingual.joinToString(File.pathSeparator) { it.path }
+        onomatopoeia?.let { p["onomatopoeia"] = it.path }
         p["deck"] = deck
         p["ankiConnect"] = ankiConnect
         p["syncAnkiWeb"] = syncAnkiWeb.toString()
@@ -70,6 +80,12 @@ data class Config(
     companion object {
         val FILE: File get() = File(Platform.dataDir, "config.properties")
 
+        /** The cleaned copies `monolingual/dicts/clean_dicts.py` writes, in the order the phone uses them. */
+        val DEFAULT_MONOLINGUAL = listOf(
+            "[Monolingual, Encyclopedia] PixivLight (clean).zip",
+            "[Monolingual] 旺文社国語辞典 第十一版 (Recommended) (clean).zip"
+        )
+
         fun load(): Config {
             val p = Properties()
             if (FILE.isFile) FILE.inputStream().use { p.load(it) }
@@ -84,6 +100,10 @@ data class Config(
                 frequency = file("frequency", "KINDLE_SYNC_FREQ", "JPDB_v2.2_Frequency.zip"),
                 pitch = file("pitch", "KINDLE_SYNC_PITCH", "kanjium_pitch_accents.zip"),
                 kanji = file("kanji", "KINDLE_SYNC_KANJI", "KANJIDIC_english.zip"),
+                monolingual = (p.getProperty("monolingual") ?: System.getenv("KINDLE_SYNC_MONOLINGUAL"))
+                    ?.split(File.pathSeparator)?.map { it.trim() }?.filter { it.isNotEmpty() }?.map(::File)
+                    ?: DEFAULT_MONOLINGUAL.map { File(dicts, it) }.filter { it.isFile },
+                onomatopoeia = file("onomatopoeia", "KINDLE_SYNC_ONOMATOPOEIA", "[Monolingual Onomatopoeia] surasura.zip"),
                 deck = p.getProperty("deck") ?: "Japanese",
                 ankiConnect = p.getProperty("ankiConnect") ?: System.getenv("KINDLE_SYNC_ANKI") ?: "http://127.0.0.1:8765",
                 syncAnkiWeb = p.getProperty("syncAnkiWeb")?.toBooleanStrictOrNull() ?: true,

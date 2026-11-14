@@ -1,6 +1,7 @@
 package com.yomitanmobile.kindle
 
 import com.yomitanmobile.data.anki.CardBuilder
+import com.yomitanmobile.data.anki.MonolingualChain
 import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.domain.model.CardProfile
@@ -325,14 +326,28 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         val audio = if (dryRun) emptyMap() else AudioMaker(config, ::log).use { maker ->
             maker.speak(toAdd.values.map { (e, _) -> Spoken(e.primaryExpression, e.reading, e.pitchAccent) }, outDir)
         }
-        val notes = toAdd.values.map { (entry, lookup) ->
-            val word = entry.toWordEntry().copy(exampleSentence = sentenceFor(lookup, entry), exampleSentenceTranslation = "")
+        // The Meaning from the JP-JP chain where it has the word, English otherwise.
+        val chain = monolingualChain(parser, config, ::log)
+        if (chain.isNotEmpty() && toAdd.isNotEmpty()) progress(tr("Szukam definicji w słownikach JP-JP…", "Looking up JP-JP definitions…"))
+        val words = MonolingualChain.apply(
+            toAdd.values.map { (entry, lookup) ->
+                entry.toWordEntry().copy(exampleSentence = sentenceFor(lookup, entry), exampleSentenceTranslation = "")
+            },
+            chain.map { it.title },
+            lookup = { title, expressions -> chain.first { it.title == title }.lookup(expressions) },
+            onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") }
+        )
+        log("meaning: ${words.count { it.meaningSource.isNotEmpty() }} of ${words.size} from JP-JP " +
+            words.groupingBy { it.meaningSource.ifEmpty { "EN" } }.eachCount())
+        val notes = toAdd.values.zip(words).map { (pair, word) ->
+            val (entry, lookup) = pair
             val kanjiData = entry.primaryExpression.filter(JapaneseTokenizer::isKanji).map(Char::toString).distinct().mapNotNull { kanji[it] }
             val font = style.randomFonts.takeIf { style.randomFontsEnabled && it.isNotEmpty() }?.random()
             val fields = profile.fieldNames.zip(builder.buildFields(word, style, kanjiData, randomFont = font)).toMap().toMutableMap()
             val recording = audio[entry.primaryExpression to entry.reading]
             if (recording != null) fields["Audio"] = "[sound:${recording.name}]"
-            val tags = listOf("yomitan-mobile", "from_kindle", slug(lookup.book)).filter { it.isNotEmpty() }
+            val tags = listOf("yomitan-mobile", "from_kindle", slug(lookup.book), if (word.meaningSource.isNotEmpty()) J_J_TAG else "")
+                .filter { it.isNotEmpty() }
             Note(entry.primaryExpression, fields, tags, recording)
         }
 
@@ -433,6 +448,9 @@ class SyncJob(private val config: Config, private val out: Reporter) {
 
     companion object {
         private val TAGS = Regex("<[^>]*>")
+
+        /** The phone's tag for a note whose meaning came from the JP-JP chain (AnkiCardCreator.MONOLINGUAL_TAG). */
+        const val J_J_TAG = "J-J"
 
         fun plain(html: String): String = TAGS.replace(html.replace(Regex("\\[sound:[^]]*]"), ""), "")
             .replace("&nbsp;", " ").trim()

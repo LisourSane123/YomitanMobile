@@ -9,11 +9,13 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.yomitanmobile.data.anki.MonolingualChain
 import com.yomitanmobile.data.local.dao.FrequencyUpdate
 import com.yomitanmobile.data.local.entity.DictionaryEntry
 import com.yomitanmobile.data.local.entity.KanjiEntry
 import com.yomitanmobile.data.mapper.toDomain
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
+import com.yomitanmobile.data.settings.PreferenceKeys
 import com.yomitanmobile.data.settings.readCardStylePreferences
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.WordEntry
@@ -191,4 +193,69 @@ fun pullPhoneSettings(config: Config, log: (String) -> Unit): Boolean {
     partial.delete()
     log("phone settings refreshed from $latest")
     return true
+}
+
+/**
+ * One monolingual dictionary zip, asked by written form. Nothing is imported:
+ * the zip is streamed past the words wanted, and what it had is kept, so a
+ * dictionary asked twice in a run (the vocabulary chain, then the
+ * onomatopoeia one) streams again only for words it was not asked before.
+ */
+class MonolingualDictionary(private val parser: YomitanDictionaryParser, val zip: File) {
+
+    /** index.json's title — the name the phone's chain setting stores. */
+    val title: String by lazy {
+        runCatching {
+            java.util.zip.ZipFile(zip).use { z ->
+                z.getEntry("index.json")?.let { e -> JSONObject(z.getInputStream(e).reader().readText()).optString("title") }
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: zip.nameWithoutExtension
+    }
+
+    private val rows = HashMap<String, MutableList<WordEntry>>()
+    private val asked = HashSet<String>()
+
+    suspend fun lookup(expressions: Collection<String>): List<WordEntry> {
+        val missing = expressions.filterTo(HashSet()) { it !in asked }
+        if (missing.isNotEmpty()) {
+            parser.parseFromZipStreaming(
+                inputStream = zip.inputStream().buffered(),
+                onBatch = { entries: List<DictionaryEntry>, _ ->
+                    for (e in entries) if (e.expression in missing) rows.getOrPut(e.expression) { ArrayList(1) } += e.toDomain()
+                }
+            )
+            asked += missing
+        }
+        return expressions.distinct().flatMap { rows[it].orEmpty() }
+    }
+
+    /** Every headword — for the small onomatopoeia dictionary, whose list of words is the point. */
+    suspend fun headwords(): Set<String> {
+        val all = HashSet<String>()
+        parser.parseFromZipStreaming(
+            inputStream = zip.inputStream().buffered(),
+            onBatch = { entries: List<DictionaryEntry>, _ -> entries.forEach { all += it.expression; all += it.reading } }
+        )
+        all.remove("")
+        return all
+    }
+}
+
+/**
+ * The configured monolingual dictionaries in the order they are asked: the
+ * phone's chain (CARD_MONOLINGUAL_DICTIONARY in its settings.json, by title)
+ * first, then any the phone does not name, in the configured order — so the
+ * laptop and the phone answer a word from the same dictionary.
+ */
+fun monolingualChain(parser: YomitanDictionaryParser, config: Config, log: (String) -> Unit): List<MonolingualDictionary> {
+    val dictionaries = config.monolingual.filter { it.isFile }.map { MonolingualDictionary(parser, it) }
+    config.monolingual.filterNot { it.isFile }.forEach { log("monolingual: ${it.path} not found, skipped") }
+    val phoneOrder = config.settingsJson.takeIf { it.isFile }?.let { file ->
+        runCatching {
+            MonolingualChain.parse(preferencesFromBackup(file.readText())[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY])
+        }.getOrNull()
+    }.orEmpty()
+    val ordered = dictionaries.sortedBy { d -> phoneOrder.indexOf(d.title).let { if (it < 0) Int.MAX_VALUE else it } }
+    log("monolingual chain: ${ordered.joinToString(" → ") { it.title }.ifEmpty { "none (English meanings)" }}")
+    return ordered
 }

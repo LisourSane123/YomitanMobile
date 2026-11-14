@@ -16,6 +16,11 @@ Plug the Kindle in, click **Sync from Kindle**. That's it.
    Only the term dictionary (e.g. Jitendex) is required; a frequency list,
    pitch accents (kanjium) and KANJIDIC make the cards complete. Point to
    them once in **Settings**.
+   *(optional)* **JP-JP meanings**: up to three monolingual dictionaries
+   (e.g. the cleaned PixivLight, then 旺文社) in *Settings → JP-JP dictionary
+   1–3*. Each word's meaning comes from the first one that has it, in the
+   order the phone's own setting gives (from its backup's `settings.json`),
+   English when none has it; such notes get the tag `J-J`, as on the phone.
 3. *(optional)* **Audio**: Kanji alive's native-speaker recordings
    (`--install-native-audio`, ~74 MB) and/or VOICEVOX installed with its own
    downloader. Without either, a word gets the system's own Japanese voice
