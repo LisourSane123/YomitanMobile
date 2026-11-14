@@ -19,6 +19,12 @@ _Avoid_: mimetic word, sound effect (as separate categories)
 **Vocabulary card** (*fiszka słownikowa*)
 : The standard note: the word on the front, its reading, meaning, pitch and kanji on the back.
 
-**Onomatopoeia card** (*fiszka onomatopeiczna*)
-: The note an onomatopoeia gets *instead of* a vocabulary card: the sentence it was met in on the front with the word underlined; on the back a sentence translation the user writes in themselves (empty when created) and a dictionary definition. One per word; a word with no usable sentence gets a vocabulary card instead.
-_Avoid_: sentence card, cloze card
+**Grammar point** (*punkt gramatyczny*)
+: A looked-up word that the Bunpro dictionary lists and that the main dictionary tags as grammar (particle, conjunction, auxiliary, expression) or does not list at all. An ordinary noun or adverb Bunpro merely also lists is not one. Only the selection itself is judged, never the sentence around it.
+
+**Context card** (*fiszka kontekstowa*)
+: The note an onomatopoeia or a grammar point gets *instead of* a vocabulary card: the sentence it was met in on the front with the word underlined; on the back a sentence translation the user writes in themselves (empty when created) and an explanation — a dictionary definition for an onomatopoeia, Bunpro's meaning, explanation and examples for a grammar point. One per word; a word with no usable sentence gets a vocabulary card instead. A tag says which kind it is.
+_Avoid_: sentence card, cloze card, onomatopoeia card (as the name of the note type)
+
+**Unlearned card** (*fiszka nienauczona*)
+: A card that has never been reviewed and is not suspended. The only cards whose meaning may be rewritten to JP-JP after the fact.

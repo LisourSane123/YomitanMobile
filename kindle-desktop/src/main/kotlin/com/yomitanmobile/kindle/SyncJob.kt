@@ -2,7 +2,7 @@ package com.yomitanmobile.kindle
 
 import com.yomitanmobile.data.anki.CardBuilder
 import com.yomitanmobile.data.anki.MonolingualChain
-import com.yomitanmobile.data.anki.OnomatopoeiaCard
+import com.yomitanmobile.data.anki.ContextCard
 import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.domain.model.CardProfile
@@ -332,7 +332,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             val isOnomatopoeia = WordFilterRules.isOnomatopoeia(entry) ||
                 entry.primaryExpression in surasuraWords || entry.reading in surasuraWords
             if (!isOnomatopoeia) continue
-            OnomatopoeiaCard.underline(sentenceFor(lookup, entry), onomatopoeiaTokens(entry, lookup))?.let { sentenceOf[key] = it }
+            ContextCard.underline(sentenceFor(lookup, entry), onomatopoeiaTokens(entry, lookup))?.let { sentenceOf[key] = it }
                 ?: log("onomatopoeia without a usable sentence, vocabulary card: ${entry.primaryExpression}")
         }
         log("onomatopoeia cards: ${sentenceOf.size} (${sentenceOf.keys.joinToString(", ") { it.substringBefore('|') }})")
@@ -369,12 +369,12 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             val sentence = sentenceOf[key]
             val tags = listOf(
                 "yomitan-mobile", "from_kindle", slug(lookup.book),
-                if (sentence != null) OnomatopoeiaCard.TAG else "",
+                if (sentence != null) ContextCard.ONOMATOPOEIA_TAG else "",
                 if (word.meaningSource.isNotEmpty()) J_J_TAG else ""
             ).filter { it.isNotEmpty() }
             if (sentence != null) {
-                Note(entry.primaryExpression, OnomatopoeiaCard.fields(vocabulary, entry.primaryExpression, sentence, lookup.book),
-                    tags, recording, OnomatopoeiaCard.MODEL_NAME)
+                Note(entry.primaryExpression, ContextCard.fields(vocabulary, entry.primaryExpression, sentence, lookup.book),
+                    tags, recording, ContextCard.MODEL_NAME)
             } else {
                 Note(entry.primaryExpression, vocabulary, tags, recording, profile.modelName)
             }
@@ -394,9 +394,9 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             progress(tr("Dodaję ${fiszki(notes.size)} do talii $deck…", "Adding ${notes.size} cards to deck $deck…", "デッキ${deck}に${notes.size}枚のカードを追加中…"))
             val (css, front, back) = builder.packageStyling(style)
             anki.ensureModel(profile, css, front, back)
-            if (notes.any { it.model == OnomatopoeiaCard.MODEL_NAME }) {
-                val (oCss, oFront, oBack) = OnomatopoeiaCard.styling(css)
-                anki.ensureModel(OnomatopoeiaCard.MODEL_NAME, OnomatopoeiaCard.FIELD_NAMES, oCss, oFront, oBack)
+            if (notes.any { it.model == ContextCard.MODEL_NAME }) {
+                val (oCss, oFront, oBack) = ContextCard.styling(css)
+                anki.ensureModel(ContextCard.MODEL_NAME, ContextCard.FIELD_NAMES, oCss, oFront, oBack)
             }
             anki.ensureDeck(deck)
             for (note in notes) {
@@ -409,7 +409,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
                     log("not added: ${note.word} — $error")
                 }
             }
-            log("added $added of ${notes.size} cards to $deck (${addedNotes.count { it.model == OnomatopoeiaCard.MODEL_NAME }} onomatopoeia)")
+            log("added $added of ${notes.size} cards to $deck (${addedNotes.count { it.model == ContextCard.MODEL_NAME }} onomatopoeia)")
         }
 
         // ---- AutoReorder's own pass, then the second sync ----------------

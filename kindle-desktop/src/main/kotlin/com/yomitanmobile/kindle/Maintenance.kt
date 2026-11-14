@@ -1,7 +1,7 @@
 package com.yomitanmobile.kindle
 
 import com.yomitanmobile.data.anki.CardBuilder
-import com.yomitanmobile.data.anki.OnomatopoeiaCard
+import com.yomitanmobile.data.anki.ContextCard
 import com.yomitanmobile.data.anki.RefreshMerge
 import com.yomitanmobile.data.audio.KanjiAlive
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
@@ -91,7 +91,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
         config.problems().firstOrNull()?.let { return Outcome(true, it) }
         if (config.syncAnkiWeb && !dryRun) anki.sync()
 
-        val query = "\"note:${profile.modelName}\" OR \"note:${OnomatopoeiaCard.MODEL_NAME}\""
+        val query = "\"note:${profile.modelName}\" OR \"note:${ContextCard.MODEL_NAME}\""
         val ids = anki.call("findNotes", JSONObject().put("query", query)) as JSONArray
         val notes = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).flatMap { chunk ->
             val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk))) as JSONArray
@@ -105,7 +105,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
                 info.getLong("noteId") to ordered
             }
         }
-        log("notes: ${notes.size} of ${profile.modelName} and ${OnomatopoeiaCard.MODEL_NAME}")
+        log("notes: ${notes.size} of ${profile.modelName} and ${ContextCard.MODEL_NAME}")
         // The two note types are told apart by their fields: only the onomatopoeia card has Word.
         fun isOnomatopoeia(fields: Map<String, String>) = "Word" in fields && "Front" !in fields
         fun wordOf(fields: Map<String, String>) = plain(fields[if (isOnomatopoeia(fields)) "Word" else "Front"].orEmpty())
@@ -137,7 +137,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
             val font = style.randomFonts.takeIf { style.randomFontsEnabled && it.isNotEmpty() }?.random()
             val rebuilt = profile.fieldNames.zip(builder.buildFields(merged.toWordEntry(), style, kanjiData, randomFont = font)).toMap()
             val after = if (isOnomatopoeia(current)) {
-                RefreshMerge.merge(current, OnomatopoeiaCard.fields(rebuilt, word, "", ""), OnomatopoeiaCard.OWNED_BY_NOTE)
+                RefreshMerge.merge(current, ContextCard.fields(rebuilt, word, "", ""), ContextCard.OWNED_BY_NOTE)
             } else {
                 RefreshMerge.merge(current, rebuilt)
             }
@@ -230,7 +230,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
         // The onomatopoeia card wears the vocabulary card's look plus its own rules.
         val targets = buildList {
             add(Triple(profile.modelName, "", Triple(css, front, back)))
-            if (OnomatopoeiaCard.MODEL_NAME in models) add(Triple(OnomatopoeiaCard.MODEL_NAME, "onomatopoeia-", OnomatopoeiaCard.styling(css)))
+            if (ContextCard.MODEL_NAME in models) add(Triple(ContextCard.MODEL_NAME, "context-", ContextCard.styling(css)))
         }
         for ((model, prefix, styling) in targets) {
             if (!restyleModel(model, prefix, styling, dryRun)) {

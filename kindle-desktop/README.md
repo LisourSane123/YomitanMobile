@@ -24,7 +24,7 @@ Plug the Kindle in, click **Sync from Kindle**. That's it.
    *(optional)* **Onomatopoeia cards**: point *Settings → Onomatopoeia* at the
    surasura dictionary. An onomatopoeia (ドキドキ, ぴくぴく — Jitendex's
    `on-mim` or a surasura word) then becomes a note of its own type,
-   `Yomitan-Mobile-Onomatopoeia`: the book's sentence on the front with the
+   `Yomitan-Mobile-Context`: the book's sentence on the front with the
    word underlined; on the back an empty box for your translation (edit the
    note's `ContextTranslation` in Anki to fill it) and a Japanese definition.
    Find them with `tag:onomatopoeia`.
