@@ -13,6 +13,7 @@ import com.yomitanmobile.domain.model.CardProfile
 import com.yomitanmobile.domain.model.CardStylePreferences
 import com.yomitanmobile.domain.model.WordEntry
 import com.yomitanmobile.util.InputSanitizer
+import com.yomitanmobile.util.LabelLanguage
 import com.yomitanmobile.util.SentenceContextHighlighter
 import kotlinx.serialization.json.Json
 
@@ -30,6 +31,10 @@ class CardBuilder(
     private val english: Boolean
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+
+    /** Japanese when the meaning came from the JP-JP chain, the interface language otherwise. */
+    fun labelLanguageFor(entry: WordEntry): LabelLanguage =
+        if (entry.meaningSource.isNotBlank()) LabelLanguage.JAPANESE else LabelLanguage.of(english)
 
     /**
      * Picks the sentence that goes under the word on the FRONT of the card.
@@ -127,11 +132,12 @@ class CardBuilder(
             else -> emptyList()
         }
 
-        // Localize the grammar / usage labels to match the app language so the
-        // exported card reads the same as the detail screen.
-        val posLabel = com.yomitanmobile.util.PartsOfSpeechFormatter.format(entry.partsOfSpeech, english = english)
+        // The grammar / usage labels speak the meaning's language: Japanese
+        // beside a JP-JP definition, the interface language beside a gloss.
+        val labels = labelLanguageFor(entry)
+        val posLabel = com.yomitanmobile.util.PartsOfSpeechFormatter.format(entry.partsOfSpeech, labels)
         val localizedUsageTags = entry.usageTags.map {
-            com.yomitanmobile.util.PartsOfSpeechFormatter.localizeUsageTag(it, english)
+            com.yomitanmobile.util.PartsOfSpeechFormatter.localizeUsageTag(it, labels)
         }
 
         // Sanitize the AI summary: it comes from a third-party LLM and may

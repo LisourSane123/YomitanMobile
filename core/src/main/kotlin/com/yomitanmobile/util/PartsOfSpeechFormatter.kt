@@ -1,6 +1,19 @@
 package com.yomitanmobile.util
 
 /**
+ * The language a dictionary tag is shown in. Japanese is not an interface
+ * language here: it is what a card whose meaning is written in Japanese gets,
+ * so the label and the definition beside it speak one language.
+ */
+enum class LabelLanguage {
+    ENGLISH, POLISH, JAPANESE;
+
+    companion object {
+        fun of(english: Boolean): LabelLanguage = if (english) ENGLISH else POLISH
+    }
+}
+
+/**
  * Converts raw JMDict tag tokens (v1, vt, adj-i, …) into human-readable labels.
  * Frequency markers (ichi1/news1/nfXX) and JLPT tags are filtered out — they are
  * surfaced separately in the UI.
@@ -315,6 +328,64 @@ object PartsOfSpeechFormatter {
         "music" to "muzyka"
     )
 
+    // Japanese counterparts, keyed by the same codes: the terms a 国語辞典
+    // uses (五段動詞, サ変動詞, 連体詞, 尊敬語…). A card whose meaning came from
+    // a monolingual dictionary shows these, not English or Polish ones.
+    private val POS_LABELS_JA = mapOf(
+        "v" to "動詞", "adj" to "形容詞", "prep" to "前置詞", "pron" to "代名詞",
+        "intj" to "感動詞", "name" to "固有名詞", "phrase" to "句", "prefix" to "接頭辞",
+        "suffix" to "接尾辞", "infix" to "接中辞", "postp" to "後置詞", "det" to "限定詞",
+        "article" to "冠詞", "particle" to "助詞", "contraction" to "縮約形",
+        "abbrev" to "略語", "character" to "文字", "punct" to "句読点",
+        "v1" to "一段動詞", "v1-s" to "一段動詞（特殊）",
+        "v5u" to "五段動詞（う）", "v5k" to "五段動詞（く）", "v5g" to "五段動詞（ぐ）",
+        "v5s" to "五段動詞（す）", "v5t" to "五段動詞（つ）", "v5n" to "五段動詞（ぬ）",
+        "v5b" to "五段動詞（ぶ）", "v5m" to "五段動詞（む）", "v5r" to "五段動詞（る）",
+        "v5r-i" to "五段動詞（る・不規則）", "v5aru" to "五段動詞（〜ある）",
+        "v5k-s" to "五段動詞（行く）", "v5u-s" to "五段動詞（う・特殊）", "v5uru" to "五段動詞（〜うる）",
+        "v2a-s" to "二段動詞（特殊）", "vk" to "カ変動詞", "vs" to "サ変動詞",
+        "vs-i" to "サ変動詞", "vs-s" to "サ変動詞（特殊）", "vs-c" to "サ変動詞（〜す）",
+        "vt" to "他動詞", "vi" to "自動詞", "vn" to "ナ変動詞", "vr" to "ラ変動詞",
+        "vz" to "ザ変動詞", "aux" to "助動詞", "aux-v" to "助動詞", "aux-adj" to "補助形容詞",
+        "adj-i" to "形容詞", "adj-ix" to "形容詞（よい・いい）", "adj-na" to "形容動詞",
+        "adj-no" to "の形容詞", "adj-pn" to "連体詞", "adj-t" to "形容動詞（タリ）",
+        "adj-f" to "連体修飾語", "adj-ku" to "ク活用形容詞（古語）",
+        "adj-shiku" to "シク活用形容詞（古語）", "adj-nari" to "ナリ活用形容動詞（古語）",
+        "n" to "名詞", "n-suf" to "接尾名詞", "n-pref" to "接頭名詞", "n-t" to "時の名詞",
+        "n-adv" to "副詞的名詞", "pn" to "代名詞", "num" to "数詞",
+        "adv" to "副詞", "adv-to" to "副詞（と）", "prt" to "助詞", "conj" to "接続詞",
+        "int" to "感動詞", "exp" to "表現", "pref" to "接頭辞", "suf" to "接尾辞",
+        "ctr" to "助数詞", "cop" to "断定の助動詞",
+        "uk" to "通常かな表記", "obs" to "廃語", "arch" to "古語", "rare" to "まれ",
+        "sl" to "俗語", "col" to "口語", "fam" to "くだけた表現", "hon" to "尊敬語",
+        "hum" to "謙譲語", "pol" to "丁寧語", "vulg" to "卑語", "derog" to "軽蔑語",
+        "joc" to "おどけた表現", "abbr" to "略語", "yoji" to "四字熟語", "id" to "慣用句",
+        "proverb" to "ことわざ", "quote" to "引用", "on-mim" to "擬音語・擬態語",
+        "comp" to "情報", "math" to "数学", "med" to "医学", "law" to "法律",
+        "Buddh" to "仏教", "Shinto" to "神道", "physics" to "物理", "chem" to "化学",
+        "biol" to "生物", "bus" to "ビジネス", "econ" to "経済", "food" to "料理",
+        "sports" to "スポーツ", "music" to "音楽"
+    )
+
+    private val USAGE_LABELS_JA = mapOf(
+        "usually kana" to "通常かな表記", "usually kanji" to "通常漢字表記",
+        "obsolete" to "廃語", "archaic" to "古語", "rare" to "まれ", "slang" to "俗語",
+        "colloq." to "口語", "familiar" to "くだけた表現", "honorific" to "尊敬語",
+        "humble" to "謙譲語", "polite" to "丁寧語", "vulgar" to "卑語",
+        "euph." to "婉曲表現", "derog." to "軽蔑語",
+        "Hokkaido dial." to "北海道方言", "Kansai dial." to "関西方言", "Kanto dial." to "関東方言",
+        "Kyoto dial." to "京都方言", "Kyushu dial." to "九州方言", "Nagano dial." to "長野方言",
+        "Osaka dial." to "大阪方言", "Ryukyu dial." to "琉球方言", "Tohoku dial." to "東北方言",
+        "Tosa dial." to "土佐方言", "Tsugaru dial." to "津軽方言",
+        "joc." to "おどけた表現", "abbr." to "略語", "yoji." to "四字熟語", "idiom" to "慣用句",
+        "proverb" to "ことわざ", "quote" to "引用", "onomat." to "擬音語", "mimetic" to "擬態語",
+        "formal" to "改まった表現", "male" to "男性語", "fem." to "女性語", "children" to "幼児語",
+        "X-rated" to "成人向け", "comp." to "情報", "math" to "数学", "med." to "医学",
+        "law" to "法律", "Buddh." to "仏教", "Shinto" to "神道", "phys." to "物理",
+        "chem." to "化学", "biol." to "生物", "bus." to "ビジネス", "econ." to "経済",
+        "food" to "料理", "sports" to "スポーツ", "music" to "音楽"
+    )
+
     // Visual / metadata markers that show up in Yomitan termTags but are not
     // real grammar info. "P" = priority form. Filtering them keeps the POS
     // chip readable. The badge glyphs and corpus bands live in [isBadgeTag],
@@ -463,7 +534,13 @@ object PartsOfSpeechFormatter {
      * dropped. Kept as the default English-only overload for tests / callers
      * that don't have a locale handy.
      */
-    fun format(rawTags: String, english: Boolean = true): String {
+    fun format(rawTags: String, english: Boolean = true): String = format(rawTags, LabelLanguage.of(english))
+
+    /**
+     * [format] in [language]. A code the language's map lacks falls back to
+     * the English label and then to the code itself, so nothing is dropped.
+     */
+    fun format(rawTags: String, language: LabelLanguage): String {
         if (rawTags.isBlank()) return ""
         val seen = LinkedHashSet<String>()
         for (token in SPLIT_REGEX.split(rawTags)) {
@@ -472,14 +549,14 @@ object PartsOfSpeechFormatter {
             if (trimmed in NON_POS_NOISE) continue
             if (isBadgeTag(trimmed)) continue
             if (JLPT_REGEX.matches(trimmed)) continue
-            val label = if (english) {
-                POS_LABELS[trimmed]
-            } else {
-                POS_LABELS_PL[trimmed] ?: POS_LABELS[trimmed]
+            val label = when (language) {
+                LabelLanguage.ENGLISH -> POS_LABELS[trimmed]
+                LabelLanguage.POLISH -> POS_LABELS_PL[trimmed] ?: POS_LABELS[trimmed]
+                LabelLanguage.JAPANESE -> POS_LABELS_JA[trimmed] ?: POS_LABELS[trimmed]
             }
             seen.add(label ?: trimmed)
         }
-        return seen.joinToString(", ")
+        return seen.joinToString(if (language == LabelLanguage.JAPANESE) "、" else ", ")
     }
 
     /**
@@ -487,8 +564,11 @@ object PartsOfSpeechFormatter {
      * form stored in [com.yomitanmobile.domain.model.WordEntry.usageTags]) to
      * Polish when [english] is false. Unknown labels pass through unchanged.
      */
-    fun localizeUsageTag(label: String, english: Boolean): String {
-        if (english) return label
-        return USAGE_LABELS_PL[label.trim()] ?: label
+    fun localizeUsageTag(label: String, english: Boolean): String = localizeUsageTag(label, LabelLanguage.of(english))
+
+    fun localizeUsageTag(label: String, language: LabelLanguage): String = when (language) {
+        LabelLanguage.ENGLISH -> label
+        LabelLanguage.POLISH -> USAGE_LABELS_PL[label.trim()] ?: label
+        LabelLanguage.JAPANESE -> USAGE_LABELS_JA[label.trim()] ?: label
     }
 }
