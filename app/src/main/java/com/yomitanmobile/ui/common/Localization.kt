@@ -6,14 +6,20 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import com.yomitanmobile.util.LocaleHelper
+import com.yomitanmobile.util.UiLanguage
 
 /**
- * Which of the two interface languages is showing.
+ * Which interface language is showing: Polish, English or Japanese.
  *
- * The app's strings are inline `tr(pl, en)` literals rather than resources (a
- * deliberate choice for two languages — see CLAUDE.md), and every screen used
- * to answer this question for itself: fifteen copies of the same two lines,
- * plus an `isEnglish` parameter threaded down through every private helper.
+ * The app's strings are inline `tr(pl, en, ja)` literals rather than resources
+ * (see CLAUDE.md). Provided once in MainActivity.
+ */
+val LocalUiLanguage = compositionLocalOf { UiLanguage.POLISH }
+
+/**
+ * True for English AND Japanese: what the code that knows only two languages
+ * reads, so a string with no Japanese falls back to English, not Polish.
+ * Provided together with [LocalUiLanguage].
  */
 val LocalIsEnglish = compositionLocalOf { false }
 
@@ -24,23 +30,29 @@ val LocalIsEnglish = compositionLocalOf { false }
  */
 val LocalStudyLanguage = compositionLocalOf { com.yomitanmobile.domain.model.AppLanguage.DEFAULT }
 
-/** Reads the device configuration; provide it once, at the top of the tree. */
+/** Reads the setting, or the device configuration; provide it once, at the top of the tree. */
 @Composable
 @ReadOnlyComposable
-fun isEnglishUi(): Boolean = LocaleHelper.isEnglish(LocalConfiguration.current)
+fun uiLanguage(): UiLanguage = LocaleHelper.language(LocalConfiguration.current)
 
-/** The Polish string or the English one, whichever the interface is set to. */
+/** The string in the interface language; a missing Japanese one falls back to English. */
 @Composable
 @ReadOnlyComposable
-fun tr(pl: String, en: String): String = if (LocalIsEnglish.current) en else pl
+fun tr(pl: String, en: String, ja: String? = null): String = pick(LocalUiLanguage.current, pl, en, ja)
 
-/**
- * The same thing as a value, for the many call sites that are not composable:
- * a toast inside a click handler, a label built in a `collect` block. Screens
- * hold it as `val tr = rememberTr()` and call `tr(...)` exactly as before.
- */
+fun pick(language: UiLanguage, pl: String, en: String, ja: String?): String = when (language) {
+    UiLanguage.POLISH -> pl
+    UiLanguage.ENGLISH -> en
+    UiLanguage.JAPANESE -> ja ?: en
+}
+
+/** [tr] as a value, for call sites that are not composable (click handlers, collect blocks). */
+class Tr(val language: UiLanguage) {
+    operator fun invoke(pl: String, en: String, ja: String? = null): String = pick(language, pl, en, ja)
+}
+
 @Composable
-fun rememberTr(): (String, String) -> String {
-    val english = LocalIsEnglish.current
-    return remember(english) { { pl, en -> if (english) en else pl } }
+fun rememberTr(): Tr {
+    val language = LocalUiLanguage.current
+    return remember(language) { Tr(language) }
 }

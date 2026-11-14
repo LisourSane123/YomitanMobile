@@ -100,7 +100,7 @@ import com.yomitanmobile.ui.common.SettingsDivider
 import com.yomitanmobile.ui.common.SettingsRow
 import com.yomitanmobile.ui.common.SettingsSectionHeader
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
@@ -1682,9 +1682,10 @@ fun SettingsScreen(
                                 )
                                 Text(
                                     when (currentLanguage) {
-                                        "pl" -> tr("Polski", "Polish")
+                                        "pl" -> "Polski"
                                         "en" -> "English"
-                                        else -> tr("Systemowy", "System")
+                                        "ja" -> "日本語"
+                                        else -> tr("Systemowy", "System", "システム")
                                     },
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1692,11 +1693,14 @@ fun SettingsScreen(
                             }
                         }
                         Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Each language named in itself, so whoever cannot read
+                            // the current one can still find their own.
                             listOf(
-                                "system" to tr("Systemowy", "System"),
-                                "pl" to tr("Polski", "Polish"),
-                                "en" to "English"
+                                "system" to tr("Systemowy", "System", "システム"),
+                                "pl" to "Polski",
+                                "en" to "English",
+                                "ja" to "日本語"
                             ).forEach { (code, label) ->
                                 FilterChip(
                                     selected = currentLanguage == code,
@@ -1710,6 +1714,8 @@ fun SettingsScreen(
                                             langPrefs.edit()
                                                 .putString(MainActivity.LANG_PREFS_KEY, code)
                                                 .apply()
+                                            com.yomitanmobile.util.LocaleHelper.chosen =
+                                                com.yomitanmobile.util.UiLanguage.fromStorage(code)
                                             (context as? Activity)?.recreate()
                                         }
                                     },

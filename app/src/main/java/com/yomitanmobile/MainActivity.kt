@@ -24,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.yomitanmobile.ui.common.LocalIsEnglish
-import com.yomitanmobile.ui.common.isEnglishUi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
@@ -66,8 +65,8 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         // Language (stored in SharedPreferences for sync read in attachBaseContext)
-        const val LANG_PREFS_NAME = "lang_prefs"
-        const val LANG_PREFS_KEY = "app_language" // "system" | "pl" | "en"
+        const val LANG_PREFS_NAME = com.yomitanmobile.util.LocaleHelper.PREFS_NAME
+        const val LANG_PREFS_KEY = com.yomitanmobile.util.LocaleHelper.PREFS_KEY // "system" | "pl" | "en" | "ja"
     }
 
     override fun attachBaseContext(newBase: Context) {
@@ -76,6 +75,7 @@ class MainActivity : ComponentActivity() {
         val locale = when (language) {
             "pl" -> java.util.Locale("pl")
             "en" -> java.util.Locale("en")
+            "ja" -> java.util.Locale("ja")
             else -> java.util.Locale.getDefault()
         }
         val config = android.content.res.Configuration(newBase.resources.configuration)
@@ -140,8 +140,10 @@ class MainActivity : ComponentActivity() {
                 // Every `tr(pl, en)` literal in the app reads this. Nothing
                 // provided it, so the default (`false`) stood everywhere and an
                 // English device saw a Polish interface.
+                val ui = com.yomitanmobile.ui.common.uiLanguage()
                 CompositionLocalProvider(
-                    LocalIsEnglish provides isEnglishUi(),
+                    com.yomitanmobile.ui.common.LocalUiLanguage provides ui,
+                    LocalIsEnglish provides (ui != com.yomitanmobile.util.UiLanguage.POLISH),
                     com.yomitanmobile.ui.common.LocalStudyLanguage provides languageSettings.current
                 ) {
                     Surface(modifier = Modifier.fillMaxSize()) {

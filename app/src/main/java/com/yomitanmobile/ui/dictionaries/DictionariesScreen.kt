@@ -202,7 +202,7 @@ private fun DictionaryRow(
 
 private val LANGUAGE_ORDER = listOf("ja", "en", "es")
 
-private fun languageName(code: String, tr: (String, String) -> String) = when (code) {
+private fun languageName(code: String, tr: com.yomitanmobile.ui.common.Tr) = when (code) {
     "ja" -> tr("Japoński", "Japanese")
     "en" -> tr("Angielski", "English")
     "es" -> tr("Hiszpański", "Spanish")

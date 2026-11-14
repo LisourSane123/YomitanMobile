@@ -31,6 +31,7 @@ class YomitanMobileApp : Application() {
         super.onCreate()
         installLastResortHandler()
         languageSettings.loadBlocking()
+        com.yomitanmobile.util.LocaleHelper.loadBlocking(this)
         frequencyRecomputer.ensureStorageCurrent()
     }
 
