@@ -108,7 +108,7 @@ android {
                     "book.paths", "dict.zip", "freq.zip", "freq.format", "scan.language", "out.dir",
                     "tier", "minOccurrences", "assumeKnownTopRank", "maxWords", "anki.fields",
                     "skipPlainKana", "skipKatakana",
-                    "cefr.dir", "ll.live", "ll.tsv", "freq.src.dir", "ka.dir", "voicevox.root", "voicevox.onnxruntime"
+                    "cefr.dir", "delete.zip", "ll.live", "ll.tsv", "freq.src.dir", "ka.dir", "voicevox.root", "voicevox.onnxruntime"
                 )) {
                     System.getProperty(key)?.let { value -> it.systemProperty(key, value) }
                 }
