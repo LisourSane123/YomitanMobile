@@ -120,6 +120,18 @@ object WordFilterRules {
         entry.usageTags.any { chip -> chip.split(',', ';').any { it.normalizeTag() in KANA_TAGS } } ||
             entry.posTokens().any { it in KANA_TAGS }
 
+    /**
+     * Jitendex/JMdict call the word onomatopoeic or mimetic (`on-mim`) — as a
+     * part-of-speech token or as a usage chip ("onomat.", "mimetic"). One of
+     * the two ways a word becomes an onomatopoeia card; the other is being in
+     * the surasura dictionary.
+     */
+    fun isOnomatopoeia(entry: MergedWordEntry): Boolean =
+        entry.usageTags.any { chip -> chip.split(',', ';').any { it.normalizeTag() in ONOMATOPOEIA_TAGS } } ||
+            entry.posTokens().any { it in ONOMATOPOEIA_TAGS }
+
+    private val ONOMATOPOEIA_TAGS = setOf("on-mim", "onomat.", "onomatopoeia", "mimetic", "onomatopoeic or mimetic word")
+
     fun isProperName(entry: MergedWordEntry): Boolean {
         // Name dictionaries tag EVERY sense; a normal word that merely also
         // exists as a surname keeps its regular part-of-speech tags too, so

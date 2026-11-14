@@ -1440,6 +1440,15 @@ class YomitanDictionaryParser @Inject constructor() {
     private fun walkForExamples(element: JsonElement, out: MutableList<ExamplePair>) {
         when (element) {
             is JsonObject -> {
+                if (isExampleList(element)) {
+                    // surasura's `ul data-content="examples"`: one Japanese
+                    // sentence per item, no translation.
+                    (element["content"] as? JsonArray ?: JsonArray(listOf(element["content"] ?: return)))
+                        .map { extractTextFromContent(it).trim() }
+                        .filter { it.isNotEmpty() }
+                        .forEach { out.add(ExamplePair(jp = it, en = "")) }
+                    return
+                }
                 if (isExampleContainer(element)) {
                     extractJpEnPair(element)?.let { out.add(it) }
                     // Don't descend further into a matched container — the
@@ -1453,7 +1462,12 @@ class YomitanDictionaryParser @Inject constructor() {
         }
     }
 
+    /** A list of bare example sentences (surasura) rather than one JP/EN pair. */
+    private fun isExampleList(obj: JsonObject): Boolean =
+        ((obj["data"] as? JsonObject)?.get("content") as? JsonPrimitive)?.contentOrNull?.trim()?.lowercase() == "examples"
+
     private fun isExampleContainer(obj: JsonObject): Boolean {
+        if (isExampleList(obj)) return true
         return try {
             val data = obj["data"] as? JsonObject ?: return false
             val content = data["content"]?.jsonPrimitive?.contentOrNull ?: return false

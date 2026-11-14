@@ -1,6 +1,7 @@
 package com.yomitanmobile.kindle
 
 import com.yomitanmobile.data.anki.CardBuilder
+import com.yomitanmobile.data.anki.OnomatopoeiaCard
 import com.yomitanmobile.data.anki.RefreshMerge
 import com.yomitanmobile.data.audio.KanjiAlive
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
@@ -51,7 +52,8 @@ class Maintenance(private val config: Config, private val out: Reporter) {
             val fields = info.getJSONObject("fields")
             fun field(name: String) = fields.optJSONObject(name)?.optString("value").orEmpty()
             // Front carries the random-font span; the word is its text.
-            Triple(info.getLong("noteId"), plain(field("Front")), plain(field("Reading")))
+            // An onomatopoeia card has no Front; its word is in Word.
+            Triple(info.getLong("noteId"), plain(field("Front")).ifEmpty { plain(field("Word")) }, plain(field("Reading")))
         }
         val pitch = Dictionary.loadPitch(YomitanDictionaryParser(), config.pitch)
         val audio = AudioMaker(config, ::log).use { maker ->
@@ -89,7 +91,8 @@ class Maintenance(private val config: Config, private val out: Reporter) {
         config.problems().firstOrNull()?.let { return Outcome(true, it) }
         if (config.syncAnkiWeb && !dryRun) anki.sync()
 
-        val ids = anki.call("findNotes", JSONObject().put("query", "\"note:${profile.modelName}\"")) as JSONArray
+        val query = "\"note:${profile.modelName}\" OR \"note:${OnomatopoeiaCard.MODEL_NAME}\""
+        val ids = anki.call("findNotes", JSONObject().put("query", query)) as JSONArray
         val notes = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).flatMap { chunk ->
             val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk))) as JSONArray
             (0 until infos.length()).map { i ->
@@ -102,11 +105,14 @@ class Maintenance(private val config: Config, private val out: Reporter) {
                 info.getLong("noteId") to ordered
             }
         }
-        log("notes: ${notes.size} of ${profile.modelName}")
+        log("notes: ${notes.size} of ${profile.modelName} and ${OnomatopoeiaCard.MODEL_NAME}")
+        // The two note types are told apart by their fields: only the onomatopoeia card has Word.
+        fun isOnomatopoeia(fields: Map<String, String>) = "Word" in fields && "Front" !in fields
+        fun wordOf(fields: Map<String, String>) = plain(fields[if (isOnomatopoeia(fields)) "Word" else "Front"].orEmpty())
 
         val parser = YomitanDictionaryParser()
         val dictionary = Dictionary.load(parser, config)
-        val words = notes.map { (_, f) -> plain(f["Front"].orEmpty()) }.filter { it.isNotEmpty() }.toSet()
+        val words = notes.map { (_, f) -> wordOf(f) }.filter { it.isNotEmpty() }.toSet()
         val entries = dictionary.collect(words, emptySet()).groupBy { it.expression to it.reading }
         val style = phoneStyle(config, anki, ::log).copy(showFrontContextSentence = false)
         val builder = CardBuilder(profile, config.englishLabels)
@@ -119,7 +125,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
             val changed get() = after.filter { (k, v) -> before[k] != v }.keys
         }
         val plans = notes.map { (id, current) ->
-            val word = plain(current["Front"].orEmpty())
+            val word = wordOf(current)
             val reading = plain(current["Reading"].orEmpty())
             if (word in excluded) return@map Plan(id, word, reading, "EXCLUDED", current, current)
             val found = entries[word to reading] ?: if (reading.isEmpty()) {
@@ -130,7 +136,12 @@ class Maintenance(private val config: Config, private val out: Reporter) {
             val kanjiData = merged.primaryExpression.filter(JapaneseTokenizer::isKanji).map(Char::toString).distinct().mapNotNull { kanji[it] }
             val font = style.randomFonts.takeIf { style.randomFontsEnabled && it.isNotEmpty() }?.random()
             val rebuilt = profile.fieldNames.zip(builder.buildFields(merged.toWordEntry(), style, kanjiData, randomFont = font)).toMap()
-            Plan(id, word, reading, "FOUND", current, RefreshMerge.merge(current, rebuilt), merged.pitchAccent)
+            val after = if (isOnomatopoeia(current)) {
+                RefreshMerge.merge(current, OnomatopoeiaCard.fields(rebuilt, word, "", ""), OnomatopoeiaCard.OWNED_BY_NOTE)
+            } else {
+                RefreshMerge.merge(current, rebuilt)
+            }
+            Plan(id, word, reading, "FOUND", current, after, merged.pitchAccent)
         }
 
         // Audio only where a card has none: a recording already on a card is
@@ -215,19 +226,41 @@ class Maintenance(private val config: Config, private val out: Reporter) {
     fun restyle(dryRun: Boolean): Outcome {
         start()
         pullPhoneSettings(config, ::log)
-        val model = profile.modelName
         val (css, front, back) = CardBuilder(profile, config.englishLabels).packageStyling(phoneStyle(config, anki, ::log))
+        val models = (anki.call("modelNames") as JSONArray).let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
+        // The onomatopoeia card wears the vocabulary card's look plus its own rules.
+        val targets = buildList {
+            add(Triple(profile.modelName, "", Triple(css, front, back)))
+            if (OnomatopoeiaCard.MODEL_NAME in models) add(Triple(OnomatopoeiaCard.MODEL_NAME, "onomatopoeia-", OnomatopoeiaCard.styling(css)))
+        }
+        for ((model, prefix, styling) in targets) {
+            if (!restyleModel(model, prefix, styling, dryRun)) {
+                return Outcome(true, tr("Nie wykonano: zapis wyglądu $model nie zgadza się z odczytem.", "Not done: the written styling of $model reads back different."))
+            }
+        }
+        if (dryRun) return Outcome(false, tr("Podgląd wyglądu gotowy: ${outDir.path}/restyle-*", "Restyle preview written: ${outDir.path}/restyle-*"))
+        val reordered = reorderConfig(Platform.autoReorderAddon())?.let { anki.reorder(it) } ?: -1
+        val syncedAfter = !config.syncAnkiWeb || sync()
+        return Outcome(false, tr(
+            "Wykonano: nowy wygląd fiszek; przestawiono ${maxOf(reordered, 0)} nowych kart (AutoReorder).",
+            "Done: new card design; ${maxOf(reordered, 0)} new cards reordered (AutoReorder)."
+        ) + if (syncedAfter) "" else syncWarning)
+    }
+
+    /** One note type's CSS and single template; false when the write reads back different. */
+    private fun restyleModel(model: String, prefix: String, styling: Triple<String, String, String>, dryRun: Boolean): Boolean {
+        val (css, front, back) = styling
         val currentCss = (anki.call("modelStyling", JSONObject().put("modelName", model)) as JSONObject).optString("css")
         val templates = anki.call("modelTemplates", JSONObject().put("modelName", model)) as JSONObject
         check(templates.length() == 1) { "$model has ${templates.length()} templates, expected one" }
         val cardName = templates.keys().next()
         val current = templates.getJSONObject(cardName)
-        File(outDir, "restyle-current.css").writeText(currentCss)
-        File(outDir, "restyle-current-front.html").writeText(current.optString("Front"))
-        File(outDir, "restyle-current-back.html").writeText(current.optString("Back"))
-        File(outDir, "restyle-new.css").writeText(css)
-        File(outDir, "restyle-new-front.html").writeText(front)
-        File(outDir, "restyle-new-back.html").writeText(back)
+        File(outDir, "restyle-${prefix}current.css").writeText(currentCss)
+        File(outDir, "restyle-${prefix}current-front.html").writeText(current.optString("Front"))
+        File(outDir, "restyle-${prefix}current-back.html").writeText(current.optString("Back"))
+        File(outDir, "restyle-${prefix}new.css").writeText(css)
+        File(outDir, "restyle-${prefix}new-front.html").writeText(front)
+        File(outDir, "restyle-${prefix}new-back.html").writeText(back)
 
         // A template naming a field the type lacks prints "{{Field}}" on the card.
         val fields = (anki.call("modelFieldNames", JSONObject().put("modelName", model)) as JSONArray)
@@ -236,7 +269,7 @@ class Maintenance(private val config: Config, private val out: Reporter) {
             .filter { it.isNotEmpty() && it !in SPECIAL_FIELDS }.toSet()
         val unknown = referenced - fields
         check(unknown.isEmpty()) { "templates name fields $model does not have: $unknown" }
-        if (dryRun) return Outcome(false, tr("Podgląd wyglądu gotowy: ${outDir.path}/restyle-*", "Restyle preview written: ${outDir.path}/restyle-*"))
+        if (dryRun) return true
 
         anki.call("updateModelStyling", JSONObject().put("model", JSONObject().put("name", model).put("css", css)))
         anki.call("updateModelTemplates", JSONObject().put("model", JSONObject().put("name", model)
@@ -244,14 +277,8 @@ class Maintenance(private val config: Config, private val out: Reporter) {
         val nowCss = (anki.call("modelStyling", JSONObject().put("modelName", model)) as JSONObject).optString("css")
         val now = (anki.call("modelTemplates", JSONObject().put("modelName", model)) as JSONObject).getJSONObject(cardName)
         val verified = nowCss == css && now.optString("Front") == front && now.optString("Back") == back
-        log("written, read back ${if (verified) "equal" else "DIFFERENT"}")
-        if (!verified) return Outcome(true, tr("Nie wykonano: zapis wyglądu nie zgadza się z odczytem.", "Not done: the written styling reads back different."))
-        val reordered = reorderConfig(Platform.autoReorderAddon())?.let { anki.reorder(it) } ?: -1
-        val syncedAfter = !config.syncAnkiWeb || sync()
-        return Outcome(false, tr(
-            "Wykonano: nowy wygląd fiszek; przestawiono ${maxOf(reordered, 0)} nowych kart (AutoReorder).",
-            "Done: new card design; ${maxOf(reordered, 0)} new cards reordered (AutoReorder)."
-        ) + if (syncedAfter) "" else syncWarning)
+        log("$model written, read back ${if (verified) "equal" else "DIFFERENT"}")
+        return verified
     }
 
     /** Read-only: which notes matching an Anki search hold a word some OTHER note holds too. */

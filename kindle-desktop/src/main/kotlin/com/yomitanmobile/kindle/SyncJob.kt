@@ -2,6 +2,7 @@ package com.yomitanmobile.kindle
 
 import com.yomitanmobile.data.anki.CardBuilder
 import com.yomitanmobile.data.anki.MonolingualChain
+import com.yomitanmobile.data.anki.OnomatopoeiaCard
 import com.yomitanmobile.data.anki.WordForms
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.domain.model.CardProfile
@@ -187,7 +188,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         }
     }
 
-    private data class Note(val word: String, val fields: Map<String, String>, val tags: List<String>, val recording: File?)
+    private data class Note(val word: String, val fields: Map<String, String>, val tags: List<String>, val recording: File?, val model: String)
 
     private class RunResult(
         val lookups: Int, val new: Int, val added: Int, val inAnki: Int, val notFound: Int,
@@ -326,29 +327,64 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         val audio = if (dryRun) emptyMap() else AudioMaker(config, ::log).use { maker ->
             maker.speak(toAdd.values.map { (e, _) -> Spoken(e.primaryExpression, e.reading, e.pitchAccent) }, outDir)
         }
-        // The Meaning from the JP-JP chain where it has the word, English otherwise.
-        val chain = monolingualChain(parser, config, ::log)
-        if (chain.isNotEmpty() && toAdd.isNotEmpty()) progress(tr("Szukam definicji w słownikach JP-JP…", "Looking up JP-JP definitions…"))
-        val words = MonolingualChain.apply(
-            toAdd.values.map { (entry, lookup) ->
-                entry.toWordEntry().copy(exampleSentence = sentenceFor(lookup, entry), exampleSentenceTranslation = "")
-            },
-            chain.map { it.title },
-            lookup = { title, expressions -> chain.first { it.title == title }.lookup(expressions) },
-            onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") }
-        )
-        log("meaning: ${words.count { it.meaningSource.isNotEmpty() }} of ${words.size} from JP-JP " +
-            words.groupingBy { it.meaningSource.ifEmpty { "EN" } }.eachCount())
-        val notes = toAdd.values.zip(words).map { (pair, word) ->
+        // ---- which words are onomatopoeia cards --------------------------
+        // An onomatopoeia (Jitendex on-mim, or a surasura headword) is learnt
+        // in its sentence: it gets an onomatopoeia card when the sentence it
+        // was looked up in really holds it, a vocabulary card otherwise.
+        val surasura = config.onomatopoeia?.takeIf { it.isFile }?.let { MonolingualDictionary(parser, it) }
+        val surasuraWords = surasura?.headwords().orEmpty()
+        val sentenceOf = HashMap<String, String>()
+        for ((key, pair) in toAdd) {
             val (entry, lookup) = pair
+            val isOnomatopoeia = WordFilterRules.isOnomatopoeia(entry) ||
+                entry.primaryExpression in surasuraWords || entry.reading in surasuraWords
+            if (!isOnomatopoeia) continue
+            OnomatopoeiaCard.underline(sentenceFor(lookup, entry), onomatopoeiaTokens(entry, lookup))?.let { sentenceOf[key] = it }
+                ?: log("onomatopoeia without a usable sentence, vocabulary card: ${entry.primaryExpression}")
+        }
+        log("onomatopoeia cards: ${sentenceOf.size} (${sentenceOf.keys.joinToString(", ") { it.substringBefore('|') }})")
+
+        // ---- meanings: the JP-JP chain where it has the word, English otherwise
+        // Onomatopoeia ask surasura first and skip the encyclopedia.
+        val chain = monolingualChain(parser, config, ::log)
+        val onomatopoeiaChain = listOfNotNull(surasura) + chain.filterNot { it.isEncyclopedia }
+        if (chain.isNotEmpty() && toAdd.isNotEmpty()) progress(tr("Szukam definicji w słownikach JP-JP…", "Looking up JP-JP definitions…"))
+        val baseWords = toAdd.mapValues { (_, pair) ->
+            val (entry, lookup) = pair
+            entry.toWordEntry().copy(exampleSentence = sentenceFor(lookup, entry), exampleSentenceTranslation = "")
+        }
+        suspend fun meanings(keys: List<String>, dictionaries: List<MonolingualDictionary>): Map<String, WordEntry> =
+            keys.zip(MonolingualChain.apply(
+                keys.map { baseWords.getValue(it) },
+                dictionaries.map { it.title },
+                lookup = { title, expressions -> dictionaries.first { it.title == title }.lookup(expressions) },
+                onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") }
+            )).toMap()
+        val words = meanings(toAdd.keys.filter { it !in sentenceOf }, chain) +
+            meanings(toAdd.keys.filter { it in sentenceOf }, onomatopoeiaChain)
+        log("meaning: ${words.values.count { it.meaningSource.isNotEmpty() }} of ${words.size} from JP-JP " +
+            words.values.groupingBy { it.meaningSource.ifEmpty { "EN" } }.eachCount())
+
+        val notes = toAdd.map { (key, pair) ->
+            val (entry, lookup) = pair
+            val word = words.getValue(key)
             val kanjiData = entry.primaryExpression.filter(JapaneseTokenizer::isKanji).map(Char::toString).distinct().mapNotNull { kanji[it] }
             val font = style.randomFonts.takeIf { style.randomFontsEnabled && it.isNotEmpty() }?.random()
-            val fields = profile.fieldNames.zip(builder.buildFields(word, style, kanjiData, randomFont = font)).toMap().toMutableMap()
+            val vocabulary = profile.fieldNames.zip(builder.buildFields(word, style, kanjiData, randomFont = font)).toMap().toMutableMap()
             val recording = audio[entry.primaryExpression to entry.reading]
-            if (recording != null) fields["Audio"] = "[sound:${recording.name}]"
-            val tags = listOf("yomitan-mobile", "from_kindle", slug(lookup.book), if (word.meaningSource.isNotEmpty()) J_J_TAG else "")
-                .filter { it.isNotEmpty() }
-            Note(entry.primaryExpression, fields, tags, recording)
+            if (recording != null) vocabulary["Audio"] = "[sound:${recording.name}]"
+            val sentence = sentenceOf[key]
+            val tags = listOf(
+                "yomitan-mobile", "from_kindle", slug(lookup.book),
+                if (sentence != null) OnomatopoeiaCard.TAG else "",
+                if (word.meaningSource.isNotEmpty()) J_J_TAG else ""
+            ).filter { it.isNotEmpty() }
+            if (sentence != null) {
+                Note(entry.primaryExpression, OnomatopoeiaCard.fields(vocabulary, entry.primaryExpression, sentence, lookup.book),
+                    tags, recording, OnomatopoeiaCard.MODEL_NAME)
+            } else {
+                Note(entry.primaryExpression, vocabulary, tags, recording, profile.modelName)
+            }
         }
 
         var added = 0
@@ -356,7 +392,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         // The cards a dry run would have written, field by field: what "preview"
         // means to someone deciding whether to let the real run go ahead.
         File(outDir, "cards-preview.json").writeText(org.json.JSONArray().apply {
-            for (note in notes) put(org.json.JSONObject().put("word", note.word).put("tags", org.json.JSONArray(note.tags))
+            for (note in notes) put(org.json.JSONObject().put("word", note.word).put("model", note.model).put("tags", org.json.JSONArray(note.tags))
                 .put("fields", org.json.JSONObject(note.fields)))
         }.toString(2))
         if (dryRun || notes.isEmpty()) {
@@ -364,11 +400,15 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         } else {
             progress(tr("Dodaję ${fiszki(notes.size)} do talii $deck…", "Adding ${notes.size} cards to deck $deck…"))
             val (css, front, back) = builder.packageStyling(style)
-            val model = anki.ensureModel(profile, css, front, back)
+            anki.ensureModel(profile, css, front, back)
+            if (notes.any { it.model == OnomatopoeiaCard.MODEL_NAME }) {
+                val (oCss, oFront, oBack) = OnomatopoeiaCard.styling(css)
+                anki.ensureModel(OnomatopoeiaCard.MODEL_NAME, OnomatopoeiaCard.FIELD_NAMES, oCss, oFront, oBack)
+            }
             anki.ensureDeck(deck)
             for (note in notes) {
                 note.recording?.let { anki.storeMedia(it) }
-                val error = anki.addNote(deck, model, note.fields, note.tags)
+                val error = anki.addNote(deck, note.model, note.fields, note.tags)
                 if (error == null) {
                     added++
                     addedNotes += note
@@ -376,7 +416,7 @@ class SyncJob(private val config: Config, private val out: Reporter) {
                     log("not added: ${note.word} — $error")
                 }
             }
-            log("added $added of ${notes.size} cards to $deck (note type $model)")
+            log("added $added of ${notes.size} cards to $deck (${addedNotes.count { it.model == OnomatopoeiaCard.MODEL_NAME }} onomatopoeia)")
         }
 
         // ---- AutoReorder's own pass, then the second sync ----------------
@@ -442,6 +482,15 @@ class SyncJob(private val config: Config, private val out: Reporter) {
      */
     private fun isPrefixOf(entry: MergedWordEntry, word: String): Boolean =
         (listOf(entry.primaryExpression) + entry.alternativeExpressions).any { it.length >= 2 && word.startsWith(it) }
+
+    /**
+     * What may be underlined: the selection as the reader made it (minus a
+     * trailing と, which is the sentence's), the headword, its reading, its
+     * other spellings.
+     */
+    private fun onomatopoeiaTokens(entry: MergedWordEntry, lookup: Lookup): List<String> =
+        listOf(lookup.word.removeSuffix("と").takeIf { it.length >= 2 } ?: lookup.word, entry.primaryExpression, entry.reading) +
+            entry.alternativeExpressions
 
     private fun slug(title: String): String =
         title.trim().replace(Regex("[\\s　]+"), "_").replace(Regex("[\"'`]"), "").take(60)

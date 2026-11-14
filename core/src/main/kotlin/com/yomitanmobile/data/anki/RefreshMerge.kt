@@ -44,7 +44,7 @@ object RefreshMerge {
      * only had the English gloss — the refresh does not ask the monolingual
      * dictionaries, so its English is not news, it is a step back.
      */
-    const val MEANING = "Meaning"
+    val MEANINGS = setOf("Meaning", "Definition")
 
     /**
      * The new value of every field of [current], by name.
@@ -53,14 +53,19 @@ object RefreshMerge {
      * receives one — and in [current]'s own order, which is the order a
      * provider or AnkiConnect write expects.
      */
-    fun merge(current: Map<String, String>, rebuilt: Map<String, String>): LinkedHashMap<String, String> {
+    fun merge(
+        current: Map<String, String>,
+        rebuilt: Map<String, String>,
+        /** The note type's own fields; the onomatopoeia card passes its own set. */
+        owned: Set<String> = OWNED_BY_NOTE
+    ): LinkedHashMap<String, String> {
         val out = LinkedHashMap<String, String>(current.size)
         for ((name, old) in current) {
             val fresh = rebuilt[name].orEmpty()
             out[name] = when {
-                name in OWNED_BY_NOTE -> if (old.isNotBlank()) old else fresh
+                name in owned -> if (old.isNotBlank()) old else fresh
                 hasUserWriting(old) -> old
-                name == MEANING && isJapaneseMeaning(old) && !isJapaneseMeaning(fresh) -> old
+                name in MEANINGS && isJapaneseMeaning(old) && !isJapaneseMeaning(fresh) -> old
                 name == FREQUENCY -> when {
                     fresh.isNotBlank() -> fresh
                     isPlainRank(old) -> old

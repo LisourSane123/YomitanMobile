@@ -100,14 +100,16 @@ class AnkiConnect(private val endpoint: String) {
      * used as it is — its styling may be what the phone synced — and a
      * new one is only created when the collection has none.
      */
-    fun ensureModel(profile: CardProfile, css: String, front: String, back: String): String {
-        val name = profile.modelName
+    fun ensureModel(profile: CardProfile, css: String, front: String, back: String): String =
+        ensureModel(profile.modelName, profile.fieldNames.toList(), css, front, back)
+
+    fun ensureModel(name: String, fieldNames: List<String>, css: String, front: String, back: String): String {
         val names = call("modelNames") as JSONArray
         if ((0 until names.length()).any { names.getString(it) == name }) {
             val fields = call("modelFieldNames", JSONObject().put("modelName", name)) as JSONArray
             val have = (0 until fields.length()).map { fields.getString(it) }
-            check(have == profile.fieldNames.toList()) {
-                "note type $name has fields $have, expected ${profile.fieldNames.toList()}"
+            check(have == fieldNames) {
+                "note type $name has fields $have, expected $fieldNames"
             }
             return name
         }
@@ -115,7 +117,7 @@ class AnkiConnect(private val endpoint: String) {
             "createModel",
             JSONObject()
                 .put("modelName", name)
-                .put("inOrderFields", JSONArray(profile.fieldNames.toList()))
+                .put("inOrderFields", JSONArray(fieldNames))
                 .put("css", css)
                 .put(
                     "cardTemplates",

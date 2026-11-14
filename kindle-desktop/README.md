@@ -21,6 +21,13 @@ Plug the Kindle in, click **Sync from Kindle**. That's it.
    1–3*. Each word's meaning comes from the first one that has it, in the
    order the phone's own setting gives (from its backup's `settings.json`),
    English when none has it; such notes get the tag `J-J`, as on the phone.
+   *(optional)* **Onomatopoeia cards**: point *Settings → Onomatopoeia* at the
+   surasura dictionary. An onomatopoeia (ドキドキ, ぴくぴく — Jitendex's
+   `on-mim` or a surasura word) then becomes a note of its own type,
+   `Yomitan-Mobile-Onomatopoeia`: the book's sentence on the front with the
+   word underlined; on the back an empty box for your translation (edit the
+   note's `ContextTranslation` in Anki to fill it) and a Japanese definition.
+   Find them with `tag:onomatopoeia`.
 3. *(optional)* **Audio**: Kanji alive's native-speaker recordings
    (`--install-native-audio`, ~74 MB) and/or VOICEVOX installed with its own
    downloader. Without either, a word gets the system's own Japanese voice

@@ -28,6 +28,14 @@ class MonolingualDictionaryLiveTest {
         println("titles: ${chain.map { it.title }} in ${System.currentTimeMillis() - t} ms")
         for (w in out) println("${w.expression}\t[${w.meaningSource.ifEmpty { "EN" }}]\t${w.definitions.joinToString(" | ").take(400).replace("\n", "⏎")}")
         val ono = File(dir!!.parentFile, "[Monolingual Onomatopoeia] surasura.zip")
-        if (ono.isFile) println("surasura headwords: ${MonolingualDictionary(parser, ono).headwords().size}")
+        if (ono.isFile) {
+            val surasura = MonolingualDictionary(parser, ono)
+            println("surasura headwords: ${surasura.headwords().size}")
+            val onoChain = listOf(surasura) + chain.filterNot { it.isEncyclopedia }
+            val sound = listOf("どきどき", "ぴくぴく", "ゆっくり", "しっかり").map { WordEntry(expression = it, reading = it, definitions = listOf("EN")) }
+            for (w in MonolingualChain.apply(sound, onoChain.map { it.title }, lookup = { title, e -> onoChain.first { it.title == title }.lookup(e) })) {
+                println("ONO ${w.expression}\t[${w.meaningSource}]\t${w.definitions} ex=${w.examples}")
+            }
+        }
     }
 }

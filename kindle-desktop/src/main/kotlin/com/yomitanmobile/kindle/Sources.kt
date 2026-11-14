@@ -212,6 +212,14 @@ class MonolingualDictionary(private val parser: YomitanDictionaryParser, val zip
         }.getOrNull()?.takeIf { it.isNotBlank() } ?: zip.nameWithoutExtension
     }
 
+    /**
+     * Pixiv's encyclopedia (titled "Encyclopedia …" once cleaned). Left out of
+     * the onomatopoeia chain: for a sound word it answers with a title or a
+     * character as often as with the meaning.
+     */
+    val isEncyclopedia: Boolean
+        get() = listOf(title, zip.name).any { it.contains("pixiv", ignoreCase = true) || it.contains("encyclopedia", ignoreCase = true) }
+
     private val rows = HashMap<String, MutableList<WordEntry>>()
     private val asked = HashSet<String>()
 
