@@ -25,7 +25,8 @@ enum class CardMeaningLanguage(val storageValue: String) {
  *  1. The Meaning comes from the dictionaries in [chain], in that order: the
  *     first one that has the word supplies it, the next is asked only for the
  *     words the ones before it lacked. A definition that is only a pointer at
- *     another spelling (Pixiv's 「ドキドキ」の表記揺れ) counts as "lacks".
+ *     another spelling (Pixiv's 「ドキドキ」の表記揺れ) counts as "lacks", and
+ *     so does an article about a work ([isWorkEntry]).
  *  2. A word none of them has keeps its English definition — a monolingual
  *     dictionary covers far fewer headwords than JMdict, and an empty back is
  *     worse than an English one.
@@ -65,7 +66,7 @@ object MonolingualChain {
             val byExpression = HashMap<String, List<String>>(rows.size)
             for (row in rows) {
                 val definitions = row.definitions.filter { it.isNotBlank() }
-                if (definitions.isEmpty() || definitions.all(::isSpellingPointer)) continue
+                if (definitions.isEmpty() || definitions.all(::isSpellingPointer) || isWorkEntry(definitions)) continue
                 byPair.putIfAbsent(pairKey(row.expression, row.reading), definitions)
                 byExpression.putIfAbsent(row.expression.trim(), definitions)
             }
@@ -112,4 +113,19 @@ object MonolingualChain {
     private val SPELLING_POINTER = Regex("""^「[^」]+」の(表記揺れ|表記ゆれ|別表記)。?$""")
 
     fun isSpellingPointer(definition: String): Boolean = SPELLING_POINTER.matches(definition.trim())
+
+    /**
+     * An article about a work or something in one — a song, a film, a
+     * character — rather than about the word. Pixiv marks every such article
+     * with its work first (`«曲»`, `«ポケモン»`, `«艦これ»`: 116 714 of
+     * PixivLight's 709 197), and the same word nearly always has an ordinary
+     * article beside it: フラストレーション is 欲求不満 in one and 彩音's
+     * song in the other, and which came first in the zip decided the card.
+     * Skipping the marked ones lets the ordinary article answer, or the next
+     * dictionary when there is none (チョップ is only a Precure character).
+     */
+    fun isWorkEntry(definitions: List<String>): Boolean =
+        definitions.firstOrNull { it.isNotBlank() }?.trim()?.let { WORK_MARKER.containsMatchIn(it) } == true
+
+    private val WORK_MARKER = Regex("""^«[^»]+»""")
 }

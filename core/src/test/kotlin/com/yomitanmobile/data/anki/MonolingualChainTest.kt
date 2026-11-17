@@ -46,6 +46,29 @@ class MonolingualChainTest {
     }
 
     @Test
+    fun `an article about a work is skipped for the word's own article, or the next dictionary`() {
+        val pixivWithWorks = listOf(
+            word("フラストレーション", "フラストレーション", "«曲»", "フラストレーションとは彩音の楽曲の一つ"),
+            word("フラストレーション", "フラストレーションすとれーしょん", "現在直面している出来事などに対して欲求不満が生じる事。"),
+            word("チョップ", "チョップ", "«プリキュア»", "チョップとは、映画版オリジナルキャラクターである。")
+        )
+        val out = runBlocking {
+            MonolingualChain.apply(
+                listOf(word("フラストレーション", "フラストレーション", "frustration"), word("チョップ", "チョップ", "chop")),
+                listOf("Pixiv", "旺文社"),
+                lookup = { name, expressions ->
+                    if (name == "Pixiv") pixivWithWorks.filter { it.expression in expressions }
+                    else listOf(word("チョップ", "チョップ", "手刀で打つこと。")).filter { it.expression in expressions }
+                }
+            )
+        }
+        assertEquals(listOf("現在直面している出来事などに対して欲求不満が生じる事。"), out[0].definitions)
+        assertEquals("旺文社", out[1].meaningSource)
+        assertTrue(MonolingualChain.isWorkEntry(listOf("«曲»", "x")))
+        assertFalse(MonolingualChain.isWorkEntry(listOf("猫とは«ネコ科»の動物。")))
+    }
+
+    @Test
     fun `a word no dictionary has keeps English and no source`() {
         val out = run(listOf(word("犬", "いぬ", "dog")))
         assertEquals(listOf("dog"), out[0].definitions)
