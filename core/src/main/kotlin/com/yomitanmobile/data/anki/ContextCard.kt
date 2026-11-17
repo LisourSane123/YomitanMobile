@@ -23,6 +23,15 @@ object ContextCard {
 
     const val MODEL_NAME = "Yomitan-Mobile-Context"
 
+    /**
+     * Its name for a few hours on 2026-11-14 — one real sync created it under
+     * this name before the rename. Searched together with [MODEL_NAME] until
+     * that note type is renamed in Anki.
+     */
+    const val LEGACY_MODEL_NAME = "Yomitan-Mobile-Onomatopoeia"
+
+    val MODEL_NAMES = listOf(MODEL_NAME, LEGACY_MODEL_NAME)
+
     /** The tag on every onomatopoeia note, so `tag:onomatopoeia` finds them. */
     const val ONOMATOPOEIA_TAG = "onomatopoeia"
 

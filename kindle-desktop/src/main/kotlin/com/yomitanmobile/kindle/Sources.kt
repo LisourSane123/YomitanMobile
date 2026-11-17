@@ -258,6 +258,7 @@ class MonolingualDictionary(private val parser: YomitanDictionaryParser, val zip
 fun monolingualChain(parser: YomitanDictionaryParser, config: Config, log: (String) -> Unit): List<MonolingualDictionary> {
     val dictionaries = config.monolingual.filter { it.isFile }.map { MonolingualDictionary(parser, it) }
     config.monolingual.filterNot { it.isFile }.forEach { log("monolingual: ${it.path} not found, skipped") }
+    if (config.monolingual.isEmpty()) log("monolingual: none configured, and none of ${Config.DEFAULT_MONOLINGUAL} is in ~/yomitan-dicts")
     val phoneOrder = config.settingsJson.takeIf { it.isFile }?.let { file ->
         runCatching {
             MonolingualChain.parse(preferencesFromBackup(file.readText())[PreferenceKeys.CARD_MONOLINGUAL_DICTIONARY])

@@ -19,7 +19,9 @@ private const val USAGE = """kindle-sync — Kindle Vocabulary Builder → Anki
   --pull-settings         copy the phone's card style over adb and exit
   --refresh-audio         re-record the Audio field of every from_kindle card
   --refresh-cards         bring every Yomitan-Mobile-v8 note up to date (with --dry-run: report only)
-  --exclude WORD          with --refresh-cards: leave this note alone (repeatable)
+  --convert-jj            give unlearned cards (never reviewed, not suspended) a JP-JP meaning (with --dry-run: report only)
+  --scope SEARCH          with --convert-jj: only notes matching this Anki search, e.g. "tag:from_kindle added:4"
+  --exclude WORD          with --refresh-cards / --convert-jj: leave this note alone (repeatable)
   --restyle               rewrite the note type's CSS and templates (with --dry-run: files only)
   --install-native-audio  download Kanji alive's native-speaker recordings (~74 MB)
   --check-duplicates Q    which notes matching Anki search Q hold a word another note holds
@@ -50,6 +52,7 @@ private fun commandLine(config: Config, args: List<String>): Int {
     var command = "sync"
     var quiet = false
     var query = ""
+    var scope = ""
     val excluded = LinkedHashSet<String>()
     var i = 0
     fun value(): String = args.getOrNull(++i) ?: run { System.err.println("${args[i - 1]} needs a value"); exitProcess(2) }
@@ -62,9 +65,10 @@ private fun commandLine(config: Config, args: List<String>): Int {
             "--vocab" -> options = options.copy(vocab = File(value()))
             "--no-sync" -> options = options.copy(sync = false)
             "--quiet" -> quiet = true
-            "--pull-settings", "--refresh-audio", "--refresh-cards", "--restyle", "--install-native-audio" -> command = a.removePrefix("--")
+            "--pull-settings", "--refresh-audio", "--refresh-cards", "--convert-jj", "--restyle", "--install-native-audio" -> command = a.removePrefix("--")
             "--check-duplicates" -> { command = "check-duplicates"; query = value() }
             "--exclude" -> excluded += value()
+            "--scope" -> scope = value()
             "-h", "--help" -> { println(USAGE + Config.FILE.path); return 0 }
             else -> { System.err.println("unknown option: $a\n\n$USAGE${Config.FILE.path}"); return 2 }
         }
@@ -97,6 +101,7 @@ private fun commandLine(config: Config, args: List<String>): Int {
                 }
                 "refresh-audio" -> maintenance.refreshAudio()
                 "refresh-cards" -> maintenance.refreshCards(options.dryRun, excluded)
+                "convert-jj" -> maintenance.convertToJapanese(options.dryRun, excluded, scope)
                 "restyle" -> maintenance.restyle(options.dryRun)
                 "install-native-audio" -> maintenance.installNativeAudio()
                 "check-duplicates" -> maintenance.checkDuplicates(query)

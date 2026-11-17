@@ -189,7 +189,9 @@ class SyncJob(private val config: Config, private val out: Reporter) {
 
     private class RunResult(
         val lookups: Int, val new: Int, val added: Int, val inAnki: Int, val notFound: Int,
-        val reordered: Int, val reorderCovers: String, val syncedAfter: Boolean, val duplicatesAfter: List<String>
+        val reordered: Int, val reorderCovers: String, val syncedAfter: Boolean, val duplicatesAfter: List<String>,
+        /** Cards were made and none got a JP-JP meaning, because no monolingual dictionary was found. */
+        val noJapaneseDictionaries: Boolean = false
     ) {
         fun message(deck: String, dryRun: Boolean): String {
             var m = when {
@@ -211,6 +213,15 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             if (reorderCovers == "false") m += tr(
                 " UWAGA: AutoReorder nie obejmuje talii $deck — nowe fiszki nie są ułożone wg częstości.",
                 " NOTE: AutoReorder does not cover deck $deck — the new cards are not in frequency order.", " 注意: AutoReorderはデッキ${deck}を対象にしていません — 新しいカードは頻度順に並んでいません。")
+            // Said in the result, not only in the log: a whole sync of English
+            // cards went by unnoticed once, because the dictionaries had not
+            // been copied where the settings point and the log was the only
+            // place that said so.
+            if (noJapaneseDictionaries) m += tr(
+                " UWAGA: nie znaleziono słowników JP-JP — znaczenia są po angielsku. Wskaż je w Ustawieniach (Słownik JP-JP 1–3).",
+                " NOTE: no JP-JP dictionaries were found — the meanings are in English. Point to them in Settings (JP-JP dictionary 1–3).",
+                " 注意: 国語辞典が見つからないため、意味は英語です。設定（国語辞典 1〜3）で指定してください。"
+            )
             if (!syncedAfter) m += tr(" UWAGA: synchronizacja po dodaniu nie przeszła — kliknij Sync w Anki.", " NOTE: the sync after adding failed — press Sync in Anki.", " 注意: 追加後の同期に失敗しました — AnkiでSyncを押してください。")
             return m
         }
@@ -447,7 +458,8 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         log("report: ${File(outDir, "kindle-sync.tsv").path}")
         return RunResult(
             lookups.size, notes.size, added, summary["IN_ANKI"] ?: 0, summary["NOT_IN_DICTIONARY"] ?: 0,
-            reordered, reorderCovers, syncedAfter, duplicatesAfter
+            reordered, reorderCovers, syncedAfter, duplicatesAfter,
+            noJapaneseDictionaries = notes.isNotEmpty() && chain.isEmpty()
         )
     }
 
