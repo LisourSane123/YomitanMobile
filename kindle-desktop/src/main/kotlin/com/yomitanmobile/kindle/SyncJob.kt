@@ -357,15 +357,16 @@ class SyncJob(private val config: Config, private val out: Reporter) {
             val (entry, lookup) = pair
             entry.toWordEntry().copy(exampleSentence = sentenceFor(lookup, entry), exampleSentenceTranslation = "")
         }
-        suspend fun meanings(keys: List<String>, dictionaries: List<MonolingualDictionary>): Map<String, WordEntry> =
+        suspend fun meanings(keys: List<String>, dictionaries: List<MonolingualDictionary>, fold: Boolean = false): Map<String, WordEntry> =
             keys.zip(MonolingualChain.apply(
                 keys.map { baseWords.getValue(it) },
                 dictionaries.map { it.title },
                 lookup = { title, expressions -> dictionaries.first { it.title == title }.lookup(expressions) },
-                onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") }
+                onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") },
+                foldKatakana = fold
             )).toMap()
         val words = meanings(toAdd.keys.filter { it !in sentenceOf }, chain) +
-            meanings(toAdd.keys.filter { it in sentenceOf }, onomatopoeiaChain)
+            meanings(toAdd.keys.filter { it in sentenceOf }, onomatopoeiaChain, fold = true)
         log("meaning: ${words.values.count { it.meaningSource.isNotEmpty() }} of ${words.size} from JP-JP " +
             words.values.groupingBy { it.meaningSource.ifEmpty { "EN" } }.eachCount())
 

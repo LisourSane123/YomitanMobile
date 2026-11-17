@@ -46,7 +46,14 @@ object MonolingualChain {
         entries: List<WordEntry>,
         chain: List<String>,
         lookup: suspend (dictionaryName: String, expressions: List<String>) -> List<WordEntry>,
-        onFailure: (dictionaryName: String, error: Throwable) -> Unit = { _, _ -> }
+        onFailure: (dictionaryName: String, error: Throwable) -> Unit = { _, _ -> },
+        /**
+         * Also ask for a katakana word in hiragana. For onomatopoeia: surasura
+         * and the 国語辞典 file ドキドキ under どきどき, and a book writing it
+         * in katakana is how five of thirteen sound words missed surasura.
+         * Off for vocabulary, where katakana is a loanword's own spelling.
+         */
+        foldKatakana: Boolean = false
     ): List<WordEntry> {
         if (entries.isEmpty() || chain.isEmpty()) return entries
         val found = arrayOfNulls<List<String>>(entries.size)
@@ -55,7 +62,10 @@ object MonolingualChain {
             val missing = entries.indices.filter { found[it] == null }
             if (missing.isEmpty()) break
             val rows = runCatching {
-                lookup(dictionaryName, missing.map { entries[it].expression.ifBlank { entries[it].reading } })
+                lookup(dictionaryName, missing.flatMap { i ->
+                    val expression = entries[i].expression.ifBlank { entries[i].reading }
+                    if (foldKatakana) listOf(expression, toHiragana(expression)).distinct() else listOf(expression)
+                })
             }.onFailure { onFailure(dictionaryName, it) }.getOrNull() ?: continue
 
             // Both the exact (expression, reading) pair and the bare expression:
@@ -75,6 +85,7 @@ object MonolingualChain {
                 val expression = entry.expression.ifBlank { entry.reading }
                 found[i] = byPair[pairKey(expression, entry.reading)]
                     ?: byExpression[expression.trim()]
+                    ?: (if (foldKatakana) byExpression[toHiragana(expression).trim()] else null)
                     ?: continue
                 source[i] = dictionaryName
             }
@@ -87,6 +98,11 @@ object MonolingualChain {
                 examples = entry.examples.map { it.copy(en = "") }
             )
         }
+    }
+
+    /** Katakana folded onto hiragana, ー and anything else left as it is. */
+    fun toHiragana(text: String): String = buildString(text.length) {
+        for (c in text) append(if (c in 'ァ'..'ヶ') c - 0x60 else c)
     }
 
     private fun pairKey(expression: String, reading: String): String {
@@ -106,13 +122,45 @@ object MonolingualChain {
         names.map { it.trim() }.filter { it.isNotEmpty() }.distinct().joinToString("\n")
 
     /**
-     * "This is another spelling of X" and nothing more. Pixiv files 18 555 of
-     * its 724 000 articles that way (どきどき → 「ドキドキ」の表記揺れ); on a
-     * card it says nothing about the word, so the next dictionary is asked.
+     * A definition that only points somewhere else, and so says nothing on a
+     * card: the next dictionary is asked instead. Three shapes, all seen on
+     * real cards:
+     *  - Pixiv's "another spelling of X" (18 555 articles; どきどき →
+     *    「ドキドキ」の表記揺れ, ツル → 「つる」のカタカナ表記, カゴ →
+     *    ｢籠｣の平仮名読みである表記揺れ, 世間話 → 噂の別表記である), judged on
+     *    its first sentence, since some add a second about a character (兎);
+     *  - Pixiv's disambiguation and name pages (奴 → 曖昧さ回避…, 綾 →
+     *    人名、あるいはキャラクター名);
+     *  - 大辞泉's cross-reference: its headword line, then nothing but
+     *    ⇒ lines (部活動 → ⇒部活, 東京都 → ⇒東京).
      */
-    private val SPELLING_POINTER = Regex("""^「[^」]+」の(表記揺れ|表記ゆれ|別表記)。?$""")
+    fun isSpellingPointer(definition: String): Boolean {
+        val text = definition.trim()
+        if (text.isEmpty()) return false
+        val firstSentence = text.substringBefore('。').substringBefore('\n').trim()
+        if (SPELLING_POINTER.matches(firstSentence)) return true
+        if (NAVIGATION_PAGE.containsMatchIn(firstSentence)) return true
+        if (SAME_AS.matches(firstSentence) && text.substringAfter('。', "").isBlank()) return true
+        // One line: headword, its notes in brackets, then ⇒ (インター‐ハイ《…の略》⇒全国高等学校総合体育大会).
+        if ('\n' !in text && ONE_LINE_POINTER.matches(BRACKETED.replace(text, "").trim())) return true
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val body = if (lines.firstOrNull()?.let { HEADWORD_LINE.containsMatchIn(it) && !it.contains('⇒') } == true) lines.drop(1) else lines
+        // A note in brackets before the arrow (《…の略》⇒…) does not make it a definition.
+        return body.isNotEmpty() && body.all { BRACKETED.replace(it, "").trim().let { rest -> rest.startsWith("⇒") || rest.isEmpty() } } &&
+            body.any { '⇒' in it }
+    }
 
-    fun isSpellingPointer(definition: String): Boolean = SPELLING_POINTER.matches(definition.trim())
+    private val SPELLING_POINTER = Regex(
+        """^(?:[「｢][^」｣]+[」｣]|\S{1,20}?)の(?:\S{0,8}?)(?:表記揺れ|表記ゆれ|別表記|カタカナ表記|ひらがな表記|平仮名表記|平仮名読み|片仮名表記)(?:である|です)?$"""
+    )
+    /** 「X」に同じ — the whole definition is "same as X". */
+    private val SAME_AS = Regex("""^[「｢][^」｣]+[」｣]に同じ$""")
+    private val BRACKETED = Regex("""〔[^〕]*〕|［[^］]*］|《[^》]*》|【[^】]*】""")
+    private val ONE_LINE_POINTER = Regex("""^[^\s⇒]*⇒\S+$""")
+    private val NAVIGATION_PAGE = Regex("""^(?:曖昧さ回避|人名、あるいはキャラクター名|人名またはキャラクター名)""")
+
+    /** 大辞泉's headword line: reading with ‐ and 【spelling】, or a loanword's 【source】. */
+    private val HEADWORD_LINE = Regex("""【[^】]+】|‐|◦|〔[^〕]+〕""")
 
     /**
      * An article about a work or something in one — a song, a film, a

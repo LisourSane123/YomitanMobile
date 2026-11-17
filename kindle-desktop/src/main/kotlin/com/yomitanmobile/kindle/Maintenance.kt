@@ -300,14 +300,16 @@ class Maintenance(private val config: Config, private val out: Reporter) {
             "Looking up JP-JP definitions for ${asked.size} unlearned cards…",
             "未学習のカード${asked.size}枚の国語辞典の定義を検索中…"
         ))
-        suspend fun japanese(list: List<Candidate>, dictionaries: List<MonolingualDictionary>) =
+        suspend fun japanese(list: List<Candidate>, dictionaries: List<MonolingualDictionary>, fold: Boolean) =
             list.zip(MonolingualChain.apply(
                 list.map { it.entry!!.toWordEntry() },
                 dictionaries.map { it.title },
                 lookup = { title, expressions -> dictionaries.first { it.title == title }.lookup(expressions) },
-                onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") }
+                onFailure = { title, error -> log("monolingual: $title failed (${error.message}), next one asked") },
+                foldKatakana = fold
             ))
-        val answered = japanese(asked.filter { !it.context }, chain) + japanese(asked.filter { it.context }, contextChain)
+        val answered = japanese(asked.filter { !it.context }, chain, fold = false) +
+            japanese(asked.filter { it.context }, contextChain, fold = true)
         val style = phoneStyle(config, anki, ::log).copy(showFrontContextSentence = false)
         val builder = CardBuilder(profile, config.englishLabels)
         val converted = answered.associate { (c, word) ->

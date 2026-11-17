@@ -69,6 +69,26 @@ class MonolingualChainTest {
     }
 
     @Test
+    fun `pointers and navigation pages count as lacking, real definitions do not`() {
+        for (pointer in listOf(
+            "「ドキドキ」の表記揺れ", "「つる」のカタカナ表記。", "｢籠｣の平仮名読みである表記揺れ。",
+            "噂の別表記である。", "うさぎの表記ゆれ。およびキャラクターの別称。",
+            "曖昧さ回避。以下のリンク先を参照。", "人名、あるいはキャラクター名。",
+            "ぶ‐かつどう〔‐クワツドウ〕【部活動】\n⇒部活", "「アカン」に同じ", "インター‐ハイ\n《(和)inter＋high schoolの略》⇒全国高等学校総合体育大会",
+            "そぐわ◦ない〔そぐはない〕\n［連語］《動詞「そぐう」の未然形＋打消しの助動詞「ない」》\n⇒そぐう",
+            "インター‐ハイ《(和)inter＋high schoolの略。「インターカレッジ」にまねた造語》⇒全国高等学校総合体育大会",
+            "そぐわ◦ない〔そぐはない〕［連語］《動詞「そぐう」の未然形＋打消しの助動詞「ない」》⇒そぐう", "とうきょう‐と〔トウキヤウ‐〕【東京都】\n⇒東京"
+        )) assertTrue(pointer, MonolingualChain.isSpellingPointer(pointer))
+        for (definition in listOf(
+            "ネコ科の動物名。世界中で飼育されている。",
+            "さ‐どう〔‐ダウ〕【茶道】\n① ⇒ちゃどう（茶道）\n② 「茶頭 (さどう) 」に同じ。",
+            "かく‐とく〔クワク‐〕【獲得】［名］(スル)手に入れること。",
+            "表記揺れとは、同じ語が複数の書き方をされること。",
+            "「アカン」に同じ。関西で、だめだという意。"
+        )) assertFalse(definition, MonolingualChain.isSpellingPointer(definition))
+    }
+
+    @Test
     fun `a word no dictionary has keeps English and no source`() {
         val out = run(listOf(word("犬", "いぬ", "dog")))
         assertEquals(listOf("dog"), out[0].definitions)

@@ -80,10 +80,17 @@ data class Config(
     companion object {
         val FILE: File get() = File(Platform.dataDir, "config.properties")
 
-        /** The cleaned copies `monolingual/dicts/clean_dicts.py` writes, in the order the phone uses them. */
+        /**
+         * 大辞泉 — the 国語辞典 a Kindle looks Japanese up in — then 旺文社,
+         * then PixivLight for what neither has (slang: あかん, カツアゲ). Pixiv
+         * led until 2026-11-17; on the same 530 words 大辞泉 covered as many
+         * and its definitions were dictionary definitions, where Pixiv's
+         * were loose and sometimes an article about a video (上書き).
+         */
         val DEFAULT_MONOLINGUAL = listOf(
-            "[Monolingual, Encyclopedia] PixivLight (clean).zip",
-            "[Monolingual] 旺文社国語辞典 第十一版 (Recommended) (clean).zip"
+            "[Monolingual] デジタル大辞泉 画像なし.zip",
+            "[Monolingual] 旺文社国語辞典 第十一版 (Recommended) (clean).zip",
+            "[Monolingual, Encyclopedia] PixivLight (clean).zip"
         )
 
         fun load(): Config {
