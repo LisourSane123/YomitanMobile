@@ -322,9 +322,11 @@ class CardBuilder(
         stylePrefs: CardStylePreferences?,
         kanjiData: List<com.yomitanmobile.data.local.entity.KanjiEntry> = emptyList(),
         audioFileName: String = "",
-        randomFont: String? = null
+        randomFont: String? = null,
+        /** Plain text for the Summary field (escaped here), e.g. an encyclopedia's summary. */
+        summary: String = ""
     ): Array<String> =
-        createAnkiCard(entry, audioFileName, randomFont, stylePrefs)
+        createAnkiCard(entry, audioFileName, randomFont, stylePrefs, aiSummaryText = summary)
             .copy(kanjiBreakdown = buildKanjiBreakdownHtml(entry, kanjiData))
             .toFieldArray(profile)
 }

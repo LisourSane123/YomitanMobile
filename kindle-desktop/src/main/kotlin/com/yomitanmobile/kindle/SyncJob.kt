@@ -370,12 +370,26 @@ class SyncJob(private val config: Config, private val out: Reporter) {
         log("meaning: ${words.values.count { it.meaningSource.isNotEmpty() }} of ${words.size} from JP-JP " +
             words.values.groupingBy { it.meaningSource.ifEmpty { "EN" } }.eachCount())
 
+        // ---- summaries: the encyclopedia above the dictionary's definition
+        // Pixiv says how a word is used, the 国語辞典 what it means; a card
+        // carries both. Not where Pixiv already gave the Meaning, and not on a
+        // context card (no Summary there; Pixiv is wrong about sound words).
+        val encyclopedias = chain.filter { it.isEncyclopedia }
+        val summaryKeys = toAdd.keys.filter { it !in sentenceOf && encyclopedias.none { e -> e.title == words.getValue(it).meaningSource } }
+        val summaryOf = summaryKeys.zip(MonolingualChain.summaries(
+            summaryKeys.map { baseWords.getValue(it) },
+            encyclopedias.map { it.title },
+            lookup = { title, expressions -> encyclopedias.first { it.title == title }.lookup(expressions) },
+            onFailure = { title, error -> log("summary: $title failed (${error.message})") }
+        )).toMap().filterValues { it.isNotEmpty() }
+        log("summary: ${summaryOf.size} of ${summaryKeys.size} from ${encyclopedias.joinToString { it.title }.ifEmpty { "no encyclopedia" }}")
+
         val notes = toAdd.map { (key, pair) ->
             val (entry, lookup) = pair
             val word = words.getValue(key)
             val kanjiData = entry.primaryExpression.filter(JapaneseTokenizer::isKanji).map(Char::toString).distinct().mapNotNull { kanji[it] }
             val font = style.randomFonts.takeIf { style.randomFontsEnabled && it.isNotEmpty() }?.random()
-            val vocabulary = profile.fieldNames.zip(builder.buildFields(word, style, kanjiData, randomFont = font)).toMap().toMutableMap()
+            val vocabulary = profile.fieldNames.zip(builder.buildFields(word, style, kanjiData, randomFont = font, summary = summaryOf[key].orEmpty())).toMap().toMutableMap()
             val recording = audio[entry.primaryExpression to entry.reading]
             if (recording != null) vocabulary["Audio"] = "[sound:${recording.name}]"
             val sentence = sentenceOf[key]

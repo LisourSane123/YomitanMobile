@@ -113,4 +113,24 @@ class MonolingualChainTest {
         // English → English still refreshes.
         assertEquals("cat", RefreshMerge.merge(mapOf("Meaning" to "kitty"), mapOf("Meaning" to "cat"))["Meaning"])
     }
+
+    @Test
+    fun `the encyclopedia's summary is its text, nothing where it lacks the word or only points elsewhere`() {
+        val out = runBlocking {
+            MonolingualChain.summaries(
+                listOf(word("猫", "ねこ", "cat"), word("走る", "はしる", "to run"), word("どきどき", "どきどき", "thump")),
+                listOf("Pixiv"),
+                lookup = { _, expressions -> pixiv.filter { it.expression in expressions } }
+            )
+        }
+        assertEquals(listOf("ネコ科の動物。", "", ""), out)
+    }
+
+    @Test
+    fun `no encyclopedia means no summaries and no lookup`() {
+        val out = runBlocking {
+            MonolingualChain.summaries(listOf(word("猫", "ねこ", "cat")), emptyList(), lookup = { _, _ -> error("not asked") })
+        }
+        assertEquals(listOf(""), out)
+    }
 }

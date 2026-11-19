@@ -100,6 +100,26 @@ object MonolingualChain {
         }
     }
 
+    /**
+     * The encyclopedia's take on each word, for the card's Summary: Pixiv's
+     * one-paragraph summary is how a word is actually used (slang, nuance),
+     * which a 国語辞典 definition is not — so a card carries both, the
+     * dictionary as the Meaning and the encyclopedia above it. The same
+     * "lacks the word" rules as the Meaning apply (pointers and articles about
+     * a work say nothing). "" where no encyclopedia has the word; a caller
+     * whose Meaning already came from an encyclopedia should not ask.
+     */
+    suspend fun summaries(
+        entries: List<WordEntry>,
+        encyclopedias: List<String>,
+        lookup: suspend (dictionaryName: String, expressions: List<String>) -> List<WordEntry>,
+        onFailure: (dictionaryName: String, error: Throwable) -> Unit = { _, _ -> }
+    ): List<String> =
+        if (encyclopedias.isEmpty()) entries.map { "" }
+        else apply(entries, encyclopedias, lookup, onFailure).map { answered ->
+            if (answered.meaningSource.isEmpty()) "" else answered.definitions.joinToString("\n") { it.trim() }
+        }
+
     /** Katakana folded onto hiragana, ー and anything else left as it is. */
     fun toHiragana(text: String): String = buildString(text.length) {
         for (c in text) append(if (c in 'ァ'..'ヶ') c - 0x60 else c)

@@ -8,6 +8,8 @@ import com.yomitanmobile.data.audio.KanjiAlive
 import com.yomitanmobile.data.parser.YomitanDictionaryParser
 import com.yomitanmobile.domain.model.CardProfile
 import com.yomitanmobile.domain.model.MergedWordEntry
+import com.yomitanmobile.domain.model.WordEntry
+import com.yomitanmobile.util.InputSanitizer
 import com.yomitanmobile.util.JapaneseTokenizer
 import org.json.JSONArray
 import org.json.JSONObject
@@ -379,6 +381,107 @@ class Maintenance(private val config: Config, private val out: Reporter) {
             "Wykonano: $updated z ${toWrite.size} nienauczonych fiszek ma definicję JP-JP (sprawdzone: $verified).",
             "Done: $updated of ${toWrite.size} unlearned cards now have a JP-JP definition (verified: $verified).",
             "完了: 未学習のカード${toWrite.size}枚のうち${updated}枚を国語辞典の定義にしました（確認済み: $verified）。"
+        ) + if (syncedAfter) "" else syncWarning)
+    }
+
+    /**
+     * Fills the EMPTY Summary of vocabulary cards with the encyclopedia's
+     * (Pixiv's) summary of the word — what a new card gets since the
+     * encyclopedia moved from the end of the meaning chain to its own slot.
+     * Only that field: the Meaning, the tags, the scheduling stay. Studied
+     * cards too, since a summary changes nothing about what was learnt. Skipped
+     * where the Meaning already IS the encyclopedia's text (Pixiv was the only
+     * dictionary that had the word) and where the encyclopedia lacks the word.
+     * [scope] narrows the notes with an Anki search; a dry run writes
+     * summary.tsv and touches nothing.
+     */
+    suspend fun fillSummaries(dryRun: Boolean, excluded: Set<String>, scope: String): Outcome {
+        start()
+        config.problems().firstOrNull()?.let { return Outcome(true, it) }
+        val encyclopedias = monolingualChain(YomitanDictionaryParser(), config, ::log).filter { it.isEncyclopedia }
+        if (encyclopedias.isEmpty()) {
+            return Outcome(true, tr(
+                "Nie wykonano: nie znaleziono encyklopedii Pixiv wśród słowników JP-JP.",
+                "Not done: no Pixiv encyclopedia among the JP-JP dictionaries.",
+                "未完了: 国語辞典の中にピクシブ百科事典が見つかりません。"
+            ))
+        }
+        if (config.syncAnkiWeb && !dryRun) anki.sync()
+        val query = "\"note:${profile.modelName}\" Summary:" + if (scope.isBlank()) "" else " ($scope)"
+        log("summary: $query")
+        val ids = anki.call("findNotes", JSONObject().put("query", query)) as JSONArray
+        val notes = (0 until ids.length()).map { ids.getLong(it) }.chunked(500).flatMap { chunk ->
+            val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk))) as JSONArray
+            (0 until infos.length()).map { i ->
+                val info = infos.getJSONObject(i)
+                val fields = info.getJSONObject("fields")
+                info.getLong("noteId") to fields.keys().asSequence().associateWith { fields.getJSONObject(it).optString("value") }
+            }
+        }.filter { (_, f) -> plain(f["Front"].orEmpty()).let { it.isNotEmpty() && it !in excluded } }
+        out.progress(tr(
+            "Szukam streszczeń Pixiv dla ${notes.size} fiszek…",
+            "Looking up Pixiv summaries for ${notes.size} cards…",
+            "${notes.size}枚のカードのピクシブ要約を検索中…"
+        ))
+        val found = MonolingualChain.summaries(
+            notes.map { (_, f) -> WordEntry(expression = plain(f["Front"].orEmpty()), reading = plain(f["Reading"].orEmpty()), definitions = emptyList()) },
+            encyclopedias.map { it.title },
+            lookup = { title, expressions -> encyclopedias.first { it.title == title }.lookup(expressions) },
+            onFailure = { title, error -> log("summary: $title failed (${error.message})") }
+        )
+        data class Plan(val id: Long, val word: String, val status: String, val summary: String)
+        val plans = notes.zip(found).map { (note, summary) ->
+            val (id, fields) = note
+            val word = plain(fields["Front"].orEmpty())
+            // The Meaning is Pixiv's own text when Pixiv was the only one to have the word.
+            val meaning = plain(fields["Meaning"].orEmpty()).filterNot(Char::isWhitespace)
+            when {
+                summary.isEmpty() -> Plan(id, word, "NOT_IN_ENCYCLOPEDIA", "")
+                summary.lines().first().filterNot(Char::isWhitespace).let { it.isNotEmpty() && it in meaning } -> Plan(id, word, "MEANING_IS_ENCYCLOPEDIA", summary)
+                else -> Plan(id, word, "FILL", summary)
+            }
+        }
+        val toWrite = plans.filter { it.status == "FILL" }
+        val report = File(outDir, "summary.tsv")
+        report.writeText(buildString {
+            appendLine("note\tstatus\tword\tsummary")
+            for (p in plans) appendLine("${p.id}\t${p.status}\t${p.word}\t${p.summary.replace('\t', ' ').replace('\n', ' ').take(160)}")
+        })
+        log("summary: ${plans.size} notes ${plans.groupingBy { it.status }.eachCount()}")
+        if (dryRun) {
+            return Outcome(false, tr(
+                "Podgląd: ${toWrite.size} z ${plans.size} fiszek dostanie streszczenie Pixiv. Raport: ${report.path}",
+                "Preview: ${toWrite.size} of ${plans.size} cards would get a Pixiv summary. Report: ${report.path}",
+                "プレビュー: ${plans.size}枚のうち${toWrite.size}枚にピクシブ要約が入ります。レポート: ${report.path}"
+            ))
+        }
+        var updated = 0
+        var verified = 0
+        for (chunk in toWrite.chunked(100)) {
+            val actions = JSONArray()
+            for (p in chunk) {
+                actions.put(JSONObject().put("action", "updateNoteFields").put("params", JSONObject().put("note",
+                    JSONObject().put("id", p.id).put("fields", JSONObject().put("Summary", InputSanitizer.escapeHtml(p.summary))))))
+            }
+            val results = anki.call("multi", JSONObject().put("actions", actions)) as JSONArray
+            for (i in 0 until results.length()) {
+                val error = (results.opt(i) as? JSONObject)?.opt("error")
+                if (error == null || error == JSONObject.NULL) updated++ else log("summary not written: ${chunk[i].word} — $error")
+            }
+        }
+        for (chunk in toWrite.chunked(500)) {
+            val infos = anki.call("notesInfo", JSONObject().put("notes", JSONArray(chunk.map { it.id }))) as JSONArray
+            for (i in 0 until infos.length()) {
+                val value = infos.getJSONObject(i).getJSONObject("fields").optJSONObject("Summary")?.optString("value")
+                if (value == InputSanitizer.escapeHtml(chunk[i].summary)) verified++ else log("verify failed: ${chunk[i].word}")
+            }
+        }
+        log("summary written on $updated of ${toWrite.size}, verified $verified")
+        val syncedAfter = !config.syncAnkiWeb || updated == 0 || sync()
+        return Outcome(updated < toWrite.size || verified < updated, tr(
+            "Wykonano: $updated z ${toWrite.size} fiszek ma streszczenie Pixiv (sprawdzone: $verified).",
+            "Done: $updated of ${toWrite.size} cards now have a Pixiv summary (verified: $verified).",
+            "完了: ${toWrite.size}枚のうち${updated}枚にピクシブ要約を入れました（確認済み: $verified）。"
         ) + if (syncedAfter) "" else syncWarning)
     }
 
